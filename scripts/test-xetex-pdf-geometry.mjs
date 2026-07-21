@@ -75,6 +75,8 @@ try {
   )
 
   const tex = [
+    '\\catcode`\\{=1',
+    '\\catcode`\\}=2',
     '\\nonstopmode',
     ...queries.map(
       ([name, file, page, box]) =>
