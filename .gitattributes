@@ -4,3 +4,7 @@
 # in sync with `src/`. (`-diff` only hides the textual diff; `git diff --quiet` still detects
 # drift, so the freshness gate is unaffected.)
 lib/** linguist-generated=true -diff
+
+# Stored unified diffs contain significant leading context markers and may need
+# to preserve upstream whitespace exactly in removed lines.
+*.patch -whitespace

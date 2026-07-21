@@ -447,19 +447,19 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### B. WTPDF/Xpdf 설계
 
-- [ ] `wasm-build/pdf-backend/wtpdf.h`에 `pplib` 표현을 복사하지 않은 독립 opaque-handle ABI를 설계한다.
-- [ ] API별로 XeTeX 또는 LuaHBTeX의 실제 caller와 필요한 observable semantics를 표로 만든다.
+- [x] `wasm-build/pdf-backend/wtpdf.h`에 `pplib` 표현을 복사하지 않은 독립 opaque-handle ABI를 설계한다.
+- [x] API별로 XeTeX 또는 LuaHBTeX의 실제 caller와 필요한 observable semantics를 표로 만든다. ABI v1의 XeTeX 범위와 향후 LuaHBTeX 보존 조건을 `wasm-build/pdf-backend/README.md`에 기록했다.
 - [ ] object/ref, integer/real, string bytes, stream raw/decode, dict order, page box, rotation 보존 규칙을 specification으로 작성한다.
 - [ ] Xpdf 4.04의 정확한 source와 GPL v2/v3 라이선스 원문을 고정한다.
-- [ ] adapter의 error ownership, buffer ownership, lifetime, memory limit을 정의한다.
-- [ ] 암호화 PDF의 password callback과 오류 모델을 정의한다.
+- [x] adapter의 error ownership, buffer ownership, lifetime, memory limit을 정의한다. 메모리 입력은 복사하며, `max_input_bytes`와 Worker 수명/스레드 제약을 명시했다.
+- [x] 암호화 PDF의 password callback과 오류 모델을 정의한다. ABI v1은 open-time owner/user password와 `WTPDF_STATUS_ENCRYPTED`를 사용한다.
 - [ ] WTPDF 단위 테스트용 C/C++ fixture를 만든다.
 
 ### C. XeTeX 교체
 
-- [ ] Xpdf 기반 document open/close를 구현한다.
-- [ ] file input과 memory input을 모두 구현한다.
-- [ ] page count 조회를 구현한다.
+- [x] Xpdf 기반 document open/close를 구현한다.
+- [x] file input과 memory input을 모두 구현한다.
+- [x] page count 조회를 구현한다.
 - [ ] 다섯 page box와 기존 fallback 규칙을 구현한다.
 - [ ] page rotation과 bounds 계산을 구현한다.
 - [ ] `pdfimage.cpp`를 WTPDF API로 전환한다.
@@ -490,7 +490,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### E. TeX Live patch와 재현 빌드
 
-- [ ] `wasm-build/patches/texlive-wtpdf.patch`를 최소 변경으로 작성한다.
+- [x] `wasm-build/patches/texlive-wtpdf.patch`를 XeTeX 범위의 최소 변경으로 작성한다. LuaHBTeX 전환은 후속 patch 확장으로 남아 있다.
 - [ ] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
 - [ ] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
 - [ ] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다.

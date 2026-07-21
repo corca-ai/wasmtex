@@ -1,0 +1,247 @@
+diff --git a/texk/web2c/ac/web2c.ac b/texk/web2c/ac/web2c.ac
+index 471c3250f..a067a4e4a 100644
+--- a/texk/web2c/ac/web2c.ac
++++ b/texk/web2c/ac/web2c.ac
+@@ -45,7 +45,7 @@ m4_define([kpse_tex_progs], [dnl
+ [[pmp],       [yes], [],    [pMetaPost],  [mpfi mpfr cairo libpng ptexenc]],
+ [[texprof],   [yes], [],    [TeXprof],    []],
+ [[upmp],      [yes], [],    [upMetaPost], [mpfi mpfr cairo libpng ptexenc]],
+-[[xetex],     [yes], [yes], [XeTeX],      [pplib libpng freetype2 teckit harfbuzz]],
++[[xetex],     [yes], [yes], [XeTeX],      [xpdf libpng freetype2 teckit harfbuzz]],
+ ])[]dnl
+ m4_foreach([Kpse_Prog], [kpse_tex_progs],
+            [m4_ifset([Kpse_Prog],
+diff --git a/texk/web2c/xetexdir/XeTeX_ext.c b/texk/web2c/xetexdir/XeTeX_ext.c
+index 9a182e0df..ab38c90b8 100644
+--- a/texk/web2c/xetexdir/XeTeX_ext.c
++++ b/texk/web2c/xetexdir/XeTeX_ext.c
+@@ -38,11 +38,7 @@ authorization from the copyright holders.
+ 
+ #include <w2c/config.h>
+ 
+-/* 
+- * From TeX Live 2021, we use pplib by Pawe\l Jackowski instead of
+- * libpoppler
+- */
+-#include <ppapi.h>
++#include <wtpdf.h>
+ 
+ #include <png.h>
+ #include <zlib.h>
+@@ -172,7 +168,7 @@ void initversionstring(char **versions)
+         "Compiled with Graphite2 version %d.%d.%d; using %d.%d.%d\n"
+         "Compiled with HarfBuzz version %s; using %s\n"
+         "Compiled with libpng version %s; using %s\n"
+-        "Compiled with pplib version %s\n"
++        "Compiled with PDF backend %s version %s\n"
+ #ifdef XETEX_MAC
+         "Using Mac OS X Core Text and Cocoa frameworks\n"
+ #else
+@@ -189,7 +185,8 @@ void initversionstring(char **versions)
+             + strlen(hb_version_string())
+             + strlen(PNG_LIBPNG_VER_STRING)
+             + strlen(png_libpng_ver)
+-            + strlen(pplib_version)
++            + strlen(wtpdf_backend_name())
++            + strlen(wtpdf_backend_version())
+ #ifndef XETEX_MAC
+             + 6 * 3 /* for fontconfig version #s (won't really need 3 digits per field!) */
+ #endif
+@@ -219,7 +216,8 @@ void initversionstring(char **versions)
+         GR2_VERSION_MAJOR, GR2_VERSION_MINOR, GR2_VERSION_BUGFIX,
+         grMajor, grMinor, grBugfix,
+         HB_VERSION_STRING, hb_version_string(),
+-        PNG_LIBPNG_VER_STRING, png_libpng_ver, pplib_version
++        PNG_LIBPNG_VER_STRING, png_libpng_ver,
++        wtpdf_backend_name(), wtpdf_backend_version()
+ #ifndef XETEX_MAC
+         ,
+         FC_VERSION / 10000, (FC_VERSION % 10000) / 100, FC_VERSION % 100,
+diff --git a/texk/web2c/xetexdir/am/xetex.am b/texk/web2c/xetexdir/am/xetex.am
+index 85914a491..cd1460c0d 100644
+--- a/texk/web2c/xetexdir/am/xetex.am
++++ b/texk/web2c/xetexdir/am/xetex.am
+@@ -30,7 +30,7 @@ xetex_cppflags += $(HARFBUZZ_INCLUDES)
+ xetex_cppflags += $(GRAPHITE2_INCLUDES)
+ xetex_cppflags += $(LIBPNG_INCLUDES)
+ xetex_cppflags += $(ZLIB_INCLUDES)
+-xetex_cppflags += $(PPLIB_INCLUDES)
++xetex_cppflags += $(XPDF_INCLUDES)
+ xetex_cppflags += -I$(srcdir)/libmd5
+ xetex_ldadd = $(libxetex)
+ xetex_ldadd += $(HARFBUZZ_LIBS)
+@@ -39,7 +39,7 @@ xetex_ldadd += $(ICU_LIBS) $(ICU_LIBS_EXTRA)
+ xetex_ldadd += $(TECKIT_LIBS)
+ xetex_ldadd += $(LIBPNG_LIBS)
+ xetex_ldadd += $(FREETYPE2_LIBS)
+-xetex_ldadd += $(PPLIB_LIBS)
++xetex_ldadd += $(XPDF_LIBS)
+ xetex_ldadd += $(ZLIB_LIBS)
+ xetex_ldadd += libmd5.a
+ xetex_dependencies = $(proglib)
+@@ -51,7 +51,7 @@ xetex_dependencies += $(GRAPHITE2_DEPEND)
+ xetex_dependencies += $(LIBPNG_DEPEND)
+ xetex_dependencies += $(FREETYPE2_DEPEND)
+ xetex_dependencies += $(ZLIB_DEPEND)
+-xetex_dependencies += $(PPLIB_DEPEND)
++xetex_dependencies += $(XPDF_DEPEND)
+ xetex_dependencies += libmd5.a
+ 
+ if XETEX_MACOSX
+diff --git a/texk/web2c/xetexdir/pdfimage.cpp b/texk/web2c/xetexdir/pdfimage.cpp
+index 38d51d1ce..7925da25c 100644
+--- a/texk/web2c/xetexdir/pdfimage.cpp
++++ b/texk/web2c/xetexdir/pdfimage.cpp
+@@ -36,13 +36,7 @@ authorization from the copyright holders.
+ 
+ #include "pdfimage.h"
+ 
+-/* 
+- * From TeX Live 2021, we use pplib by Pawe\l Jackowski instead of
+- * libpoppler
+- */
+-extern "C" {
+-#include "ppapi.h"
+-}
++#include "wtpdf.h"
+ 
+ #include "XeTeX_ext.h"
+ 
+@@ -57,13 +51,18 @@ int
+ pdf_get_rect(char* filename, int page_num, int pdf_box, realrect* box)
+ 	/* return the box converted to TeX points */
+ {
+-	ppdoc*	doc = ppdoc_load(filename);
++	wtpdf_status status;
++	wtpdf_document* doc = wtpdf_document_open_file(filename, NULL, &status);
+ 
+ 	if (!doc) {
+ 		return -1;
+ 	}
+ 
+-	int	pages = ppdoc_page_count(doc);
++	int	pages = wtpdf_document_page_count(doc);
++	if (pages < 1) {
++		wtpdf_document_close(doc);
++		return -1;
++	}
+ 
+ 	if (page_num > pages)
+ 		page_num = pages;
+@@ -72,74 +71,51 @@ pdf_get_rect(char* filename, int page_num, int pdf_box, realrect* box)
+ 	if (page_num < 1)
+ 		page_num = 1;
+ 
+-	ppref*	page = ppdoc_page(doc, page_num);
+-	ppdict*	pdict = page->object.dict;
+-
+-	pprect	Rect;
+-	pprect*	r;
++	wtpdf_page_box requested_box;
+ 
+ 	switch (pdf_box) {
+ 		default:
+ 		case pdfbox_crop:
+-			r = ppdict_get_box(pdict, "CropBox", &Rect);
++			requested_box = WTPDF_PAGE_BOX_CROP;
+ 			break;
+ 		case pdfbox_media:
+-			r = ppdict_get_box(pdict, "MediaBox", &Rect);
++			requested_box = WTPDF_PAGE_BOX_MEDIA;
+ 			break;
+ 		case pdfbox_bleed:
+-			r = ppdict_get_box(pdict, "BleedBox", &Rect);
++			requested_box = WTPDF_PAGE_BOX_BLEED;
+ 			break;
+ 		case pdfbox_trim:
+-			r = ppdict_get_box(pdict, "TrimBox", &Rect);
++			requested_box = WTPDF_PAGE_BOX_TRIM;
+ 			break;
+ 		case pdfbox_art:
+-			r = ppdict_get_box(pdict, "ArtBox", &Rect);
++			requested_box = WTPDF_PAGE_BOX_ART;
+ 			break;
+ 	}
+ 
+-/*
+- *  In pplib, r can be NULL. If r == NULL, we try "CropBox",
+- *  "MediaBox",  "BleedBox", "TrimBox", "ArtBox" in this order.
+- */
+-	if (!r) {
+-		r = ppdict_get_box(pdict, "CropBox", &Rect);
+-	}
+-	if (!r) {
+-		r = ppdict_get_box(pdict, "MediaBox", &Rect);
+-	}
+-	if (!r) {
+-		r = ppdict_get_box(pdict, "BleedBox", &Rect);
+-	}
+-	if (!r) {
+-		r = ppdict_get_box(pdict, "TrimBox", &Rect);
+-	}
+-	if (!r) {
+-		r = ppdict_get_box(pdict, "ArtBox", &Rect);
+-	}
+-
+-/*
+- * If r == NULL, return error.
+- */
+-	if (!r) {
++	wtpdf_rectangle rect;
++	if (wtpdf_document_page_box(doc, page_num, requested_box, &rect) !=
++		WTPDF_STATUS_OK) {
++		wtpdf_document_close(doc);
+ 		return -1;
+ 	}
+ 
+-	ppint RotAngle = 0;
+-	(void)ppdict_get_int(pdict, "Rotate", &RotAngle);
+-	RotAngle = RotAngle % 360;
+-	if (RotAngle < 0)
+-		RotAngle += 360;
++	int RotAngle = 0;
++	if (wtpdf_document_page_rotation(doc, page_num, &RotAngle) !=
++		WTPDF_STATUS_OK) {
++		wtpdf_document_close(doc);
++		return -1;
++	}
+ 	if (RotAngle == 90 || RotAngle == 270) {
+-		box->wd = 72.27 / 72 * fabs(r->ry - r->ly);
+-		box->ht = 72.27 / 72 * fabs(r->rx - r->lx);
++		box->wd = 72.27 / 72 * fabs(rect.y2 - rect.y1);
++		box->ht = 72.27 / 72 * fabs(rect.x2 - rect.x1);
+ 	} else {
+-		box->wd = 72.27 / 72 * fabs(r->rx - r->lx);
+-		box->ht = 72.27 / 72 * fabs(r->ry - r->ly);
++		box->wd = 72.27 / 72 * fabs(rect.x2 - rect.x1);
++		box->ht = 72.27 / 72 * fabs(rect.y2 - rect.y1);
+ 	}
+-	box->x  = 72.27 / 72 * my_fmin(r->lx, r->rx);
+-	box->y  = 72.27 / 72 * my_fmin(r->ly, r->ry);
++	box->x  = 72.27 / 72 * my_fmin(rect.x1, rect.x2);
++	box->y  = 72.27 / 72 * my_fmin(rect.y1, rect.y2);
+ 
+-	ppdoc_free(doc);
++	wtpdf_document_close(doc);
+ 
+ 	return 0;
+ }
+@@ -148,14 +124,15 @@ int
+ pdf_count_pages(char* filename)
+ {
+ 	int	pages = 0;
+-	ppdoc*	doc = ppdoc_load(filename);
++	wtpdf_status status;
++	wtpdf_document* doc = wtpdf_document_open_file(filename, NULL, &status);
+ 
+ 	if (!doc) {
+ 		return 0;
+ 	}
+ 
+-	pages = ppdoc_page_count(doc);
+-	if (doc) ppdoc_free(doc);
++	pages = wtpdf_document_page_count(doc);
++	wtpdf_document_close(doc);
+ 
+ 	return pages;
+ }
