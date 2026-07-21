@@ -63,6 +63,22 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
 
+      - name: Extract prebuilt pdfLaTeX format (.fmt)
+        timeout-minutes: 10
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+        run: |
+          npm ci
+          npx playwright install-deps chromium
+          mkdir -p public/wasmtex/2025
+          cp wasm-build/dist/wasmtex-pdftex.js \
+             wasm-build/dist/wasmtex-pdftex.worker.js \
+             wasm-build/dist/wasmtex-pdftex.wasm public/wasmtex/2025/
+          node scripts/extract-format.mjs 2025
+          cp public/wasmtex/2025/wasmtex-pdftex.fmt \
+             wasm-build/dist/wasmtex-pdftex.fmt
+          ls -lh wasm-build/dist/wasmtex-pdftex.fmt
+
       - name: Smoke test pdfTeX WASM
         run: |
           node -e "
@@ -104,7 +120,7 @@ jobs:
           node scripts/gen-engine-build-receipt.mjs \
             pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex.json \
             wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
-            wasmtex-kpse-resolve.js
+            wasmtex-kpse-resolve.js wasmtex-pdftex.fmt
 
       - name: Record exact BibTeX build inputs and outputs
         if: steps.bibtex-smoke.outcome == 'success'
@@ -121,6 +137,7 @@ jobs:
             wasm-build/dist/wasmtex-pdftex.js
             wasm-build/dist/wasmtex-pdftex.worker.js
             wasm-build/dist/wasmtex-pdftex.wasm
+            wasm-build/dist/wasmtex-pdftex.fmt
             wasm-build/dist/wasmtex-kpse-resolve.js
             wasm-build/dist/BUILD-RECEIPT.pdftex.json
           retention-days: 90

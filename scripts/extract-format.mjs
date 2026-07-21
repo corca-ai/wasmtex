@@ -21,7 +21,10 @@ async function main() {
   console.log(`Vite running at ${url}`)
 
   console.log('Launching browser...')
-  const browser = await chromium.launch()
+  // CI uses its preinstalled Chrome; local development can keep using the
+  // Playwright-managed Chromium binary.
+  const channel = process.env.PLAYWRIGHT_CHANNEL
+  const browser = await chromium.launch(channel ? { channel } : {})
   try {
     const page = await browser.newPage()
     page.on('console', (msg) => {
