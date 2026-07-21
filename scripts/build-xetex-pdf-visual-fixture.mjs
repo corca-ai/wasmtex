@@ -136,7 +136,13 @@ const result = spawnSync(
   {
     cwd: directory,
     encoding: 'utf8',
-    env: { ...process.env, TEXINPUTS: '.', TEXMFOUTPUT: directory },
+    env: {
+      ...process.env,
+      FORCE_SOURCE_DATE: '1',
+      SOURCE_DATE_EPOCH: '946684800',
+      TEXINPUTS: '.',
+      TEXMFOUTPUT: directory,
+    },
     timeout: 60_000,
   },
 )

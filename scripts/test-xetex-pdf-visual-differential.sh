@@ -39,6 +39,7 @@ run_xetex() {
 run_converter() {
   local directory="$1"
   docker run --rm --platform linux/amd64 \
+    -e FORCE_SOURCE_DATE=1 -e SOURCE_DATE_EPOCH=946684800 \
     -v "$directory:/work" -w /work "$TEXLIVE_IMAGE" \
     xdvipdfmx -q -o visual-probe.pdf visual-probe.xdv
 }
