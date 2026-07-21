@@ -36,7 +36,7 @@
  *   #    to the Docker host as <dir>/opentype/*.otf + <dir>/truetype/*.ttf:
  *   #    AWS_PROFILE=cc aws s3 sync s3://<bucket>/<year>/pdftex/47/ <dir>/opentype/
  *   #    AWS_PROFILE=cc aws s3 sync s3://<bucket>/<year>/pdftex/36/ <dir>/truetype/
- *   # 1. Generate on a host with Docker (e.g. remote-builder). Produces ./luaotfload-names.lua
+ *   # 1. Generate in a Docker environment. Produces ./luaotfload-names.lua
  *   node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>   # exact-mirror (#73)
  *   node scripts/gen-luaotfload-names.mjs --generate                     # quick, not exact
  *   # 2. Upload from a host with AWS creds (AWS_PROFILE=cc)
@@ -77,7 +77,7 @@ function runDockerGenerate(script, mounts) {
   try {
     execSync('docker --version', { stdio: 'ignore' })
   } catch {
-    console.error('docker is required for --generate (run on a host with Docker, e.g. remote-builder).')
+    console.error('docker is required for --generate.')
     process.exit(1)
   }
   const gz = execFileSync(

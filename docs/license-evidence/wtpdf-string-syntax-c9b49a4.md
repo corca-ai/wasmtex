@@ -13,12 +13,12 @@ evidence, not LuaHBTeX release clearance.
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live Xpdf 4.04 at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |
-| Build host | `remote-builder`, x86_64 Linux, Docker 24.0.2 |
+| Build environment | x86_64 Linux, Docker 24.0.2 |
 | Build image | `sha256:382f2077968e6ea337393476a91356106954ae208a074e4478d2b46562822b19` |
 | Date | 2026-07-21 UTC |
 
 The exact commit was transferred as a complete Git bundle, verified, and checked
-out with a clean worktree. All WebAssembly compilation ran on `remote-builder`.
+out with a clean worktree in the recorded build environment.
 
 | Source | SHA-256 |
 | --- | --- |

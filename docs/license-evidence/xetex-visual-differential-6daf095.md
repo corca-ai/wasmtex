@@ -19,7 +19,7 @@ overall engine release clearance.
 | xdvipdfmx version | `20260317` |
 | Raster renderer | Poppler `pdftoppm` 22.02.0, PNG, 144 DPI |
 | Reproducible time | `SOURCE_DATE_EPOCH=946684800`, `FORCE_SOURCE_DATE=1` |
-| Build/test host | `remote-builder`, x86_64 Linux, Docker 24.0.2 |
+| Build/test environment | x86_64 Linux, Docker 24.0.2 |
 | Date | 2026-07-21 UTC |
 
 The baseline image was used only as a non-distributed internal comparator. The

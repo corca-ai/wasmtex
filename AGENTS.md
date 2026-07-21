@@ -8,14 +8,6 @@ Browser-based LaTeX editor with real-time PDF preview.
 
 To provide a high-performance, **embeddable LaTeX component** for academic platforms and collaboration tools.
 
-## WASM Build Host
-
-All WASM compilation, including Docker-based TeX Live builds and direct Emscripten
-invocations, must run on the `remote-builder` host over SSH. Do not compile WASM on the
-local workstation. Local work may edit sources, run TypeScript checks/tests, and
-inspect already-built artifacts; use `ssh remote-builder` whenever a task needs to build
-or relink an engine.
-
 ## Documentation Index
 
 - **[System Architecture](docs/architecture.md)**: Overview of the SDK structure, core components (VFS, LSP, Engines), and tech stack. Read this to understand how different modules interact.

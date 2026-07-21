@@ -1,18 +1,5 @@
 # Development Guide
 
-## WASM build host
-
-WASM compilation is remote-only. Run Docker, Emscripten (`emcc`, `emconfigure`,
-`emmake`), TeX Live engine builds, and engine relinks on `remote-builder` over SSH. Do
-not run those workloads on the local workstation. TypeScript development, unit
-tests, documentation work, and inspection of existing artifacts remain local.
-
-Before a remote build, transfer or check out the exact local Git commit on
-`remote-builder`; record that commit in the build result so the resulting artifact can
-be tied to its source. Copy only the resulting evidence and intended build outputs
-back, and keep generated engine files out of Git unless the license release gate
-explicitly allows them.
-
 This guide is for developers contributing to the `wasmtex` codebase.
 
 ## Quick Start

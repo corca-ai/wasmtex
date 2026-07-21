@@ -12,7 +12,7 @@ does not approve visual rendering compatibility or clear an engine release.
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` | `143f1723353b20202645f241db429b080a8adcdf` |
 | PDF parser | `pplib` | WTPDF over Xpdf 4.04 |
 | Initialization | native XeTeX, `-ini -etex -no-pdf` | native XeTeX, `-ini -etex -no-pdf` |
-| Build host | `remote-builder`, x86_64 Linux, Docker 24.0.2 | same |
+| Build environment | x86_64 Linux, Docker 24.0.2 | same |
 | Date | 2026-07-21 UTC | same |
 
 The comparison used `scripts/test-xetex-pdf-geometry.mjs` at commit

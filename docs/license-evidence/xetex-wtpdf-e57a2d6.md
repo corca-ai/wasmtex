@@ -16,12 +16,11 @@ for its same-run dvipdfmx build and hashes.
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live's Xpdf 4.04 source at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |
-| Build host | `remote-builder`, x86_64 Linux, Docker 24.0.2 |
+| Build environment | x86_64 Linux, Docker 24.0.2 |
 | Date | 2026-07-21 UTC |
 
 The exact Git commit was transferred as a verified Git bundle and checked out in
-a clean directory. All WebAssembly compilation ran on `remote-builder`, as required by
-the project build policy.
+a clean directory in the recorded build environment.
 
 ## Command and gates
 

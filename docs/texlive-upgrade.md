@@ -166,10 +166,6 @@ the package bytes and notices.
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.
 
-All commands in this step must run in the exact-commit checkout on `remote-builder` over
-SSH. Do not run Docker, Emscripten, an engine relink, or any other WASM compilation
-on the local workstation.
-
 1. Update the pinned source commit in `wasm-build/texlive-source.ref` (resolve the
    new TeX Live year's `branch<YEAR>` tip to a commit SHA — see *Upstream
    maintenance* above).
@@ -178,8 +174,7 @@ on the local workstation.
    Pass the pinned ref as `--build-arg TEXLIVE_REF` (CI does this via
    `wasm-build/texlive-source.ref`):
    ```bash
-   ssh remote-builder
-   cd <remote-wasmtex-checkout>
+   cd <wasmtex-build-checkout>
    git checkout <exact-source-commit>
 
    # pdfTeX + BibTeX (see .github/workflows/wasm-build.yml)
@@ -227,7 +222,7 @@ AWS_PROFILE=cc node scripts/gen-xetexfontlist.mjs --upload
 # TeX Live year's luaotfload (env vars, or edit the defaults '3.29' / '6' in the script);
 # the upload step rejects a DB whose schema version mismatches, so the engine never rescans.
 # Use --fonts-dir for the exact-mirror DB (#73); bare --generate is the quick, non-exact mode.
-node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>   # on a Docker host (e.g. remote-builder)
+node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>   # in a Docker environment
 AWS_PROFILE=cc node scripts/gen-luaotfload-names.mjs --db ./luaotfload-names.lua --upload
 ```
 

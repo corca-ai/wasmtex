@@ -395,15 +395,6 @@ if (existsSync(texliveAudit)) {
   }
 }
 
-for (const buildPolicyPath of ['AGENTS.md', 'docs/develop.md']) {
-  const text = readFileSync(resolve(root, buildPolicyPath), 'utf8')
-  for (const required of ['remote-builder', 'SSH']) {
-    if (!text.includes(required)) {
-      fail(`${buildPolicyPath} does not preserve the remote-only WASM build policy: ${required}`)
-    }
-  }
-}
-
 const texliveBundle = resolve(root, 'scripts/bundle-texlive.mjs')
 if (existsSync(texliveBundle)) {
   const text = readFileSync(texliveBundle, 'utf8')

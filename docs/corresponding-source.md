@@ -26,9 +26,8 @@ release artifacts and receipts with the release workflows first.
 
 ## Create and verify an archive
 
-Use a Linux host with GNU tar for deterministic ownership, ordering, and timestamps.
-Archive creation itself does not compile WebAssembly, but all later WebAssembly
-rebuilds for this project must run through `ssh remote-builder`.
+Use a Linux environment with GNU tar for deterministic ownership, ordering, and
+timestamps.
 
 ```bash
 node scripts/build-corresponding-source.mjs \
@@ -62,7 +61,7 @@ The resulting archive contains:
 Creating an archive does not by itself clear the release. Before changing
 `LICENSE-MANIFEST.json` to `release-cleared`:
 
-1. rebuild every engine from the archive inputs on a clean `remote-builder` builder;
+1. rebuild every engine from the archive inputs in a clean Linux build environment;
 2. compare outputs with the receipt-bound release files and explain any
    nondeterministic difference;
 3. run the compatibility, security, LGPL/relink, notice, and TeX Live provenance

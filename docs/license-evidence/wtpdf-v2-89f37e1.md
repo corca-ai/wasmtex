@@ -16,7 +16,7 @@ LuaHBTeX migration is recorded in
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live Xpdf 4.04 at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |
-| Build host | `remote-builder`, x86_64 Linux, Docker 24.0.2 |
+| Build environment | x86_64 Linux, Docker 24.0.2 |
 | Date | 2026-07-21 UTC |
 
 The three mounted source files matched the committed files before the build:
@@ -26,8 +26,6 @@ The three mounted source files matched the committed files before the build:
 | `wtpdf.h` | `3edbd65064b036a463574a6a943e40f615334a2124d592d3cc54a5c0dfe6a737` |
 | `wtpdf-xpdf.cc` | `fd3cae99aba651b5eeaf2a19fba086f72cee5560f2fdf785f186833fc0cf913b` |
 | `wtpdf-smoke.cc` | `21a9fd44e929f3f945316587fd4a0e8fe758c64f05eb065914835cc843bf4c2b` |
-
-All WebAssembly compilation ran on `remote-builder`.
 
 ## Exercised contract
 

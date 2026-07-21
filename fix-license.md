@@ -54,7 +54,7 @@
 
 ### 2.3 FastLaTeX를 새 WTPDF 기반 WasmTex로 교체해야 한다
 
-조사 당시 FastLaTeX와 WasmTex는 동일한 TeX Live 계열 소스와 `pplib` 정적 링크를 사용했다. 이후 WasmTex의 XeTeX와 LuaHBTeX 후보는 독립 WTPDF/Xpdf adapter로 전환했고, 새 LuaHBTeX 빌드는 숨은 SHA-2 의존성까지 독립 구현으로 교체했다. remote-builder의 정확한 커밋 빌드에서 native/WASM smoke, 최종 link map, JavaScript/WASM byte 검사가 모두 통과해 새 산출물에는 `pplib` archive와 legacy symbol이 없음을 확인했다.
+조사 당시 FastLaTeX와 WasmTex는 동일한 TeX Live 계열 소스와 `pplib` 정적 링크를 사용했다. 이후 WasmTex의 XeTeX와 LuaHBTeX 후보는 독립 WTPDF/Xpdf adapter로 전환했고, 새 LuaHBTeX 빌드는 숨은 SHA-2 의존성까지 독립 구현으로 교체했다. 정확한 커밋의 clean x86_64 Linux 빌드에서 native/WASM smoke, 최종 link map, JavaScript/WASM byte 검사가 모두 통과해 새 산출물에는 `pplib` archive와 legacy symbol이 없음을 확인했다.
 
 따라서 Cortex가 FastLaTeX를 **새로 빌드된 WTPDF 기반 WasmTex engine release**로 교체하면 `pplib` 재배포 문제를 제거할 수 있다. 단순히 asset URL만 바꾸면서 과거 `pplib`-linked WasmTex 바이너리를 재사용해서는 안 된다. 릴리스 manifest의 hash와 대응 소스가 감사된 새 byte를 가리켜야 한다.
 
@@ -490,7 +490,6 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### E. TeX Live patch와 재현 빌드
 
-- [x] 모든 WASM compile, Docker/Emscripten engine build와 relink를 로컬에서 금지하고 `ssh remote-builder`의 exact-commit checkout에서만 실행하는 정책을 `AGENTS.md`와 `docs/develop.md`에 고정했다.
 - [x] `wasm-build/patches/texlive-wtpdf.patch`를 XeTeX와 LuaHBTeX의 필요한 caller/build metadata 범위로 확장하고 고정 upstream에 exact apply를 검증한다.
 - [x] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
 - [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
@@ -550,7 +549,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] Emscripten 3.1.46 base image를 registry digest로 고정하고 Emscripten Git commit 및 사용 ports source URL/SHA-512를 기록했다.
 - [x] engine artifact마다 byte hash, WasmTex commit, TeX Live commit, Emscripten commit, Docker digest를 묶는 deterministic build receipt를 생성하도록 workflow를 변경했다.
 - [x] release asset manifest가 모든 engine file의 receipt 누락·중복·hash 불일치·license family 미분류를 거부하도록 했다.
-- [ ] `ssh remote-builder`의 exact-commit checkout에서 새 receipt workflow로 모든 release engine을 다시 빌드하고 동일 release manifest에 모은다.
+- [ ] exact-commit clean Linux build environment에서 새 receipt workflow로 모든 release engine을 다시 빌드하고 동일 release manifest에 모은다.
 - [x] receipt가 가리키는 모든 WasmTex commit, pinned TeX Live/Emscripten source, ports source archive, build control file을 동일 release ID로 묶는 deterministic source archive builder/checker를 구현했다.
 - [ ] 새 receipt artifact로 source archive를 실제 생성하고 clean-builder rebuild evidence를 기록한다.
 - [ ] artifact, manifest, source archive에 동일 release ID를 넣는다.

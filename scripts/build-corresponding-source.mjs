@@ -96,7 +96,7 @@ function sourceReadme(releaseId) {
 
 function rebuildReadme(manifest) {
   const revisions = manifest.sources.wasmtex.map((source) => `- \`${source.commit}\``).join('\n')
-  return `# Rebuild inputs\n\nThe exact WasmTex source snapshots used by the build receipts are:\n\n${revisions}\n\nThe pinned TeX Live source is under \`source/texlive/\`; the unused legacy\n\`libs/pplib\` directory is deliberately absent. WTPDF/Xpdf integration, SHA-2 source,\nDockerfiles, worker glue, and build scripts are in each WasmTex snapshot.\n\nEmscripten source is under \`source/emscripten/\`. Exact source archives for every\nEmscripten port used by these builds are under \`source/ports/\`. The build image is\n\`${manifest.buildEnvironment.dockerImage}\`.\n\nRun the original build workflow from the snapshot named by each receipt. A release is\nnot approved until a clean builder rebuild has been compared with the receipt-bound\nartifact bytes and any deterministic differences have been recorded. WebAssembly\ncompilation for this project must be run on the designated \`remote-builder\` host.\n`
+  return `# Rebuild inputs\n\nThe exact WasmTex source snapshots used by the build receipts are:\n\n${revisions}\n\nThe pinned TeX Live source is under \`source/texlive/\`; the unused legacy\n\`libs/pplib\` directory is deliberately absent. WTPDF/Xpdf integration, SHA-2 source,\nDockerfiles, worker glue, and build scripts are in each WasmTex snapshot.\n\nEmscripten source is under \`source/emscripten/\`. Exact source archives for every\nEmscripten port used by these builds are under \`source/ports/\`. The build image is\n\`${manifest.buildEnvironment.dockerImage}\`.\n\nRun the original build workflow from the snapshot named by each receipt. A release is\nnot approved until a clean builder rebuild has been compared with the receipt-bound\nartifact bytes and any deterministic differences have been recorded.\n`
 }
 
 async function main() {
@@ -247,7 +247,7 @@ async function main() {
     if (failures.length > 0) throw new Error(`source bundle check failed:\n- ${failures.join('\n- ')}`)
     const tarVersion = run('tar', ['--version'])
     if (!tarVersion.includes('GNU tar')) {
-      throw new Error('deterministic source archives require GNU tar; run this step on Linux/remote-builder')
+      throw new Error('deterministic source archives require GNU tar; run this step on Linux')
     }
     run('tar', [
       '--sort=name',

@@ -10,7 +10,7 @@
  * so a suggested font is one the worker can fetch on demand from the mirror.
  *
  * Usage:
- *   # On a host with Docker + the texlive image (remote-builder) — scan + emit:
+ *   # In an environment with Docker + the texlive image — scan + emit:
  *   node scripts/gen-font-scripts.mjs --write
  *   # Or split: capture raw `fc-scan %{file}<US>%{lang}` on the Docker host, then
  *   # parse locally (no Docker needed):
