@@ -465,7 +465,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] `pdfimage.cpp`를 WTPDF API로 전환한다.
 - [x] `XeTeX_ext.c`의 `pplib` version 의존성을 제거한다.
 - [x] XeTeX build metadata에서 `pplib` dependency를 제거한다.
-- [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `e57a2d6`의 원격 link map과 artifact 감사를 통과했다.
+- [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `2c53a86`의 원격 link map과 artifact 감사를 통과했다.
 - [ ] XeTeX PDF image corpus의 page/box/rotation/visual differential test를 통과한다.
 - [x] dvipdfmx embedding 경로가 변경되지 않았음을 확인한다. TeX Live patch는 dvipdfmx 소스를 수정하지 않으며 같은 원격 빌드에서 dvipdfmx WASM 재빌드와 validation을 통과했다.
 
@@ -494,7 +494,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
 - [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
 - [x] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다. XeTeX 원격 build에서 TeX Live Xpdf 4.04 archive 생성을 확인했다.
-- [ ] Phase 1 native build가 `pplib` 없이 필요한 code-generation tool을 만들도록 한다.
+- [x] Phase 1 native build가 `pplib` 없이 native XeTeX와 필요한 code-generation tool을 만들도록 한다. `2c53a86` 원격 빌드에서 각 필수 출력을 fail-loud 검사했다.
 - [ ] XeTeX와 LuaHBTeX build script에서 `libpplib.a`를 제거한다.
 - [ ] final link map에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
 - [ ] 대응 소스 archive에 `libs/pplib`가 없음을 자동 검사한다.

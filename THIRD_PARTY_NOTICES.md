@@ -74,7 +74,7 @@ valid private or historical grant.
 
 The WTPDF/Xpdf XeTeX candidate at WasmTex commit `e57a2d6` no longer contains this
 dependency. Its build evidence is recorded in
-[`docs/license-evidence/xetex-wtpdf-e57a2d6.md`](docs/license-evidence/xetex-wtpdf-e57a2d6.md).
+[`docs/license-evidence/xetex-wtpdf-2c53a86.md`](docs/license-evidence/xetex-wtpdf-2c53a86.md).
 That result removes the `pplib` evidence blocker for new XeTeX builds only; the
 remaining corresponding-source, notices, provenance, and compatibility gates still
 apply.

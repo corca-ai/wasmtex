@@ -56,7 +56,7 @@ The practical engine classification is:
 
 The WTPDF/Xpdf XeTeX candidate no longer links `pplib`; the exact remote build and
 link-map evidence is recorded in
-[`license-evidence/xetex-wtpdf-e57a2d6.md`](license-evidence/xetex-wtpdf-e57a2d6.md).
+[`license-evidence/xetex-wtpdf-2c53a86.md`](license-evidence/xetex-wtpdf-2c53a86.md).
 LuaHBTeX still links `pplib`, whose public source copy does not provide a standalone
 license grant that this project can reproduce. LuaHBTeX and any older XeTeX artifact
 remain blocked by the evidence issue in

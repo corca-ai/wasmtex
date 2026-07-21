@@ -4,6 +4,10 @@ This record covers the first full XeTeX WebAssembly build after replacing its
 `pplib` dependency with the WasmTex WTPDF adapter over Xpdf. It is build evidence,
 not a release-clearance statement or a full compatibility approval.
 
+The XeTeX portion is superseded by the fail-loud build evidence in
+[`xetex-wtpdf-2c53a86.md`](xetex-wtpdf-2c53a86.md). This older record remains useful
+for its same-run dvipdfmx build and hashes.
+
 ## Fixed inputs
 
 | Input | Value |
