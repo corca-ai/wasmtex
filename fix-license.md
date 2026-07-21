@@ -572,8 +572,8 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [ ] `complete-corresponding-source` 차단 사유를 실제 재현 빌드 증거로 해소했다.
 - [ ] `texlive-provenance` 차단 사유를 파일별 manifest와 allowlist로 해소했다.
 - [ ] `pplib-license-evidence` 차단 사유의 해소 근거를 manifest에 연결했다.
-- [ ] `LICENSE-MANIFEST.json`을 자동 검증하는 CI가 모든 engine에 대해 통과한다.
-- [ ] release artifact가 `development-only`가 아닌 상태로 전환될 조건을 자동 gate가 확인한다.
+- [x] `LICENSE-MANIFEST.json`과 source repository 정책을 자동 검증하는 CI를 모든 engine workflow에 연결한다. `npm run check:licenses`가 현재 source mode에서 통과한다.
+- [x] public repository의 engine workflow가 artifact 생성·업로드 전에 strict `--release` gate를 실행한다. 현재 `development-only` manifest는 의도대로 거부된다.
 - [ ] 보안·호환성·성능 gate가 통과했다.
 - [ ] 법률 검토 의견과 engineering evidence 사이의 미해결 항목이 없다.
 - [ ] release approver가 엔진 artifact, source archive, notices, Cortex boundary를 최종 확인했다.
@@ -585,15 +585,15 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 라이선스 해결 작업을 모두 마칠 때까지 Git 사용을 미룰 필요는 없다. 원저작 source, build recipe, 테스트, 라이선스 조사 문서와 `development-only` manifest는 먼저 commit할 수 있다. 반면 라이선스가 정리되지 않은 제3자 source, complete corresponding source가 준비되지 않은 engine binary와 format, CDN mirror, 비밀값은 어떤 중간 commit에도 넣지 않는다.
 
-- [ ] `.env`, `.env.*`, `.DS_Store`, 로컬 agent/browser 상태를 `.gitignore`로 제외한다.
-- [ ] `public/wasmtex/<version>/`에서는 검토된 compliance manifest만 추적하고 WASM, glue, Worker, format, ICU data를 제외한다.
-- [ ] `wasm-build/dist*/`, 루트 `dist/`, `bin/`, test output과 cache를 추적하지 않는다.
-- [ ] 최초 staging 전에 `git status --ignored`로 제외 규칙을 검토한다.
+- [x] `.env`, `.env.*`, `.DS_Store`, 로컬 agent/browser 상태를 `.gitignore`로 제외한다.
+- [x] `public/wasmtex/<version>/`에서는 검토된 compliance manifest만 추적하고 WASM, glue, Worker, format, ICU data를 제외한다.
+- [x] `wasm-build/dist*/`, 루트 `dist/`, `bin/`, test output과 cache를 추적하지 않는다.
+- [x] 최초 staging 전에 `git status --ignored`로 제외 규칙을 검토한다.
 - [ ] 최초 staging 전에 secret scanner를 실행하고 결과를 보존한다.
 - [ ] 최초 staging 대상에서 대용량 binary와 archive를 별도로 검토한다.
 - [ ] 제3자에서 복사·포팅한 모든 source 파일에 provenance와 적용 notice가 있는지 확인한다.
 - [ ] `pplib` header, source, binary 또는 그 표현을 복사한 compatibility shim을 어떤 commit에도 넣지 않는다.
-- [ ] engine release artifact는 대응 소스와 manifest가 준비될 때까지 GitHub Releases에도 올리지 않는다.
+- [x] engine workflow는 대응 소스와 manifest가 준비되지 않은 public repository에서 Actions artifact 생성·업로드를 strict gate로 차단하며, 같은 정책을 GitHub Releases에도 적용한다.
 - [ ] GitHub 공개 전 `git rev-list --objects --all`을 기준으로 전체 이력의 secret, binary, 제3자 provenance를 다시 검사한다.
 - [ ] 공개 전 license scanner와 SBOM 생성을 CI에 추가하고 미확인 라이선스를 fail-closed 처리한다.
 - [ ] 공개 전 branch, tag, stash 및 Git LFS object까지 포함해 제거 대상이 과거 이력에 없는지 확인한다.

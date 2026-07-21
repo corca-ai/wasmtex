@@ -62,6 +62,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:golden": "playwright test golden-output",
+    "check:licenses": "node scripts/check-license-compliance.mjs 2025",
     "update:golden": "GOLDEN_UPDATE=1 playwright test golden-output",
     "compat": "node scripts/compat/run.mjs",
     "sync-engine-assets": "node scripts/sync-engine-assets.mjs",

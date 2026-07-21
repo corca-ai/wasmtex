@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
+      - run: npm run check:licenses
       # Plain `npm ci` (not --ignore-scripts): esbuild's postinstall fetches its binary,
       # which build:lib needs. `npm ci` also runs `prepare` (build:lib); the explicit run
       # below is idempotent and keeps the intent obvious.
@@ -39,6 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
+      - run: npm run check:licenses
       - run: npm ci
       - name: Download latest WASM engine
         uses: dawidd6/action-download-artifact@v3

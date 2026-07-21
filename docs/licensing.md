@@ -111,6 +111,14 @@ an asset set whose `LICENSE-MANIFEST.json` is not `release-cleared`. These check
 intentional: changing a label to `release-cleared` without resolving and removing
 every recorded blocker would make the metadata false.
 
+`npm run check:licenses` is the source-repository gate. It verifies the SDK/package
+license boundary, pinned TeX Live commit, manifest links and blocker consistency,
+required notices, and the absence of tracked engine binaries, formats, local
+environment files, or a vendored `pplib`. Every engine workflow runs it. When the
+GitHub repository is public, those workflows additionally run the strict `--release`
+mode before building or uploading an Actions artifact, so a `development-only`
+manifest fails closed rather than making uncleared binaries downloadable.
+
 ## TeX Live mirror gate
 
 The current mirror layout uses flattened basenames for kpathsea lookup. Flattening

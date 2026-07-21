@@ -5,9 +5,9 @@
   "emscriptenVersion": "3.1.46",
   "sdkLicense": "MIT",
   "releaseStatus": "development-only",
-  "noticePath": "../../THIRD_PARTY_NOTICES.md",
-  "licenseDirectoryPath": "../../LICENSES/",
-  "requirementsPath": "../../docs/licensing.md",
+  "noticePath": "../../../THIRD_PARTY_NOTICES.md",
+  "licenseDirectoryPath": "../../../LICENSES/",
+  "requirementsPath": "../../../docs/licensing.md",
   "correspondingSource": null,
   "texliveProvenance": null,
   "artifactFamilies": [
