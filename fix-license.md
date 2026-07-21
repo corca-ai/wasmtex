@@ -521,9 +521,9 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### G. 엔진 라이선스 배포물
 
-- [ ] Cortex가 실제로 import하는 WasmTex 코드와 Worker protocol 경계를 확정한다.
-- [ ] Cortex 비공개 목표를 기준으로 WasmTex 원저작 SDK의 라이선스를 permissive, weak-copyleft, GPL, dual/commercial 선택지 중에서 결정한다.
-- [ ] WasmTex 원저작 코드, 공개 engine code, generated artifact와 제3자 자료의 라이선스 범위를 파일·디렉터리 단위로 정한다.
+- [x] Cortex가 실제로 import하는 WasmTex 코드와 Worker protocol 경계를 확정한다. Cortex commit `53010b8808aec59fab99545aa9e6cbdf8eb3e265`에서 headless/LSP/Monaco/warmup runtime을 client build에 직접 import하는 것을 확인했다.
+- [x] Cortex 비공개 목표를 기준으로 WasmTex 원저작 SDK의 라이선스를 결정한다. 현재 결합 방식에서는 host SDK를 MIT로 유지하고 engine release에 별도 상위 라이선스를 적용한다.
+- [x] WasmTex 원저작 코드, 공개 engine code, generated artifact와 제3자 자료의 라이선스 범위를 파일·디렉터리 단위로 정한다. 기준 표는 `docs/licensing.md`에 둔다.
 - [ ] 선택한 구조를 루트 `LICENSE`, README, 파일별 SPDX, `LICENSES/`와 manifest에 일관되게 명시한다.
 - [ ] WasmTex 원저작 코드를 GPL로 선택한다면 Cortex가 해당 코드를 main bundle에 직접 import/link하지 않는지 별도 검토한다.
 - [ ] pdfTeX, XeTeX/dvipdfmx, LuaHBTeX 각각의 최종 결합물 라이선스를 확정한다.

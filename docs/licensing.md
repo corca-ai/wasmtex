@@ -10,17 +10,41 @@ WasmTex uses a split licensing model:
 The root [`LICENSE`](../LICENSE) does not relicense anything identified in
 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
 
-## License decision
+## Project goal and license decision
 
-The WasmTex-authored SDK remains under MIT. Do not relicense the whole repository
-under GPL merely because it builds or launches GPL TeX engines. MIT is compatible
-with the engine licenses and permits an integrator to keep its own application
-closed-source. The separately distributed engine artifacts still carry their
-upstream copyleft and notice obligations.
+The governing product goal is not to preserve MIT for its own sake. It is to publish
+WasmTex, keep an integrating application such as Cortex closed-source, and comply
+with every license on both sides of the boundary.
+
+The current Cortex integration imports the SDK's headless compiler, LSP, Monaco
+adapter, warmup runtime, SyncTeX types, and other public TypeScript APIs into its
+client build. It does not consume the SDK solely through an out-of-process engine
+protocol. Based on that concrete coupling, the WasmTex-authored host SDK remains
+under MIT: a permissive SDK license lets Cortex keep its original application code
+private while the separately delivered engine workers satisfy their own copyleft
+terms. MIT is the selected implementation for this boundary, not an immutable
+project requirement.
+
+Do not relicense the whole repository under GPL merely because it builds or launches
+GPL TeX engines. Doing so while Cortex directly bundles the SDK would work against
+the closed-source Cortex goal. A future switch to GPL for host-facing code requires
+first changing Cortex to consume only an independent engine protocol, or providing a
+separate permissive/commercial license for the host SDK.
 
 This means `package.json` correctly says `MIT` for the installable SDK because its
 `files` list excludes `public/` and the engine binaries. A product must not use that
 metadata to describe a separately hosted engine directory or TeX Live mirror.
+
+The repository is deliberately multi-license:
+
+| Path or release unit | License treatment |
+| --- | --- |
+| `src/`, WasmTex-authored documentation and build glue | MIT unless the file says otherwise. |
+| `src/synctex/` port | MIT SDK distribution plus the retained upstream SyncTeX permission and non-endorsement notice. |
+| `lib/` | Generated form of the corresponding `src/` code; ship the same notices as the source package. |
+| Engine Worker/glue/WASM release | The terms of the complete linked engine unit, including GPL and linked-component notices; never described by npm's MIT metadata alone. |
+| TeX Live packages, formats, fonts, Lua and ICU data | Each input's own license and release-specific provenance. |
+| `LICENSES/` and third-party notices | Preserved license evidence; inclusion does not relicense the covered component. |
 
 The practical engine classification is:
 
