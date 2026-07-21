@@ -31,10 +31,11 @@
         "wasmtex-xetex.worker.js"
       ],
       "distributionTerms": [
+        "GPL-2.0-only OR GPL-3.0-only",
         "LicenseRef-XeTeX",
+        "MIT",
         "LicenseRef-Linked-Component-Notices"
-      ],
-      "releaseBlocker": "pplib-license-evidence"
+      ]
     },
     {
       "name": "dvipdfmx",
@@ -119,7 +120,7 @@
     },
     {
       "id": "pplib-license-evidence",
-      "detail": "Resolve the missing public pplib license evidence before distributing XeTeX or LuaHBTeX."
+      "detail": "Resolve the missing public pplib license evidence before distributing LuaHBTeX or a legacy pplib-linked XeTeX build."
     },
     {
       "id": "texlive-provenance",

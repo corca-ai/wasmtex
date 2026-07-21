@@ -9,6 +9,7 @@ They do not change the license of any component.
 | `Emscripten-3.1.46.txt` | Emscripten-generated runtime code and Emscripten notices. |
 | `FreeType.txt` | FreeType when used under the FreeType License. |
 | `GPL-2.0.txt` | GPL-2.0 and GPL-2.0-or-later engine components. |
+| `GPL-3.0.txt` | GPL version 3 text, copied byte-for-byte from the pinned Xpdf 4.04 `COPYING3`. |
 | `Graphite2.txt` | Graphite2's LGPL/MPL/GPL licensing notice. |
 | `HarfBuzz.txt` | HarfBuzz's Old MIT notice. |
 | `ICU-68.2.txt` | ICU 68.2 code, data, and bundled third-party notices. |
@@ -22,6 +23,8 @@ They do not change the license of any component.
 | `SyncTeX.txt` | The reference SyncTeX algorithms ported to TypeScript. |
 | `TECkit.txt` | TECkit's CPL/LGPL licensing notice. |
 | `XeTeX.txt` | XeTeX changes and additions. |
+| `Xpdf-4.04-GPL-2.0.txt` | GPL version 2 text copied byte-for-byte from the pinned Xpdf 4.04 `COPYING`. |
+| `Xpdf-4.04-README.txt` | Xpdf 4.04 README and its GPL v2-or-v3 licensing notice, normalized from ISO-8859-1 to UTF-8. |
 | `zlib.txt` | The bundled/ported zlib implementation. |
 | `zziplib.txt` | zziplib's LGPL/MPL licensing notice. |
 
@@ -33,5 +36,6 @@ ship the notices from its exact corresponding source archive.
 
 There is deliberately no `pplib` license file here. The copies inspected in the
 pinned TeX Live source and public upstream repository do not provide a standalone
-license grant that WasmTex can reproduce. See the release blocker in
+license grant that WasmTex can reproduce. This remains relevant to LuaHBTeX and
+legacy XeTeX builds. See the release blocker in
 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#unresolved-pplib-licensing-evidence).

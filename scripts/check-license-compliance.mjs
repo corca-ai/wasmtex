@@ -47,7 +47,10 @@ function validateDownload(value, label) {
 for (const path of [
   'LICENSE',
   'LICENSES/README.md',
+  'LICENSES/GPL-3.0.txt',
   'LICENSES/SyncTeX.txt',
+  'LICENSES/Xpdf-4.04-GPL-2.0.txt',
+  'LICENSES/Xpdf-4.04-README.txt',
   'THIRD_PARTY_NOTICES.md',
   'docs/licensing.md',
   'docs/proprietary-integration.md',
@@ -148,6 +151,14 @@ if (packageJson && manifest) {
     }
   }
 
+  const xetex = (families ?? []).find((family) => family?.name === 'xetex')
+  if (!xetex?.distributionTerms?.includes('GPL-2.0-only OR GPL-3.0-only')) {
+    fail('xetex distribution terms must record the linked Xpdf GPL-2.0/GPL-3.0 choice')
+  }
+  if (xetex?.releaseBlocker === 'pplib-license-evidence') {
+    fail('the WTPDF/Xpdf xetex family must not retain the legacy pplib release blocker')
+  }
+
   if (!['development-only', 'release-cleared'].includes(manifest.releaseStatus)) {
     fail(`unsupported license manifest releaseStatus: ${String(manifest.releaseStatus)}`)
   }
@@ -201,6 +212,17 @@ if (existsSync(synctexSource)) {
   const text = readFileSync(synctexSource, 'utf8')
   for (const marker of ['Jérôme Laurens', 'LICENSES/SyncTeX.txt']) {
     if (!text.includes(marker)) fail(`SyncTeX source header is missing marker: ${marker}`)
+  }
+}
+
+const xetexBuild = resolve(root, 'wasm-build/build-xetex2.sh')
+if (existsSync(xetexBuild)) {
+  const text = readFileSync(xetexBuild, 'utf8')
+  for (const forbiddenLink of [/find\s+"\$WB\/libs\/pplib"/, /"\$WB"\/libs\/pplib/]) {
+    if (forbiddenLink.test(text)) fail('XeTeX build still links the forbidden pplib dependency')
+  }
+  for (const required of ['wtpdf-xpdf.o', 'libxpdf.a', 'wasmtex-xetex.map']) {
+    if (!text.includes(required)) fail(`XeTeX WTPDF build gate is missing marker: ${required}`)
   }
 }
 

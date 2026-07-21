@@ -450,24 +450,24 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] `wasm-build/pdf-backend/wtpdf.h`에 `pplib` 표현을 복사하지 않은 독립 opaque-handle ABI를 설계한다.
 - [x] API별로 XeTeX 또는 LuaHBTeX의 실제 caller와 필요한 observable semantics를 표로 만든다. ABI v1의 XeTeX 범위와 향후 LuaHBTeX 보존 조건을 `wasm-build/pdf-backend/README.md`에 기록했다.
 - [ ] object/ref, integer/real, string bytes, stream raw/decode, dict order, page box, rotation 보존 규칙을 specification으로 작성한다.
-- [ ] Xpdf 4.04의 정확한 source와 GPL v2/v3 라이선스 원문을 고정한다.
+- [x] Xpdf 4.04의 정확한 source와 GPL v2/v3 라이선스 원문을 고정한다. TeX Live commit `143f1723353b20202645f241db429b080a8adcdf`와 `LICENSES/Xpdf-4.04-*`, `LICENSES/GPL-3.0.txt`에 기록했다.
 - [x] adapter의 error ownership, buffer ownership, lifetime, memory limit을 정의한다. 메모리 입력은 복사하며, `max_input_bytes`와 Worker 수명/스레드 제약을 명시했다.
 - [x] 암호화 PDF의 password callback과 오류 모델을 정의한다. ABI v1은 open-time owner/user password와 `WTPDF_STATUS_ENCRYPTED`를 사용한다.
-- [ ] WTPDF 단위 테스트용 C/C++ fixture를 만든다.
+- [x] WTPDF 단위 테스트용 C/C++ fixture를 만든다. `wtpdf-smoke.cc`를 Emscripten으로 빌드·실행하는 gate를 XeTeX 빌드에 포함했다.
 
 ### C. XeTeX 교체
 
 - [x] Xpdf 기반 document open/close를 구현한다.
 - [x] file input과 memory input을 모두 구현한다.
 - [x] page count 조회를 구현한다.
-- [ ] 다섯 page box와 기존 fallback 규칙을 구현한다.
-- [ ] page rotation과 bounds 계산을 구현한다.
-- [ ] `pdfimage.cpp`를 WTPDF API로 전환한다.
-- [ ] `XeTeX_ext.c`의 `pplib` version 의존성을 제거한다.
-- [ ] XeTeX build metadata에서 `pplib` dependency를 제거한다.
-- [ ] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다.
+- [x] 다섯 page box와 표준 fallback 규칙을 구현한다. 정상 fixture의 BleedBox→CropBox fallback을 원격 WASM smoke test에서 확인했으며 malformed PDF의 과거-parser 차이는 differential gate에 남긴다.
+- [x] page rotation과 bounds 계산을 구현한다. 음수 rotation 정규화와 기존 XeTeX TeX-point 계산 경로를 보존했다.
+- [x] `pdfimage.cpp`를 WTPDF API로 전환한다.
+- [x] `XeTeX_ext.c`의 `pplib` version 의존성을 제거한다.
+- [x] XeTeX build metadata에서 `pplib` dependency를 제거한다.
+- [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `e57a2d6`의 원격 link map과 artifact 감사를 통과했다.
 - [ ] XeTeX PDF image corpus의 page/box/rotation/visual differential test를 통과한다.
-- [ ] dvipdfmx embedding 경로가 변경되지 않았음을 확인한다.
+- [x] dvipdfmx embedding 경로가 변경되지 않았음을 확인한다. TeX Live patch는 dvipdfmx 소스를 수정하지 않으며 같은 원격 빌드에서 dvipdfmx WASM 재빌드와 validation을 통과했다.
 
 ### D. LuaHBTeX 교체
 
@@ -491,16 +491,16 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 ### E. TeX Live patch와 재현 빌드
 
 - [x] `wasm-build/patches/texlive-wtpdf.patch`를 XeTeX 범위의 최소 변경으로 작성한다. LuaHBTeX 전환은 후속 patch 확장으로 남아 있다.
-- [ ] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
-- [ ] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
-- [ ] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다.
+- [x] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
+- [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
+- [x] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다. XeTeX 원격 build에서 TeX Live Xpdf 4.04 archive 생성을 확인했다.
 - [ ] Phase 1 native build가 `pplib` 없이 필요한 code-generation tool을 만들도록 한다.
 - [ ] XeTeX와 LuaHBTeX build script에서 `libpplib.a`를 제거한다.
 - [ ] final link map에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
 - [ ] 대응 소스 archive에 `libs/pplib`가 없음을 자동 검사한다.
 - [ ] 네트워크가 제한된 깨끗한 builder에서 source archive만으로 동일 release를 재빌드한다.
 - [ ] 재빌드 산출물과 release artifact의 hash 또는 차이 원인을 기록한다.
-- [ ] TeX Live 연도 업그레이드 CI에서 patch drift를 감지한다.
+- [x] TeX Live 연도 업그레이드 CI에서 patch drift를 감지한다. `texlive-source.ref` 또는 patch 변경이 XeTeX workflow를 실행하고 exact `git apply --check`를 거친다.
 
 ### F. 호환성·보안·성능 gate
 

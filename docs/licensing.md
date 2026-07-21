@@ -51,14 +51,17 @@ The practical engine classification is:
 | Runtime | Distribution treatment |
 | --- | --- |
 | pdfLaTeX | Treat the pdfTeX JavaScript/WASM distribution unit as GPL-2.0-or-later and retain all linked-component notices. The LaTeX format and packages retain LPPL or other input licenses. |
-| XeLaTeX | XeTeX changes use the permissive XeTeX notice, but the pipeline also distributes GPL-2.0-or-later dvipdfmx and a mixed set of linked libraries. It is not an MIT-only distribution. |
+| XeLaTeX | XeTeX changes use the permissive XeTeX notice, while the WTPDF build links Xpdf 4.04 under GPL v2 and/or GPL v3. The pipeline also distributes GPL-2.0-or-later dvipdfmx and other linked libraries. It is not an MIT-only distribution. |
 | LuaLaTeX | Treat the LuaHBTeX JavaScript/WASM distribution unit as GPL-2.0-or-later and retain all linked-component notices. The format, Lua modules, packages, and fonts retain their own licenses. |
 
-The current XeTeX and LuaHBTeX builds statically link `pplib`. Its public source
-copy does not provide a standalone license grant that this project can reproduce,
-so those two browser artifacts are not release-cleared until the evidence issue in
-[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#unresolved-pplib-licensing-evidence)
-is resolved.
+The WTPDF/Xpdf XeTeX candidate no longer links `pplib`; the exact remote build and
+link-map evidence is recorded in
+[`license-evidence/xetex-wtpdf-e57a2d6.md`](license-evidence/xetex-wtpdf-e57a2d6.md).
+LuaHBTeX still links `pplib`, whose public source copy does not provide a standalone
+license grant that this project can reproduce. LuaHBTeX and any older XeTeX artifact
+remain blocked by the evidence issue in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#unresolved-pplib-licensing-evidence).
+The new XeTeX candidate is still development-only until its other release gates pass.
 
 For the boundary that lets a commercial or otherwise closed-source application use
 WasmTex, see [Proprietary integration](proprietary-integration.md).

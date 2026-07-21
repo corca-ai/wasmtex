@@ -32,17 +32,19 @@ not covered solely by the WasmTex MIT license.
 | BibTeX | Web2C/BibTeX source terms and LGPL-2.1-or-later kpathsea; consult the corresponding source files. |
 | BibTeX8 | GPL-2.0-or-later source in `texk/bibtex-x`, plus kpathsea and linked-library terms. |
 | makeindex | The MakeIndex Distribution Notice, plus LGPL-2.1-or-later kpathsea and linked-library terms. The WebAssembly port is a modified version for purposes of that notice. |
-| XeTeX | The permissive XeTeX notice, plus kpathsea, FreeType, ICU, HarfBuzz, Graphite2, TECkit, pplib, libpng, zlib, and other linked-library terms. This is a mixed-license binary, not an MIT-only artifact. |
+| XeTeX | The permissive XeTeX notice, plus Xpdf 4.04 under GPL v2 and/or GPL v3, the MIT WTPDF adapter, kpathsea, FreeType, ICU, HarfBuzz, Graphite2, TECkit, libpng, zlib, and other linked-library terms. This is a GPL/mixed-license binary, not an MIT-only artifact. |
 | dvipdfmx | GPL-2.0-or-later terms, plus kpathsea, FreeType, libpng, zlib, and other linked-library terms. |
 | LuaHBTeX | GPL-2.0-or-later engine terms, plus kpathsea, Lua, HarfBuzz, Graphite2, zziplib, pplib, libpng, zlib, and other notices from the corresponding source. |
 
 Relevant license texts included here are:
 
 - [`LICENSES/GPL-2.0.txt`](LICENSES/GPL-2.0.txt)
+- [`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt)
 - [`LICENSES/LGPL-2.1.txt`](LICENSES/LGPL-2.1.txt)
 - [`LICENSES/MakeIndex.txt`](LICENSES/MakeIndex.txt)
 - [`LICENSES/XeTeX.txt`](LICENSES/XeTeX.txt)
 - [`LICENSES/SyncTeX.txt`](LICENSES/SyncTeX.txt)
+- [`LICENSES/Xpdf-4.04-README.txt`](LICENSES/Xpdf-4.04-README.txt)
 
 Corresponding source means the pinned TeX Live source plus the WasmTex glue, patches,
 build scripts, Dockerfiles, and any other material needed to rebuild the distributed
@@ -53,14 +55,15 @@ that bundle.
 
 ### Unresolved pplib licensing evidence
 
-The current XeTeX and LuaHBTeX link commands include `pplib`. The pinned TeX Live
-copy and the public pplib repository do not contain a standalone license grant that
-is sufficient for WasmTex to record exact redistribution terms. Inclusion in TeX
-Live is useful context, but it is not a replacement for a license notice from the
-copyright holder.
+The current LuaHBTeX link command and legacy XeTeX artifacts include `pplib`. The
+pinned TeX Live copy and the public pplib repository do not contain a standalone
+license grant that is sufficient for WasmTex to record exact redistribution terms.
+Inclusion in TeX Live is useful context, but it is not a replacement for a license
+notice from the copyright holder.
 
-Do not publish the current XeTeX or LuaHBTeX browser artifacts as a cleared release
-until one of the following is recorded with the release:
+Do not publish the current LuaHBTeX or a legacy `pplib`-linked XeTeX browser
+artifact as a cleared release until one of the following is recorded with the
+release:
 
 - an explicit upstream license or written redistribution grant covering pplib;
 - a licensed replacement for pplib; or
@@ -68,6 +71,13 @@ until one of the following is recorded with the release:
 
 This is a documentation/evidence blocker; it is not a claim that upstream lacks a
 valid private or historical grant.
+
+The WTPDF/Xpdf XeTeX candidate at WasmTex commit `e57a2d6` no longer contains this
+dependency. Its build evidence is recorded in
+[`docs/license-evidence/xetex-wtpdf-e57a2d6.md`](docs/license-evidence/xetex-wtpdf-e57a2d6.md).
+That result removes the `pplib` evidence blocker for new XeTeX builds only; the
+remaining corresponding-source, notices, provenance, and compatibility gates still
+apply.
 
 ## Emscripten and ports
 
