@@ -67,7 +67,10 @@ hashes and must not be copied into a release manifest for a different build.
 
 This build does not clear the overall 2025 engine release. In particular:
 
-- the old-parser versus WTPDF PDF/TeX differential corpus has not run;
+- at the time of this build, the old-parser versus WTPDF differential corpus
+  had not run; the later geometry subset is recorded in
+  [`xetex-geometry-differential-dba9069.md`](xetex-geometry-differential-dba9069.md),
+  while visual and extended PDF coverage remain open;
 - LuaHBTeX still uses `pplib`;
 - complete corresponding source, relink compliance, component notices, and
   TeX Live/ICU/package/font provenance are not yet complete.

@@ -1,6 +1,6 @@
 # WasmTex 라이선스 문제 해결 절차
 
-상태: 실행 계획 초안
+상태: 실행 중
 
 대상: WasmTex, WasmTex를 브라우저 엔진으로 사용하는 비공개 Cortex
 
@@ -43,7 +43,7 @@
 | 사용자 기능 | 실제 파이프라인 | 주요 라이선스 성격 | 현재 판단 |
 | --- | --- | --- | --- |
 | pdfLaTeX | pdfTeX → PDF | pdfTeX 및 결합 라이브러리 때문에 GPL 배포물 | 브라우저 배포 가능하나 GPL 대응 소스 필요 |
-| XeLaTeX | XeTeX → XDV → dvipdfmx → PDF | XeTeX 자체 고지 외에 dvipdfmx와 결합 라이브러리의 GPL 의무 존재 | 현재 XeTeX WASM의 `pplib` 정적 링크가 차단 요소 |
+| XeLaTeX | XeTeX → XDV → dvipdfmx → PDF | XeTeX 자체 고지 외에 dvipdfmx와 결합 라이브러리의 GPL 의무 존재 | WTPDF/Xpdf 후보에서 `pplib` 제거와 기본 geometry parity를 확인했으나 대응 소스·고지·전체 compatibility gate가 남음 |
 | LuaLaTeX | LuaHBTeX → PDF | GPL-2.0-or-later 계열 배포물 | 현재 LuaHBTeX WASM의 `pplib` 정적 링크가 차단 요소 |
 | SyncTeX | TeX Live reference parser를 TypeScript로 포팅 | 상위 MIT 유사 고지 유지 필요 | 원저작권·허가문을 소스와 배포 고지에 보존 |
 | TeX Live 패키지·폰트·Lua·포맷·ICU 데이터 | 버전별 CDN에서 지연 로드 | 파일마다 라이선스가 다름 | CDN manifest와 파일별 provenance가 필요 |
@@ -54,9 +54,8 @@
 
 ### 2.3 FastLaTeX를 WasmTex로 바꾸는 것만으로 `pplib` 문제가 없어지지는 않는다
 
-조사 당시 FastLaTeX와 WasmTex는 동일한 TeX Live 계열 소스와 `pplib` 정적 링크를 사용했다. 현재 WasmTex의 빌드도 다음 지점에서 `pplib`를 링크한다.
+조사 당시 FastLaTeX와 WasmTex는 동일한 TeX Live 계열 소스와 `pplib` 정적 링크를 사용했다. 이후 WasmTex의 XeTeX 후보는 독립 WTPDF/Xpdf adapter로 전환해 `pplib`를 link line과 산출물에서 제거했다. LuaHBTeX는 아직 다음 지점에서 `pplib`를 링크한다.
 
-- `wasm-build/build-xetex2.sh`
 - `wasm-build/build-luatex.sh`
 
 그러므로 Cortex에서 FastLaTeX asset URL을 WasmTex asset URL로 바꾸는 일은 구조와 유지보수 측면에서는 개선이지만 라이선스 해결 자체는 아니다. WasmTex가 더 적합한 이유는 엔진 배포 manifest와 release gate를 갖고 있어 문제를 명시적으로 차단할 수 있기 때문이다.
@@ -93,7 +92,7 @@ GPL 엔진을 독립된 Worker 배포 단위로 만들고 Cortex가 단순한 �
 
 ### 3.5 `pplib`가 무엇이며 왜 문제가 되는가
 
-`pplib`는 LuaTeX를 위해 만들어진 read-only PDF parsing/disassembly 라이브러리다. TeX Live 빌드 설정은 XeTeX, LuaTeX, LuaHBTeX의 필수 라이브러리로 이를 선언하며, 현재 WasmTex는 XeTeX와 LuaHBTeX WASM에 정적으로 링크한다.
+`pplib`는 LuaTeX를 위해 만들어진 read-only PDF parsing/disassembly 라이브러리다. 고정한 원본 TeX Live 빌드 설정은 XeTeX, LuaTeX, LuaHBTeX의 필수 라이브러리로 이를 선언한다. WasmTex patch는 XeTeX dependency를 Xpdf/WTPDF로 바꿨지만 LuaHBTeX WASM은 아직 `pplib`를 정적으로 링크한다. 교체 전 XeTeX는 비공개 비교 기준에만 남기고 공개 artifact로 배포하지 않는다.
 
 공개 `pplib` 저장소와 확인 가능한 이력에서는 라이브러리 본체 전체를 포괄하는 `LICENSE` 또는 `COPYING` 파일을 찾지 못했다. 일부 유틸리티 파일의 개별 라이선스가 라이브러리 전체의 허가를 대신하지 않는다. 이는 “반드시 독점 소프트웨어”라는 증명은 아니지만, 제3자가 브라우저 바이너리와 대응 소스를 재배포할 충분한 권리를 입증할 수 없는 상태다.
 
@@ -466,7 +465,8 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] `XeTeX_ext.c`의 `pplib` version 의존성을 제거한다.
 - [x] XeTeX build metadata에서 `pplib` dependency를 제거한다.
 - [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `2c53a86`의 원격 link map과 artifact 감사를 통과했다.
-- [ ] XeTeX PDF image corpus의 page/box/rotation/visual differential test를 통과한다.
+- [x] 자체 생성 XeTeX PDF corpus의 page selection/box fallback/rotation/inclusion geometry differential test를 통과한다. `docs/license-evidence/xetex-geometry-differential-dba9069.md`에 같은 TeX Live revision의 결과와 hash를 기록했다.
+- [ ] 고정 renderer와 실제 PDF corpus를 사용한 XeTeX visual differential test를 통과한다.
 - [x] dvipdfmx embedding 경로가 변경되지 않았음을 확인한다. TeX Live patch는 dvipdfmx 소스를 수정하지 않으며 같은 원격 빌드에서 dvipdfmx WASM 재빌드와 validation을 통과했다.
 
 ### D. LuaHBTeX 교체
@@ -495,8 +495,10 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
 - [x] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다. XeTeX 원격 build에서 TeX Live Xpdf 4.04 archive 생성을 확인했다.
 - [x] Phase 1 native build가 `pplib` 없이 native XeTeX와 필요한 code-generation tool을 만들도록 한다. `2c53a86` 원격 빌드에서 각 필수 출력을 fail-loud 검사했다.
-- [ ] XeTeX와 LuaHBTeX build script에서 `libpplib.a`를 제거한다.
-- [ ] final link map에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
+- [x] XeTeX build script에서 `libpplib.a`를 제거한다.
+- [ ] LuaHBTeX build script에서 `libpplib.a`를 제거한다.
+- [x] XeTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
+- [ ] LuaHBTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
 - [ ] 대응 소스 archive에 `libs/pplib`가 없음을 자동 검사한다.
 - [ ] 네트워크가 제한된 깨끗한 builder에서 source archive만으로 동일 release를 재빌드한다.
 - [ ] 재빌드 산출물과 release artifact의 hash 또는 차이 원인을 기록한다.
@@ -504,9 +506,9 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### F. 호환성·보안·성능 gate
 
-- [ ] `pplib` 기준 빌드와 WTPDF 후보 빌드를 같은 revision과 format으로 만든다.
+- [x] `pplib` 기준 빌드와 WTPDF 후보 빌드를 같은 TeX Live revision과 같은 XeTeX initialization mode로 만든다. 기준 바이너리는 비교에만 사용하고 배포하지 않는다.
 - [ ] PDF parser corpus의 출처·라이선스·기대 결과를 기록한다.
-- [ ] page count, page size, box, rotation, XDV geometry 비교를 자동화한다.
+- [x] 자체 생성 classic-xref fixture의 page selection boundary, page size, box fallback, rotation과 XeTeX inclusion geometry 비교를 자동화한다.
 - [ ] 고정 renderer와 DPI로 raster pixel diff를 자동화한다.
 - [ ] text와 위치 비교를 자동화한다.
 - [ ] 두 개 이상의 PDF 구조 검사기로 결과를 검증한다.

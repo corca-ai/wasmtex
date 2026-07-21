@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const xetex = process.argv[2]
+const expectedPath = process.argv[3]
 if (!xetex) {
-  console.error('Usage: node scripts/test-xetex-pdf-geometry.mjs /path/to/xetex')
+  console.error(
+    'Usage: node scripts/test-xetex-pdf-geometry.mjs /path/to/xetex [expected.json]',
+  )
   process.exit(2)
 }
 
@@ -115,7 +118,16 @@ try {
     process.stderr.write(result.stdout)
     throw new Error(`expected ${queries.length} measurements, got ${Object.keys(measurements).length}`)
   }
-  process.stdout.write(`${JSON.stringify(measurements, null, 2)}\n`)
+  const output = `${JSON.stringify(measurements, null, 2)}\n`
+  process.stdout.write(output)
+
+  if (expectedPath) {
+    const expected = JSON.parse(readFileSync(resolve(expectedPath), 'utf8'))
+    if (JSON.stringify(measurements) !== JSON.stringify(expected)) {
+      process.stderr.write(`XeTeX PDF geometry mismatch; expected:\n${JSON.stringify(expected, null, 2)}\n`)
+      process.exitCode = 1
+    }
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true })
 }

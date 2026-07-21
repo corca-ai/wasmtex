@@ -1,0 +1,82 @@
+{
+  "all-media": {
+    "width": "200.75pt",
+    "height": "401.50002pt",
+    "depth": "0.0pt"
+  },
+  "all-crop": {
+    "width": "180.675pt",
+    "height": "371.3875pt",
+    "depth": "0.0pt"
+  },
+  "all-bleed": {
+    "width": "170.6375pt",
+    "height": "361.35002pt",
+    "depth": "0.0pt"
+  },
+  "all-trim": {
+    "width": "160.6pt",
+    "height": "351.3125pt",
+    "depth": "0.0pt"
+  },
+  "all-art": {
+    "width": "150.56252pt",
+    "height": "341.27501pt",
+    "depth": "0.0pt"
+  },
+  "rotate-0": {
+    "width": "72.27pt",
+    "height": "144.54pt",
+    "depth": "0.0pt"
+  },
+  "rotate-90": {
+    "width": "144.54pt",
+    "height": "72.27pt",
+    "depth": "0.0pt"
+  },
+  "rotate-180": {
+    "width": "72.27pt",
+    "height": "144.54pt",
+    "depth": "0.0pt"
+  },
+  "rotate-270": {
+    "width": "144.54pt",
+    "height": "72.27pt",
+    "depth": "0.0pt"
+  },
+  "fallback-crop": {
+    "width": "89.33376pt",
+    "height": "178.6675pt",
+    "depth": "0.0pt"
+  },
+  "fallback-bleed": {
+    "width": "89.33376pt",
+    "height": "178.6675pt",
+    "depth": "0.0pt"
+  },
+  "fallback-trim": {
+    "width": "89.33376pt",
+    "height": "178.6675pt",
+    "depth": "0.0pt"
+  },
+  "fallback-art": {
+    "width": "89.33376pt",
+    "height": "178.6675pt",
+    "depth": "0.0pt"
+  },
+  "clamp-first": {
+    "width": "100.375pt",
+    "height": "200.75pt",
+    "depth": "0.0pt"
+  },
+  "clamp-last-high": {
+    "width": "301.125pt",
+    "height": "401.5pt",
+    "depth": "0.0pt"
+  },
+  "clamp-last-negative": {
+    "width": "301.125pt",
+    "height": "401.5pt",
+    "depth": "0.0pt"
+  }
+}

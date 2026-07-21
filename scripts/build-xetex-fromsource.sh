@@ -36,6 +36,14 @@ TEXLIVE_REF="$(cat wasm-build/texlive-source.ref)"
 echo "Building wasmtex-xetex from texlive-source ($TEXLIVE_REF) ..."
 docker build -f wasm-build/Dockerfile.xetex --platform linux/amd64 \
   --build-arg TEXLIVE_REF="$TEXLIVE_REF" -t wasmtex-xetex-wasm wasm-build/
+
+echo "Checking XeTeX PDF inclusion geometry ..."
+docker run --rm --platform linux/amd64 \
+  -v "$REPO_ROOT/scripts/test-xetex-pdf-geometry.mjs:/test-xetex-pdf-geometry.mjs:ro" \
+  -v "$REPO_ROOT/wasm-build/pdf-backend/fixtures/xetex-geometry.expected.json:/xetex-geometry.expected.json:ro" \
+  --entrypoint node wasmtex-xetex-wasm \
+  /test-xetex-pdf-geometry.mjs /build/native/texk/web2c/xetex /xetex-geometry.expected.json
+
 docker run --rm --platform linux/amd64 -v "$OUT_ABS:/dist" wasmtex-xetex-wasm
 [ -f "$OUT_DIR/wasmtex-xetex.wasm" ] || { echo "xetex build produced no wasm"; exit 1; }
 echo "Built: $(wc -c < "$OUT_DIR/wasmtex-xetex.js") + $(wc -c < "$OUT_DIR/wasmtex-xetex.wasm") bytes"
