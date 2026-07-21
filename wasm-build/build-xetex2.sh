@@ -103,6 +103,16 @@ echo "=== Phase 2c: build the needed libs (Xpdf/harfbuzz/graphite2/teckit) ==="
 emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C libs -j"$(nproc)" \
   >emmake-libs.out 2>&1 || { echo "libs build failed"; tail -40 emmake-libs.out; exit 1; }
 XPDFLIB="$(find "$WB/libs/xpdf" -name libxpdf.a | head -1)"
+if [ -z "$XPDFLIB" ]; then
+  echo "Xpdf was configured but not reached by the recursive libs target; building it explicitly"
+  emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc \
+    -C "$WB/libs/xpdf" -j"$(nproc)" >emmake-xpdf.out 2>&1 || {
+      echo "Xpdf build failed"
+      tail -60 emmake-xpdf.out
+      exit 1
+    }
+  XPDFLIB="$(find "$WB/libs/xpdf" -name libxpdf.a | head -1)"
+fi
 [ -n "$XPDFLIB" ] && [ -s "$XPDFLIB" ] || {
   echo "Xpdf library missing after the XeTeX dependency build"
   find "$WB/libs/xpdf" -maxdepth 3 -type f 2>/dev/null | tail -40
