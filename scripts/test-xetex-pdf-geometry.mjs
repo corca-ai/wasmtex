@@ -79,19 +79,23 @@ try {
     ...queries.map(
       ([name, file, page, box]) =>
         `\\setbox0=\\hbox{\\XeTeXpdffile "${file}" page ${page} ${box}}%\n` +
-        `\\immediate\\write16{GEOM ${name} wd=\\the\\wd0 ht=\\the\\ht0 dp=\\the\\dp0}`,
+        `\\immediate\\write16{GEOM:${name}:\\the\\wd0:\\the\\ht0:\\the\\dp0}`,
     ),
     '\\end',
     '',
   ].join('\n')
   writeFileSync(join(directory, 'probe.tex'), tex)
 
-  const result = spawnSync(resolve(xetex), ['-ini', '-no-pdf', '-interaction=nonstopmode', 'probe.tex'], {
-    cwd: directory,
-    encoding: 'utf8',
-    env: { ...process.env, TEXINPUTS: '.', TEXMFOUTPUT: directory },
-    timeout: 60_000,
-  })
+  const result = spawnSync(
+    resolve(xetex),
+    ['-ini', '-etex', '-no-pdf', '-interaction=nonstopmode', 'probe.tex'],
+    {
+      cwd: directory,
+      encoding: 'utf8',
+      env: { ...process.env, TEXINPUTS: '.', TEXMFOUTPUT: directory },
+      timeout: 60_000,
+    },
+  )
   if (result.error) throw result.error
   if (result.status !== 0) {
     process.stderr.write(result.stdout ?? '')
@@ -100,7 +104,7 @@ try {
   }
 
   const measurements = Object.fromEntries(
-    [...result.stdout.matchAll(/^GEOM (\S+) wd=(\S+) ht=(\S+) dp=(\S+)$/gm)].map((match) => [
+    [...result.stdout.matchAll(/^GEOM:(\S+?):(\S+?):(\S+?):(\S+)$/gm)].map((match) => [
       match[1],
       { width: match[2], height: match[3], depth: match[4] },
     ]),
