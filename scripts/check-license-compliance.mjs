@@ -56,6 +56,7 @@ for (const path of [
   'docs/licensing.md',
   'docs/corresponding-source.md',
   'docs/develop.md',
+  'docs/license-evidence/texlive-2025-metadata-audit-9906443.md',
   'docs/proprietary-integration.md',
   'fix-license.md',
   'scripts/audit-texlive-provenance.mjs',

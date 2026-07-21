@@ -541,6 +541,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] 내용이 다른 basename collision, 소유 package 누락, license metadata 누락, archive hash 불일치를 fail-closed 처리한다.
 - [x] 모든 사용 package가 reviewed override와 실제 notice evidence path를 갖기 전에는 provenance release 검사가 실패하도록 했다.
 - [x] 고정 TLPDB만으로 package review queue와 content-check collision 목록을 만드는 metadata-only 감사 도구를 추가했다. 이 결과는 승인 결과가 아니며 실제 파일 byte/notice 검사가 뒤따라야 한다.
+- [x] 2025 고정 TLPDB metadata audit를 실행하고 `docs/license-evidence/texlive-2025-metadata-audit-9906443.md`에 재현 입력과 결과를 기록했다. 현재 범위는 155,983개 key, 4,110개 package review, license metadata 없는 73개 package, notice 후보 없는 374개 package, byte 확인이 필요한 collision 60개다.
 - [ ] 전체 2025 mirror에 생성기를 실행하고 differing collision과 package별 license/notice override를 검토·확정한다.
 - [ ] 생성된 전체 provenance와 실제 CDN object를 대조하고 안정적인 URL/SHA-256으로 공개한다.
 - [ ] 라이선스 미확인 CDN 파일이 production allowlist에 들어오지 못하게 한다.

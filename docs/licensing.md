@@ -177,6 +177,8 @@ An exit status of 2 means the queue contains unresolved package metadata; it is 
 expected result until all entries are reviewed. This inventory does not replace the
 full-byte audit: notice files must be checked in the extracted tree, and collision
 candidates must be resolved from actual hashes before mirror generation.
+The first 2025 inventory and its unresolved counts are recorded in
+[`license-evidence/texlive-2025-metadata-audit-9906443.md`](license-evidence/texlive-2025-metadata-audit-9906443.md).
 
 ## Updating dependencies
 
