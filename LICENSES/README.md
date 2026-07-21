@@ -6,8 +6,9 @@ They do not change the license of any component.
 | File | Applies to |
 | --- | --- |
 | `Apache-2.0.txt` | PDF.js and other Apache-2.0 components when distributed. |
+| `BibTeX.txt` | BibTeX 0.99d and the separately identified WasmTex/Web2C port. |
 | `Emscripten-3.1.46.txt` | Emscripten-generated runtime code and Emscripten notices. |
-| `FreeType.txt` | FreeType when used under the FreeType License. |
+| `FreeType.txt` | FreeType's alternative FreeType License text. The XeTeX release selects GPL-2.0-only instead because Xpdf fixes that combined unit at GPLv2. |
 | `GPL-2.0.txt` | GPL-2.0 and GPL-2.0-or-later engine components. |
 | `GPL-3.0.txt` | GPL version 3 text, copied byte-for-byte from the pinned Xpdf 4.04 `COPYING3`. |
 | `Graphite2.txt` | Graphite2's LGPL/MPL/GPL licensing notice. |
@@ -16,9 +17,13 @@ They do not change the license of any component.
 | `LGPL-2.0.txt` | LGPL-2.0 components such as zziplib when that option is used. |
 | `LGPL-2.1.txt` | LGPL-2.1 and LGPL-2.1-or-later components such as kpathsea. |
 | `libpng.txt` | The bundled/ported libpng implementation. |
+| `LLVM-exception.txt` | The LLVM exception used with Apache-2.0 for libc++, libc++abi, and compiler-rt. |
+| `Lua-5.3.txt` | Lua 5.3.6 embedded in LuaHBTeX. |
+| `LuaHBTeX-embedded.txt` | Index of retained notices for LuaHBTeX's embedded libraries. |
 | LPPL 1.3c | LaTeX formats and packages that identify LPPL 1.3c as their license. Use the exact package notice; authoritative text: <https://www.latex-project.org/lppl/lppl-1-3c/>. |
 | `MakeIndex.txt` | The makeindex source and WasmTex WebAssembly port. |
 | `Monaco-Editor.txt` | Monaco Editor when bundled by the demo application. |
+| `musl.txt` | musl libc linked from the Emscripten sysroot; the complete component notice is also in corresponding source. |
 | `pdf-lib.txt` | pdf-lib when the optional peer is bundled. |
 | `SyncTeX.txt` | The reference SyncTeX algorithms ported to TypeScript. |
 | `TECkit.txt` | TECkit's CPL/LGPL licensing notice. |

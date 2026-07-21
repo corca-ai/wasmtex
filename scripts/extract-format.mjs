@@ -6,6 +6,7 @@ import { createServer } from 'vite'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { collectFormatRequests, writeFormatInputEvidence } from './lib/format-input-evidence.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -27,6 +28,7 @@ async function main() {
   const browser = await chromium.launch(channel ? { channel } : {})
   try {
     const page = await browser.newPage()
+    const formatRequests = collectFormatRequests(page, version)
     page.on('console', (msg) => {
       const text = msg.text()
       if (text.includes('[compile]') || text.includes('[kpse]') || text.includes('[engine]')) {
@@ -62,6 +64,13 @@ async function main() {
     const buffer = Buffer.from(b64Data, 'base64')
     mkdirSync(dirname(outPath), { recursive: true })
     writeFileSync(outPath, buffer)
+    writeFormatInputEvidence({
+      output: process.env.FORMAT_INPUT_LOG,
+      engine: 'pdftex',
+      formatPath: outPath,
+      requests: formatRequests,
+      procedure: 'node scripts/extract-format.mjs',
+    })
     console.log(`\nSUCCESS: Format saved to ${outPath} (${buffer.length} bytes)`)
   } finally {
     await browser.close()

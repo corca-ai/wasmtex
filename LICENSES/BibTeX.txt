@@ -1,0 +1,24 @@
+BibTeX 0.99d distribution notice
+================================
+
+This program is copyright (C) 1985, 1988, 2010 by Oren Patashnik;
+all rights are reserved.
+
+This program, BibTeX, is available under the same terms as Donald Knuth's
+TeX program.
+
+(Request to implementors: The WEB system provides for alterations via an
+auxiliary file; the master file should stay intact.)
+
+Although considerable effort has been expended to make the BibTeX program
+correct and reliable, no warranty is implied; the author disclaims any
+obligation or liability for damages, including but not limited to special,
+indirect, or consequential damages arising out of or in connection with the
+use or performance of this software.
+
+The WasmTex build does not edit the `bibtex.web` master file. It applies the
+Web2C change-file build used by the pinned TeX Live source and adds a separate
+WebAssembly entry point and file-lookup interposition layer. The resulting
+executable is distributed as `wasmtex-bibtex`, not as an unmodified upstream
+binary. The exact master, change files, generated C, glue, and build scripts
+are provided in the corresponding-source archive.

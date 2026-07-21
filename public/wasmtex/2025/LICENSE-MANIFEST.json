@@ -8,6 +8,7 @@
   "noticePath": "../../../THIRD_PARTY_NOTICES.md",
   "licenseDirectoryPath": "../../../LICENSES/",
   "requirementsPath": "../../../docs/licensing.md",
+  "componentInventoryPath": "../../../scripts/engine-components-2025.json",
   "correspondingSource": null,
   "requiredBuildFamilies": [
     "pdftex",
@@ -26,7 +27,7 @@
         "wasmtex-pdftex.worker.js"
       ],
       "distributionTerms": [
-        "GPL-2.0-or-later",
+        "GPL-2.0-only",
         "LicenseRef-Linked-Component-Notices"
       ]
     },
@@ -38,7 +39,7 @@
         "wasmtex-xetex.worker.js"
       ],
       "distributionTerms": [
-        "GPL-2.0-only OR GPL-3.0-only",
+        "GPL-2.0-only",
         "LicenseRef-XeTeX",
         "MIT",
         "LicenseRef-Linked-Component-Notices"
@@ -64,8 +65,7 @@
         "wasmtex-luatex.worker.js"
       ],
       "distributionTerms": [
-        "GPL-2.0-or-later",
-        "GPL-2.0-only OR GPL-3.0-only",
+        "GPL-2.0-only",
         "MIT",
         "LicenseRef-Linked-Component-Notices"
       ]
@@ -108,6 +108,7 @@
       ],
       "distributionTerms": [
         "LicenseRef-MakeIndex-Distribution-Notice",
+        "LGPL-2.1-or-later",
         "LicenseRef-Linked-Component-Notices"
       ]
     },
@@ -122,10 +123,6 @@
     }
   ],
   "releaseBlockers": [
-    {
-      "id": "third-party-notices-and-relink",
-      "detail": "Finish the exact linked-component notices, license choices, and any required LGPL relink materials."
-    },
     {
       "id": "compatibility-security",
       "detail": "Complete the WTPDF compatibility, malformed-input, memory, cross-host, and performance release gates."

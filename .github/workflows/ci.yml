@@ -113,10 +113,13 @@ jobs:
       # corresponding source and has no unresolved component-license blocker.
       - name: Verify and generate releasable asset manifest
         if: github.ref == 'refs/heads/main'
-        run: node scripts/gen-asset-manifest.mjs 2025 --release
+        run: |
+          node scripts/check-release-notices.mjs --assets public/wasmtex/2025 --release
+          node scripts/gen-asset-manifest.mjs 2025 --release
       - run: npx vite build
         env:
           BASE_URL: /${{ github.event.repository.name }}/
+      - run: node scripts/check-release-notices.mjs --assets public/wasmtex/2025 --demo dist
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
         with: { path: dist }

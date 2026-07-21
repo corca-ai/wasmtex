@@ -99,6 +99,39 @@ function rebuildReadme(manifest) {
   return `# Rebuild inputs\n\nThe exact WasmTex source snapshots used by the build receipts are:\n\n${revisions}\n\nThe pinned TeX Live source is under \`source/texlive/\`; the unused legacy\n\`libs/pplib\` directory is deliberately absent. WTPDF/Xpdf integration, SHA-2 source,\nDockerfiles, worker glue, and build scripts are in each WasmTex snapshot.\n\nEmscripten source is under \`source/emscripten/\`. Exact source archives for every\nEmscripten port used by these builds are under \`source/ports/\`. The build image is\n\`${manifest.buildEnvironment.dockerImage}\`.\n\nRun the original build workflow from the snapshot named by each receipt. A release is\nnot approved until a clean builder rebuild has been compared with the receipt-bound\nartifact bytes and any deterministic differences have been recorded.\n`
 }
 
+function relinkReadme(manifest) {
+  const revision = manifest.sources.wasmtex[0].commit
+  return `# Relinking statically linked LGPL libraries
+
+The engine executables statically link the following libraries under their selected
+LGPL alternatives:
+
+- kpathsea 6.4.1: LGPL-2.1-or-later (all executable families);
+- Graphite2 1.3.14: LGPL-2.1-or-later (XeTeX and LuaHBTeX);
+- TECkit 2.5.12: LGPL-2.1-or-later (XeTeX); and
+- zziplib 0.13.72: LGPL-2.0-or-later (LuaHBTeX).
+
+This archive supplies source, rather than only pre-linked object code, as the
+machine-readable material used to modify and relink those libraries. The exact
+archive-to-component choices are in \`release/ENGINE-COMPONENTS.json\`.
+
+1. Start from \`source/wasmtex/${revision}\` and the bundled
+   \`source/texlive\`, \`source/emscripten\`, and \`source/ports\` inputs.
+2. Replace the desired library source under \`source/texlive\` with a modified
+   compatible version. For the Emscripten ports, replace the corresponding verified
+   archive under \`source/ports\` and update the local build input deliberately.
+3. Run the family build described in \`REBUILD.md\`. The build scripts compile the
+   selected library and then perform the final Emscripten link; no pre-linked engine
+   object is required.
+4. Keep the chosen LGPL text and modified-library source with the resulting binary.
+
+The build may be changed for private debugging, and WasmTex imposes no term that
+forbids reverse engineering of the distributed executable for debugging changes to
+the LGPL-covered portions. This file is a technical relink recipe, not a change to
+any upstream license.
+`
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   for (const required of ['assets', 'output-dir']) {
@@ -143,6 +176,10 @@ async function main() {
       copyFileSync(join(assets, receipt.name), join(bundle, 'release', receipt.name))
     }
     copyFileSync(configPath, join(bundle, 'corresponding-source-config.json'))
+    copyFileSync(
+      join(root, `scripts/engine-components-${config.texliveYear}.json`),
+      join(bundle, 'release/ENGINE-COMPONENTS.json'),
+    )
 
     const revisions = [...new Set(inspected.receipts.map((receipt) => receipt.value.sourceRevision))].sort()
     const wasmtexRepository = ensureRepository({
@@ -238,6 +275,7 @@ async function main() {
     writeFileSync(join(bundle, 'SOURCE-MANIFEST.json'), `${JSON.stringify(sourceManifest, null, 2)}\n`)
     writeFileSync(join(bundle, 'README.md'), sourceReadme(assetManifest.releaseId))
     writeFileSync(join(bundle, 'REBUILD.md'), rebuildReadme(sourceManifest))
+    writeFileSync(join(bundle, 'RELINK.md'), relinkReadme(sourceManifest))
 
     const failures = checkCorrespondingSourceDirectory({
       directory: bundle,

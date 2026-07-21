@@ -43,6 +43,8 @@ function fixture() {
   put(root, 'release/BUILD-RECEIPT.pdftex.json', receipt)
   put(root, 'README.md')
   put(root, 'REBUILD.md')
+  put(root, 'RELINK.md')
+  put(root, 'release/ENGINE-COMPONENTS.json', '{}\n')
   for (const path of [
     'wasm-build/texlive-source.ref',
     'wasm-build/patches/texlive-wtpdf.patch',

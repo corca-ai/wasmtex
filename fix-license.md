@@ -41,7 +41,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | 대응 소스 도구 | 구현됨 | build receipt 기반 source archive builder/checker가 있다. |
 | 새 릴리스 후보 바이너리 | 완료 | source `23ee539`, TeX Live `143f172…`로 모든 엔진·포맷을 새로 만들고 receipt와 link inventory에 묶었다. |
 | 최종 대응 소스 archive | 없음 | 새 release receipt로 실제 archive를 만들고 재빌드해야 한다. |
-| 최종 notices/relink 자료 | 미완료 | 링크 inventory, LGPL 처리와 배포 고지를 확정해야 한다. |
+| 최종 notices/relink 자료 | 완료 | archive 81개를 구성요소 inventory로 분류하고 GPL 선택, 고지, SPDX SBOM과 complete-source relink 절차를 검사한다. 실제 source archive 생성은 F 단계다. |
 | 호환성·보안 승인 | 미완료 | 특히 LuaHBTeX PDF API와 비정상 PDF 검증이 남아 있다. |
 | 엔진 매니페스트 | `development-only` | fresh artifact 차단은 해소했지만 나머지 네 차단 항목이 끝나기 전에는 공개 바이너리를 배포하지 않는다. |
 
@@ -59,10 +59,10 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | --- | --- |
 | npm SDK, UI, LSP, WasmTex 문서·glue 원본 | MIT. `package.json`의 배포 파일 목록에서 엔진 바이너리를 제외한다. |
 | SyncTeX TypeScript port | MIT SDK와 함께 배포하되 원 저작권, 허가문과 non-endorsement 고지를 보존한다. |
-| pdfTeX Worker/JS/WASM | GPL-2.0-or-later 결합물로 취급하고 정확한 대응 소스를 제공한다. |
-| XeTeX Worker/JS/WASM | XeTeX 고지와 Xpdf GPL 선택을 포함한 GPL/mixed-license 결합물로 취급한다. |
+| pdfTeX Worker/JS/WASM | Xpdf 4.04의 GPLv2 선택 때문에 이 결합물은 GPL-2.0-only로 배포하고 정확한 대응 소스를 제공한다. |
+| XeTeX Worker/JS/WASM | Xpdf와 FreeType을 GPL-2.0-only로 선택하고 XeTeX 고지를 함께 적용한다. |
 | dvipdfmx Worker/JS/WASM | GPL-2.0-or-later 결합물로 취급한다. |
-| LuaHBTeX Worker/JS/WASM | LuaHBTeX와 Xpdf를 포함한 GPL 결합물로 취급한다. |
+| LuaHBTeX Worker/JS/WASM | Xpdf 4.04의 GPLv2 선택 때문에 이 결합물은 GPL-2.0-only로 배포한다. |
 | BibTeX/BibTeX8/makeindex | 각 원본 고지, kpathsea 등 링크 라이브러리 조건과 makeindex의 특별 문구를 적용한다. |
 | `.fmt`/`.fmt.gz`, ICU 데이터 | 생성 입력과 ICU 68.2의 원래 조건·고지를 적용한다. |
 | Monaco, PDF.js, pdf-lib | WasmTex npm 배포에 byte를 복제하지 않는 peer다. 데모에 실제 번들되면 데모 산출물에 고지를 포함한다. |
@@ -127,15 +127,15 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] GPL-2.0, GPL-3.0, LGPL-2.0/2.1, Xpdf 4.04, XeTeX, SyncTeX와 makeindex의 현재 원문·고지 파일을 `LICENSES/`에 두었다.
 - [x] SyncTeX port source header가 원 저작자와 `LICENSES/SyncTeX.txt`를 가리키도록 했다.
 - [x] ICU 68.2, Emscripten 3.1.46와 현재 알려진 ports/linked library 고지를 저장했다.
-- [ ] 새 최종 link inventory를 기준으로 빠진 library, version, copyright와 license text가 없는지 다시 조사한다.
-- [ ] pdfTeX, XeTeX/dvipdfmx와 LuaHBTeX 결합물별로 사용할 GPL 선택과 호환성을 최종 확정한다.
-- [ ] 정적으로 링크된 LGPL 구성요소마다 사용하는 라이선스 선택지를 기록하고, 필요한 object/relink material과 재링크 절차를 제공한다.
-- [ ] makeindex 배포물에 수정된 port임을 밝히고 소스를 얻는 방법을 눈에 띄게 적는다.
-- [ ] 생성된 Emscripten JavaScript에서 보존해야 할 license output과 copyright notice가 minify/build 후에도 남는지 확인한다.
-- [ ] `.fmt` 파일의 정확한 생성 입력과 생성 절차를 release evidence에 기록한다.
-- [ ] `THIRD_PARTY_NOTICES.md`와 `LICENSES/README.md`를 최종 artifact inventory에 맞춰 갱신한다.
-- [ ] npm package와 standalone demo 각각에 실제 포함된 peer dependency notice를 확인한다.
-- [ ] 최종 엔진 배포물의 SBOM과 machine-readable license inventory를 생성한다.
+- [x] 새 최종 link inventory를 기준으로 빠진 library, version, copyright와 license text가 없는지 다시 조사한다.
+- [x] pdfTeX, XeTeX/dvipdfmx와 LuaHBTeX 결합물별로 사용할 GPL 선택과 호환성을 최종 확정한다.
+- [x] 정적으로 링크된 LGPL 구성요소마다 사용하는 라이선스 선택지를 기록하고, complete-source relink 방식과 `RELINK.md` 생성·검사 절차를 구현한다. 실제 자료를 담은 archive 생성·재빌드는 F 단계에서 검증한다.
+- [x] makeindex 배포물에 수정된 port임을 밝히고 소스를 얻는 방법을 눈에 띄게 적는다.
+- [x] 생성된 Emscripten JavaScript에서 보존해야 할 license output과 copyright notice가 minify/build 후에도 남는지 확인한다.
+- [x] `.fmt` 파일의 정확한 관측 입력과 생성 절차를 release evidence에 기록하고, 재생성 byte의 알려진 비결정성도 명시한다.
+- [x] `THIRD_PARTY_NOTICES.md`와 `LICENSES/README.md`를 최종 artifact inventory에 맞춰 갱신한다.
+- [x] npm package와 standalone demo 각각에 실제 포함된 peer dependency notice를 확인한다.
+- [x] 최종 엔진 배포물의 SPDX SBOM과 machine-readable license inventory를 생성한다.
 
 ### F. 완전한 대응 소스
 
@@ -156,7 +156,8 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] asset manifest가 파일별 receipt 누락·중복·hash 불일치와 license family 미분류를 거부한다.
 - [ ] `LICENSE-MANIFEST.json`의 artifact family와 distribution terms를 최종 link inventory에 맞춰 확정한다.
 - [x] `fresh-release-artifacts` 차단 사유를 새 receipt와 link inventory 증거로 해소한다.
-- [ ] `third-party-notices-and-relink`, `compatibility-security`, `complete-corresponding-source`, `public-repository-audit` 차단 사유를 각각 증거와 함께 해소한다.
+- [x] `third-party-notices-and-relink` 차단 사유를 link inventory, 구성요소 inventory, notices, SPDX SBOM과 relink 절차 증거로 해소한다.
+- [ ] `compatibility-security`, `complete-corresponding-source`, `public-repository-audit` 차단 사유를 각각 증거와 함께 해소한다.
 - [ ] 모든 차단 사유가 해소된 뒤에만 `releaseStatus`를 `release-cleared`로 변경한다.
 - [ ] `node scripts/gen-asset-manifest.mjs 2025 --release`가 최종 asset directory에서 통과하는지 확인한다.
 - [ ] `npm run check:licenses -- --release`가 통과하는지 확인한다.

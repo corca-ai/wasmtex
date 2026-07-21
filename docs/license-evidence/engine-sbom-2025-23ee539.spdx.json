@@ -1,0 +1,360 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "WasmTex engine components 2025 23ee539",
+  "documentNamespace": "https://github.com/corca-ai/wasmtex/sbom/2025/23ee539b04f41b53e5bed715fbb077e14e46ec24/42ced0ea781c92809b318fd7e560df27a6ae6f9097198bb1a3543c102b65d800",
+  "creationInfo": {
+    "created": "2026-07-21T21:41:08Z",
+    "creators": [
+      "Organization: WasmTex project",
+      "Tool: scripts/gen-engine-sbom.mjs"
+    ]
+  },
+  "documentDescribes": [
+    "SPDXRef-emscripten-runtime",
+    "SPDXRef-musl-libc",
+    "SPDXRef-llvm-runtime",
+    "SPDXRef-dlmalloc",
+    "SPDXRef-kpathsea",
+    "SPDXRef-texlive-web2c-runtime",
+    "SPDXRef-xpdf",
+    "SPDXRef-texlive-libpng",
+    "SPDXRef-emscripten-libpng-port",
+    "SPDXRef-texlive-zlib",
+    "SPDXRef-emscripten-zlib-port",
+    "SPDXRef-freetype-port",
+    "SPDXRef-icu-port",
+    "SPDXRef-graphite2",
+    "SPDXRef-harfbuzz",
+    "SPDXRef-teckit",
+    "SPDXRef-lua",
+    "SPDXRef-zziplib",
+    "SPDXRef-xetex-core",
+    "SPDXRef-luahbtex-core-and-embedded-libraries"
+  ],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-emscripten-runtime",
+      "name": "emscripten-runtime",
+      "versionInfo": "3.1.46",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT AND NCSA",
+      "licenseDeclared": "MIT AND NCSA",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/lib(?:noexit|sockets|stubs)\\\\.a$\"],\"noticeFiles\":[\"LICENSES/Emscripten-3.1.46.txt\"],\"sourceNoticePaths\":[\"source/emscripten/LICENSE\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-musl-libc",
+      "name": "musl-libc",
+      "versionInfo": "Emscripten 3.1.46 bundled revision",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT AND LicenseRef-musl-component-notices",
+      "licenseDeclared": "MIT AND LicenseRef-musl-component-notices",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/libc\\\\.a$\"],\"noticeFiles\":[\"LICENSES/musl.txt\"],\"sourceNoticePaths\":[\"source/emscripten/system/lib/libc/musl/COPYRIGHT\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-llvm-runtime",
+      "name": "llvm-runtime",
+      "versionInfo": "Emscripten 3.1.46 bundled revision",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Apache-2.0 WITH LLVM-exception",
+      "licenseDeclared": "Apache-2.0 WITH LLVM-exception",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/lib(?:c\\\\+\\\\+(?:abi)?-noexcept|compiler_rt)\\\\.a$\"],\"noticeFiles\":[\"LICENSES/Apache-2.0.txt\",\"LICENSES/LLVM-exception.txt\"],\"sourceNoticePaths\":[\"source/emscripten/system/lib/compiler-rt/LICENSE.TXT\",\"source/emscripten/system/lib/libcxx/LICENSE.TXT\",\"source/emscripten/system/lib/libcxxabi/LICENSE.TXT\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-dlmalloc",
+      "name": "dlmalloc",
+      "versionInfo": "Emscripten 3.1.46 bundled revision",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Public-Domain OR CC0-1.0",
+      "licenseDeclared": "LicenseRef-Public-Domain OR CC0-1.0",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/libdlmalloc\\\\.a$\"],\"noticeFiles\":[\"LICENSES/Emscripten-3.1.46.txt\"],\"sourceNoticePaths\":[\"source/emscripten/system/lib/dlmalloc.c\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-kpathsea",
+      "name": "kpathsea",
+      "versionInfo": "6.4.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1-or-later",
+      "licenseDeclared": "LGPL-2.1-or-later",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/texk/kpathsea/\\\\.libs/libkpathsea\\\\.a$\"],\"noticeFiles\":[\"LICENSES/LGPL-2.1.txt\"],\"sourceNoticePaths\":[\"source/texlive/texk/kpathsea/COPYING.LESSERv2\"],\"staticLinking\":{\"method\":\"complete-source-relink\",\"instructions\":\"RELINK.md\",\"families\":[\"pdftex\",\"bibtex\",\"bibtex8\",\"makeindex\",\"xetex\",\"dvipdfmx\",\"luahbtex\"]}}"
+    },
+    {
+      "SPDXID": "SPDXRef-texlive-web2c-runtime",
+      "name": "texlive-web2c-runtime",
+      "versionInfo": "TeX Live source commit",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-TeXLive-Web2C-Notices",
+      "licenseDeclared": "LicenseRef-TeXLive-Web2C-Notices",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^lib/lib\\\\.a$\",\"^libmd5\\\\.a$\"],\"noticeFiles\":[\"THIRD_PARTY_NOTICES.md\"],\"sourceNoticePaths\":[\"source/texlive/texk/web2c/README\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-xpdf",
+      "name": "xpdf",
+      "versionInfo": "4.04",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-only",
+      "licenseDeclared": "GPL-2.0-only",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/xpdf/libxpdf\\\\.a$\"],\"noticeFiles\":[\"LICENSES/Xpdf-4.04-README.txt\",\"LICENSES/Xpdf-4.04-GPL-2.0.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/xpdf/xpdf-src/README\",\"source/texlive/libs/xpdf/xpdf-src/COPYING\"],\"licenseSelection\":\"GPL version 2 only\"}"
+    },
+    {
+      "SPDXID": "SPDXRef-texlive-libpng",
+      "name": "texlive-libpng",
+      "versionInfo": "1.6.46",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Libpng",
+      "licenseDeclared": "Libpng",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/libpng/libpng\\\\.a$\"],\"noticeFiles\":[\"LICENSES/libpng.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/libpng/libpng-src/LICENSE\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-emscripten-libpng-port",
+      "name": "emscripten-libpng-port",
+      "versionInfo": "1.6.39",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Libpng",
+      "licenseDeclared": "Libpng",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/libpng\\\\.a$\"],\"noticeFiles\":[\"LICENSES/libpng.txt\"],\"sourceNoticePaths\":[\"source/ports/libpng-1.6.39.tar.gz\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-texlive-zlib",
+      "name": "texlive-zlib",
+      "versionInfo": "1.3.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Zlib",
+      "licenseDeclared": "Zlib",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/zlib/libz\\\\.a$\"],\"noticeFiles\":[\"LICENSES/zlib.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/zlib/zlib-src/LICENSE\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-emscripten-zlib-port",
+      "name": "emscripten-zlib-port",
+      "versionInfo": "1.2.13",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "Zlib",
+      "licenseDeclared": "Zlib",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/libz\\\\.a$\"],\"noticeFiles\":[\"LICENSES/zlib.txt\"],\"sourceNoticePaths\":[\"source/ports/zlib-1.2.13.tar.gz\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-freetype-port",
+      "name": "freetype-port",
+      "versionInfo": "Emscripten port version_1 (reports 2.6.0)",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-only",
+      "licenseDeclared": "GPL-2.0-only",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/libfreetype\\\\.a$\"],\"noticeFiles\":[\"LICENSES/GPL-2.0.txt\",\"LICENSES/FreeType.txt\"],\"sourceNoticePaths\":[\"source/ports/freetype-version_1.zip\"],\"licenseSelection\":\"GPL version 2; the alternative FreeType License is not selected for this GPLv2 combined work\"}"
+    },
+    {
+      "SPDXID": "SPDXRef-icu-port",
+      "name": "icu-port",
+      "versionInfo": "68.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "ICU",
+      "licenseDeclared": "ICU",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^emscripten-sysroot/libicu_(?:common|stubdata)\\\\.a$\"],\"noticeFiles\":[\"LICENSES/ICU-68.2.txt\"],\"sourceNoticePaths\":[\"source/ports/icu4c-68_2-src.zip\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-graphite2",
+      "name": "graphite2",
+      "versionInfo": "1.3.14",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1-or-later",
+      "licenseDeclared": "LGPL-2.1-or-later",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/graphite2/libgraphite2\\\\.a$\"],\"noticeFiles\":[\"LICENSES/Graphite2.txt\",\"LICENSES/LGPL-2.1.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/graphite2/graphite2-src/COPYING\",\"source/texlive/libs/graphite2/graphite2-src/LICENSE\"],\"licenseSelection\":\"LGPL-2.1-or-later alternative\",\"staticLinking\":{\"method\":\"complete-source-relink\",\"instructions\":\"RELINK.md\",\"families\":[\"xetex\",\"luahbtex\"]}}"
+    },
+    {
+      "SPDXID": "SPDXRef-harfbuzz",
+      "name": "harfbuzz",
+      "versionInfo": "10.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT-Old-Style",
+      "licenseDeclared": "MIT-Old-Style",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/harfbuzz/libharfbuzz\\\\.a$\"],\"noticeFiles\":[\"LICENSES/HarfBuzz.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/harfbuzz/harfbuzz-src/COPYING\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-teckit",
+      "name": "teckit",
+      "versionInfo": "2.5.12",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.1-or-later",
+      "licenseDeclared": "LGPL-2.1-or-later",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/teckit/libTECkit\\\\.a$\"],\"noticeFiles\":[\"LICENSES/TECkit.txt\",\"LICENSES/LGPL-2.1.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/teckit/TECkit-src/COPYING\",\"source/texlive/libs/teckit/TECkit-src/license/License_LGPLv21.txt\"],\"licenseSelection\":\"LGPL-2.1-or-later alternative\",\"staticLinking\":{\"method\":\"complete-source-relink\",\"instructions\":\"RELINK.md\",\"families\":[\"xetex\"]}}"
+    },
+    {
+      "SPDXID": "SPDXRef-lua",
+      "name": "lua",
+      "versionInfo": "5.3.6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/lua53/\\\\.libs/libtexlua53\\\\.a$\"],\"noticeFiles\":[\"LICENSES/Lua-5.3.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/lua53/lua53-src/doc/readme.html\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-zziplib",
+      "name": "zziplib",
+      "versionInfo": "0.13.72",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LGPL-2.0-or-later",
+      "licenseDeclared": "LGPL-2.0-or-later",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^texlive-build/libs/zziplib/libzzip\\\\.a$\"],\"noticeFiles\":[\"LICENSES/zziplib.txt\",\"LICENSES/LGPL-2.0.txt\"],\"sourceNoticePaths\":[\"source/texlive/libs/zziplib/zziplib-src/COPYING.LIB\"],\"licenseSelection\":\"LGPL-2.0-or-later alternative\",\"staticLinking\":{\"method\":\"complete-source-relink\",\"instructions\":\"RELINK.md\",\"families\":[\"luahbtex\"]}}"
+    },
+    {
+      "SPDXID": "SPDXRef-xetex-core",
+      "name": "xetex-core",
+      "versionInfo": "TeX Live source commit",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-XeTeX AND GPL-2.0-only",
+      "licenseDeclared": "LicenseRef-XeTeX AND GPL-2.0-only",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^libxetex\\\\.a$\"],\"noticeFiles\":[\"LICENSES/XeTeX.txt\",\"LICENSES/GPL-2.0.txt\"],\"sourceNoticePaths\":[\"source/texlive/texk/web2c/xetexdir/COPYING\"]}"
+    },
+    {
+      "SPDXID": "SPDXRef-luahbtex-core-and-embedded-libraries",
+      "name": "luahbtex-core-and-embedded-libraries",
+      "versionInfo": "TeX Live source commit",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "GPL-2.0-or-later AND LicenseRef-LuaHBTeX-Embedded-Notices",
+      "licenseDeclared": "GPL-2.0-or-later AND LicenseRef-LuaHBTeX-Embedded-Notices",
+      "copyrightText": "NOASSERTION",
+      "comment": "{\"archivePatterns\":[\"^lib(?:ff|luaffi|luaharfbuzz|luahbtexspecific|luamisc|luasocket|luatex|mplibcore|mputil|unilib)\\\\.a$\"],\"noticeFiles\":[\"LICENSES/GPL-2.0.txt\",\"LICENSES/LuaHBTeX-embedded.txt\"],\"sourceNoticePaths\":[\"source/texlive/texk/web2c/luatexdir/luaffi/LICENSE\",\"source/texlive/texk/web2c/luatexdir/luafilesystem/LICENSE\",\"source/texlive/texk/web2c/luatexdir/luafontloader/fontforge/LICENSE\",\"source/texlive/texk/web2c/luatexdir/luaharfbuzz/LICENSE\",\"source/texlive/texk/web2c/luatexdir/luasocket/LICENSE\",\"source/texlive/texk/web2c/luatexdir/luazip/doc/us/license.html\",\"source/texlive/texk/web2c/luatexdir/luazlib/README\",\"source/texlive/texk/web2c/luatexdir/slnunicode/slnunico.c\"]}"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-emscripten-runtime"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-musl-libc"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-llvm-runtime"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-dlmalloc"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-kpathsea"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-texlive-web2c-runtime"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-xpdf"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-texlive-libpng"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-emscripten-libpng-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-texlive-zlib"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-emscripten-zlib-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-freetype-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-icu-port"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-graphite2"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-harfbuzz"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-teckit"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-lua"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-zziplib"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-xetex-core"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-luahbtex-core-and-embedded-libraries"
+    }
+  ]
+}

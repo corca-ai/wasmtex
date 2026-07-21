@@ -1,0 +1,26 @@
+LuaHBTeX embedded-library notices
+=================================
+
+The LuaHBTeX static archives include code from LuaTeX itself and permissively
+licensed embedded projects. The exact unmodified notice files and license-bearing
+source headers are included in every corresponding-source archive. In particular:
+
+- LuaTeX core: GNU GPL version 2 or later.
+- FontForge-derived fontloader code: Copyright 2000-2008 George Williams,
+  under its BSD-style redistribution notice.
+- luaffi/ravi-ffi: MIT and BSD notices by Dibyendu Majumdar, Facebook, Inc.,
+  and James R. McKaskill.
+- LuaFileSystem: Copyright 2003-2014 Kepler Project, MIT license.
+- lua-harfbuzz: Copyright 2015-2016 Deepak Jois, MIT license.
+- LuaSocket: Copyright 2004-2013 Diego Nehab, MIT license.
+- LuaZip: Copyright 2003-2006 Kepler Project, MIT license.
+- Lua zlib binding: Tiago Dionizio, MIT license.
+- Selene Unicode: Copyright 2005 Malete Partner under the Lua 5.0 license;
+  incorporated Tcl-derived tables retain the Regents of the University of
+  California, Sun Microsystems, Scriptics and ActiveState permission notice.
+- libavl-derived code: Copyright 1998-2004 Free Software Foundation, Inc.,
+  GNU GPL version 2 or later.
+
+The release legal-material generator copies the exact upstream notice files and
+license-bearing headers named in `scripts/engine-components-2025.json`. This
+summary is not a substitute for those exact notices.

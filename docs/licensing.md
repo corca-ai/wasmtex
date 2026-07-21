@@ -50,9 +50,14 @@ The practical engine classification is:
 
 | Runtime | Distribution treatment |
 | --- | --- |
-| pdfLaTeX | Treat the pdfTeX JavaScript/WASM distribution unit as GPL-2.0-or-later and retain all linked-component notices. The LaTeX format and packages retain LPPL or other input licenses. |
-| XeLaTeX | XeTeX changes use the permissive XeTeX notice, while the WTPDF build links Xpdf 4.04 under GPL v2 and/or GPL v3. The pipeline also distributes GPL-2.0-or-later dvipdfmx and other linked libraries. It is not an MIT-only distribution. |
-| LuaLaTeX | Treat the LuaHBTeX JavaScript/WASM distribution unit as GPL-2.0-or-later, select a compatible GPL option for linked Xpdf 4.04, and retain the MIT WTPDF/SHA-2 and all linked-component notices. The format, Lua modules, packages, and fonts retain their own licenses. |
+| pdfLaTeX | Distribute this exact pdfTeX JavaScript/WASM unit as GPL-2.0-only. pdfTeX permits later versions, but linked Xpdf 4.04 is selected under GPLv2 only. Retain all linked-component notices. |
+| XeLaTeX | Distribute this exact XeTeX JavaScript/WASM unit as GPL-2.0-only plus the XeTeX notice. Xpdf 4.04 and FreeType are both selected under GPLv2; the alternative FreeType License is not used for this combined unit. dvipdfmx remains GPL-2.0-or-later. |
+| LuaLaTeX | Distribute this exact LuaHBTeX JavaScript/WASM unit as GPL-2.0-only because linked Xpdf 4.04 is selected under GPLv2. Retain the MIT WTPDF/SHA-2 and all embedded-library notices. |
+
+The selections above are release-specific and are enforced by
+[`scripts/engine-components-2025.json`](../scripts/engine-components-2025.json).
+Changing Xpdf or FreeType to a different alternative requires a new link audit and
+new receipts; changing only the prose is not sufficient.
 
 The WTPDF/Xpdf XeTeX and LuaHBTeX candidates no longer link `pplib`. The exact
 remote build and link-map evidence is recorded in
@@ -98,8 +103,11 @@ Do not publish a versioned engine directory until all of the following are true:
    produce the binary.
 3. GPL-covered binaries are distributed with source in the same place or through
    another GPL-2.0-compliant method. Do not rely solely on a third-party upstream URL.
-4. A statically linked LGPL component is handled under a valid chosen option, including
-   relinkable material where LGPL section 6 requires it.
+4. Statically linked kpathsea, Graphite2, TECkit, and zziplib keep their selected LGPL
+   terms. The complete-source archive contains the exact engine and library source,
+   local changes, build scripts, and `RELINK.md`, so a recipient can replace a library
+   with a modified version and rebuild/relink the executable. WasmTex does not claim
+   that static linking erases the LGPL terms.
 5. The makeindex executable is accompanied by `LICENSES/MakeIndex.txt` and a
    conspicuous, working source-obtainment statement.
 6. Generated Emscripten JavaScript retains its license output, and the complete
@@ -107,6 +115,9 @@ Do not publish a versioned engine directory until all of the following are true:
 7. Every linked component has an affirmative, recorded redistribution basis. A
    release containing XeTeX or LuaHBTeX must use the audited WTPDF/Xpdf build and
    reject any legacy `pplib`-linked artifact.
+8. `node scripts/check-engine-license-inventory.mjs 2025` covers every archive in the
+   release link maps exactly once and rejects missing notice files or an LGPL entry
+   without its relink method.
 
 The committed or locally downloaded files under `public/wasmtex/<version>/` are
 development inputs, not evidence that the release gate has passed. A public product

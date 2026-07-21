@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateSourceConfig } from './lib/engine-build-receipt.mjs'
+import { loadAndValidateEngineLicenseInventory } from './lib/engine-license-inventory.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const positional = process.argv.slice(2).filter((arg) => !arg.startsWith('--'))
@@ -49,6 +50,11 @@ for (const path of [
   'LICENSE',
   'LICENSES/README.md',
   'LICENSES/GPL-3.0.txt',
+  'LICENSES/BibTeX.txt',
+  'LICENSES/LLVM-exception.txt',
+  'LICENSES/Lua-5.3.txt',
+  'LICENSES/LuaHBTeX-embedded.txt',
+  'LICENSES/musl.txt',
   'LICENSES/SyncTeX.txt',
   'LICENSES/Xpdf-4.04-GPL-2.0.txt',
   'LICENSES/Xpdf-4.04-README.txt',
@@ -59,6 +65,11 @@ for (const path of [
   'docs/license-evidence/texlive-2025-metadata-audit-124bfca.md',
   'docs/license-evidence/engine-release-2025-23ee539.md',
   'docs/license-evidence/link-inventory-23ee539.json',
+  'docs/license-evidence/linked-components-2025-23ee539.md',
+  'docs/license-evidence/engine-sbom-2025-23ee539.spdx.json',
+  'docs/license-evidence/format-inputs-pdftex-23ee539.json',
+  'docs/license-evidence/format-inputs-xetex-23ee539.json',
+  'docs/license-evidence/format-inputs-luahbtex-23ee539.json',
   'docs/proprietary-integration.md',
   'fix-license.md',
   'scripts/audit-texlive-provenance.mjs',
@@ -68,8 +79,14 @@ for (const path of [
   'scripts/corresponding-source-2025.json',
   'scripts/gen-engine-build-receipt.mjs',
   'scripts/gen-link-inventory.mjs',
+  'scripts/gen-engine-sbom.mjs',
+  'scripts/check-engine-license-inventory.mjs',
+  'scripts/check-release-notices.mjs',
+  'scripts/engine-components-2025.json',
   'scripts/gen-texlive-provenance.mjs',
   'scripts/lib/engine-build-receipt.mjs',
+  'scripts/lib/engine-license-inventory.mjs',
+  'scripts/lib/format-input-evidence.mjs',
   'scripts/lib/link-inventory.mjs',
   'scripts/lib/corresponding-source.mjs',
   'scripts/lib/release-assets.mjs',
@@ -149,6 +166,27 @@ if (linkInventory) {
       fail(`${String(map.family)}: link inventory has no static archives`)
     }
   }
+}
+
+try {
+  loadAndValidateEngineLicenseInventory(root, `scripts/engine-components-${version}.json`)
+} catch (error) {
+  fail(`engine component inventory: ${error instanceof Error ? error.message : String(error)}`)
+}
+
+try {
+  execFileSync(
+    process.execPath,
+    [
+      resolve(root, 'scripts/gen-engine-sbom.mjs'),
+      version,
+      '--check',
+      'docs/license-evidence/engine-sbom-2025-23ee539.spdx.json',
+    ],
+    { cwd: root, stdio: 'pipe' },
+  )
+} catch (error) {
+  fail(`engine SPDX SBOM is stale: ${error instanceof Error ? error.message : String(error)}`)
 }
 
 if (mirrorConfig) {
@@ -241,7 +279,12 @@ if (packageJson && manifest) {
     fail('license manifest texliveSourceCommit does not match wasm-build/texlive-source.ref')
   }
 
-  for (const field of ['noticePath', 'licenseDirectoryPath', 'requirementsPath']) {
+  for (const field of [
+    'noticePath',
+    'licenseDirectoryPath',
+    'requirementsPath',
+    'componentInventoryPath',
+  ]) {
     const relativePath = manifest[field]
     if (typeof relativePath !== 'string' || relativePath.length === 0) {
       fail(`license manifest ${field} is missing`)
@@ -304,21 +347,25 @@ if (packageJson && manifest) {
   }
 
   const xetex = (families ?? []).find((family) => family?.name === 'xetex')
-  if (!xetex?.distributionTerms?.includes('GPL-2.0-only OR GPL-3.0-only')) {
-    fail('xetex distribution terms must record the linked Xpdf GPL-2.0/GPL-3.0 choice')
+  if (!xetex?.distributionTerms?.includes('GPL-2.0-only')) {
+    fail('xetex distribution terms must record the selected Xpdf/FreeType GPL-2.0-only terms')
   }
   if (xetex?.releaseBlocker === 'pplib-license-evidence') {
     fail('the WTPDF/Xpdf xetex family must not retain the legacy pplib release blocker')
   }
   const luahbtex = (families ?? []).find((family) => family?.name === 'luahbtex')
-  if (!luahbtex?.distributionTerms?.includes('GPL-2.0-only OR GPL-3.0-only')) {
-    fail('luahbtex distribution terms must record the linked Xpdf GPL-2.0/GPL-3.0 choice')
+  if (!luahbtex?.distributionTerms?.includes('GPL-2.0-only')) {
+    fail('luahbtex distribution terms must record the selected Xpdf GPL-2.0-only terms')
   }
   if (luahbtex?.releaseBlocker === 'pplib-license-evidence') {
     fail('the WTPDF/Xpdf luahbtex family must not retain the legacy pplib release blocker')
   }
   if (blockerIds.has('pplib-license-evidence')) {
     fail('the current WTPDF/Xpdf engine build must not retain the legacy pplib release blocker')
+  }
+  const pdftex = (families ?? []).find((family) => family?.name === 'pdftex')
+  if (!pdftex?.distributionTerms?.includes('GPL-2.0-only')) {
+    fail('pdftex distribution terms must record the selected Xpdf GPL-2.0-only terms')
   }
 
   if (!['development-only', 'release-cleared'].includes(manifest.releaseStatus)) {

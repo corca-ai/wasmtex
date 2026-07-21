@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 import { createServer } from 'vite'
+import { collectFormatRequests, writeFormatInputEvidence } from './lib/format-input-evidence.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -48,8 +49,10 @@ async function main() {
   const channel = process.env.PLAYWRIGHT_CHANNEL
   const browser = await chromium.launch(channel ? { channel } : {})
   let b64
+  let formatRequests
   try {
     const page = await browser.newPage()
+    formatRequests = collectFormatRequests(page, version)
     page.on('console', (msg) => {
       const t = msg.text()
       if (t.includes('error') || t.includes('Error') || t.includes('fatal')) {
@@ -103,6 +106,13 @@ async function main() {
   const buf = Buffer.from(b64, 'base64')
   mkdirSync(dirname(outPath), { recursive: true })
   writeFileSync(outPath, buf)
+  writeFormatInputEvidence({
+    output: process.env.FORMAT_INPUT_LOG,
+    engine: 'luahbtex',
+    formatPath: outPath,
+    requests: formatRequests,
+    procedure: 'node scripts/extract-luatex-format.mjs; gzip -n -9 -c wasmtex-luatex.fmt',
+  })
   console.log(`SUCCESS: wrote ${outPath} (${(buf.length / 1024 / 1024).toFixed(2)} MB)`)
 }
 

@@ -48,7 +48,7 @@ runtime switch or fallback to `pplib` was found.
 - The WTPDF native and WebAssembly smoke tests and the XeTeX geometry and visual
   fixture checks ran as part of the source builds.
 
-This evidence clears only the fresh-artifact build gate. The candidate remains
-non-releasable until the linked-component notices and LGPL relink materials,
-compatibility/security gates, corresponding-source archive, and public-repository
-audit are complete.
+This evidence clears only the fresh-artifact build gate. Linked-component and relink
+evidence was completed later in `linked-components-2025-23ee539.md`. The candidate
+remains non-releasable until the compatibility/security gate, corresponding-source
+archive, and public-repository audit are complete.

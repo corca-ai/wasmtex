@@ -60,6 +60,8 @@ export function checkCorrespondingSourceDirectory({ directory, config, assetMani
   const sourceManifestPath = requireFile(directory, 'SOURCE-MANIFEST.json', failures)
   requireFile(directory, 'README.md', failures)
   requireFile(directory, 'REBUILD.md', failures)
+  requireFile(directory, 'RELINK.md', failures)
+  requireFile(directory, 'release/ENGINE-COMPONENTS.json', failures)
   requireFile(directory, 'release/manifest.json', failures)
   requireFile(directory, 'release/LICENSE-MANIFEST.json', failures)
   if (failures.length > 0) return failures
