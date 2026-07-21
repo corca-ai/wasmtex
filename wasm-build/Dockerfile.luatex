@@ -90,7 +90,7 @@ RUN cd /src/texlive-source && \
 RUN set -eu; \
     echo "=== Phase 1: native luahbtex (generate C + codegen tools) ==="; \
     cd /build/native && \
-    if ! /src/texlive-source/configure \
+    if ! CPPFLAGS=-D_LARGEFILE64_SOURCE /src/texlive-source/configure \
         --disable-all-pkgs --enable-web2c --enable-luahbtex \
         --disable-pdftex --disable-bibtex --disable-xetex \
         --disable-luajittex --disable-luajithbtex --disable-mfluajit \
