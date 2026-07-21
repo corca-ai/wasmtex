@@ -1,0 +1,360 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CachedTexliveFile, WarmupCache } from '../types'
+import { mergeWarmupCaches, WasmTexPdftexEngine } from './wasmtex-engine'
+import type { EngineWorker } from './worker-host'
+
+// The constructor is side-effect-free (no Worker is spawned until init()),
+// so we can assert the option → internal-state mapping directly.
+describe('WasmTexPdftexEngine preamble snapshot opt-out', () => {
+  it('enables preamble snapshots by default', () => {
+    const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/' })
+    expect(engine.isPreambleSnapshotEnabled()).toBe(true)
+  })
+
+  it('disables preamble snapshots when disablePreambleSnapshot is set', () => {
+    const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/', disablePreambleSnapshot: true })
+    expect(engine.isPreambleSnapshotEnabled()).toBe(false)
+  })
+
+  it('treats disablePreambleSnapshot: false as enabled', () => {
+    const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/', disablePreambleSnapshot: false })
+    expect(engine.isPreambleSnapshotEnabled()).toBe(true)
+  })
+
+  it('throws if toggled before initialization', () => {
+    const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/' })
+    expect(() => engine.setPreambleSnapshot(false)).toThrow(/not initialized/)
+  })
+})
+
+describe('WasmTexPdftexEngine persistent cache', () => {
+  it('starts with a zero download count', () => {
+    const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/', persistentCache: true })
+    expect(engine.getDownloadCount()).toBe(0)
+  })
+
+  it('clearCache() is a graceful no-op when IndexedDB is unavailable', async () => {
+    // In Node there is no global indexedDB, so the durable cache is disabled.
+    const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/', persistentCache: true })
+    await expect(engine.clearCache()).resolves.toBeUndefined()
+  })
+})
+
+type WorkerReply = {
+  cmd?: string
+  result?: string
+  status?: number
+  pdf?: ArrayBuffer
+  synctex?: ArrayBuffer
+  log?: string
+}
+
+/** Drives the engine without a real Worker by exposing the protected seams. */
+class TestableEngine extends WasmTexPdftexEngine {
+  markReady(): void {
+    this.status = 'ready'
+  }
+
+  /** Install a stub worker; each postMessage delivers `reply()` (if any) via the real dispatch. */
+  installWorker(reply?: () => WorkerReply): void {
+    this.worker = {
+      postMessage: () => {
+        if (reply) this.dispatchWorkerMessage(reply(), noop, noop)
+      },
+    } as unknown as EngineWorker
+  }
+
+  /** Simulate a worker → main message through the real dispatch path. */
+  deliver(reply: WorkerReply): void {
+    this.dispatchWorkerMessage(reply, noop, noop)
+  }
+}
+
+function noop(): void {
+  /* init callbacks are unused for cmd-keyed replies */
+}
+
+describe('WasmTexPdftexEngine worker crash after init', () => {
+  /** Ready engine + a worker that never replies, so a started compile stays pending. */
+  class CrashTestableEngine extends WasmTexPdftexEngine {
+    markReady(): void {
+      this.status = 'ready'
+    }
+    installSilentWorker(): void {
+      this.worker = { postMessage: () => {}, terminate: () => {} } as unknown as EngineWorker
+    }
+    crash(err: Error): void {
+      this.handleWorkerError(err)
+    }
+    get pendingSize(): number {
+      return this.pendingResponses.size
+    }
+  }
+
+  it('rejects an in-flight compile when the worker errors after init (no permanent hang)', async () => {
+    const engine = new CrashTestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    engine.installSilentWorker()
+
+    const p = engine.compile() // registers a 'cmd:compile' waiter; would hang forever
+    expect(engine.pendingSize).toBe(1)
+
+    engine.crash(new Error('wasm oom')) // spontaneous post-init worker error
+
+    await expect(p).rejects.toThrow(/wasm oom/)
+    expect(engine.pendingSize).toBe(0) // in-flight waiter settled, not leaked
+    expect(engine.getStatus()).toBe('error')
+  })
+})
+
+describe('WasmTexPdftexEngine format extraction', () => {
+  it('returns the binary produced by compileformat', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    engine.installWorker(() => ({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      pdf: bytes.buffer,
+    }))
+
+    await expect(engine.buildFormat()).resolves.toEqual(bytes)
+    expect(engine.getStatus()).toBe('ready')
+  })
+
+  it('surfaces the engine log when format generation fails', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    engine.installWorker(() => ({
+      cmd: 'compile',
+      result: 'failed',
+      status: 1,
+      log: 'format exploded',
+    }))
+
+    await expect(engine.buildFormat()).rejects.toThrow(/format exploded/)
+  })
+})
+
+describe('mergeWarmupCaches reconciles cross-list collisions', () => {
+  const file = (filename: string): CachedTexliveFile => ({
+    format: 1,
+    filename,
+    data: new Uint8Array([1, 2, 3]).buffer,
+  })
+  const keysOf = (entries: { format: number; filename: string }[]) =>
+    entries.map((e) => `${e.format}/${e.filename}`)
+
+  it('lets an override file supersede a base 404 (and removes it from notFound)', () => {
+    const base: WarmupCache = { files: [], notFound: [{ format: 1, filename: 'X.sty' }] }
+    const override: WarmupCache = { files: [file('X.sty')], notFound: [] }
+    const merged = mergeWarmupCaches(base, override)
+    expect(keysOf(merged.files)).toContain('1/X.sty')
+    expect(keysOf(merged.notFound)).not.toContain('1/X.sty')
+  })
+
+  it('lets an override 404 supersede a base file (and removes it from files)', () => {
+    const base: WarmupCache = { files: [file('X.sty')], notFound: [] }
+    const override: WarmupCache = { files: [], notFound: [{ format: 1, filename: 'X.sty' }] }
+    const merged = mergeWarmupCaches(base, override)
+    expect(keysOf(merged.notFound)).toContain('1/X.sty')
+    expect(keysOf(merged.files)).not.toContain('1/X.sty')
+  })
+
+  it('never lists a key in both files and notFound', () => {
+    const base: WarmupCache = {
+      files: [file('A.sty')],
+      notFound: [{ format: 1, filename: 'B.sty' }],
+    }
+    const override: WarmupCache = {
+      files: [file('B.sty')],
+      notFound: [{ format: 1, filename: 'A.sty' }],
+    }
+    const merged = mergeWarmupCaches(base, override)
+    const fileKeys = new Set(keysOf(merged.files))
+    expect(keysOf(merged.notFound).some((k) => fileKeys.has(k))).toBe(false)
+  })
+})
+
+describe('WasmTexPdftexEngine persist watermark', () => {
+  /** Drives compile() with a stub worker and a persist step that fails once. */
+  class PersistTestableEngine extends WasmTexPdftexEngine {
+    saveCalls = 0
+    private failNext = true
+
+    markReady(): void {
+      this.status = 'ready'
+    }
+
+    enableDurable(): void {
+      // maybePersistCache only runs when a durable cache exists; the persist step
+      // itself is overridden below, so an empty stand-in is enough.
+      ;(this as unknown as { durableCache: unknown }).durableCache = {}
+    }
+
+    installCompileWorker(): void {
+      this.worker = {
+        postMessage: () => {
+          this.dispatchWorkerMessage(
+            { cmd: 'compile', result: 'ok', status: 0, log: '' },
+            noop,
+            noop,
+          )
+        },
+      } as unknown as EngineWorker
+    }
+
+    bumpDownload(): void {
+      this.dispatchWorkerMessage({ cmd: 'downloading', file: 'x.sty' }, noop, noop)
+    }
+
+    // Stand in for the real dump + IndexedDB save; reject once to simulate a
+    // transient quota/IndexedDB failure, succeed thereafter.
+    override async persistTexliveCache(): Promise<void> {
+      this.saveCalls++
+      if (this.failNext) {
+        this.failNext = false
+        throw new Error('transient save failure')
+      }
+    }
+  }
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('retries the persist after a failed save instead of stranding fetched files', async () => {
+    const engine = new PersistTestableEngine({ assetBaseUrl: '/', persistentCache: true })
+    engine.markReady()
+    engine.enableDurable()
+    engine.installCompileWorker()
+
+    engine.bumpDownload() // one new file fetched this session
+    await engine.compile() // persist fires, save() rejects
+    await flush()
+    expect(engine.saveCalls).toBe(1)
+
+    // No further downloads: a fixed watermark would short-circuit and never retry.
+    await engine.compile()
+    await flush()
+    expect(engine.saveCalls).toBe(2) // retried because the first save did not commit
+  })
+})
+
+describe('WasmTexPdftexEngine compile() result mapping', () => {
+  it('returns null synctex when the worker omits the synctex field on a successful compile', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    const pdf = new Uint8Array([1, 2, 3]).buffer
+    engine.markReady()
+    // A successful compile that produced no .synctex file: the worker omits `synctex`.
+    engine.installWorker(() => ({ cmd: 'compile', result: 'ok', status: 0, pdf, log: '' }))
+
+    const result = await engine.compile()
+
+    expect(result.success).toBe(true)
+    expect(result.pdf).not.toBeNull()
+    // synctex must be null (not an empty Uint8Array) so the viewer clears stale state.
+    expect(result.synctex).toBeNull()
+  })
+
+  it('maps a success reply with no pdf to null, not a zero-length buffer', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    // result:'ok' but the worker shipped no PDF (e.g. a document that produced no pages).
+    // `new Uint8Array(undefined)` would yield a 0-byte buffer that downstream
+    // `if (result.pdf)` checks treat as a renderable PDF — pdf must be null instead.
+    engine.installWorker(() => ({ cmd: 'compile', result: 'ok', status: 0, log: '' }))
+
+    const result = await engine.compile()
+
+    expect(result.pdf).toBeNull()
+  })
+})
+
+/** Exposes injectWarmupCache + a pendingResponses size probe, with a fake worker
+ *  whose postMessage may or may not reply (simulating new vs. old worker glue). */
+class WarmupTestableEngine extends WasmTexPdftexEngine {
+  /** Install a worker that records sent commands and optionally auto-replies. */
+  installWorker(replyToPreload404: boolean): void {
+    this.status = 'ready'
+    this.worker = {
+      postMessage: (msg: unknown) => {
+        const m = msg as { cmd?: string; msgId?: string }
+        if (!replyToPreload404) return // old worker: ignores preload404, never replies
+        if (m.cmd === 'preload404' && m.msgId) {
+          this.dispatchWorkerMessage(
+            { result: 'ok', cmd: 'preload404', msgId: m.msgId },
+            noop,
+            noop,
+          )
+        }
+      },
+    } as unknown as EngineWorker
+  }
+
+  runInjectWarmup(cache: WarmupCache): Promise<void> {
+    return this.injectWarmupCache(cache)
+  }
+
+  get pendingSize(): number {
+    return this.pendingResponses.size
+  }
+}
+
+describe('WasmTexPdftexEngine preload404 timeout cleanup', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const cache: WarmupCache = { files: [], notFound: [{ format: 1, filename: 'missing.sty' }] }
+
+  it('discards the orphaned preload404 waiter when an old worker never replies', async () => {
+    const engine = new WarmupTestableEngine({ assetBaseUrl: '/' })
+    engine.installWorker(false) // old worker: no preload404 reply
+
+    const p = engine.runInjectWarmup(cache)
+    expect(engine.pendingSize).toBe(1) // waiter registered
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await p // resolves via the timeout, does not hang
+
+    // The orphaned waiter must be cleaned up — not left to leak for the engine lifetime.
+    expect(engine.pendingSize).toBe(0)
+  })
+
+  it('resolves and clears normally when a current worker replies before the timeout', async () => {
+    const engine = new WarmupTestableEngine({ assetBaseUrl: '/' })
+    engine.installWorker(true) // current worker replies to preload404
+
+    await engine.runInjectWarmup(cache)
+    expect(engine.pendingSize).toBe(0)
+  })
+})
+
+describe('WasmTexPdftexEngine concurrent response routing', () => {
+  it('resolves every concurrent cmd-keyed request (no resolver overwrite)', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    engine.installWorker() // replies are delivered manually below
+
+    let aResolved = false
+    let bResolved = false
+    const pA = engine.writeFile('a.tex', 'A').then(() => {
+      aResolved = true
+    })
+    const pB = engine.writeFile('b.tex', 'B').then(() => {
+      bResolved = true
+    })
+
+    // A single-threaded worker emits one writefile reply per command, in order.
+    engine.deliver({ cmd: 'writefile', result: 'ok' })
+    engine.deliver({ cmd: 'writefile', result: 'ok' })
+
+    await Promise.race([Promise.all([pA, pB]), new Promise((resolve) => setTimeout(resolve, 200))])
+
+    expect(aResolved).toBe(true)
+    expect(bResolved).toBe(true)
+  })
+})

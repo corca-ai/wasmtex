@@ -1,0 +1,47 @@
+name: Golden Canary
+
+# Scheduled output-regression guard (#51). The build workflows prove the engines link
+# and keep our interposition glue (#50); this proves the *rendered output* of a small
+# reference corpus has not silently drifted (CDN content, committed engine assets, a
+# font-DB regen, an Emscripten bump). Runs the `e2e/golden-output.spec.ts` corpus against
+# the committed `public/wasmtex/2025/` engines + the live TeX Live mirror.
+#
+# A heavier "upstream canary" — bump `wasm-build/texlive-source.ref` to the latest
+# branch<YEAR> tip, rebuild the engine, re-extract the format, then run this corpus — is
+# the natural next step on top of the existing wasm-*.yml builds; tracked separately.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Golden output regression
+        run: npx playwright test golden-output
+
+      - name: Cross-host parity (Node host ≡ browser golden) — S4 #111
+        run: CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-canary-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 30

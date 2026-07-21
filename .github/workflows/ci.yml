@@ -1,0 +1,116 @@
+name: CI
+on:
+  push:
+    branches: [main, 'iter4-*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  # The published library bundle (`lib/`) is committed so `github:` installs resolve
+  # `exports` without a build step (#146). Rebuild it and fail if it drifts from `src/`,
+  # with an actionable message. build:lib needs no engine assets, so this is a fast,
+  # standalone gate. Output is deterministic (no sourcemaps / absolute paths; same node 24).
+  lib-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      # Plain `npm ci` (not --ignore-scripts): esbuild's postinstall fetches its binary,
+      # which build:lib needs. `npm ci` also runs `prepare` (build:lib); the explicit run
+      # below is idempotent and keeps the intent obvious.
+      - run: npm ci
+      - run: npm run build:lib
+      - name: Verify committed lib/ is up to date
+        run: |
+          if ! git diff --quiet -- lib; then
+            echo "::error::Committed lib/ is stale — run 'npm run build:lib' and commit lib/."
+            git --no-pager diff --stat -- lib
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Download latest WASM engine
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: wasm-build.yml
+          name: wasm-pdftex
+          path: public/wasmtex/2025
+          search_artifacts: true
+          if_no_artifact_found: warn
+      - name: Download latest BibTeX WASM
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: wasm-build.yml
+          name: wasm-bibtex
+          path: public/wasmtex/2025
+          search_artifacts: true
+          if_no_artifact_found: warn
+      - name: Download latest XeLaTeX WASM (xetex + dvipdfmx)
+        # Optional engine: XeLaTeX degrades to an actionable "engine unavailable"
+        # result when absent. continue-on-error also tolerates wasm-xetex.yml never
+        # having run yet (the API 404s listing runs, which `if_no_artifact_found`
+        # does not cover).
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: wasm-xetex.yml
+          name: wasm-xetex
+          path: public/wasmtex/2025
+          search_artifacts: true
+          if_no_artifact_found: warn
+      - name: Download latest LuaLaTeX WASM (luatex)
+        # Optional engine, same as XeLaTeX above. wasm-luatex.yml is a heavy,
+        # convergence-in-progress build, so the artifact may not exist yet —
+        # continue-on-error keeps the deploy green; LuaLaTeX then degrades to the
+        # actionable "requires LuaLaTeX" result.
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: wasm-luatex.yml
+          name: wasm-luatex
+          path: public/wasmtex/2025
+          search_artifacts: true
+          if_no_artifact_found: warn
+      - run: npm run lint
+      - run: npx tsgo --noEmit
+      - run: npm run test
+      # Emit a content-hashed manifest of the (just-downloaded) engine assets so
+      # `vite build` copies it into dist and consumers can sync/verify against it.
+      - name: Generate development asset manifest
+        if: github.ref != 'refs/heads/main'
+        run: node scripts/gen-asset-manifest.mjs 2025
+      # A Pages deploy distributes the engine files to browsers. Refuse a main-branch
+      # deploy until the per-version license manifest records complete
+      # source/provenance and has no unresolved component-license blocker.
+      - name: Verify and generate releasable asset manifest
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/gen-asset-manifest.mjs 2025 --release
+      - run: npx vite build
+        env:
+          BASE_URL: /${{ github.event.repository.name }}/
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with: { path: dist }
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

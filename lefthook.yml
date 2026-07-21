@@ -1,0 +1,15 @@
+pre-commit:
+  parallel: true
+  commands:
+    typecheck:
+      run: npx tsgo --noEmit
+    lint:
+      run: npx biome check --diagnostic-level=error src/
+    test:
+      run: npx vitest run
+    cpd:
+      # 0.6%: the duplication is pre-existing clones (latex-parser, font-scripts,
+      # persistent-cache tests, …); the figure floats just over 0.5% as files move
+      # between src/ and e2e/ (the corpus moved to e2e/golden-corpus.ts). Tighten by
+      # refactoring those clones, not by blocking unrelated changes.
+      run: npx jscpd src/ --threshold 0.6 --mode weak

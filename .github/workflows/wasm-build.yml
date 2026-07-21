@@ -1,0 +1,116 @@
+name: WASM Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'iter4-*', 'feat/semantic-trace', 'feat/texlive-2025-upgrade']
+    # This builds pdfTeX + BibTeX only. Exclude the other engines' glue so a
+    # XeTeX/LuaTeX-only change doesn't needlessly rebuild pdfTeX/BibTeX (those
+    # engines have their own workflows: wasm-xetex.yml, wasm-luatex.yml).
+    paths:
+      - 'wasm-build/**'
+      - '!wasm-build/luatex-*'
+      - '!wasm-build/Dockerfile.luatex'
+      - '!wasm-build/build-luatex.sh'
+      - '!wasm-build/xetex-*'
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: wasm-docker-${{ hashFiles('wasm-build/Dockerfile') }}
+          restore-keys: wasm-docker-
+
+      - name: Build Docker image (Phase 1 cached)
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --load \
+            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -t pdftex-wasm \
+            wasm-build/
+
+      - name: Run WASM build (Phase 2)
+        run: |
+          mkdir -p wasm-build/dist
+          docker run --platform linux/amd64 \
+            -v ${{ github.workspace }}/wasm-build/dist:/dist \
+            pdftex-wasm
+
+      - name: Rotate Docker cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - name: Smoke test pdfTeX WASM
+        run: |
+          node -e "
+            const fs = require('fs');
+            const wasm = fs.readFileSync('wasm-build/dist/wasmtex-pdftex.wasm');
+            if (!WebAssembly.validate(wasm)) process.exit(1);
+            console.log('pdfTeX WASM OK (' + wasm.length + ' bytes)');
+            const core = fs.readFileSync('wasm-build/dist/wasmtex-pdftex.js', 'utf8');
+            const controller = fs.readFileSync('wasm-build/dist/wasmtex-pdftex.worker.js', 'utf8');
+            const required = ['_scanHashTable', '_compileLaTeX', '_compileFormat', '_main', '_setMainEntry'];
+            const missing = required.filter(s => !core.includes(s));
+            if (missing.length) { console.error('Missing interposition/entry symbols: ' + missing.join(', ')); process.exit(1); }
+            for (const token of ['kpse_find_file_impl', 'texlive_endpoint', 'importScripts']) {
+              if (!controller.includes(token)) { console.error('Missing controller token: ' + token); process.exit(1); }
+            }
+            console.log('core exports and controller hooks present');
+          "
+
+      - name: Smoke test BibTeX WASM
+        continue-on-error: true
+        id: bibtex-smoke
+        run: |
+          node -e "
+            const fs = require('fs');
+            const wasm = fs.readFileSync('wasm-build/dist/wasmtex-bibtex.wasm');
+            if (!WebAssembly.validate(wasm)) process.exit(1);
+            console.log('BibTeX WASM OK (' + wasm.length + ' bytes)');
+            const core = fs.readFileSync('wasm-build/dist/wasmtex-bibtex.js', 'utf8');
+            const controller = fs.readFileSync('wasm-build/dist/wasmtex-bibtex.worker.js', 'utf8');
+            if (!core.includes('_compileBibtex')) { console.error('Missing _compileBibtex'); process.exit(1); }
+            if (!controller.includes('compileBibtexRoutine') || !controller.includes('importScripts')) {
+              console.error('Missing BibTeX controller hooks'); process.exit(1);
+            }
+            console.log('BibTeX core exports and controller hooks present');
+          "
+
+      - name: Upload pdfTeX WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pdftex
+          path: |
+            wasm-build/dist/wasmtex-pdftex.js
+            wasm-build/dist/wasmtex-pdftex.worker.js
+            wasm-build/dist/wasmtex-pdftex.wasm
+            wasm-build/dist/wasmtex-kpse-resolve.js
+          retention-days: 90
+
+      - name: Upload BibTeX WASM artifacts
+        if: steps.bibtex-smoke.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-bibtex
+          path: |
+            wasm-build/dist/wasmtex-bibtex.js
+            wasm-build/dist/wasmtex-bibtex.worker.js
+            wasm-build/dist/wasmtex-bibtex.wasm
+          retention-days: 90
+
+      - name: List build outputs
+        if: always()
+        run: ls -lh wasm-build/dist/ 2>/dev/null || echo "No dist files"

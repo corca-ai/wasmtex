@@ -1,0 +1,37 @@
+# Included license texts
+
+These files preserve notices for third-party code and data distributed by WasmTex.
+They do not change the license of any component.
+
+| File | Applies to |
+| --- | --- |
+| `Apache-2.0.txt` | PDF.js and other Apache-2.0 components when distributed. |
+| `Emscripten-3.1.46.txt` | Emscripten-generated runtime code and Emscripten notices. |
+| `FreeType.txt` | FreeType when used under the FreeType License. |
+| `GPL-2.0.txt` | GPL-2.0 and GPL-2.0-or-later engine components. |
+| `Graphite2.txt` | Graphite2's LGPL/MPL/GPL licensing notice. |
+| `HarfBuzz.txt` | HarfBuzz's Old MIT notice. |
+| `ICU-68.2.txt` | ICU 68.2 code, data, and bundled third-party notices. |
+| `LGPL-2.0.txt` | LGPL-2.0 components such as zziplib when that option is used. |
+| `LGPL-2.1.txt` | LGPL-2.1 and LGPL-2.1-or-later components such as kpathsea. |
+| `libpng.txt` | The bundled/ported libpng implementation. |
+| LPPL 1.3c | LaTeX formats and packages that identify LPPL 1.3c as their license. Use the exact package notice; authoritative text: <https://www.latex-project.org/lppl/lppl-1-3c/>. |
+| `MakeIndex.txt` | The makeindex source and WasmTex WebAssembly port. |
+| `Monaco-Editor.txt` | Monaco Editor when bundled by the demo application. |
+| `pdf-lib.txt` | pdf-lib when the optional peer is bundled. |
+| `SyncTeX.txt` | The reference SyncTeX algorithms ported to TypeScript. |
+| `TECkit.txt` | TECkit's CPL/LGPL licensing notice. |
+| `XeTeX.txt` | XeTeX changes and additions. |
+| `zlib.txt` | The bundled/ported zlib implementation. |
+| `zziplib.txt` | zziplib's LGPL/MPL licensing notice. |
+
+TeX Live packages, fonts, Lua files, generated formats, and some libraries embedded
+in engine builds have additional component-specific terms. See
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) and
+[`docs/licensing.md`](../docs/licensing.md); an engine or mirror release must also
+ship the notices from its exact corresponding source archive.
+
+There is deliberately no `pplib` license file here. The copies inspected in the
+pinned TeX Live source and public upstream repository do not provide a standalone
+license grant that WasmTex can reproduce. See the release blocker in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#unresolved-pplib-licensing-evidence).

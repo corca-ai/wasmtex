@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WasmTex</title>
+</head>
+<body>
+  <div id="app" class="le-root">
+    <div class="le-main">
+      <aside id="file-tree-panel" class="le-left-panel panel">
+        <div class="le-file-tree">
+          <div class="file-tree-header">
+            <span>Files</span>
+            <div class="file-tree-btns">
+              <button id="add-file-btn" title="New file">+</button>
+            </div>
+          </div>
+          <div id="file-tree-list"></div>
+        </div>
+        <div class="le-outline">
+          <div class="outline-header">Outline</div>
+          <div id="outline-list"></div>
+        </div>
+      </aside>
+      <div class="divider"></div>
+      <div id="editor-container" class="le-editor panel"></div>
+      <div class="divider"></div>
+      <div id="preview-container" class="le-viewer panel"></div>
+    </div>
+    <div id="error-log-panel" class="le-error-log">
+      <div class="log-header">
+        <span>Diagnostics</span>
+        <span id="error-count" class="badge">0</span>
+      </div>
+      <div id="error-log-list"></div>
+    </div>
+    <div id="status-bar" class="le-status-bar">
+      <div class="le-status-group">
+        <span id="status">Initializing...</span>
+        <span id="status-detail"></span>
+      </div>
+      <div class="le-status-controls">
+        <div class="le-version-info">
+          <label for="project-select">Project:</label>
+          <select id="project-select" class="le-version-select">
+            <option value="default">Default</option>
+            <option value="sample">Sample</option>
+          </select>
+        </div>
+        <div class="le-version-info">
+          <label for="texlive-version">TeX Live:</label>
+          <select id="texlive-version" class="le-version-select">
+            <option value="2025">2025</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

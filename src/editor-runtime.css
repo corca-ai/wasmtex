@@ -1,0 +1,125 @@
+[data-wasmtex-runtime] .binary-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e1e1e;
+  z-index: 10;
+}
+
+[data-wasmtex-runtime] .binary-preview-img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+[data-wasmtex-runtime] .binary-preview-info {
+  color: #888;
+  font-size: 14px;
+}
+
+/* PDF viewer loading overlay */
+[data-wasmtex-runtime] .pdf-loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  flex: 1;
+}
+
+[data-wasmtex-runtime] .pdf-loading-text {
+  font-size: 13px;
+  color: #888;
+}
+
+[data-wasmtex-runtime] .pdf-loading-bar {
+  width: 160px;
+  height: 3px;
+  background: #444;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+[data-wasmtex-runtime] .pdf-loading-bar-fill {
+  width: 10%;
+  height: 100%;
+  background: #007acc;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* PDF viewer */
+[data-wasmtex-runtime] .pdf-page-container {
+  margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  max-width: 100%;
+}
+
+[data-wasmtex-runtime] .pdf-page-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+[data-wasmtex-runtime] .pdf-controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(45, 45, 45, 0.9);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+[data-wasmtex-runtime] .pdf-download-btn {
+  background: #404040;
+  border: none;
+  color: #ccc;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+[data-wasmtex-runtime] .pdf-download-btn:hover {
+  background: #505050;
+}
+
+[data-wasmtex-runtime] .pdf-controls button {
+  background: #404040;
+  border: none;
+  color: #ccc;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+[data-wasmtex-runtime] .pdf-controls button:hover {
+  background: #505050;
+}
+
+[data-wasmtex-runtime] .pdf-controls span {
+  font-size: 12px;
+  color: #999;
+}
+
+[data-wasmtex-runtime] .pdf-controls .zoom-label {
+  cursor: pointer;
+  min-width: 36px;
+  text-align: center;
+}
+
+[data-wasmtex-runtime] .pdf-controls .zoom-label:hover {
+  color: #ccc;
+}

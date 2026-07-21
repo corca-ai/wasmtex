@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WasmTex — Embed Example</title>
+  <style>
+    body { margin: 0; }
+    #app { display: flex; width: 100vw; height: 100vh; }
+    #editor, #preview { flex: 1 1 0; min-width: 0; }
+  </style>
+</head>
+<body>
+  <!--
+    Illustrative minimal embed.
+
+    This is NOT a static double-click page: `monaco-editor` and `pdfjs-dist`
+    are peer dependencies whose web workers must be resolved by a bundler
+    (Vite, webpack, …). Copy this <script> into a bundled app, or serve this
+    file through Vite. Full setup and explanation: ../docs/howto.md
+  -->
+  <div id="app">
+    <div id="editor"></div>
+    <div id="preview"></div>
+  </div>
+
+  <script type="module">
+    import * as pdfjsLib from 'pdfjs-dist'
+    import { WasmTex } from 'wasmtex'
+    import 'wasmtex/style.css'
+
+    // 1. Worker setup (required). The `new URL(..., import.meta.url)` pattern
+    //    must live in your own source so your bundler can emit the workers.
+    self.MonacoEnvironment = {
+      getWorker(_id, label) {
+        if (label === 'json') {
+          return new Worker(
+            new URL('monaco-editor/esm/vs/language/json/json.worker.js', import.meta.url),
+            { type: 'module' },
+          )
+        }
+        return new Worker(
+          new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url),
+          { type: 'module' },
+        )
+      },
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.mjs', import.meta.url,
+    ).toString()
+
+    // 2. Create the editor — constructor is (editorContainer, previewContainer, options).
+    const editor = new WasmTex('#editor', '#preview', {
+      files: {
+        'main.tex': `\\documentclass{article}
+\\begin{document}
+Hello from an embedded \\LaTeX{} editor!
+\\end{document}
+`,
+      },
+    })
+
+    editor.on('compile', ({ result }) => {
+      console.log('Compiled:', result.success ? 'OK' : 'FAIL')
+    })
+
+    await editor.init()
+  </script>
+</body>
+</html>

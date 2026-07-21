@@ -1,0 +1,1 @@
+{ "class": "missing-package", "note": "nonexistent .sty — verifies the not-found path and CDN 404 handling" }

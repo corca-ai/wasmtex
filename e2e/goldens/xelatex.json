@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "errorCount": 0,
+  "pages": 1,
+  "diagnosticCodes": [],
+  "geometry": {
+    "pages": 1,
+    "reliable": false,
+    "textRuns": 44,
+    "rules": 2
+  }
+}

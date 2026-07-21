@@ -1,0 +1,89 @@
+name: WASM makeindex (from source)
+
+# Builds makeindex (texk/makeindexk) to WASM from the pinned texlive-source (#101).
+# Plain C — no native phase — so this is a single Docker build + run.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-build/Dockerfile.makeindex'
+      - 'wasm-build/build-makeindex.sh'
+      - 'wasm-build/makeindex-entry.c'
+      - 'wasm-build/makeindex-worker.js'
+      - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/library.js'
+      - 'wasm-build/texlive-source.ref'
+      - '.github/workflows/wasm-makeindex.yml'
+  pull_request:
+    paths:
+      - 'wasm-build/Dockerfile.makeindex'
+      - 'wasm-build/build-makeindex.sh'
+      - 'wasm-build/makeindex-entry.c'
+      - 'wasm-build/makeindex-worker.js'
+      - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/library.js'
+      - 'wasm-build/texlive-source.ref'
+      - '.github/workflows/wasm-makeindex.yml'
+
+jobs:
+  build-makeindex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --load \
+            -f wasm-build/Dockerfile.makeindex \
+            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            -t makeindex-wasm \
+            wasm-build/
+
+      - name: Run WASM build
+        run: |
+          mkdir -p wasm-build/dist-makeindex
+          docker run --platform linux/amd64 \
+            -v ${{ github.workspace }}/wasm-build/dist-makeindex:/dist \
+            makeindex-wasm
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - name: Smoke test (WASM validity + entry export + own glue)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const d = 'wasm-build/dist-makeindex/';
+            const w = fs.readFileSync(d + 'wasmtex-makeindex.wasm');
+            if (!WebAssembly.validate(w)) { console.error('INVALID wasm'); process.exit(1); }
+            console.log('wasmtex-makeindex.wasm OK (' + w.length + ' bytes)');
+            const js = fs.readFileSync(d + 'wasmtex-makeindex.js', 'utf8');
+            const controller = fs.readFileSync(d + 'wasmtex-makeindex.worker.js', 'utf8');
+            // Interposition contract (#50): entry export + the kpse hook must survive.
+            for (const s of ['_compileMakeindex', '_setMainEntry']) {
+              if (!js.includes(s)) { console.error('missing symbol: ' + s); process.exit(1); }
+            }
+            for (const s of ['kpse_find_file_impl', 'importScripts']) {
+              if (!controller.includes(s)) { console.error('missing controller symbol: ' + s); process.exit(1); }
+            }
+            console.log('entry + hook symbols present');
+          "
+
+      - name: Upload makeindex WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-makeindex
+          path: |
+            wasm-build/dist-makeindex/wasmtex-makeindex.js
+            wasm-build/dist-makeindex/wasmtex-makeindex.worker.js
+            wasm-build/dist-makeindex/wasmtex-makeindex.wasm
+          retention-days: 90
+
+      - name: List build outputs
+        if: always()
+        run: ls -lh wasm-build/dist-makeindex/ 2>/dev/null || echo "No dist files"

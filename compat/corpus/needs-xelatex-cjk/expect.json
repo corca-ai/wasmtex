@@ -1,0 +1,4 @@
+{
+  "class": "needs-xelatex-lualatex",
+  "note": "Korean via xeCJK. The multi-engine router detects the XeTeX requirement from the source up-front (0ms, regardless of mirror state) and returns an actionable 'requires XeLaTeX' result. Before Stage 2 this failed as missing-package because xeCJK.sty is not yet mirrored."
+}

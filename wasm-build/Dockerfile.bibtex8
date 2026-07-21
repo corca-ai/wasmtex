@@ -1,0 +1,43 @@
+# =============================================================================
+# Dockerfile.bibtex8 — bibtex8 (texk/bibtex-x) WASM build environment (#102)
+# =============================================================================
+# Plain C (no web2c codegen), so no native Phase 1 — build-bibtex8.sh does an
+# emconfigure + emmake of texk/kpathsea + texk/bibtex-x, then relinks with own glue.
+#
+# Usage:
+#   docker build --platform linux/amd64 -f Dockerfile.bibtex8 \
+#     --build-arg TEXLIVE_REF=$(cat texlive-source.ref) -t bibtex8-wasm .
+#   docker run --platform linux/amd64 -v $(pwd)/dist-bibtex8:/dist bibtex8-wasm
+# =============================================================================
+
+FROM emscripten/emsdk:3.1.46
+
+LABEL description="bibtex8 WASM build environment (TeX Live 2025)"
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool pkg-config git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG TEXLIVE_REF
+RUN test -n "${TEXLIVE_REF}" || { echo "TEXLIVE_REF build-arg is required"; exit 1; }; \
+    echo "=== Fetching pinned TeX Live source ${TEXLIVE_REF} ===" && \
+    mkdir -p /src/texlive-source && cd /src/texlive-source && \
+    git init -q && \
+    git remote add origin https://github.com/TeX-Live/texlive-source.git && \
+    git fetch --depth 1 -q origin "${TEXLIVE_REF}" && \
+    git checkout -q FETCH_HEAD && \
+    echo "=== Source checkout complete ($(git rev-parse HEAD)) ==="
+
+RUN mkdir -p /build /dist
+
+COPY kpse-hook.c                 /src/kpse-hook.c
+COPY library.js                  /src/library.js
+COPY bibtex8-entry.c             /src/bibtex8-entry.c
+COPY bibtex8-worker.js           /src/bibtex8-worker.js
+COPY build-bibtex8.sh            /src/build-bibtex8.sh
+
+RUN chmod +x /src/build-bibtex8.sh
+WORKDIR /src
+ENTRYPOINT ["bash", "build-bibtex8.sh"]

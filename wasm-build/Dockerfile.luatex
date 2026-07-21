@@ -1,0 +1,86 @@
+# =============================================================================
+# Dockerfile.luatex: Lua(HB)TeX WASM — Build Environment
+# =============================================================================
+#
+# Builds LuaHBTeX (the LuaTeX variant lualatex uses, with HarfBuzz shaping) as a
+# WebAssembly module with this repo's own controller/glue (the WASM is the GPL
+# LuaTeX engine). This is a from-texlive-source port, structured like the pdfTeX
+# Dockerfile in two phases:
+#
+#   Phase 1 (native, baked into image): configure --enable-luahbtex + native make,
+#           which (a) translates LuaTeX's CWEB/WEB (.w) sources to C via web2c and
+#           (b) builds the native codegen tools (ctangle/tangle/web2c). build-luatex.sh
+#           reuses BOTH because those tools can't run once compiled to wasm.
+#   Phase 2 (emcc, at `docker run`): build-luatex.sh cross-compiles the source graph
+#           and links it with the own glue. LuaHBTeX builds cleanly under emscripten
+#           (lua53/harfbuzz/graphite2/pplib/zziplib/kpathsea from TeX Live's bundled
+#           sources); the heavy native helpers are reused from Phase 1.
+#
+# Usage:
+#   docker build -f Dockerfile.luatex --platform linux/amd64 -t luatex-wasm wasm-build/
+#   docker run --platform linux/amd64 -v $(pwd)/wasm-build/dist-luatex:/dist luatex-wasm
+# =============================================================================
+
+FROM emscripten/emsdk:3.1.46
+
+LABEL maintainer="wasmtex"
+LABEL description="LuaHBTeX WASM build environment (TeX Live 2025)"
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# ---- System packages --------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool pkg-config git ca-certificates \
+    wget python3 flex bison ghostscript texinfo \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- TeX Live source (pinned, immutable; see wasm-build/texlive-source.ref) --
+# Pinned to an immutable commit via --build-arg (a moving branch isn't
+# reproducible). No default → fails loudly if not supplied.
+ARG TEXLIVE_REF
+RUN test -n "${TEXLIVE_REF}" || { echo "TEXLIVE_REF build-arg is required"; exit 1; }; \
+    echo "=== Fetching pinned TeX Live source ${TEXLIVE_REF} ===" && \
+    mkdir -p /src/texlive-source && cd /src/texlive-source && \
+    git init -q && \
+    git remote add origin https://github.com/TeX-Live/texlive-source.git && \
+    git fetch --depth 1 -q origin "${TEXLIVE_REF}" && \
+    git checkout -q FETCH_HEAD && \
+    echo "=== Source checkout complete ($(git rev-parse HEAD)) ==="
+
+RUN mkdir -p /build/native /build/wasm /dist
+
+# =============================================================================
+# Phase 1: Native build (INLINED — does not depend on COPY'd files)
+# =============================================================================
+# Enabling only luahbtex (XeTeX disabled → no system fontconfig needed) generates
+# LuaTeX's C sources + the web2c codegen tools and builds the native libs. The same
+# --disable-* set is used in Phase 2 so the two trees match.
+RUN echo "=== Phase 1: native luahbtex (generate C + codegen tools) ===" && \
+    cd /build/native && \
+    /src/texlive-source/configure \
+        --disable-all-pkgs --enable-web2c --enable-luahbtex \
+        --disable-pdftex --disable-bibtex --disable-xetex \
+        --disable-luajittex --disable-luajithbtex --disable-mfluajit \
+        --disable-mf --disable-mp \
+        --disable-ptex --disable-eptex --disable-uptex --disable-euptex \
+        --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
+        2>&1 | tail -20 && \
+    make MAKEINFO=true -j"$(nproc)" 2>&1 | tail -40 || true && \
+    echo "=== Verifying native luahbtex outputs ===" && \
+    ls -la /build/native/texk/web2c/luahbtex 2>/dev/null && echo "native luahbtex OK" && \
+    ls -la /build/native/texk/web2c/ctangle /build/native/texk/web2c/web2c/web2c 2>/dev/null || \
+        echo "(codegen tools may be at other paths — build-luatex.sh discovers ELF tools)"
+
+# =============================================================================
+# COPY build script + own glue (AFTER native build — won't invalidate Phase 1)
+# =============================================================================
+COPY build-luatex.sh /src/build-luatex.sh
+COPY luatex-worker.js /src/luatex-worker.js
+COPY luatex-library.js /src/luatex-library.js
+COPY luatex-entry.c /src/luatex-entry.c
+COPY kpse-hook.c /src/kpse-hook.c
+
+RUN chmod +x /src/build-luatex.sh
+
+WORKDIR /src
+ENTRYPOINT ["bash", "build-luatex.sh"]

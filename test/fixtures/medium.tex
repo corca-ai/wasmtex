@@ -1,0 +1,73 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+
+\title{Medium Test Document}
+\author{Test}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+This is a medium-sized test document that exercises several LaTeX features.
+We include math, lists, tables, and cross-references to test compilation performance.
+
+\section{Mathematics}
+
+\subsection{Inline Math}
+The Euler identity $e^{i\pi} + 1 = 0$ is considered one of the most beautiful equations.
+
+\subsection{Display Math}
+\begin{equation}
+  \int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+  \label{eq:gaussian}
+\end{equation}
+
+As shown in Equation~\ref{eq:gaussian}, the Gaussian integral has a closed form.
+
+\begin{align}
+  \nabla \cdot \mathbf{E} &= \frac{\rho}{\varepsilon_0} \\
+  \nabla \cdot \mathbf{B} &= 0 \\
+  \nabla \times \mathbf{E} &= -\frac{\partial \mathbf{B}}{\partial t} \\
+  \nabla \times \mathbf{B} &= \mu_0 \mathbf{J} + \mu_0\varepsilon_0 \frac{\partial \mathbf{E}}{\partial t}
+\end{align}
+
+\section{Lists}
+
+\begin{enumerate}
+  \item First item with explanation
+  \item Second item with subitems:
+    \begin{itemize}
+      \item Sub-item A
+      \item Sub-item B
+      \item Sub-item C
+    \end{itemize}
+  \item Third item
+\end{enumerate}
+
+\section{Tables}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|r|}
+  \hline
+  Left & Center & Right \\
+  \hline
+  One & Two & Three \\
+  Four & Five & Six \\
+  Seven & Eight & Nine \\
+  \hline
+\end{tabular}
+\caption{A sample table}
+\label{tab:sample}
+\end{table}
+
+See Table~\ref{tab:sample} for details.
+
+\section{Conclusion}
+This document tests cross-references, math environments, lists, and tables.
+
+\end{document}

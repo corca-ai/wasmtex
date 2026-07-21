@@ -1,0 +1,100 @@
+export type { WasmTexEventMap, WasmTexOptions } from './component-types'
+export { ensureLanguagesRegistered } from './editor/setup'
+export {
+  BackendRegistry,
+  createJsonTextBackend,
+  createRemoteBackend,
+  type JsonTextBackendOptions,
+  type RemoteBackendOptions,
+  type ToolBackend,
+} from './engine/backend-registry'
+export {
+  type BiberBackendOptions,
+  type BiberRequest,
+  createBiberBackend,
+  runRemoteBiber,
+} from './engine/biber-backend'
+export {
+  type BblInput,
+  BIBLIOGRAPHY_STAGE,
+  type BibliographyBackend,
+  type BibliographyMode,
+  type BibliographyStageRequest,
+  biblatexLiteBackend,
+  detectBiblatexBackend,
+  detectBiblatexSort,
+  detectBibliographyMode,
+  generateBiblatexBbl,
+  parseBcfCitedKeys,
+  runRemoteBibliography,
+  selectBiblatexBackend,
+} from './engine/bibliography-backend'
+export {
+  type CacheStore,
+  contentKey,
+  MemoryCacheStore,
+  withCache,
+} from './engine/content-cache'
+export {
+  createMakeindexBackend,
+  detectIndexUse,
+  INDEX_STAGE,
+  type IndexStageRequest,
+  type MakeindexBackendOptions,
+  runRemoteIndex,
+} from './engine/index-backend'
+export {
+  clearTexliveCache,
+  isIndexedDbSupported,
+  PersistentCache,
+  type PersistentCacheOptions,
+} from './engine/persistent-cache'
+export { warmup } from './engine/warmup'
+export { wasmSimdSupported } from './engine/wasm-features'
+export {
+  createXindyBackend,
+  type XindyBackendOptions,
+  type XindyRequest,
+} from './engine/xindy-backend'
+export {
+  DEFAULT_LINT_CONFIG,
+  type LintConfig,
+  type LintRuleConfig,
+  type LintRuleId,
+  lintSource,
+} from './lsp/linter'
+export {
+  type CommandArg,
+  formatSignature,
+  getCommandPackage,
+  getCommandSignature,
+  parseSignature,
+  registerShard,
+} from './lsp/package-db'
+export {
+  type PackageShard,
+  PackageShardLoader,
+  type PackageShardLoaderOptions,
+  type ShardStore,
+} from './lsp/package-shard-loader'
+export type {
+  AppStatus,
+  BoxGeometry,
+  CachedTexliveFile,
+  CompileResult,
+  DependencyEdge,
+  DependencyGraph,
+  DependencyNode,
+  Diagnostic,
+  DiagnosticCode,
+  DocumentGeometry,
+  EngineTelemetry,
+  FontGlyphGap,
+  GlyphCoverageReport,
+  GlyphMiss,
+  PageGeometry,
+  TexError,
+  TextRun,
+  WarmupCache,
+} from './types'
+export { WasmTex } from './wasmtex'

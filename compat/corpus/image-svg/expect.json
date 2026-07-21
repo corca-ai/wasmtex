@@ -1,0 +1,5 @@
+{
+  "class": "ok",
+  "signal": "image-format",
+  "note": "SVG has no pdfTeX path: pdfTeX emits 'Unknown graphics extension: .svg' but RECOVERS and still produces a (figure-less) PDF, so the primary class is ok with image-format as a signal. (EPS behaves the same way via epstopdf-base draft mode.) This documents that pdfTeX degrades rather than hard-fails on unsupported image formats."
+}

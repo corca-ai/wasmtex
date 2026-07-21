@@ -1,0 +1,122 @@
+name: WASM XeTeX (from source)
+
+# Builds the XeLaTeX engine (wasmtex-xetex + dvipdfmx) with this project's OWN
+# glue, and uploads the artifacts. `ci.yml` downloads them into
+# public/wasmtex/<version>/ so XeLaTeX ships in the deployed app.
+#
+# wasmtex-xetex is built FROM TeX-Live/texlive-source via Docker
+# (wasm-build/Dockerfile.xetex: native codegen + libkpathsea, then emcc). ICU data is
+# NOT bundled; the engine fetches icudt68l.dat from the CDN at runtime (one-time
+# asset, see scripts/build-icu-data.sh). wasmtex-dvipdfm is also built FROM
+# texlive-source (same Docker image, own controller and glue).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-build/Dockerfile.xetex'
+      - 'wasm-build/build-xetex2.sh'
+      - 'wasm-build/xetex-entry.c'
+      - 'wasm-build/xetex-worker.js'
+      - 'wasm-build/xetex-library.js'
+      - 'wasm-build/icu-data-loader.c'
+      - 'wasm-build/fontconfig-shim.c'
+      - 'wasm-build/fontconfig-shim.h'
+      - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/texlive-source.ref'
+      - 'wasm-build/dvipdfm-worker.js'
+      - 'wasm-build/xetex-dvipdfm-library.js'
+      - 'wasm-build/build-dvipdfm2.sh'
+      - 'wasm-build/dvipdfm-entry.c'
+      - 'wasm-build/dvipdfm-stubs.c'
+      - 'scripts/build-xetex-fromsource.sh'
+      - '.github/workflows/wasm-xetex.yml'
+
+jobs:
+  build-xetex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - name: Build XeLaTeX engine from source (own glue)
+        # Docker texlive-source build (native codegen + emcc) + the dvipdfmx pass.
+        # Much heavier than the old single-emcc build; allow ~an hour.
+        timeout-minutes: 75
+        run: bash scripts/build-xetex-fromsource.sh wasm-build/dist-xetex
+
+      - name: Smoke test (WASM validity + own glue, no AGPL markers)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const d = 'wasm-build/dist-xetex/';
+            for (const f of ['wasmtex-xetex.wasm', 'wasmtex-dvipdfm.wasm']) {
+              const w = fs.readFileSync(d + f);
+              if (!WebAssembly.validate(w)) { console.error(f + ' INVALID'); process.exit(1); }
+              console.log(f + ' OK (' + w.length + ' bytes)');
+            }
+            // Both engine controllers must be authored here (no obsolete upstream markers).
+            for (const f of ['wasmtex-xetex.js', 'wasmtex-dvipdfm.js']) {
+              const controller = fs.readFileSync(d + f.replace('.js', '.worker.js'), 'utf8');
+              const obsoleteHost = ['texlive2', ['swift', 'latex'].join('')].join('.');
+              if (controller.includes('getResponseHeader(\"fileid\")') || controller.includes(obsoleteHost)) {
+                console.error(f + ': obsolete upstream controller markers present'); process.exit(1);
+              }
+              for (const token of ['kpse_find_file_impl', 'texlive_endpoint', 'importScripts']) {
+                if (!controller.includes(token)) { console.error(f + ': controller token missing: ' + token); process.exit(1); }
+              }
+            }
+            // The from-source xetex registers runtime-fetched ICU data (no stubdata crash).
+            if (!fs.readFileSync(d + 'wasmtex-xetex.worker.js', 'utf8').includes('set_icu_common_data')) {
+              console.error('wasmtex-xetex.worker.js: ICU data loader missing'); process.exit(1);
+            }
+            // Interposition contract (#50): the C entry exports must survive the build,
+            // else a silent drift ships a non-functional engine.
+            const entry = {
+              'wasmtex-xetex.js': ['_compileLaTeX', '_compileFormat', '_setMainEntry'],
+              'wasmtex-dvipdfm.js': ['_compilePDF', '_setMainEntry'],
+            };
+            for (const [f, syms] of Object.entries(entry)) {
+              const js = fs.readFileSync(d + f, 'utf8');
+              const missing = syms.filter(s => !js.includes(s));
+              if (missing.length) { console.error(f + ': missing entry exports: ' + missing.join(', ')); process.exit(1); }
+            }
+            console.log('own glue OK');
+          "
+
+      - name: Extract + compress prebuilt XeLaTeX format (.fmt.gz)
+        # Run the freshly-built engine's `xetex -ini xelatex.ini` once and capture
+        # the .fmt so the app preloads it instead of rebuilding the format on every
+        # cold start (the dominant first-compile cost). The .fmt is ~25 MB so ship
+        # it gzipped (~5 MB; the engine decompresses in-browser). Uses the runner's
+        # system Chrome (channel=chrome) — Playwright's browser download hangs in CI.
+        timeout-minutes: 10
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+        run: |
+          npm ci
+          npx playwright install-deps chromium
+          mkdir -p public/wasmtex/2025
+          cp wasm-build/dist-xetex/wasmtex-xetex.js \
+             wasm-build/dist-xetex/wasmtex-xetex.worker.js \
+             wasm-build/dist-xetex/wasmtex-xetex.wasm public/wasmtex/2025/
+          node scripts/extract-xetex-format.mjs 2025
+          gzip -9 -c public/wasmtex/2025/wasmtex-xetex.fmt \
+            > wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
+          ls -lh wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
+
+      - name: Upload XeLaTeX WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-xetex
+          path: |
+            wasm-build/dist-xetex/wasmtex-xetex.js
+            wasm-build/dist-xetex/wasmtex-xetex.worker.js
+            wasm-build/dist-xetex/wasmtex-xetex.wasm
+            wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
+            wasm-build/dist-xetex/wasmtex-dvipdfm.js
+            wasm-build/dist-xetex/wasmtex-dvipdfm.worker.js
+            wasm-build/dist-xetex/wasmtex-dvipdfm.wasm
+          retention-days: 90

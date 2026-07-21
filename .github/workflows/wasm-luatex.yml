@@ -1,0 +1,131 @@
+name: WASM LuaTeX (from source)
+
+# Builds the LuaHBTeX engine (wasmtex-luatex) from texlive-source with this
+# project's OWN glue, and uploads the artifact. `ci.yml` downloads it into
+# public/wasmtex/<version>/ so LuaLaTeX ships in the deployed app.
+#
+# Heavy build: this is a two-phase texlive-source port (native source generation +
+# codegen tools, then emcc cross-link of the full graph; see wasm-build/build-luatex.sh).
+# Phase 1 (native, ~tens of minutes) is cached in the Docker image, so reruns are
+# fast. Runs on workflow_dispatch and on pushes that change the LuaTeX glue/build
+# (e.g. the worker controller), so a glue change to the engine actually ships.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-build/luatex-worker.js'
+      - 'wasm-build/luatex-library.js'
+      - 'wasm-build/luatex-entry.c'
+      - 'wasm-build/build-luatex.sh'
+      - 'wasm-build/Dockerfile.luatex'
+      - 'wasm-build/kpse-hook.c'
+      - '.github/workflows/wasm-luatex.yml'
+
+jobs:
+  build-luatex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-luatex
+          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex') }}
+          restore-keys: luatex-docker-
+
+      - name: Build image (Phase 1 native, cached)
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --load \
+            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            --cache-from type=local,src=/tmp/.buildx-cache-luatex \
+            --cache-to type=local,dest=/tmp/.buildx-cache-luatex-new,mode=max \
+            -f wasm-build/Dockerfile.luatex \
+            -t luatex-wasm \
+            wasm-build/
+
+      - name: Run Phase 2 (emcc cross-compile + glue relink)
+        run: |
+          mkdir -p wasm-build/dist-luatex
+          docker run --platform linux/amd64 \
+            -v ${{ github.workspace }}/wasm-build/dist-luatex:/dist \
+            luatex-wasm
+
+      - name: Rotate Docker cache
+        run: |
+          rm -rf /tmp/.buildx-cache-luatex
+          mv /tmp/.buildx-cache-luatex-new /tmp/.buildx-cache-luatex 2>/dev/null || true
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+
+      - name: Extract prebuilt LuaLaTeX format (.fmt)
+        # Run the freshly-built WASM engine once (luatex -ini lualatex.ini) and
+        # capture the .fmt so the app can preload it instead of rebuilding the
+        # format on every cold start (the dominant first-compile cost). The .fmt
+        # is engine-binary-specific, so it must be regenerated with every build.
+        # timeout-minutes guards against a stalled browser download (observed:
+        # `playwright install` hanging after the browser reached 100%).
+        timeout-minutes: 10
+        # Use the runner's system Chrome (channel=chrome) instead of downloading
+        # Playwright's bundled browser — its post-download install step hangs
+        # deterministically on GitHub-hosted runners. install-deps (apt only, no
+        # browser download) ensures the shared libs are present.
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+        run: |
+          npm ci
+          npx playwright install-deps chromium
+          mkdir -p public/wasmtex/2025
+          cp wasm-build/dist-luatex/wasmtex-luatex.js \
+             wasm-build/dist-luatex/wasmtex-luatex.worker.js \
+             wasm-build/dist-luatex/wasmtex-luatex.wasm public/wasmtex/2025/
+          node scripts/extract-luatex-format.mjs 2025
+          # Ship the format gzipped (consistent with XeLaTeX; the engine prefers
+          # `.fmt.gz` and decompresses in-browser). ~5.5 MB → ~2 MB.
+          gzip -9 -c public/wasmtex/2025/wasmtex-luatex.fmt \
+            > wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
+          ls -lh wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
+
+      - name: Smoke test (WASM validity + own glue, no AGPL markers)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const d = 'wasm-build/dist-luatex/';
+            const w = fs.readFileSync(d + 'wasmtex-luatex.wasm');
+            if (!WebAssembly.validate(w)) { console.error('INVALID wasm'); process.exit(1); }
+            console.log('wasmtex-luatex.wasm OK (' + w.length + ' bytes)');
+            const js = fs.readFileSync(d + 'wasmtex-luatex.js', 'utf8');
+            const controller = fs.readFileSync(d + 'wasmtex-luatex.worker.js', 'utf8');
+            const obsoleteHost = ['texlive2', ['swift', 'latex'].join('')].join('.');
+            if (controller.includes('getResponseHeader(\"fileid\")') || controller.includes(obsoleteHost)) {
+              console.error('obsolete upstream controller markers present'); process.exit(1);
+            }
+            for (const t of ['compileLaTeXRoutine','kpse_find_file_impl','texlive_endpoint','importScripts']) {
+              if (!controller.includes(t)) { console.error('controller token missing: ' + t); process.exit(1); }
+            }
+            // Interposition contract (#50): the C entry exports must survive the build.
+            for (const s of ['_compileLaTeX','_compileFormat','_main','_setMainEntry']) {
+              if (!js.includes(s)) { console.error('missing entry export: ' + s); process.exit(1); }
+            }
+            console.log('own glue OK');
+          "
+
+      - name: Upload LuaTeX WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-luatex
+          path: |
+            wasm-build/dist-luatex/wasmtex-luatex.js
+            wasm-build/dist-luatex/wasmtex-luatex.worker.js
+            wasm-build/dist-luatex/wasmtex-luatex.wasm
+            wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
+          retention-days: 90
+
+      - name: List build outputs
+        if: always()
+        run: ls -lh wasm-build/dist-luatex/ 2>/dev/null || echo "No dist-luatex files"

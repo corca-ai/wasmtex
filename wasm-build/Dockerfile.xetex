@@ -1,0 +1,93 @@
+# =============================================================================
+# Dockerfile.xetex: XeTeX WASM — Build Environment (from texlive-source)  [#52]
+# =============================================================================
+#
+# Builds XeTeX from TeX-Live/texlive-source as WebAssembly with this repo's own
+# controller/glue and the real libkpathsea. Two phases, like Dockerfile.luatex /
+# the pdfTeX build:
+#
+#   Phase 1 (native, baked in): configure --enable-xetex + native make. XeTeX's
+#           configure HARD-REQUIRES fontconfig (or Mac), so libfontconfig1-dev is
+#           installed for the configure check; the build (a) web2c-translates XeTeX's
+#           WEB sources to C, (b) builds the native codegen tools, and (c) builds the
+#           native libkpathsea.a. build-xetex2.sh reuses all three.
+#   Phase 2 (emcc, at `docker run`): build-xetex2.sh cross-compiles the XeTeX object
+#           graph and links real libkpathsea.a + the fontconfig SHIM (own FC API over
+#           xetexfontlist.txt) + kpse-hook (--wrap=kpse_find_file) + the FT_New_Face
+#           wrap + emscripten freetype/icu/png ports + bundled harfbuzz/graphite2/
+#           teckit + this repo's own controller/glue.
+#
+# Usage:
+#   docker build -f Dockerfile.xetex --platform linux/amd64 -t xetex-wasm wasm-build/
+#   docker run  --platform linux/amd64 -v $(pwd)/wasm-build/dist-xetex:/dist xetex-wasm
+# =============================================================================
+
+FROM emscripten/emsdk:3.1.46
+
+LABEL maintainer="wasmtex"
+LABEL description="XeTeX WASM build environment from texlive-source (TeX Live 2025)"
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# ---- System packages --------------------------------------------------------
+# libfontconfig1-dev: XeTeX's configure requires fontconfig (or Mac) to be present
+# at configure time — we satisfy the *check* with the system lib, but Phase 2 links
+# our own fontconfig shim (xetexfontlist.txt-backed), never the system fontconfig.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool pkg-config git ca-certificates \
+    wget python3 flex bison ghostscript texinfo \
+    libfontconfig1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- TeX Live source (pinned, immutable; see wasm-build/texlive-source.ref) --
+ARG TEXLIVE_REF
+RUN test -n "${TEXLIVE_REF}" || { echo "TEXLIVE_REF build-arg is required"; exit 1; }; \
+    echo "=== Fetching pinned TeX Live source ${TEXLIVE_REF} ===" && \
+    mkdir -p /src/texlive-source && cd /src/texlive-source && \
+    git init -q && \
+    git remote add origin https://github.com/TeX-Live/texlive-source.git && \
+    git fetch --depth 1 -q origin "${TEXLIVE_REF}" && \
+    git checkout -q FETCH_HEAD && \
+    echo "=== Source checkout complete ($(git rev-parse HEAD)) ==="
+
+RUN mkdir -p /build/native /build/wasm /dist
+
+# =============================================================================
+# Phase 1: Native build (INLINED — does not depend on COPY'd files)
+# =============================================================================
+# --enable-xetex generates XeTeX's C + the web2c codegen tools and builds native
+# libkpathsea.a. The same --enable/--disable set is used in Phase 2 so the trees match.
+RUN echo "=== Phase 1: native xetex (generate C + codegen tools + libkpathsea) ===" && \
+    cd /build/native && \
+    /src/texlive-source/configure \
+        --disable-all-pkgs --enable-web2c --enable-xetex \
+        --disable-pdftex --disable-bibtex \
+        --disable-luatex --disable-luahbtex --disable-luajittex --disable-luajithbtex --disable-mfluajit \
+        --disable-mf --disable-mp \
+        --disable-ptex --disable-eptex --disable-uptex --disable-euptex \
+        --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
+        2>&1 | tail -25 && \
+    make MAKEINFO=true -j"$(nproc)" 2>&1 | tail -40 || true && \
+    echo "=== Verifying native xetex outputs ===" && \
+    ls -la /build/native/texk/web2c/xetex 2>/dev/null && echo "native xetex OK" || \
+        echo "(native xetex link may fail without all libs — C generation + tools are what matter)" && \
+    ls -la /build/native/texk/kpathsea/.libs/libkpathsea.a 2>/dev/null && echo "native libkpathsea OK"
+
+# =============================================================================
+# COPY build script + own glue + shim (AFTER native build — won't invalidate Phase 1)
+# =============================================================================
+COPY build-xetex2.sh /src/build-xetex2.sh
+COPY xetex-entry.c /src/xetex-entry.c
+COPY xetex-worker.js /src/xetex-worker.js
+COPY xetex-library.js /src/xetex-library.js
+COPY kpse-hook.c /src/kpse-hook.c
+COPY fontconfig-shim.c /src/fontconfig-shim.c
+COPY fontconfig-shim.h /src/fontconfig-shim.h
+# ICU data loader (#52 M4b): registers runtime-fetched icudt68l.dat via
+# udata_setCommonData so XeTeX's font manager works without baking 28MB into the wasm.
+COPY icu-data-loader.c /src/icu-data-loader.c
+
+RUN chmod +x /src/build-xetex2.sh
+
+WORKDIR /src
+ENTRYPOINT ["bash", "build-xetex2.sh"]

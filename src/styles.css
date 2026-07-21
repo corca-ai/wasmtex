@@ -1,0 +1,520 @@
+body {
+  margin: 0;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+}
+
+#editor-container,
+#preview-container {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+
+#editor-container {
+  border-right: 1px solid #404040;
+}
+
+.le-root *,
+.le-root *::before,
+.le-root *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.le-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  background: #1e1e1e;
+  color: #ccc;
+}
+
+.le-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.le-root .panel {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.le-left-panel {
+  width: 180px;
+  flex-shrink: 0;
+  background: #252526;
+  border-right: 1px solid #404040;
+  display: flex;
+  flex-direction: column;
+}
+
+.le-file-tree {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 100px;
+}
+
+.le-outline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-top: 1px solid #404040;
+  min-height: 100px;
+}
+
+.le-editor {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+
+.le-root .le-viewer {
+  flex: 1;
+  min-width: 200px;
+  background: #333;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+}
+
+.le-root .divider {
+  width: 4px;
+  cursor: col-resize;
+  background: #404040;
+  flex-shrink: 0;
+}
+
+.le-root .divider:hover {
+  background: #007acc;
+}
+
+/* Error log panel */
+.le-error-log {
+  height: 0;
+  flex-shrink: 0;
+  background: #1e1e1e;
+  border-top: 1px solid #404040;
+  overflow-y: auto;
+  font-family: "Menlo", "Consolas", monospace;
+  font-size: 12px;
+  transition: height 0.15s ease;
+}
+
+.le-error-log.open {
+  height: 150px;
+}
+
+.le-status-bar {
+  height: 24px;
+  background: #007acc;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+#status {
+  display: inline-flex;
+}
+
+#status-detail {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+}
+
+.le-status-group,
+.le-status-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.le-status-group {
+  flex: 1;
+}
+
+.le-status-controls {
+  flex-shrink: 0;
+}
+
+#file-tree-list,
+#outline-list,
+#error-log-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+#recompile-btn {
+  margin-left: 8px;
+}
+
+#file-tree-panel {
+  min-width: 220px;
+}
+
+.le-version-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.le-version-select {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: none;
+  border-radius: 2px;
+  font-size: 11px;
+  padding: 1px 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.le-version-select option {
+  background: #333;
+  color: white;
+}
+
+.le-version-select:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.le-error-log .log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+  cursor: pointer;
+  position: sticky;
+  top: 0;
+}
+
+.le-error-log .log-header .badge {
+  background: #f44747;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+.le-error-log .log-entry {
+  padding: 2px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+  cursor: text;
+}
+
+.le-error-log .log-entry.clickable {
+  cursor: pointer;
+}
+
+.le-error-log .log-entry:hover {
+  background: #2a2d2e;
+}
+
+.le-error-log .log-entry.error {
+  color: #f44747;
+}
+
+.le-error-log .log-entry.warning {
+  color: #dcdcaa;
+}
+
+/* File tree */
+.file-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  border-bottom: 1px solid #404040;
+}
+
+.file-tree-header button {
+  background: none;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.file-tree-header button:hover {
+  color: #fff;
+}
+
+.file-item {
+  padding: 4px 12px 4px 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.file-item:hover {
+  background: #2a2d2e;
+}
+
+.file-item.active {
+  background: #094771;
+  color: #fff;
+}
+
+.file-item .delete-btn {
+  float: right;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 12px;
+  display: none;
+}
+
+.file-item:hover .delete-btn {
+  display: inline;
+}
+
+.file-item .delete-btn:hover {
+  color: #f44747;
+}
+
+/* PDF viewer loading overlay */
+.pdf-loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  flex: 1;
+}
+
+.pdf-loading-text {
+  font-size: 13px;
+  color: #888;
+}
+
+.pdf-loading-bar {
+  width: 160px;
+  height: 3px;
+  background: #444;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.pdf-loading-bar-fill {
+  width: 10%;
+  height: 100%;
+  background: #007acc;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* PDF viewer */
+.pdf-page-container {
+  margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.pdf-page-container canvas {
+  display: block;
+}
+
+.pdf-controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(45, 45, 45, 0.9);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.pdf-download-btn {
+  background: #404040;
+  border: none;
+  color: #ccc;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.pdf-download-btn:hover {
+  background: #505050;
+}
+
+.pdf-controls button {
+  background: #404040;
+  border: none;
+  color: #ccc;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.pdf-controls button:hover {
+  background: #505050;
+}
+
+.pdf-controls span {
+  font-size: 12px;
+  color: #999;
+}
+
+.pdf-controls .zoom-label {
+  cursor: pointer;
+  min-width: 36px;
+  text-align: center;
+}
+
+.pdf-controls .zoom-label:hover {
+  color: #ccc;
+}
+
+/* Binary file preview */
+.binary-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e1e1e;
+  z-index: 10;
+}
+
+.binary-preview-img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.binary-preview-info {
+  color: #888;
+  font-size: 14px;
+}
+
+/* File tree drag & drop */
+.le-file-tree.drag-over {
+  outline: 2px dashed #007acc;
+  outline-offset: -2px;
+}
+
+/* File tree header buttons */
+.file-tree-btns {
+  display: flex;
+  gap: 2px;
+}
+
+/* Outline */
+.outline-header {
+  padding: 6px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.outline-item {
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.outline-item:hover {
+  background: #2a2d2e;
+  color: #fff;
+}
+
+.outline-item.active {
+  background: #37373d;
+  color: #fff;
+  box-shadow: inset 2px 0 0 #007acc;
+}
+
+.outline-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Folder items */
+.folder-item {
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #ccc;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+}
+
+.folder-item:hover {
+  background: #2a2d2e;
+}
+
+.folder-item.drag-over {
+  background: #094771;
+}
+
+.folder-toggle {
+  font-size: 10px;
+  width: 12px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.folder-name {
+  color: #ccc;
+}

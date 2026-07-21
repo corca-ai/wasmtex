@@ -1,0 +1,1 @@
+{ "class": "needs-shell-escape", "note": "minted requires -shell-escape + pygmentize" }

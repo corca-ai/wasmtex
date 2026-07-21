@@ -1,0 +1,1 @@
+{ "class": "needs-biber", "note": "biblatex+biber — biblatex-lite covers only a subset; full fidelity needs a WASM Biber" }

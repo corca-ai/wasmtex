@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "texliveVersion": "2025",
+  "texliveSourceCommit": "143f1723353b20202645f241db429b080a8adcdf",
+  "emscriptenVersion": "3.1.46",
+  "sdkLicense": "MIT",
+  "releaseStatus": "development-only",
+  "noticePath": "../../THIRD_PARTY_NOTICES.md",
+  "licenseDirectoryPath": "../../LICENSES/",
+  "requirementsPath": "../../docs/licensing.md",
+  "correspondingSource": null,
+  "texliveProvenance": null,
+  "artifactFamilies": [
+    {
+      "name": "pdftex",
+      "patterns": [
+        "wasmtex-pdftex.js",
+        "wasmtex-pdftex.wasm",
+        "wasmtex-pdftex.worker.js"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "xetex",
+      "patterns": [
+        "wasmtex-xetex.js",
+        "wasmtex-xetex.wasm",
+        "wasmtex-xetex.worker.js"
+      ],
+      "distributionTerms": [
+        "LicenseRef-XeTeX",
+        "LicenseRef-Linked-Component-Notices"
+      ],
+      "releaseBlocker": "pplib-license-evidence"
+    },
+    {
+      "name": "dvipdfmx",
+      "patterns": [
+        "wasmtex-dvipdfm.js",
+        "wasmtex-dvipdfm.wasm",
+        "wasmtex-dvipdfm.worker.js"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "luahbtex",
+      "patterns": [
+        "wasmtex-luatex.js",
+        "wasmtex-luatex.wasm",
+        "wasmtex-luatex.worker.js"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ],
+      "releaseBlocker": "pplib-license-evidence"
+    },
+    {
+      "name": "latex-formats",
+      "patterns": [
+        "*.fmt",
+        "*.fmt.gz"
+      ],
+      "distributionTerms": [
+        "LicenseRef-TeXLive-Format-Inputs"
+      ]
+    },
+    {
+      "name": "bibtex",
+      "patterns": [
+        "wasmtex-bibtex.*"
+      ],
+      "distributionTerms": [
+        "LicenseRef-BibTeX-Web2C-Notices",
+        "LGPL-2.1-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "bibtex8",
+      "patterns": [
+        "wasmtex-bibtex8.*"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "makeindex",
+      "patterns": [
+        "wasmtex-makeindex.*"
+      ],
+      "distributionTerms": [
+        "LicenseRef-MakeIndex-Distribution-Notice",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "wasmtex-runtime-helper",
+      "patterns": [
+        "wasmtex-kpse-resolve.js"
+      ],
+      "distributionTerms": [
+        "MIT"
+      ]
+    }
+  ],
+  "releaseBlockers": [
+    {
+      "id": "complete-corresponding-source",
+      "detail": "Publish and hash the complete source archive for the exact engine bytes."
+    },
+    {
+      "id": "pplib-license-evidence",
+      "detail": "Resolve the missing public pplib license evidence before distributing XeTeX or LuaHBTeX."
+    },
+    {
+      "id": "texlive-provenance",
+      "detail": "Publish package, format, font, Lua, and ICU provenance for every mirrored file."
+    }
+  ]
+}

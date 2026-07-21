@@ -1,0 +1,1 @@
+{ "class": "needs-xelatex-lualatex", "note": "fontspec under pdfTeX must fail with the engine-requirement error" }

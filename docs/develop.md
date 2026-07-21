@@ -1,0 +1,87 @@
+# Development Guide
+
+This guide is for developers contributing to the `wasmtex` codebase.
+
+## Quick Start
+
+```bash
+npm install
+npm run sync-engine-assets -- --from https://corca-ai.github.io/wasmtex/
+npm run dev               # Start dev server
+# App: http://localhost:6001
+```
+
+## Prerequisites
+
+- **Node.js**: v24+ (`engines.node: ">=24"`).
+- **WASM Assets**: Each engine's authored controller (`*.worker.js`), generated module
+  (`*.js`), binary (`*.wasm`), and format (`*.fmt`/`*.fmt.gz`) must be present. The
+  runtime and CI load them from a per-year subdirectory, `public/wasmtex/<version>/`
+  (e.g. `public/wasmtex/2025/`). Use `npm run sync-engine-assets` to fetch a
+  hash-verified set. See [docs/engine.md](engine.md).
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Vite dev server (port 6001) |
+| `npm run build` | Production build: typecheck (`tsgo`) + standalone demo app (`vite build`) → `dist/` (GitHub Pages; gitignored) |
+| `npm run build:lib` | SDK-only build (`BUILD_MODE=lib`): the seven ES entry points (`wasmtex`, `headless`, `node`, `synctex`, `lsp`, `lsp-monaco`, `lsp-server`) + `wasmtex.css` → **`lib/` (committed)** |
+| `npm run check` | Typecheck only (`tsgo --noEmit`) |
+| `npm run test` | Unit tests (Vitest, `vitest run`) |
+| `npm run test:watch` | Unit tests in watch mode |
+| `npm run test:e2e` | End-to-end tests (Playwright) |
+| `npm run test:golden` / `npm run update:golden` | Golden-output tests (write/refresh `e2e/goldens/*.json`) |
+| `npm run lint` / `npm run lint:fix` | Lint (Biome) — check / apply fixes |
+| `npm run format` | Format code (Biome) |
+| `npm run sync-engine-assets -- --from <baseUrl>` | Download and SHA-256-verify a complete versioned engine set into `public/wasmtex/<version>/` |
+| `npm run compat` | Compatibility harness — compile a corpus and bucket failures (`node scripts/compat/run.mjs`; writes `compat/report.{json,md}`) |
+| `node scripts/gen-bloom-filter.mjs` | Generate bloom filter for CDN file existence checks (requires AWS CLI) |
+
+## The committed `lib/` bundle
+
+WasmTex isn't on npm, so consumers `npm install github:corca-ai/wasmtex#main`. A
+`github:` install must yield a usable package **without** running a build (the `prepare`
+build step is skipped or blocked by some package managers, and would otherwise leave
+`exports` pointing at nonexistent files). So the published library bundle in **`lib/` is
+committed** — built by `npm run build:lib`. The demo-app / GitHub-Pages build stays in the
+gitignored `dist/`.
+
+**If you change `src/` in a way that affects the built output, run `npm run build:lib` and
+commit `lib/` in the same change.** The `lib-fresh` CI job rebuilds and fails the PR if
+`lib/` drifts from `src/`. The build is deterministic (no sourcemaps / absolute paths; Node
+24 everywhere), so a clean rebuild is byte-identical. `lib/**` is marked
+`linguist-generated` in `.gitattributes`, so it's collapsed in PR diffs.
+
+## Architecture & Internals
+
+- See **[docs/architecture.md](architecture.md)** for a deep dive into the SDK structure and LSP implementation.
+- See **[docs/engine.md](engine.md)** for details on the WASM compilation engine and TeX Live CDN.
+
+## Testing
+
+### Unit Tests
+We use **Vitest**. Tests are located in `*.test.ts` files alongside the source code.
+```bash
+npm run test
+```
+
+### E2E Tests
+We use **Playwright**. These verify the full compilation loop, SyncTeX, and BibTeX integration.
+```bash
+# Playwright starts the dev server itself (reuses one already on port 6001)
+npm run test:e2e
+```
+
+### Cross-Host (Node) Engine Tests
+The same from-source WASM engine runs under Node via `installNodeWorkerHost`
+(`src/engine/node-host.ts`, exported from `wasmtex/node`). The verification tests are
+**env-gated** so they stay out of the default `npm run test`; they read the engine assets
+from `public/`, so run `npm run sync-engine-assets -- --from <baseUrl>` first.
+```bash
+# Off-browser pdfTeX smoke (#121)
+NODE_COMPILE_SMOKE=1 npx vitest run src/engine/node-compile.smoke.test.ts
+
+# Client/server parity vs the browser golden — pdflatex + lualatex + xelatex + bibtex
+CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
+```

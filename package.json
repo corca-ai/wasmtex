@@ -1,0 +1,99 @@
+{
+  "name": "wasmtex",
+  "version": "0.1.0",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "lib",
+    "LICENSE",
+    "LICENSES",
+    "THIRD_PARTY_NOTICES.md",
+    "docs/licensing.md",
+    "docs/proprietary-integration.md"
+  ],
+  "private": true,
+  "type": "module",
+  "main": "./lib/wasmtex.js",
+  "module": "./lib/wasmtex.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/wasmtex.js"
+    },
+    "./headless": {
+      "types": "./lib/headless.d.ts",
+      "import": "./lib/headless.js"
+    },
+    "./node": {
+      "types": "./lib/node.d.ts",
+      "import": "./lib/node.js"
+    },
+    "./synctex": {
+      "types": "./lib/synctex.d.ts",
+      "import": "./lib/synctex.js"
+    },
+    "./lsp": {
+      "types": "./lib/lsp-service.d.ts",
+      "import": "./lib/lsp.js"
+    },
+    "./lsp/monaco": {
+      "types": "./lib/lsp-monaco.d.ts",
+      "import": "./lib/lsp-monaco.js"
+    },
+    "./lsp/server": {
+      "types": "./lib/lsp-server.d.ts",
+      "import": "./lib/lsp-server.js"
+    },
+    "./style.css": "./lib/wasmtex.css",
+    "./wasmtex.css": "./lib/wasmtex.css"
+  },
+  "scripts": {
+    "dev": "vite --port 6001",
+    "build": "tsgo && vite build",
+    "preview": "vite preview",
+    "check": "tsgo --noEmit",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/",
+    "format": "biome format --write src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:golden": "playwright test golden-output",
+    "update:golden": "GOLDEN_UPDATE=1 playwright test golden-output",
+    "compat": "node scripts/compat/run.mjs",
+    "sync-engine-assets": "node scripts/sync-engine-assets.mjs",
+    "extract-luatex-format": "node scripts/extract-luatex-format.mjs",
+    "extract-xetex-format": "node scripts/extract-xetex-format.mjs",
+    "gen-luatex-manifest": "node scripts/gen-luatex-manifest.mjs",
+    "gen-asset-manifest": "node scripts/gen-asset-manifest.mjs",
+    "build:lib": "BUILD_MODE=lib vite build && node scripts/check-dts-exports.mjs",
+    "prepare": "npm run build:lib"
+  },
+  "peerDependencies": {
+    "monaco-editor": "^0.55.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.624"
+  },
+  "peerDependenciesMeta": {
+    "pdf-lib": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.3",
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^24.13.2",
+    "@typescript/native-preview": "^7.0.0-dev.20260219.1",
+    "jscpd": "^4.0.8",
+    "lefthook": "^2.1.1",
+    "monaco-editor": "^0.55.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.624",
+    "vite": "^7.3.1",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^4.0.18"
+  }
+}

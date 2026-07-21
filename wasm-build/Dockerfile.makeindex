@@ -1,0 +1,47 @@
+# =============================================================================
+# Dockerfile.makeindex — makeindex (texk/makeindexk) WASM build environment (#101)
+# =============================================================================
+#
+# makeindex is plain C (no web2c codegen), so — unlike pdfTeX/LuaTeX — there is NO
+# native Phase 1. We just fetch the pinned source and let build-makeindex.sh do an
+# emconfigure + emmake of texk/kpathsea + texk/makeindexk, then relink with own glue.
+#
+# Usage:
+#   docker build --platform linux/amd64 -f Dockerfile.makeindex \
+#     --build-arg TEXLIVE_REF=$(cat texlive-source.ref) -t makeindex-wasm .
+#   docker run --platform linux/amd64 -v $(pwd)/dist-makeindex:/dist makeindex-wasm
+# =============================================================================
+
+FROM emscripten/emsdk:3.1.46
+
+LABEL description="makeindex WASM build environment (TeX Live 2025)"
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential autoconf automake libtool pkg-config git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- TeX Live source (pinned, immutable — single source of truth ref) -------
+ARG TEXLIVE_REF
+RUN test -n "${TEXLIVE_REF}" || { echo "TEXLIVE_REF build-arg is required"; exit 1; }; \
+    echo "=== Fetching pinned TeX Live source ${TEXLIVE_REF} ===" && \
+    mkdir -p /src/texlive-source && cd /src/texlive-source && \
+    git init -q && \
+    git remote add origin https://github.com/TeX-Live/texlive-source.git && \
+    git fetch --depth 1 -q origin "${TEXLIVE_REF}" && \
+    git checkout -q FETCH_HEAD && \
+    echo "=== Source checkout complete ($(git rev-parse HEAD)) ==="
+
+RUN mkdir -p /build /dist
+
+# ---- Own glue (COPY after fetch so glue edits don't refetch the source) ------
+COPY kpse-hook.c                   /src/kpse-hook.c
+COPY library.js                    /src/library.js
+COPY makeindex-entry.c             /src/makeindex-entry.c
+COPY makeindex-worker.js           /src/makeindex-worker.js
+COPY build-makeindex.sh            /src/build-makeindex.sh
+
+RUN chmod +x /src/build-makeindex.sh
+WORKDIR /src
+ENTRYPOINT ["bash", "build-makeindex.sh"]
