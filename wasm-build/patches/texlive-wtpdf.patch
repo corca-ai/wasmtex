@@ -305,3 +305,1173 @@ diff --git a/libs/xpdf/xpdf-src/xpdf/Object.h b/libs/xpdf/xpdf-src/xpdf/Object.h
    union {			// value for each type:
      GBool booln;		//   boolean
      int intg;			//   integer
+ 
+diff --git a/texk/web2c/luatexdir/image/epdf.h b/texk/web2c/luatexdir/image/epdf.h
+index 5e280a4ce..6bd81ad5a 100644
+--- a/texk/web2c/luatexdir/image/epdf.h
++++ b/texk/web2c/luatexdir/image/epdf.h
+@@ -70,7 +70,7 @@ typedef enum { FE_FAIL, FE_RETURN_NULL } file_error_mode;
+ #  include "lua.h"
+ #  include "lauxlib.h"
+ 
+-# include "pplib.h"
++# include "wtpdf.h"
+ 
+ 
+ /* pdfgen.w */
+@@ -149,8 +149,8 @@ int luaopen_epdf(lua_State * L);
+ typedef struct InObj InObj;
+ 
+ struct InObj {
+- /* int version; */             /* old object number in included PDF */
+-    int objnum;                 /* old version number in included PDF, we can do without */
++    int objnum;                 /* old object number in included PDF */
++    int generation;             /* old generation number in included PDF */
+     int num;                    /* new object number in output PDF */
+     InObj *next;                /* next entry in list of indirect objects */
+ } ;
+@@ -161,7 +161,7 @@ typedef struct avl_table avl_table;
+ struct PdfDocument {
+     char *file_path;            /* full file name including path */
+     char *checksum;             /* for reopening */
+-    ppdoc *pdfe;
++    wtpdf_document *pdf_input;
+     InObj *inObjList;           /* temporary linked list */
+     avl_table *ObjMapTree;      /* permanent over luatex run */
+     int is_mem;
+diff --git a/texk/web2c/luatexdir/image/pdftoepdf.c b/texk/web2c/luatexdir/image/pdftoepdf.c
+index 7f2ccaf9a..c1583ed2e 100644
+--- a/texk/web2c/luatexdir/image/pdftoepdf.c
++++ b/texk/web2c/luatexdir/image/pdftoepdf.c
+@@ -134,7 +134,7 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
+ {
+     char *checksum, *path_copy;
+     PdfDocument *pdf_doc;
+-    ppdoc *pdfe = NULL;
++    wtpdf_document *pdf_input = NULL;
+     int new_flag = 0;
+     if ((checksum = get_file_checksum(file_path, fe)) == NULL) {
+         return (PdfDocument *) NULL;
+@@ -145,7 +145,7 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
+         pdf_doc = (PdfDocument*) xmalloc(sizeof( PdfDocument));
+         pdf_doc->file_path = path_copy;
+         pdf_doc->checksum = checksum;
+-        pdf_doc->pdfe = NULL;
++        pdf_doc->pdf_input = NULL;
+         pdf_doc->inObjList = NULL;
+         pdf_doc->ObjMapTree = NULL;
+         pdf_doc->occurences = 0; /* 0 = unreferenced */
+@@ -158,19 +158,24 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
+         free(checksum);
+         free(path_copy);
+     }
+-    if (pdf_doc->pdfe == NULL) {
+-        pdfe = ppdoc_load(file_path);
++    if (pdf_doc->pdf_input == NULL) {
++        wtpdf_open_options options;
++        wtpdf_status status;
++        wtpdf_open_options_init(&options);
++        options.user_password = userpassword;
++        options.owner_password = ownerpassword;
++        pdf_input = wtpdf_document_open_file(file_path, &options, &status);
+         pdf_doc->pc++;
+         /* todo: check if we might print the document */
+-        if (pdfe == NULL) {
++        if (pdf_input == NULL) {
+             switch (fe) {
+                 case FE_FAIL:
+                     normal_error("pdf inclusion","reading image failed");
+                     break;
+                 case FE_RETURN_NULL:
+-                    if (pdf_doc->pdfe != NULL) {
+-                        ppdoc_free(pdfe);
+-                        pdf_doc->pdfe = NULL;
++                    if (pdf_input != NULL) {
++                        wtpdf_document_close(pdf_input);
++                        pdf_doc->pdf_input = NULL;
+                     }
+                     /* delete docName */
+                     if (new_flag == 1) {
+@@ -186,21 +191,7 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
+                     assert(0);
+             }
+         }
+-        if (pdfe != NULL) {
+-            if (ppdoc_crypt_status(pdfe) < 0 && userpassword==NULL) {
+-                formatted_error("pdf inclusion","the pdf file '%s' is encrypted, passwords wrong",file_path);
+-            }
+-            if (ppdoc_crypt_status(pdfe) < 0) {
+-                ppdoc_crypt_pass(pdfe,userpassword,strlen(userpassword),NULL,0);
+-            }
+-            if (ppdoc_crypt_status(pdfe) < 0) {
+-                ppdoc_crypt_pass(pdfe,NULL,0,ownerpassword,strlen(ownerpassword));
+-            }
+-            if (ppdoc_crypt_status(pdfe) < 0) {
+-                formatted_error("pdf inclusion","the pdf file '%s' is encrypted, provide proper passwords",file_path);
+-            }
+-        }
+-        pdf_doc->pdfe = pdfe;
++        pdf_doc->pdf_input = pdf_input;
+     }
+     /* PDF file could be opened without problems, checksum ok. */
+     if (PdfDocumentTree == NULL)
+@@ -223,7 +214,7 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
+     char *checksum;
+     char *file_path;
+     PdfDocument *pdf_doc;
+-    ppdoc *pdfe = NULL;
++    wtpdf_document *pdf_input = NULL;
+     size_t  cnt = 0;
+     checksum = get_stream_checksum(docstream, streamsize);
+     cnt = strlen(file_id);
+@@ -237,7 +228,7 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
+         pdf_doc = (PdfDocument*) xmalloc(sizeof( PdfDocument));
+         pdf_doc->file_path = file_path;
+         pdf_doc->checksum = checksum;
+-        pdf_doc->pdfe = NULL;
++        pdf_doc->pdf_input = NULL;
+         pdf_doc->inObjList = NULL;
+         pdf_doc->ObjMapTree = NULL;
+         pdf_doc->occurences = 0; /* 0 = unreferenced */
+@@ -252,13 +243,15 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
+         free(file_path);
+         free(checksum);
+     }
+-    if (pdf_doc->pdfe == NULL) {
+-        pdfe = ppdoc_mem(docstream, (size_t) streamsize);
++    if (pdf_doc->pdf_input == NULL) {
++        wtpdf_status status;
++        pdf_input = wtpdf_document_open_memory(
++            (const unsigned char *) docstream, (size_t) streamsize, NULL, &status);
+         pdf_doc->pc++;
+-        if (pdfe == NULL) {
++        if (pdf_input == NULL) {
+             normal_error("pdf inclusion","reading pdf Stream failed");
+         }
+-        pdf_doc->pdfe = pdfe;
++        pdf_doc->pdf_input = pdf_input;
+     }
+     /* PDF file could be opened without problems, checksum ok. */
+     if (PdfDocumentTree == NULL)
+@@ -278,8 +271,8 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
+ typedef struct ObjMap ObjMap ;
+ 
+ struct ObjMap {
+- /* int version; */ /* not really needed */
+     int objnum;
++    int generation;
+     int out_num;
+ };
+ 
+@@ -291,37 +284,34 @@ static int CompObjMap(const void *pa, const void *pb, void *p)
+         return 1;
+     else if (a->objnum < b->objnum)
+         return -1;
+-    /*
+-    else if (a->version == b->version)
++    else if (a->generation == b->generation)
+         return 0;
+-    else if (a->version < b->version)
++    else if (a->generation < b->generation)
+         return -1;
+     return 1;
+-    */
+-    return 0;
+ }
+ 
+-static ObjMap *findObjMap(PdfDocument * pdf_doc, ppref * in)
++static ObjMap *findObjMap(PdfDocument * pdf_doc, int objnum, int generation)
+ {
+     ObjMap *obj_map, tmp;
+     if (pdf_doc->ObjMapTree == NULL) {
+         return NULL;
+     }
+-    tmp.objnum = in->number;
+- /* tmp.version = in->version; */
++    tmp.objnum = objnum;
++    tmp.generation = generation;
+     obj_map = (ObjMap *) avl_find(pdf_doc->ObjMapTree, &tmp);
+     return obj_map;
+ }
+ 
+-static void addObjMap(PdfDocument * pdf_doc, ppref * in, int out_num)
++static void addObjMap(PdfDocument * pdf_doc, int objnum, int generation, int out_num)
+ {
+     ObjMap *obj_map = NULL;
+     if (pdf_doc->ObjMapTree == NULL) {
+         pdf_doc->ObjMapTree = avl_create(CompObjMap, NULL, &avl_xallocator);
+     }
+     obj_map = (ObjMap*)xmalloc(sizeof(ObjMap));
+- /* obj_map->version = in->version; */
+-    obj_map->objnum = in->number;
++    obj_map->objnum = objnum;
++    obj_map->generation = generation;
+     obj_map->out_num = out_num;
+     avl_probe(pdf_doc->ObjMapTree, obj_map);
+ }
+@@ -337,22 +327,22 @@ static void addObjMap(PdfDocument * pdf_doc, ppref * in, int out_num)
+     LuaTeX and then will be appended into a linked list.
+ */
+ 
+-static int addInObj(PDF pdf, PdfDocument * pdf_doc, ppref * ref)
++static int addInObj(PDF pdf, PdfDocument * pdf_doc, int objnum, int generation)
+ {
+     ObjMap *obj_map;
+     InObj *p, *q, *n;
+-    if (ref->number == 0) {
++    if (objnum == 0) {
+         normal_error("pdf inclusion","reference to invalid object (broken pdf)");
+     }
+-    if ((obj_map = findObjMap(pdf_doc, ref)) != NULL) {
++    if ((obj_map = findObjMap(pdf_doc, objnum, generation)) != NULL) {
+         return obj_map->out_num;
+     }
+     n = (InObj*)xmalloc(sizeof(InObj));
+-    n->objnum = ref->number;
+- /* n->version = ref->version; */
++    n->objnum = objnum;
++    n->generation = generation;
+     n->next = NULL;
+     n->num = pdf_create_obj(pdf, obj_type_others, 0);
+-    addObjMap(pdf_doc, ref, n->num);
++    addObjMap(pdf_doc, objnum, generation, n->num);
+     if (pdf_doc->inObjList == NULL) {
+         pdf_doc->inObjList = n;
+     } else {
+@@ -370,179 +360,307 @@ static int addInObj(PDF pdf, PdfDocument * pdf_doc, ppref * ref)
+     return n->num;
+ }
+ 
+-static void copyObject(PDF, PdfDocument *, ppobj *);
++static void copyObject(PDF, PdfDocument *, wtpdf_value *);
+ 
+-static void copyString(PDF pdf, ppstring *str)
++static void copyString(PDF pdf, wtpdf_value *value)
+ {
++    static const char hex[] = "0123456789ABCDEF";
++    const unsigned char *bytes = NULL;
++    size_t size = 0;
++    size_t i;
++    if (wtpdf_value_get_string(value, &bytes, &size) != WTPDF_STATUS_OK) {
++        normal_error("pdf inclusion", "unable to read PDF string");
++    }
+     pdf_check_space(pdf);
+-    switch (ppstring_type(str)) {
+-        case PPSTRING_PLAIN:
+-            pdf_out(pdf, '(');
+-            pdf_out_block(pdf, ppstring_data(str), ppstring_size(str));
+-            pdf_out(pdf, ')');
+-            break;
+-        case PPSTRING_BASE16:
+-            pdf_out(pdf, '<');
+-            pdf_out_block(pdf, ppstring_data(str), ppstring_size(str));
+-            pdf_out(pdf, '>');
+-            break;
+-        case PPSTRING_BASE85:
+-            pdf_out(pdf, '<');
+-            pdf_out(pdf, '~');
+-            pdf_out_block(pdf, ppstring_data(str), ppstring_size(str));
+-            pdf_out(pdf, '~');
+-            pdf_out(pdf, '>');
+-            break;
++    pdf_out(pdf, '<');
++    for (i = 0; i < size; ++i) {
++        pdf_out(pdf, hex[bytes[i] >> 4]);
++        pdf_out(pdf, hex[bytes[i] & 15]);
+     }
++    pdf_out(pdf, '>');
+     pdf_set_space(pdf);
+ }
+ 
+-static void copyName(PDF pdf, ppname *name)
++static void copyName(PDF pdf, wtpdf_value *value)
+ {
+-    pdf_add_name(pdf, ppname_data(name));
++    const unsigned char *name = NULL;
++    size_t size = 0;
++    if (wtpdf_value_get_name(value, &name, &size) != WTPDF_STATUS_OK ||
++        strlen((const char *) name) != size) {
++        normal_error("pdf inclusion", "unable to read PDF name");
++    }
++    pdf_add_name(pdf, (const char *) name);
+ }
+ 
+-static void copyArray(PDF pdf, PdfDocument * pdf_doc, pparray * array)
++static void copyArray(PDF pdf, PdfDocument *pdf_doc, wtpdf_value *array)
+ {
+-    int i;
+-    int n = array->size;
++    size_t i, n = 0;
++    wtpdf_status status;
++    if (wtpdf_value_count(array, &n) != WTPDF_STATUS_OK) {
++        normal_error("pdf inclusion", "unable to read PDF array");
++    }
+     pdf_begin_array(pdf);
+-    for (i=0; i<n; ++i) {
+-        copyObject(pdf, pdf_doc, pparray_at(array,i));
++    for (i = 0; i < n; ++i) {
++        wtpdf_value *item = wtpdf_array_get(
++            array, i, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
++        if (item == NULL) {
++            normal_error("pdf inclusion", "unable to read PDF array item");
++        }
++        copyObject(pdf, pdf_doc, item);
++        wtpdf_value_destroy(item);
+     }
+     pdf_end_array(pdf);
+ }
+ 
+-static void copyDict(PDF pdf, PdfDocument * pdf_doc, ppdict *dict)
++static void copyDict(PDF pdf, PdfDocument *pdf_doc, wtpdf_value *dict)
+ {
+-    int i;
+-    int n = dict->size;
++    size_t i, n = 0;
++    wtpdf_status status;
++    if (wtpdf_value_count(dict, &n) != WTPDF_STATUS_OK) {
++        normal_error("pdf inclusion", "unable to read PDF dictionary");
++    }
+     pdf_begin_dict(pdf);
+-    for (i=0; i<n; ++i) {
+-        ppname *key = ppdict_key(dict,i);
+-        pdf_add_name(pdf,ppname_data(key));
+-        copyObject(pdf, pdf_doc, ppdict_at(dict,i));
++    for (i = 0; i < n; ++i) {
++        const unsigned char *key = NULL;
++        size_t key_size = 0;
++        wtpdf_value *item = wtpdf_dictionary_at(
++            dict, i, &key, &key_size, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
++        if (item == NULL || strlen((const char *) key) != key_size) {
++            normal_error("pdf inclusion", "unable to read PDF dictionary item");
++        }
++        pdf_add_name(pdf, (const char *) key);
++        copyObject(pdf, pdf_doc, item);
++        wtpdf_value_destroy(item);
+     }
+     pdf_end_dict(pdf);
+ }
+ 
+-static void copyStreamStream(PDF pdf, ppstream * stream, int decode, int callback_id)
++static void copyStreamStream(PDF pdf, wtpdf_value *stream, int decode, int callback_id)
+ {
+-    uint8_t *data = NULL;
++    unsigned char chunk[16384];
++    unsigned char *data = NULL;
++    size_t allocated = 0;
+     size_t size = 0;
+-    if (0) {
+-        for (data = ppstream_first(stream, &size, decode); data != NULL; data = ppstream_next(stream, &size)) {
+-            pdf_out_block(pdf, (const char *) data, size);
++    int eof = 0;
++    wtpdf_status status;
++    wtpdf_stream_reader *reader;
++    if (callback_id == 1) {
++        callback_id = callback_defined(process_pdf_image_content_callback);
++    }
++    reader = wtpdf_stream_reader_open(
++        stream, decode ? WTPDF_STREAM_DECODED : WTPDF_STREAM_RAW, &status);
++    if (reader == NULL) {
++        normal_error("pdf inclusion", "unable to open PDF stream");
++    }
++    while (!eof) {
++        size_t count = 0;
++        status = wtpdf_stream_reader_read(
++            reader, chunk, sizeof(chunk), &count, &eof);
++        if (status != WTPDF_STATUS_OK) {
++            wtpdf_stream_reader_close(reader);
++            xfree(data);
++            normal_error("pdf inclusion", "unable to read PDF stream");
+         }
+-    } else {
+-        data = ppstream_all(stream,&size,decode);
+-        if (data != NULL) {
+-            /*tex We only do this when we recompress in which case we fetch the whole stream. */
+-            if (callback_id == 1) {
+-                callback_id = callback_defined(process_pdf_image_content_callback);
++        if (callback_id) {
++            if (count > (size_t) -1 - size - 1) {
++                wtpdf_stream_reader_close(reader);
++                xfree(data);
++                normal_error("pdf inclusion", "PDF stream is too large");
+             }
+-            if (callback_id) {
+-                char *result = NULL;
+-                run_callback(callback_id, "S->S",(char *) data,&result);
+-                pdf_out_block(pdf, (const char *) (uint8_t *) result, size);
+-                xfree(result);
+-            } else {
+-                pdf_out_block(pdf, (const char *) data, size);
++            if (size + count + 1 > allocated) {
++                size_t next = allocated == 0 ? sizeof(chunk) : allocated;
++                while (next < size + count + 1) {
++                    if (next > ((size_t) -1) / 2) {
++                        next = size + count + 1;
++                        break;
++                    }
++                    next *= 2;
++                }
++                data = allocated == 0
++                    ? (unsigned char *) xmalloc(next)
++                    : (unsigned char *) xrealloc(data, next);
++                allocated = next;
+             }
++            memcpy(data + size, chunk, count);
++            size += count;
++        } else if (count != 0) {
++            pdf_out_block(pdf, (const char *) chunk, count);
+         }
+     }
+-    ppstream_done(stream);
++    wtpdf_stream_reader_close(reader);
++    if (callback_id) {
++        char *result = NULL;
++        if (data == NULL) {
++            data = (unsigned char *) xmalloc(1);
++        }
++        data[size] = '\0';
++        run_callback(callback_id, "S->S", (char *) data, &result);
++        if (result != NULL) {
++            pdf_out_block(pdf, result, strlen(result));
++            xfree(result);
++        }
++        xfree(data);
++    }
+ }
+ 
+-static void copyStream(PDF pdf, PdfDocument * pdf_doc, ppstream * stream)
++static int key_is(const unsigned char *key, size_t size, const char *expected)
+ {
+-    ppdict *dict = stream->dict; /* bug in: stream_dict(stream) */
++    size_t expected_size = strlen(expected);
++    return size == expected_size && memcmp(key, expected, size) == 0;
++}
++
++static wtpdf_value *dictionary_get(
++    wtpdf_value *dictionary, const char *key, wtpdf_lookup_mode mode)
++{
++    wtpdf_status status;
++    return wtpdf_dictionary_get(
++        dictionary, (const unsigned char *) key, strlen(key), mode, &status);
++}
++
++static void copyStream(PDF pdf, PdfDocument *pdf_doc, wtpdf_value *stream)
++{
++    wtpdf_status status;
++    wtpdf_value *dict = wtpdf_stream_dictionary(stream, &status);
++    if (dict == NULL) {
++        normal_error("pdf inclusion", "unable to read PDF stream dictionary");
++    }
+     if (pdf->compress_level == 0 || pdf->recompress) {
+-        ppobj * obj = ppdict_get_obj (dict, "Filter");
++        static const unsigned char filter_key[] = "Filter";
++        wtpdf_value *obj = wtpdf_dictionary_get(
++            dict, filter_key, sizeof(filter_key) - 1,
++            WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+         int known = 0;
+-        if (obj != NULL && obj->type == PPNAME) {
++        if (obj != NULL && wtpdf_value_type(obj) == WTPDF_VALUE_NAME) {
+             const char *codecs[] = {
+                 "ASCIIHexDecode", "ASCII85Decode", "RunLengthDecode",
+                 "FlateDecode", "LZWDecode", NULL
+             };
++            const unsigned char *name = NULL;
++            size_t name_size = 0;
+             int k;
+-            for (k = 0; codecs[k] != NULL; k++) {
+-                if (strcmp(ppname_data(obj->name),codecs[k]) == 0) {
+-                    known = 1;
+-                    break;
++            if (wtpdf_value_get_name(obj, &name, &name_size) == WTPDF_STATUS_OK) {
++                for (k = 0; codecs[k] != NULL; k++) {
++                    if (key_is(name, name_size, codecs[k])) {
++                        known = 1;
++                        break;
++                    }
+                 }
+             }
+         }
++        wtpdf_value_destroy(obj);
+         if (known) {
+             /*tex recompress or keep uncompressed */
+             const char *ignoredkeys[] = {
+                 "Filter", "DecodeParms", "Length", "DL", NULL
+             };
+-            int i;
++            size_t i, count = 0;
++            if (wtpdf_value_count(dict, &count) != WTPDF_STATUS_OK) {
++                wtpdf_value_destroy(dict);
++                normal_error("pdf inclusion", "unable to read PDF stream dictionary");
++            }
+             pdf_begin_dict(pdf);
+-            for (i=0; i<dict->size; ++i) {
+-                ppname *key = ppdict_key(dict,i);
++            for (i = 0; i < count; ++i) {
++                const unsigned char *key = NULL;
++                size_t key_size = 0;
++                wtpdf_value *item = wtpdf_dictionary_at(
++                    dict, i, &key, &key_size,
++                    WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+                 int copy = 1;
+                 int k;
++                if (item == NULL) {
++                    wtpdf_value_destroy(dict);
++                    normal_error("pdf inclusion", "unable to read PDF stream dictionary item");
++                }
+                 for (k = 0; ignoredkeys[k] != NULL; k++) {
+-                    if (strcmp(ppname_data(key),ignoredkeys[k]) == 0) {
++                    if (key_is(key, key_size, ignoredkeys[k])) {
+                         copy = 0;
+                         break;
+                     }
+                 }
+                 if (copy) {
+-                    pdf_add_name(pdf, ppname_data(key));
+-                    copyObject(pdf, pdf_doc, ppdict_at(dict,i));
++                    if (strlen((const char *) key) != key_size) {
++                        wtpdf_value_destroy(item);
++                        wtpdf_value_destroy(dict);
++                        normal_error("pdf inclusion", "unable to read PDF stream dictionary key");
++                    }
++                    pdf_add_name(pdf, (const char *) key);
++                    copyObject(pdf, pdf_doc, item);
+                 }
++                wtpdf_value_destroy(item);
+             }
+             pdf_dict_add_streaminfo(pdf);
+             pdf_end_dict(pdf);
+             pdf_begin_stream(pdf);
+             copyStreamStream(pdf, stream, 1, 0);
+             pdf_end_stream(pdf);
++            wtpdf_value_destroy(dict);
+             return ;
+         }
+     }
+     /* copy as-is */
+     copyDict(pdf, pdf_doc, dict);
++    wtpdf_value_destroy(dict);
+     pdf_begin_stream(pdf);
+     copyStreamStream(pdf, stream, 0, 0);
+     pdf_end_stream(pdf);
+ }
+ 
+-static void copyObject(PDF pdf, PdfDocument * pdf_doc, ppobj * obj)
++static void copyObject(PDF pdf, PdfDocument *pdf_doc, wtpdf_value *obj)
+ {
+-    switch (obj->type) {
+-        case PPNULL:
++    switch (wtpdf_value_type(obj)) {
++        case WTPDF_VALUE_NULL:
+             pdf_add_null(pdf);
+             break;
+-        case PPBOOL:
+-            pdf_add_bool(pdf,obj->integer);                     /* ppobj_get_bool_value(obj) */
++        case WTPDF_VALUE_BOOLEAN: {
++            int value = 0;
++            if (wtpdf_value_get_boolean(obj, &value) != WTPDF_STATUS_OK) {
++                normal_error("pdf inclusion", "unable to read PDF boolean");
++            }
++            pdf_add_bool(pdf, value);
+             break;
+-        case PPINT:
+-            pdf_add_int(pdf,obj->integer);                      /* ppobj_get_int_value(obj) */
++        }
++        case WTPDF_VALUE_INTEGER: {
++            long long value = 0;
++            if (wtpdf_value_get_integer(obj, &value) != WTPDF_STATUS_OK) {
++                normal_error("pdf inclusion", "unable to read PDF integer");
++            }
++            pdf_add_int(pdf, (int) value);
+             break;
+-        case PPNUM:
+-            pdf_add_real(pdf,obj->number);                      /* ppobj_get_num_value(obj) */
++        }
++        case WTPDF_VALUE_REAL: {
++            double value = 0;
++            if (wtpdf_value_get_real(obj, &value) != WTPDF_STATUS_OK) {
++                normal_error("pdf inclusion", "unable to read PDF real");
++            }
++            pdf_add_real(pdf, value);
+             break;
+-        case PPNAME:
+-            copyName(pdf, obj->name);
++        }
++        case WTPDF_VALUE_NAME:
++            copyName(pdf, obj);
+             break;
+-        case PPSTRING:
+-            copyString(pdf, obj->string);                       /* ppobj_get_string(obj) */
++        case WTPDF_VALUE_STRING:
++            copyString(pdf, obj);
+             break;
+-        case PPARRAY:
+-            copyArray(pdf, pdf_doc, obj->array);                /* ppobj_get_array(obj) */
++        case WTPDF_VALUE_ARRAY:
++            copyArray(pdf, pdf_doc, obj);
+             break;
+-        case PPDICT:
+-            copyDict(pdf, pdf_doc, obj->dict);                  /* ppobj_get_dict(obj) */
++        case WTPDF_VALUE_DICTIONARY:
++            copyDict(pdf, pdf_doc, obj);
+             break;
+-        case PPSTREAM:
+-            copyStream(pdf, pdf_doc, obj->stream);              /* ppobj_get_stream(obj) */
++        case WTPDF_VALUE_STREAM:
++            copyStream(pdf, pdf_doc, obj);
+             break;
+-        case PPREF:
+-            pdf_add_ref(pdf, addInObj(pdf, pdf_doc, obj->ref)); /* ppobj_get_ref(obj) */
++        case WTPDF_VALUE_REFERENCE: {
++            int object_number = 0;
++            int generation_number = 0;
++            if (wtpdf_value_get_reference(
++                    obj, &object_number, &generation_number) != WTPDF_STATUS_OK) {
++                normal_error("pdf inclusion", "unable to read PDF reference");
++            }
++            pdf_add_ref(pdf, addInObj(
++                pdf, pdf_doc, object_number, generation_number));
+             break;
++        }
+         default:
+             break;
+     }
+@@ -551,26 +669,23 @@ static void copyObject(PDF pdf, PdfDocument * pdf_doc, ppobj * obj)
+ static void writeRefs(PDF pdf, PdfDocument * pdf_doc)
+ {
+     InObj *r, *n;
+-    ppobj * obj;
+-    ppref * ref ;
+-    ppxref * xref = ppdoc_xref (pdf_doc->pdfe);
+     for (r = pdf_doc->inObjList; r != NULL;) {
+-        if (xref != NULL) {
+-            ref = ppxref_find(xref, (ppuint) r->objnum);
+-            if (ref != NULL) {
+-                obj = ppref_obj(ref);
+-                if (obj->type == PPSTREAM) {
+-                    pdf_begin_obj(pdf, r->num, OBJSTM_NEVER);
+-                } else {
+-                    pdf_begin_obj(pdf, r->num, 2);
+-                }
+-                copyObject(pdf, pdf_doc, obj);
+-                pdf_end_obj(pdf);
++        wtpdf_status status;
++        wtpdf_value *obj = wtpdf_document_object(
++            pdf_doc->pdf_input, r->objnum, r->generation, &status);
++        if (obj != NULL) {
++            if (wtpdf_value_type(obj) == WTPDF_VALUE_STREAM) {
++                pdf_begin_obj(pdf, r->num, OBJSTM_NEVER);
+             } else {
+-                formatted_warning("pdf inclusion","ignoring missing object %i, case 1\n",(int) r->objnum);
++                pdf_begin_obj(pdf, r->num, 2);
+             }
++            copyObject(pdf, pdf_doc, obj);
++            pdf_end_obj(pdf);
++            wtpdf_value_destroy(obj);
+         } else {
+-            formatted_warning("pdf inclusion","ignoring missing object %i, case 2\n",(int) r->objnum);
++            formatted_warning(
++                "pdf inclusion", "ignoring missing object %i %i R\n",
++                r->objnum, r->generation);
+         }
+         n = r->next;
+         free(r);
+@@ -582,41 +697,34 @@ static void writeRefs(PDF pdf, PdfDocument * pdf_doc)
+ 
+ /* get the pagebox coordinates according to the pagebox_spec */
+ 
+-static void somebox(ppdict *page, const char * key, pprect * box)
+-{
+-    pprect * r = ppdict_get_box(page, key, box);
+-    if (r != NULL) {
+-        box->lx = r->lx;
+-        box->ly = r->ly;
+-        box->rx = r->rx;
+-        box->ry = r->ry;
+-    }
+-}
+-
+-static void get_pagebox(ppdict * page, int pagebox_spec, pprect * box)
++static void get_pagebox(
++    wtpdf_document *pdf_input, int page_number, int pagebox_spec,
++    wtpdf_rectangle *box)
+ {
+-    box->lx = box->rx = box->ly = box->ry = 0;
+-    somebox(page,"MediaBox",box);
+-    if (pagebox_spec == PDF_BOX_SPEC_MEDIA) {
+-        return;
+-    }
+-    somebox(page,"CropBox",box);
+-    if (pagebox_spec == PDF_BOX_SPEC_CROP) {
+-        return;
+-    }
++    wtpdf_page_box selected = WTPDF_PAGE_BOX_CROP;
+     switch (pagebox_spec) {
++        case PDF_BOX_SPEC_MEDIA:
++            selected = WTPDF_PAGE_BOX_MEDIA;
++            break;
++        case PDF_BOX_SPEC_CROP:
++            selected = WTPDF_PAGE_BOX_CROP;
++            break;
+         case PDF_BOX_SPEC_BLEED:
+-            somebox(page,"BleedBox",box);
++            selected = WTPDF_PAGE_BOX_BLEED;
+             break;
+         case PDF_BOX_SPEC_TRIM:
+-            somebox(page,"TrimBox",box);
++            selected = WTPDF_PAGE_BOX_TRIM;
+             break;
+         case PDF_BOX_SPEC_ART:
+-            somebox(page,"ArtBox",box);
++            selected = WTPDF_PAGE_BOX_ART;
+             break;
+         default:
+             break;
+     }
++    if (wtpdf_document_page_box(
++            pdf_input, page_number, selected, box) != WTPDF_STATUS_OK) {
++        normal_error("pdf inclusion", "unable to read PDF page box");
++    }
+ }
+ 
+ /*
+@@ -626,25 +734,20 @@ static void get_pagebox(ppdict * page, int pagebox_spec, pprect * box)
+     page_num. Returns the page number.
+ */
+ 
+-static ppdict * get_pdf_page_dict(ppdoc *pdfe, int n)
++static wtpdf_value *get_pdf_page_dict(wtpdf_document *pdf_input, int n)
+ {
+-    ppref *r;
+-    int i;
+-    for (r=ppdoc_first_page(pdfe), i=1; r != NULL; r = ppdoc_next_page(pdfe), ++i) {
+-        if (i == n) {
+-            return ppref_obj(r)->dict;
+-        }
+-    }
+-    return NULL;
++    wtpdf_status status;
++    return wtpdf_document_page(
++        pdf_input, n, WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
+ }
+ 
+ void read_pdf_info(image_dict * idict)
+ {
+     PdfDocument *pdf_doc = NULL;
+-    ppdoc * pdfe = NULL;
+-    ppdict *pageDict, *groupDict;
+-    pprect pagebox;
+-    ppint rotate = 0;
++    wtpdf_document * pdf_input = NULL;
++    wtpdf_value *pageDict, *groupDict;
++    wtpdf_rectangle pagebox;
++    int rotate = 0;
+     int pdf_major_version_found = 1;
+     int pdf_minor_version_found = 3;
+     double xsize, ysize, xorig, yorig;
+@@ -654,19 +757,24 @@ void read_pdf_info(image_dict * idict)
+         pdf_doc = findPdfDocument(img_filepath(idict)) ;
+         if (pdf_doc == NULL )
+            normal_error("pdf inclusion", "memstream not initialized");
+-        if (pdf_doc->pdfe == NULL)
++        if (pdf_doc->pdf_input == NULL)
+            normal_error("pdf inclusion", "memstream document is empty");
+         pdf_doc->occurences++;
+     } else {
+         normal_error("pdf inclusion","unknown document");
+     }
+-    pdfe = pdf_doc->pdfe;
++    pdf_input = pdf_doc->pdf_input;
+     /*
+         Check PDF version. This works only for PDF 1.x but since any versions of
+         PDF newer than 1.x will not be backwards compatible to PDF 1.x, we will
+         then have to changed drastically anyway.
+     */
+-    pdf_major_version_found = ppdoc_version_number(pdfe,&pdf_minor_version_found);
++    {
++        double version = wtpdf_document_pdf_version(pdf_input);
++        pdf_major_version_found = (int) version;
++        pdf_minor_version_found =
++            (int) ((version - pdf_major_version_found) * 10.0 + 0.5);
++    }
+     if ((100 * pdf_major_version_found + pdf_minor_version_found) > (100 * img_pdfmajorversion(idict) + img_pdfminorversion(idict))) {
+         const char *msg = "PDF inclusion: found PDF version '%d.%d', but at most version '%d.%d' allowed";
+         if (img_errorlevel(idict) > 0) {
+@@ -675,7 +783,7 @@ void read_pdf_info(image_dict * idict)
+             formatted_warning("pdf inclusion",msg, pdf_major_version_found, pdf_minor_version_found, img_pdfmajorversion(idict), img_pdfminorversion(idict));
+         }
+     }
+-    img_totalpages(idict) = ppdoc_page_count(pdfe);
++    img_totalpages(idict) = wtpdf_document_page_count(pdf_input);
+     if (img_pagename(idict)) {
+         /*
+             get page by name is obsolete
+@@ -692,27 +800,27 @@ void read_pdf_info(image_dict * idict)
+     /*
+         get the required page
+     */
+-    pageDict = get_pdf_page_dict(pdfe,img_pagenum(idict));
++    pageDict = get_pdf_page_dict(pdf_input,img_pagenum(idict));
+     if (pageDict==NULL) {
+       formatted_error("pdf inclusion","unable to retrive dictionary for page '%i'",(int) img_pagenum(idict));
+     }
+     /*
+         get the pagebox coordinates (media, crop,...) to use
+     */
+-    get_pagebox(pageDict, img_pagebox(idict), &pagebox);
+-    if (pagebox.rx > pagebox.lx) {
+-        xorig = pagebox.lx;
+-        xsize = pagebox.rx - pagebox.lx;
++    get_pagebox(pdf_input, img_pagenum(idict), img_pagebox(idict), &pagebox);
++    if (pagebox.x2 > pagebox.x1) {
++        xorig = pagebox.x1;
++        xsize = pagebox.x2 - pagebox.x1;
+     } else {
+-        xorig = pagebox.rx;
+-        xsize = pagebox.lx - pagebox.rx;
++        xorig = pagebox.x2;
++        xsize = pagebox.x1 - pagebox.x2;
+     }
+-    if (pagebox.ry > pagebox.ly) {
+-        yorig = pagebox.ly;
+-        ysize = pagebox.ry - pagebox.ly;
++    if (pagebox.y2 > pagebox.y1) {
++        yorig = pagebox.y1;
++        ysize = pagebox.y2 - pagebox.y1;
+     } else {
+-        yorig = pagebox.ry;
+-        ysize = pagebox.ly - pagebox.ry;
++        yorig = pagebox.y2;
++        ysize = pagebox.y1 - pagebox.y2;
+     }
+     /*
+         The following 4 parameters are raw. Do _not_ modify by /Rotate!
+@@ -725,7 +833,8 @@ void read_pdf_info(image_dict * idict)
+         Handle /Rotate parameter. Only multiples of 90 deg. are allowed (PDF Ref. v1.3,
+         p. 78). We also accept negative angles. Beware: PDF counts clockwise!
+     */
+-    if (ppdict_get_int(pageDict, "Rotate", &rotate)) {
++    if (wtpdf_document_page_rotation(
++            pdf_input, img_pagenum(idict), &rotate) == WTPDF_STATUS_OK) {
+         switch ((((int)rotate % 360) + 360) % 360) {
+             case 0:
+                 img_rotation(idict) = 0;
+@@ -746,10 +855,19 @@ void read_pdf_info(image_dict * idict)
+     /*
+         currently unused info whether PDF contains a /Group
+     */
+-    groupDict = ppdict_get_dict(pageDict, "Group");
+-    if (groupDict != NULL) {
++    {
++        static const unsigned char group_key[] = "Group";
++        wtpdf_status status;
++        groupDict = wtpdf_dictionary_get(
++            pageDict, group_key, sizeof(group_key) - 1,
++            WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++    }
++    if (groupDict != NULL &&
++        wtpdf_value_type(groupDict) == WTPDF_VALUE_DICTIONARY) {
+          img_set_group(idict);
+     }
++    wtpdf_value_destroy(groupDict);
++    wtpdf_value_destroy(pageDict);
+     /*
+         LuaTeX pre 0.85 versions did this:
+ 
+@@ -786,10 +904,10 @@ void flush_pdf_info(image_dict * idict)
+ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+ {
+     PdfDocument *pdf_doc = NULL;
+-    ppdoc *pdfe = NULL;
+-    ppdict *pageDict, *infoDict;
+-    ppobj *obj, *content, *resources;
+-    pprect pagebox;
++    wtpdf_document *pdf_input = NULL;
++    wtpdf_value *pageDict, *infoDict;
++    wtpdf_value *obj, *content, *resources;
++    wtpdf_rectangle pagebox;
+     int i;
+     double bbox[4];
+     const char *pagedictkeys[] = {
+@@ -806,8 +924,8 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+     } else {
+         normal_error("pdf inclusion","unknown document");
+     }
+-    pdfe = pdf_doc->pdfe;
+-    pageDict = get_pdf_page_dict(pdfe,img_pagenum(idict));
++    pdf_input = pdf_doc->pdf_input;
++    pageDict = get_pdf_page_dict(pdf_input,img_pagenum(idict));
+     if (pageDict==NULL) {
+       formatted_error("pdf inclusion","unable to retrive dictionary for page '%i'",(int) img_pagenum(idict));
+     }
+@@ -827,10 +945,12 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+         pdf_dict_add_int(pdf, pdf_pdf_prefix_str("PTEX_PageNumber", "PTEX.PageNumber"), (int) img_pagenum(idict));
+     }
+     if ((suppress_optional_info & 8) == 0) {
+-        infoDict = ppdoc_info(pdfe);
++        wtpdf_status status;
++        infoDict = wtpdf_document_info(pdf_input, &status);
+         if (infoDict != NULL) {
+             pdf_add_name(pdf,pdf_pdf_prefix_str("PTEX_InfoDict", "PTEX.InfoDict"));
+             copyDict(pdf, pdf_doc, infoDict);
++            wtpdf_value_destroy(infoDict);
+         }
+     }
+     if (img_is_bbox(idict)) {
+@@ -842,11 +962,12 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+         /*
+             get the pagebox coordinates (media, crop,...) to use.
+         */
+-        get_pagebox(pageDict, img_pagebox(idict), &pagebox);
+-        bbox[0] = pagebox.lx;
+-        bbox[1] = pagebox.ly;
+-        bbox[2] = pagebox.rx;
+-        bbox[3] = pagebox.ry;
++        get_pagebox(
++            pdf_input, img_pagenum(idict), img_pagebox(idict), &pagebox);
++        bbox[0] = pagebox.x1;
++        bbox[1] = pagebox.y1;
++        bbox[2] = pagebox.x2;
++        bbox[3] = pagebox.y2;
+     }
+     pdf_add_name(pdf, "BBox");
+     pdf_begin_array(pdf);
+@@ -859,24 +980,29 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+         Now all relevant parts of the Page dictionary are copied. Metadata validity
+         check is needed(as a stream it must be indirect).
+     */
+-    obj = ppdict_get_obj(pageDict, "Metadata");
+-    if (obj != NULL && obj->type != PPREF) {
++    obj = dictionary_get(
++        pageDict, "Metadata", WTPDF_LOOKUP_PRESERVE_REFERENCE);
++    if (obj != NULL && wtpdf_value_type(obj) != WTPDF_VALUE_REFERENCE) {
+         formatted_warning("pdf inclusion","/Metadata must be indirect object");
+     }
++    wtpdf_value_destroy(obj);
+     /*
+         copy selected items in Page dictionary
+     */
+     for (i = 0; pagedictkeys[i] != NULL; i++) {
+-        obj = ppdict_get_obj(pageDict, pagedictkeys[i]);
++        obj = dictionary_get(
++            pageDict, pagedictkeys[i], WTPDF_LOOKUP_PRESERVE_REFERENCE);
+         if (obj != NULL) {
+             pdf_add_name(pdf, pagedictkeys[i]);
+             /*
+                 preserves indirection
+             */
+             copyObject(pdf, pdf_doc, obj);
++            wtpdf_value_destroy(obj);
+         }
+     }
+-    resources = ppdict_rget_obj(pageDict, "Resources");
++    resources = dictionary_get(
++        pageDict, "Resources", WTPDF_LOOKUP_RESOLVE_REFERENCE);
+     if (resources == NULL) {
+         /*
+             If there are no Resources in the Page dict of the embedded page,
+@@ -884,18 +1010,27 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+             PDF file, climbing up the tree until the Resources are found.
+             (This fixes a problem with Scribus 1.3.3.14.)
+         */
+-            obj = ppdict_rget_obj(pageDict, "Parent");
+-            while (obj != NULL && obj->type == PPDICT) {
+-                resources = ppdict_rget_obj(obj->dict, "Resources");
++            obj = dictionary_get(
++                pageDict, "Parent", WTPDF_LOOKUP_RESOLVE_REFERENCE);
++            while (obj != NULL &&
++                   wtpdf_value_type(obj) == WTPDF_VALUE_DICTIONARY) {
++                wtpdf_value *parent;
++                resources = dictionary_get(
++                    obj, "Resources", WTPDF_LOOKUP_RESOLVE_REFERENCE);
+                 if (resources != NULL) {
+                     break;
+                 }
+-                obj = ppdict_get_obj(obj->dict, "Parent");
++                parent = dictionary_get(
++                    obj, "Parent", WTPDF_LOOKUP_RESOLVE_REFERENCE);
++                wtpdf_value_destroy(obj);
++                obj = parent;
+             }
++            wtpdf_value_destroy(obj);
+     }
+     if (resources != NULL) {
+         pdf_add_name(pdf, "Resources");
+         copyObject(pdf, pdf_doc, resources);
++        wtpdf_value_destroy(resources);
+     } else {
+         formatted_warning("pdf inclusion","Page /Resources missing");
+     }
+@@ -908,60 +1043,77 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+     /*
+         Write the Page contents.
+     */
+-    content = ppdict_rget_obj(pageDict, "Contents");
+-    if (content && content->type == PPSTREAM) {
++    content = dictionary_get(
++        pageDict, "Contents", WTPDF_LOOKUP_RESOLVE_REFERENCE);
++    if (content && wtpdf_value_type(content) == WTPDF_VALUE_STREAM) {
+         if (pdf->compress_level == 0 || pdf->recompress) {
+             pdf_dict_add_streaminfo(pdf);
+             pdf_end_dict(pdf);
+             pdf_begin_stream(pdf);
+-            copyStreamStream(pdf, content->stream, 1, 1); /* decompress */
++            copyStreamStream(pdf, content, 1, 1); /* decompress */
+         } else {
+             /* copies compressed stream */
+-            ppstream * stream = content->stream;
+-            ppdict *streamDict = stream->dict; /* */
+-            obj = ppdict_rget_obj(streamDict, "Length");
++            wtpdf_status status;
++            wtpdf_value *streamDict = wtpdf_stream_dictionary(content, &status);
++            if (streamDict == NULL) {
++                wtpdf_value_destroy(content);
++                wtpdf_value_destroy(pageDict);
++                normal_error("pdf inclusion", "unable to read PDF stream dictionary");
++            }
++            obj = dictionary_get(
++                streamDict, "Length", WTPDF_LOOKUP_RESOLVE_REFERENCE);
+             if (obj != NULL) {
+                 pdf_add_name(pdf, "Length");
+                 copyObject(pdf, pdf_doc, obj);
+-                obj = ppdict_rget_obj(streamDict, "Filter");
++                wtpdf_value_destroy(obj);
++                obj = dictionary_get(
++                    streamDict, "Filter", WTPDF_LOOKUP_RESOLVE_REFERENCE);
+                 if (obj != NULL) {
+                     pdf_add_name(pdf, "Filter");
+                     copyObject(pdf, pdf_doc, obj);
++                    wtpdf_value_destroy(obj);
+                     /* the next one is irrelevant, only for inline images: */
+                     /*
+-                    obj = ppdict_rget_obj(streamDict, "DecodeParms");
++                    obj = dictionary_get(
++                        streamDict, "DecodeParms", WTPDF_LOOKUP_RESOLVE_REFERENCE);
+                     if (obj != NULL) {
+                         pdf_add_name(pdf, "DecodeParms");
+                         copyObject(pdf, pdf_doc, obj);
++                        wtpdf_value_destroy(obj);
+                     }
+                     */
+                 }
+                 pdf_end_dict(pdf);
+                 pdf_begin_stream(pdf);
+-                copyStreamStream(pdf, stream, 0, 0);
++                copyStreamStream(pdf, content, 0, 0);
+             } else {
+                 pdf_dict_add_streaminfo(pdf);
+                 pdf_end_dict(pdf);
+                 pdf_begin_stream(pdf);
+-                copyStreamStream(pdf, stream, 1, 0);
++                copyStreamStream(pdf, content, 1, 0);
+             }
++            wtpdf_value_destroy(streamDict);
+         }
+         pdf_end_stream(pdf);
+-    } else if (content && content->type == PPARRAY) {
++    } else if (content && wtpdf_value_type(content) == WTPDF_VALUE_ARRAY) {
+         /* listens to compresslevel */
+         pdf_dict_add_streaminfo(pdf);
+         pdf_end_dict(pdf);
+         pdf_begin_stream(pdf);
+         {
+-            int i;
++            size_t index, count = 0;
+             int b = 0;
+-            int n = content->array->size;
+-            for (i=0; i<n; ++i) {
+-                ppobj *o = pparray_at(content->array,i);
+-                while (o != NULL && o->type == PPREF) {
+-                    o = ppref_obj((ppref *) o->ref);
+-                }
+-                if (o != NULL && o->type == PPSTREAM) {
++            if (wtpdf_value_count(content, &count) != WTPDF_STATUS_OK) {
++                wtpdf_value_destroy(content);
++                wtpdf_value_destroy(pageDict);
++                normal_error("pdf inclusion", "unable to read PDF contents array");
++            }
++            for (index = 0; index < count; ++index) {
++                wtpdf_status status;
++                wtpdf_value *item = wtpdf_array_get(
++                    content, index, WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++                if (item != NULL &&
++                    wtpdf_value_type(item) == WTPDF_VALUE_STREAM) {
+                     if (b) {
+                         /*
+                             Put a space between streams to be on the safe side (streams
+@@ -971,8 +1123,9 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+                     } else {
+                         b = 1;
+                     }
+-                    copyStreamStream(pdf, (ppstream *) o->stream, 1, 0);
++                    copyStreamStream(pdf, item, 1, 0);
+                 }
++                wtpdf_value_destroy(item);
+             }
+         }
+         pdf_end_stream(pdf);
+@@ -985,6 +1138,8 @@ void write_epdf(PDF pdf, image_dict * idict, int suppress_optional_info)
+         pdf_begin_stream(pdf);
+         pdf_end_stream(pdf);
+     }
++    wtpdf_value_destroy(content);
++    wtpdf_value_destroy(pageDict);
+     pdf_end_obj(pdf);
+     /*
+         write out all indirect objects
+@@ -1008,26 +1163,23 @@ int write_epdf_object(PDF pdf, image_dict * idict, int n)
+         normal_error("pdf inclusion","unknown document");
+     } else {
+         PdfDocument * pdf_doc = refPdfDocument(img_filepath(idict), FE_FAIL, img_userpassword(idict), img_ownerpassword(idict));
+-        ppdoc * pdfe = pdf_doc->pdfe;
+-        if (ppdoc_xref(pdfe)) {
+-            ppref * ref = ppxref_find(ppdoc_xref(pdfe), (ppuint) n);
+-            if (ref != NULL) {
+-                ppobj *obj;
+-                num = pdf->obj_count++;
+-                obj = ppref_obj(ref);
+-                if (obj->type == PPSTREAM) {
+-                    pdf_begin_obj(pdf, num, OBJSTM_NEVER);
+-                } else {
+-                    pdf_begin_obj(pdf, num, 2);
+-                }
+-                copyObject(pdf, pdf_doc, obj);
+-                pdf_end_obj(pdf);
+-                writeRefs(pdf, pdf_doc);
++        wtpdf_document * pdf_input = pdf_doc->pdf_input;
++        wtpdf_status status;
++        wtpdf_value *obj = wtpdf_document_object(pdf_input, n, 0, &status);
++        if (obj != NULL) {
++            num = pdf->obj_count++;
++            if (wtpdf_value_type(obj) == WTPDF_VALUE_STREAM) {
++                pdf_begin_obj(pdf, num, OBJSTM_NEVER);
+             } else {
+-                formatted_warning("pdf inclusion","ignoring missing image %i, case 1\n",(int) n);
++                pdf_begin_obj(pdf, num, 2);
+             }
++            copyObject(pdf, pdf_doc, obj);
++            pdf_end_obj(pdf);
++            wtpdf_value_destroy(obj);
++            writeRefs(pdf, pdf_doc);
+         } else {
+-            formatted_warning("pdf inclusion","ignoring missing image %i, case 2\n",(int) n);
++            formatted_warning(
++                "pdf inclusion", "ignoring missing image %i\n", (int) n);
+         }
+         if (! img_keepopen(idict)) {
+             unrefPdfDocument(img_filepath(idict));
+@@ -1046,12 +1198,11 @@ static void deletePdfDocumentPdfDoc(PdfDocument * pdf_doc)
+         n = r->next;
+         free(r);
+     }
+-    if (pdf_doc->pdfe != NULL) {
+-        ppdoc_free(pdf_doc->pdfe);
+-        pdf_doc->pdfe = NULL;
++    if (pdf_doc->pdf_input != NULL) {
++        wtpdf_document_close(pdf_doc->pdf_input);
++        pdf_doc->pdf_input = NULL;
+     }
+     if (pdf_doc->memstream != NULL) {
+-     /* pplib does this: free(pdf_doc->memstream); */
+-        pdf_doc->memstream = NULL;
++        xfree(pdf_doc->memstream);
+     }
+  /* pdf_doc->pc++; */
