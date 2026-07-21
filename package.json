@@ -65,6 +65,7 @@
     "check:licenses": "node scripts/check-license-compliance.mjs 2025",
     "check:corresponding-source": "node scripts/check-corresponding-source.mjs",
     "check:texlive-provenance": "node scripts/check-texlive-provenance.mjs",
+    "audit:texlive-provenance": "node scripts/audit-texlive-provenance.mjs",
     "test:license-tools": "node --test scripts/*.test.mjs",
     "update:golden": "GOLDEN_UPDATE=1 playwright test golden-output",
     "compat": "node scripts/compat/run.mjs",

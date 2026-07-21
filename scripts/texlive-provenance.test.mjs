@@ -4,7 +4,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
-import { checkMirror, generateMirror, parseTlpdb } from './lib/texlive-provenance.mjs'
+import {
+  auditMirror,
+  auditTlpdb,
+  checkMirror,
+  generateMirror,
+  parseTlpdb,
+} from './lib/texlive-provenance.mjs'
 
 const temporary = []
 afterEach(() => {
@@ -91,6 +97,68 @@ test('generates and verifies a provenance-bound mirror', () => {
     checkMirror({ manifest, mirrorRoot: outputDir, requireLicenseReview: true }).join('\n'),
     /has not been reviewed/,
   )
+})
+
+test('audits all package review work without emitting a mirror', () => {
+  const value = fixture()
+  const audit = auditMirror({
+    texmfDist: value.texmf,
+    tlpdbPath: value.tlpdb,
+    config: value.config,
+    overrides: value.overrides,
+  })
+  assert.equal(audit.summary.mirrorKeys, 1)
+  assert.equal(audit.summary.packages, 1)
+  assert.equal(audit.summary.packagesRequiringReview, 1)
+  assert.equal(audit.summary.unreviewedPackages, 1)
+  assert.equal(audit.summary.errors, 0)
+  assert.equal(audit.packages[0].package, 'example')
+  assert.deepEqual(audit.reviewQueue[0].reasons, ['license-review-required'])
+})
+
+test('builds a review inventory from the pinned TLPDB without TeX Live bytes', () => {
+  const value = fixture()
+  const audit = auditTlpdb({
+    tlpdbPath: value.tlpdb,
+    config: value.config,
+    overrides: value.overrides,
+  })
+  assert.equal(audit.mode, 'metadata-only')
+  assert.equal(audit.summary.mirrorKeys, 1)
+  assert.equal(audit.summary.unreviewedPackages, 1)
+})
+
+test('deduplicates missing-license review work by package', () => {
+  const value = fixture()
+  mkdirSync(join(value.texmf, 'tex/latex/example'), { recursive: true })
+  writeFileSync(join(value.texmf, 'tex/latex/example/second.sty'), 'second\n')
+  writeFileSync(
+    value.tlpdb,
+    [
+      'name example',
+      'revision 42',
+      'runfiles size=2',
+      ' texmf-dist/tex/latex/example/example.sty',
+      ' texmf-dist/tex/latex/example/second.sty',
+      '',
+    ].join('\n'),
+  )
+  value.config.tlpdb.sha256 = createHash('sha256').update(readFileSync(value.tlpdb)).digest('hex')
+  const audit = auditTlpdb({
+    tlpdbPath: value.tlpdb,
+    config: value.config,
+    overrides: value.overrides,
+  })
+  assert.equal(audit.summary.packages, 1)
+  assert.equal(audit.summary.missingLicensePackages, 1)
+  assert.equal(audit.summary.errors, 1)
+  assert.equal(audit.errors[0].package, 'example')
+  assert.deepEqual(audit.reviewQueue[0].reasons, [
+    'license-metadata',
+    'license-review-required',
+    'missing-license-metadata',
+    'notice-evidence-required',
+  ])
 })
 
 test('release check accepts an evidenced package review', () => {

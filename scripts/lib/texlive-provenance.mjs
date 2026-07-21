@@ -327,29 +327,8 @@ function validateNoticePaths(texmfDist, pkg, noticePaths) {
   }
 }
 
-export function generateMirror({
-  texmfDist,
-  tlpdbPath,
-  outputDir,
-  manifestPath,
-  config,
-  overrides,
-  texmfArchivePath = null,
-  metadataArchivePath = null,
-}) {
-  validateConfig(config, overrides)
-  if (!existsSync(texmfDist) || !statSync(texmfDist).isDirectory()) {
-    throw new Error(`texmf-dist directory does not exist: ${texmfDist}`)
-  }
-  if (!existsSync(tlpdbPath)) throw new Error(`TLPDB does not exist: ${tlpdbPath}`)
-
-  const tlpdbSha256 = sha('sha256', tlpdbPath)
-  if (tlpdbSha256 !== config.tlpdb.sha256) {
-    throw new Error(`TLPDB digest mismatch: expected ${config.tlpdb.sha256}, got ${tlpdbSha256}`)
-  }
-  const parsed = parseTlpdb(readFileSync(tlpdbPath, 'utf8'))
+function collectCandidates(texmfDist) {
   const candidatesByKey = new Map()
-
   for (const rule of FORMAT_RULES) {
     for (const root of rule.roots) {
       const absoluteRoot = join(texmfDist, root)
@@ -371,6 +350,302 @@ export function generateMirror({
       }
     }
   }
+  return candidatesByKey
+}
+
+function collectMetadataCandidates(parsed) {
+  const candidatesByKey = new Map()
+  for (const sourcePath of parsed.owners.keys()) {
+    if (!sourcePath.startsWith('texmf-dist/')) continue
+    const relativePath = sourcePath.slice('texmf-dist/'.length)
+    for (const rule of FORMAT_RULES) {
+      if (!rule.roots.some((root) => relativePath.startsWith(`${root}/`))) continue
+      if (!matchesRule(relativePath, rule)) continue
+      const name = outputName(relativePath, rule)
+      const key = `pdftex/${rule.format}/${name}`
+      const candidates = candidatesByKey.get(key) ?? []
+      candidates.push({ sourcePath, bytes: null, sha256: sourcePath })
+      candidatesByKey.set(key, candidates)
+    }
+  }
+  return candidatesByKey
+}
+
+function loadPinnedTlpdb(tlpdbPath, config) {
+  if (!existsSync(tlpdbPath)) throw new Error(`TLPDB does not exist: ${tlpdbPath}`)
+  const tlpdbSha256 = sha('sha256', tlpdbPath)
+  if (tlpdbSha256 !== config.tlpdb.sha256) {
+    throw new Error(`TLPDB digest mismatch: expected ${config.tlpdb.sha256}, got ${tlpdbSha256}`)
+  }
+  return { tlpdbSha256, parsed: parseTlpdb(readFileSync(tlpdbPath, 'utf8')) }
+}
+
+function packageAuditEntry(pkg, license, reviewIssues) {
+  return {
+    package: pkg.name,
+    revision: pkg.revision,
+    catalogue: pkg.catalogue,
+    catalogueLicenses: pkg.catalogueLicenses,
+    resolvedLicenseIds: license?.ids ?? [],
+    licenseReviewed: license?.reviewed ?? false,
+    noticePaths: license?.noticePaths ?? pkg.noticePaths,
+    reviewIssues,
+  }
+}
+
+function reviewQueue(packageList) {
+  return packageList
+    .map((pkg) => {
+      const reasons = []
+      if (pkg.resolvedLicenseIds.length === 0) reasons.push('missing-license-metadata')
+      if (!pkg.licenseReviewed) reasons.push('license-review-required')
+      if (pkg.noticePaths.length === 0) reasons.push('notice-evidence-required')
+      reasons.push(...pkg.reviewIssues.map((issue) => issue.type))
+      return {
+        package: pkg.package,
+        revision: pkg.revision,
+        catalogue: pkg.catalogue,
+        catalogueLicenses: pkg.catalogueLicenses,
+        noticePaths: pkg.noticePaths,
+        reasons: [...new Set(reasons)].sort(),
+      }
+    })
+    .filter((pkg) => pkg.reasons.length > 0)
+}
+
+function auditSummary(packageList, queue) {
+  return {
+    packages: packageList.length,
+    packagesRequiringReview: queue.length,
+    unreviewedPackages: packageList.filter((pkg) => !pkg.licenseReviewed).length,
+    missingLicensePackages: packageList.filter((pkg) => pkg.resolvedLicenseIds.length === 0).length,
+    packagesWithoutNoticeEvidence: packageList.filter((pkg) => pkg.noticePaths.length === 0).length,
+  }
+}
+
+export function auditMirror({ texmfDist, tlpdbPath, config, overrides }) {
+  validateConfig(config, overrides)
+  if (!existsSync(texmfDist) || !statSync(texmfDist).isDirectory()) {
+    throw new Error(`texmf-dist directory does not exist: ${texmfDist}`)
+  }
+  const { tlpdbSha256, parsed } = loadPinnedTlpdb(tlpdbPath, config)
+  const candidatesByKey = collectCandidates(texmfDist)
+  const collisions = []
+  const errors = []
+  const packages = new Map()
+
+  const inspectCandidate = (key, candidate) => {
+    let owner
+    try {
+      owner = resolveOwner(candidate.sourcePath, parsed, overrides)
+    } catch (error) {
+      errors.push({
+        type: 'package-owner',
+        key,
+        sourcePath: candidate.sourcePath,
+        detail: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+    const pkg = parsed.packages.get(owner)
+    if (packages.has(owner)) return
+    let license = null
+    const reviewIssues = []
+    try {
+      license = resolveLicense(pkg, overrides)
+    } catch (error) {
+      const issue = {
+        type: 'license-metadata',
+        detail: error instanceof Error ? error.message : String(error),
+      }
+      reviewIssues.push(issue)
+      errors.push({
+        type: issue.type,
+        package: owner,
+        detail: issue.detail,
+      })
+    }
+    try {
+      if (license) validateNoticePaths(texmfDist, pkg, license.noticePaths)
+    } catch (error) {
+      const issue = {
+        type: 'notice-evidence',
+        detail: error instanceof Error ? error.message : String(error),
+      }
+      reviewIssues.push(issue)
+      errors.push({
+        type: issue.type,
+        package: owner,
+        detail: issue.detail,
+      })
+    }
+    packages.set(owner, packageAuditEntry(pkg, license, reviewIssues))
+  }
+
+  for (const key of [...candidatesByKey.keys()].sort()) {
+    const candidates = candidatesByKey.get(key)
+    let selected = null
+    try {
+      const resolution = resolveCollision(key, candidates, overrides)
+      selected = resolution.selected
+      if (resolution.collision) collisions.push({ key, ...resolution.collision })
+    } catch (error) {
+      collisions.push({
+        key,
+        decision: 'unresolved',
+        candidates: candidates.map(({ sourcePath, bytes, sha256 }) => ({ sourcePath, bytes, sha256 })),
+        detail: error instanceof Error ? error.message : String(error),
+      })
+      errors.push({
+        type: 'collision',
+        key,
+        detail: error instanceof Error ? error.message : String(error),
+      })
+    }
+    if (selected) inspectCandidate(key, selected)
+    else for (const candidate of candidates) inspectCandidate(key, candidate)
+  }
+
+  const packageList = [...packages.values()].sort((a, b) => a.package.localeCompare(b.package))
+  const packageReviewQueue = reviewQueue(packageList)
+  return {
+    schemaVersion: 1,
+    texliveYear: config.texliveYear,
+    tlpdbSha256,
+    summary: {
+      mirrorKeys: candidatesByKey.size,
+      sourceCandidates: [...candidatesByKey.values()].reduce((sum, values) => sum + values.length, 0),
+      ...auditSummary(packageList, packageReviewQueue),
+      collisions: collisions.length,
+      unresolvedCollisions: collisions.filter((collision) => collision.decision === 'unresolved').length,
+      errors: errors.length,
+    },
+    packages: packageList,
+    reviewQueue: packageReviewQueue,
+    collisions,
+    errors,
+  }
+}
+
+export function auditTlpdb({ tlpdbPath, config, overrides }) {
+  validateConfig(config, overrides)
+  const { tlpdbSha256, parsed } = loadPinnedTlpdb(tlpdbPath, config)
+  const candidatesByKey = collectMetadataCandidates(parsed)
+  const collisions = []
+  const errors = []
+  const packages = new Map()
+
+  const inspectCandidate = (key, candidate) => {
+    let owner
+    try {
+      owner = resolveOwner(candidate.sourcePath, parsed, overrides)
+    } catch (error) {
+      errors.push({
+        type: 'package-owner',
+        key,
+        sourcePath: candidate.sourcePath,
+        detail: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+    const pkg = parsed.packages.get(owner)
+    if (packages.has(owner)) return
+    let license = null
+    const reviewIssues = []
+    try {
+      license = resolveLicense(pkg, overrides)
+    } catch (error) {
+      const issue = {
+        type: 'license-metadata',
+        detail: error instanceof Error ? error.message : String(error),
+      }
+      reviewIssues.push(issue)
+      errors.push({
+        type: issue.type,
+        package: owner,
+        detail: issue.detail,
+      })
+    }
+    packages.set(owner, packageAuditEntry(pkg, license, reviewIssues))
+  }
+
+  for (const key of [...candidatesByKey.keys()].sort()) {
+    const candidates = candidatesByKey.get(key)
+    let selected = candidates[0]
+    if (candidates.length > 1) {
+      const override = overrides.collisions[key]
+      if (override) {
+        try {
+          const resolution = resolveCollision(key, candidates, overrides)
+          selected = resolution.selected
+          collisions.push({ key, ...resolution.collision })
+        } catch (error) {
+          collisions.push({
+            key,
+            decision: 'invalid-override',
+            candidateSources: candidates.map((candidate) => candidate.sourcePath),
+            detail: error instanceof Error ? error.message : String(error),
+          })
+          errors.push({
+            type: 'collision-override',
+            key,
+            detail: error instanceof Error ? error.message : String(error),
+          })
+          selected = null
+        }
+      } else {
+        collisions.push({
+          key,
+          decision: 'content-check-required',
+          candidateSources: candidates.map((candidate) => candidate.sourcePath),
+        })
+        selected = null
+      }
+    }
+    if (selected) inspectCandidate(key, selected)
+    else for (const candidate of candidates) inspectCandidate(key, candidate)
+  }
+
+  const packageList = [...packages.values()].sort((a, b) => a.package.localeCompare(b.package))
+  const packageReviewQueue = reviewQueue(packageList)
+  return {
+    schemaVersion: 1,
+    mode: 'metadata-only',
+    texliveYear: config.texliveYear,
+    tlpdbSha256,
+    summary: {
+      mirrorKeys: candidatesByKey.size,
+      sourceCandidates: [...candidatesByKey.values()].reduce((sum, values) => sum + values.length, 0),
+      ...auditSummary(packageList, packageReviewQueue),
+      collisionCandidates: collisions.length,
+      contentCheckCollisions: collisions.filter(
+        (collision) => collision.decision === 'content-check-required',
+      ).length,
+      errors: errors.length,
+    },
+    packages: packageList,
+    reviewQueue: packageReviewQueue,
+    collisions,
+    errors,
+  }
+}
+
+export function generateMirror({
+  texmfDist,
+  tlpdbPath,
+  outputDir,
+  manifestPath,
+  config,
+  overrides,
+  texmfArchivePath = null,
+  metadataArchivePath = null,
+}) {
+  validateConfig(config, overrides)
+  if (!existsSync(texmfDist) || !statSync(texmfDist).isDirectory()) {
+    throw new Error(`texmf-dist directory does not exist: ${texmfDist}`)
+  }
+  const { tlpdbSha256, parsed } = loadPinnedTlpdb(tlpdbPath, config)
+  const candidatesByKey = collectCandidates(texmfDist)
 
   const files = []
   for (const key of [...candidatesByKey.keys()].sort()) {

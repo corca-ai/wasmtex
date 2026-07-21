@@ -162,6 +162,22 @@ mirrored package lacks that review or a notice path; `provenance-reviewed` means
 that this mirror-specific review is complete, not that the engine release is cleared.
 The repository-wide strict license gate is also run immediately before any S3 upload.
 
+Use the metadata-only audit before downloading the multi-gigabyte `texmf` archive. It
+reads only the digest-pinned TLPDB and produces a deduplicated package review queue
+plus the flattened-name collisions that still require byte inspection:
+
+```bash
+npm run audit:texlive-provenance -- \
+  --metadata-only \
+  --tlpdb <extracted-texlive.tlpdb> \
+  --output <audit.json>
+```
+
+An exit status of 2 means the queue contains unresolved package metadata; it is the
+expected result until all entries are reviewed. This inventory does not replace the
+full-byte audit: notice files must be checked in the extracted tree, and collision
+candidates must be resolved from actual hashes before mirror generation.
+
 ## Updating dependencies
 
 When bumping TeX Live, Emscripten, ICU, or a peer dependency:

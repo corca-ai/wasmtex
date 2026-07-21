@@ -55,8 +55,10 @@ for (const path of [
   'THIRD_PARTY_NOTICES.md',
   'docs/licensing.md',
   'docs/corresponding-source.md',
+  'docs/develop.md',
   'docs/proprietary-integration.md',
   'fix-license.md',
+  'scripts/audit-texlive-provenance.mjs',
   'scripts/build-corresponding-source.mjs',
   'scripts/check-corresponding-source.mjs',
   'scripts/check-texlive-provenance.mjs',
@@ -381,6 +383,23 @@ if (existsSync(mirrorSync)) {
   }
   for (const forbidden of ['copy_flat', 'first-found wins', '--size-only']) {
     if (text.includes(forbidden)) fail(`TeX Live mirror retains unsafe behavior: ${forbidden}`)
+  }
+}
+
+const texliveAudit = resolve(root, 'scripts/audit-texlive-provenance.mjs')
+if (existsSync(texliveAudit)) {
+  const text = readFileSync(texliveAudit, 'utf8')
+  for (const required of ['auditMirror', 'auditTlpdb', '--metadata-only']) {
+    if (!text.includes(required)) fail(`TeX Live audit tool is missing marker: ${required}`)
+  }
+}
+
+for (const buildPolicyPath of ['AGENTS.md', 'docs/develop.md']) {
+  const text = readFileSync(resolve(root, buildPolicyPath), 'utf8')
+  for (const required of ['remote-builder', 'SSH']) {
+    if (!text.includes(required)) {
+      fail(`${buildPolicyPath} does not preserve the remote-only WASM build policy: ${required}`)
+    }
   }
 }
 

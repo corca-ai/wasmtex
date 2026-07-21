@@ -490,6 +490,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### E. TeX Live patch와 재현 빌드
 
+- [x] 모든 WASM compile, Docker/Emscripten engine build와 relink를 로컬에서 금지하고 `ssh remote-builder`의 exact-commit checkout에서만 실행하는 정책을 `AGENTS.md`와 `docs/develop.md`에 고정했다.
 - [x] `wasm-build/patches/texlive-wtpdf.patch`를 XeTeX와 LuaHBTeX의 필요한 caller/build metadata 범위로 확장하고 고정 upstream에 exact apply를 검증한다.
 - [x] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
 - [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
@@ -539,6 +540,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] mirror key, byte hash, 원래 `texmf-dist` path, package/revision, catalogue license, notice path, basename collision 결정을 생성하는 도구와 fixture test를 추가했다.
 - [x] 내용이 다른 basename collision, 소유 package 누락, license metadata 누락, archive hash 불일치를 fail-closed 처리한다.
 - [x] 모든 사용 package가 reviewed override와 실제 notice evidence path를 갖기 전에는 provenance release 검사가 실패하도록 했다.
+- [x] 고정 TLPDB만으로 package review queue와 content-check collision 목록을 만드는 metadata-only 감사 도구를 추가했다. 이 결과는 승인 결과가 아니며 실제 파일 byte/notice 검사가 뒤따라야 한다.
 - [ ] 전체 2025 mirror에 생성기를 실행하고 differing collision과 package별 license/notice override를 검토·확정한다.
 - [ ] 생성된 전체 provenance와 실제 CDN object를 대조하고 안정적인 URL/SHA-256으로 공개한다.
 - [ ] 라이선스 미확인 CDN 파일이 production allowlist에 들어오지 못하게 한다.
@@ -547,7 +549,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] Emscripten 3.1.46 base image를 registry digest로 고정하고 Emscripten Git commit 및 사용 ports source URL/SHA-512를 기록했다.
 - [x] engine artifact마다 byte hash, WasmTex commit, TeX Live commit, Emscripten commit, Docker digest를 묶는 deterministic build receipt를 생성하도록 workflow를 변경했다.
 - [x] release asset manifest가 모든 engine file의 receipt 누락·중복·hash 불일치·license family 미분류를 거부하도록 했다.
-- [ ] 새 receipt workflow로 모든 release engine을 다시 빌드하고 동일 release manifest에 모은다.
+- [ ] `ssh remote-builder`의 exact-commit checkout에서 새 receipt workflow로 모든 release engine을 다시 빌드하고 동일 release manifest에 모은다.
 - [x] receipt가 가리키는 모든 WasmTex commit, pinned TeX Live/Emscripten source, ports source archive, build control file을 동일 release ID로 묶는 deterministic source archive builder/checker를 구현했다.
 - [ ] 새 receipt artifact로 source archive를 실제 생성하고 clean-builder rebuild evidence를 기록한다.
 - [ ] artifact, manifest, source archive에 동일 release ID를 넣는다.
