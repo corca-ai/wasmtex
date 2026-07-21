@@ -477,7 +477,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] WTPDF v2에 direct object, indirect reference, object number/generation 보존과 명시적 resolve를 구현한다.
 - [ ] classic xref, xref stream, object stream을 지원한다.
 - [x] WTPDF v2에 독립 cursor를 사용하는 raw stream과 decoded stream reader를 구분해 구현한다. filter별 differential coverage와 decoded-output limit은 남아 있다.
-- [x] WTPDF v2가 embedded-NUL string bytes, literal/hex lexical form과 decoded name bytes를 보존한다. LuaHBTeX serializer와 `pdfe` 연결은 아직 남아 있다.
+- [x] WTPDF v2가 embedded-NUL string bytes, literal/hex lexical form과 decoded name bytes를 보존한다. `docs/license-evidence/wtpdf-string-syntax-c9b49a4.md`에 native/WASM 결과를 기록했으며 LuaHBTeX serializer와 `pdfe` 연결은 아직 남아 있다.
 - [ ] `epdf.h`를 WTPDF abstraction으로 전환한다.
 - [ ] `pdftoepdf.c`를 WTPDF API로 전환하되 기존 output serializer를 유지한다.
 - [ ] `lpdfelib.c`의 `pdfe` API를 기존 observable contract에 맞게 전환한다.
