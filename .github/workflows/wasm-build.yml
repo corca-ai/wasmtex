@@ -73,7 +73,8 @@ jobs:
           mkdir -p public/wasmtex/2025
           cp wasm-build/dist/wasmtex-pdftex.js \
              wasm-build/dist/wasmtex-pdftex.worker.js \
-             wasm-build/dist/wasmtex-pdftex.wasm public/wasmtex/2025/
+             wasm-build/dist/wasmtex-pdftex.wasm \
+             wasm-build/dist/wasmtex-kpse-resolve.js public/wasmtex/2025/
           node scripts/extract-format.mjs 2025
           cp public/wasmtex/2025/wasmtex-pdftex.fmt \
              wasm-build/dist/wasmtex-pdftex.fmt

@@ -19,7 +19,7 @@ function sha256(data) {
 function normalizeInputPath(path) {
   return path
     .replaceAll('\\', '/')
-    .replace(/^\/build\/wasm\//, 'texlive-build/')
+    .replace(/^\/build\/wasm(?:-[^/]+)?\//, 'texlive-build/')
     .replace(
       /^\/emsdk\/upstream\/emscripten\/cache\/sysroot\/lib\/wasm32-emscripten\//,
       'emscripten-sysroot/',

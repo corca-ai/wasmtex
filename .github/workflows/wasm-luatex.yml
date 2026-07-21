@@ -102,7 +102,7 @@ jobs:
           node scripts/extract-luatex-format.mjs 2025
           # Ship the format gzipped (consistent with XeLaTeX; the engine prefers
           # `.fmt.gz` and decompresses in-browser). ~5.5 MB → ~2 MB.
-          gzip -9 -c public/wasmtex/2025/wasmtex-luatex.fmt \
+          gzip -n -9 -c public/wasmtex/2025/wasmtex-luatex.fmt \
             > wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
           ls -lh wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
 

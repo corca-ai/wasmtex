@@ -117,7 +117,7 @@ jobs:
              wasm-build/dist-xetex/wasmtex-xetex.worker.js \
              wasm-build/dist-xetex/wasmtex-xetex.wasm public/wasmtex/2025/
           node scripts/extract-xetex-format.mjs 2025
-          gzip -9 -c public/wasmtex/2025/wasmtex-xetex.fmt \
+          gzip -n -9 -c public/wasmtex/2025/wasmtex-xetex.fmt \
             > wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
           ls -lh wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
 

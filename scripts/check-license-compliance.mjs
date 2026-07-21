@@ -57,6 +57,8 @@ for (const path of [
   'docs/corresponding-source.md',
   'docs/develop.md',
   'docs/license-evidence/texlive-2025-metadata-audit-124bfca.md',
+  'docs/license-evidence/engine-release-2025-23ee539.md',
+  'docs/license-evidence/link-inventory-23ee539.json',
   'docs/proprietary-integration.md',
   'fix-license.md',
   'scripts/audit-texlive-provenance.mjs',
@@ -85,6 +87,7 @@ const manifest = readJson(manifestRelativePath)
 const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
 const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
 const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
+const linkInventory = readJson('docs/license-evidence/link-inventory-23ee539.json')
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
 
 if (sourceConfig) {
@@ -116,6 +119,34 @@ if (sourceConfig) {
     const text = readFileSync(resolve(root, dockerfile), 'utf8')
     if (!text.includes(`FROM ${dockerImage}`)) {
       fail(`${dockerfile} does not use the pinned corresponding-source Docker image`)
+    }
+  }
+}
+
+if (linkInventory) {
+  if (linkInventory.schemaVersion !== 1) fail('link inventory schemaVersion must be 1')
+  if (!/^[a-f0-9]{40}$/i.test(linkInventory.sourceRevision ?? '')) {
+    fail('link inventory sourceRevision must be a Git commit')
+  }
+  const expectedMapFamilies = [
+    'pdftex',
+    'bibtex',
+    'bibtex8',
+    'makeindex',
+    'xetex',
+    'dvipdfmx',
+    'luahbtex',
+  ].sort()
+  const actualMapFamilies = (linkInventory.maps ?? []).map((map) => map.family).sort()
+  if (JSON.stringify(actualMapFamilies) !== JSON.stringify(expectedMapFamilies)) {
+    fail('link inventory does not cover every executable artifact family exactly once')
+  }
+  for (const map of linkInventory.maps ?? []) {
+    if (!isSha256(map.mapSha256) || !isSha256(map.buildId)) {
+      fail(`${String(map.family)}: link inventory has an invalid map or build digest`)
+    }
+    if (!Array.isArray(map.archives) || map.archives.length === 0) {
+      fail(`${String(map.family)}: link inventory has no static archives`)
     }
   }
 }
@@ -467,6 +498,38 @@ for (const workflow of [
   const text = readFileSync(resolve(root, workflow), 'utf8')
   if (!text.includes('gen-engine-build-receipt.mjs') || !text.includes('BUILD-RECEIPT.')) {
     fail(`${workflow} does not publish an engine build receipt`)
+  }
+}
+
+const pdftexWorkflow = readFileSync(resolve(root, '.github/workflows/wasm-build.yml'), 'utf8')
+for (const required of [
+  'extract-format.mjs',
+  'wasmtex-pdftex.fmt',
+  'wasmtex-kpse-resolve.js public/wasmtex/2025/',
+]) {
+  if (!pdftexWorkflow.includes(required)) {
+    fail(`pdfTeX workflow does not bind its generated format dependency: ${required}`)
+  }
+}
+
+const aggregateWorkflow = readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8')
+for (const requiredArtifact of [
+  'wasm-pdftex',
+  'wasm-bibtex',
+  'wasm-bibtex8',
+  'wasm-makeindex',
+  'wasm-xetex',
+  'wasm-luatex',
+]) {
+  if (!aggregateWorkflow.includes(`name: ${requiredArtifact}`)) {
+    fail(`aggregate workflow omits required build artifact: ${requiredArtifact}`)
+  }
+}
+
+for (const workflow of ['.github/workflows/wasm-xetex.yml', '.github/workflows/wasm-luatex.yml']) {
+  const text = readFileSync(resolve(root, workflow), 'utf8')
+  if (!text.includes('gzip -n -9 -c')) {
+    fail(`${workflow} must produce timestamp-free deterministic format archives`)
   }
 }
 

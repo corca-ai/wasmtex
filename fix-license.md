@@ -39,11 +39,11 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | `pplib` | 새 소스에서 제거됨 | XeTeX/LuaHBTeX가 WTPDF/Xpdf를 사용하고 독립 SHA-2 구현을 사용한다. |
 | WTPDF 증거 빌드 | 통과 | native/WASM smoke, link map과 byte scan 증거가 저장되어 있다. |
 | 대응 소스 도구 | 구현됨 | build receipt 기반 source archive builder/checker가 있다. |
-| 최종 릴리스 바이너리 | 없음 | 현재 로컬의 무시된 엔진 파일은 과거 산출물이므로 공개할 수 없다. |
+| 새 릴리스 후보 바이너리 | 완료 | source `23ee539`, TeX Live `143f172…`로 모든 엔진·포맷을 새로 만들고 receipt와 link inventory에 묶었다. |
 | 최종 대응 소스 archive | 없음 | 새 release receipt로 실제 archive를 만들고 재빌드해야 한다. |
 | 최종 notices/relink 자료 | 미완료 | 링크 inventory, LGPL 처리와 배포 고지를 확정해야 한다. |
 | 호환성·보안 승인 | 미완료 | 특히 LuaHBTeX PDF API와 비정상 PDF 검증이 남아 있다. |
-| 엔진 매니페스트 | `development-only` | 아래의 미완료 항목이 모두 해소되기 전에는 공개 바이너리를 배포하지 않는다. |
+| 엔진 매니페스트 | `development-only` | fresh artifact 차단은 해소했지만 나머지 네 차단 항목이 끝나기 전에는 공개 바이너리를 배포하지 않는다. |
 
 새 WTPDF 구현의 주요 증거는 다음 문서에 있다.
 
@@ -92,17 +92,17 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 
 ### C. 새 엔진 릴리스 빌드
 
-- [ ] 현재의 정확한 WasmTex commit과 고정 TeX Live source로 pdfTeX와 BibTeX를 새로 빌드한다.
-- [ ] 같은 입력으로 BibTeX8을 새로 빌드한다.
-- [ ] 같은 입력으로 makeindex를 새로 빌드한다.
-- [ ] WTPDF/Xpdf 경로로 XeTeX와 dvipdfmx를 새로 빌드한다.
-- [ ] WTPDF/Xpdf와 독립 SHA-2 경로로 LuaHBTeX를 새로 빌드한다.
-- [ ] 새 pdfLaTeX, XeLaTeX와 LuaLaTeX 바이너리에 맞는 `.fmt`와 `.fmt.gz`를 다시 생성한다.
-- [ ] Worker/controller, Emscripten module, WASM, format과 runtime helper를 하나의 release asset directory에 모은다.
-- [ ] 각 build family에 `BUILD-RECEIPT.<family>.json`을 생성하고 모든 파일이 정확히 한 receipt에만 속하게 한다.
-- [ ] 각 receipt가 WasmTex commit, TeX Live commit, Emscripten commit, Docker image digest와 파일 SHA-256을 기록하는지 검증한다.
-- [ ] 최종 link map, archive, JS와 WASM byte scan에서 `libpplib.a`, `ppdoc_`, `ppdict_`, `pparray_`, `ppstream_`, `ppref_`와 legacy SHA helper가 없음을 확인한다.
-- [ ] 최종 artifact의 실제 link inventory를 생성하고 `LICENSE-MANIFEST.json`의 family 분류와 대조한다.
+- [x] release source commit `23ee539`과 고정 TeX Live source로 pdfTeX와 BibTeX를 새로 빌드한다.
+- [x] 같은 입력으로 BibTeX8을 새로 빌드한다.
+- [x] 같은 입력으로 makeindex를 새로 빌드한다.
+- [x] WTPDF/Xpdf 경로로 XeTeX와 dvipdfmx를 새로 빌드한다.
+- [x] WTPDF/Xpdf와 독립 SHA-2 경로로 LuaHBTeX를 새로 빌드한다.
+- [x] 새 pdfLaTeX, XeLaTeX와 LuaLaTeX 바이너리에 맞는 `.fmt`와 `.fmt.gz`를 다시 생성한다.
+- [x] Worker/controller, Emscripten module, WASM, format과 runtime helper를 하나의 release asset directory에 모은다.
+- [x] 각 build family에 `BUILD-RECEIPT.<family>.json`을 생성하고 모든 파일이 정확히 한 receipt에만 속하게 한다.
+- [x] 각 receipt가 WasmTex commit, TeX Live commit, Emscripten commit, Docker image digest와 파일 SHA-256을 기록하는지 검증한다.
+- [x] 최종 link map, archive, JS와 WASM byte scan에서 `libpplib.a`, `ppdoc_`, `ppdict_`, `pparray_`, `ppstream_`, `ppref_`와 legacy SHA helper가 없음을 확인한다.
+- [x] 최종 artifact의 실제 link inventory를 생성하고 `LICENSE-MANIFEST.json`의 family 분류와 대조한다.
 
 ### D. WTPDF 호환성·보안·성능
 
@@ -155,7 +155,8 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] public workflow가 artifact 업로드와 Pages 배포 전에 strict release mode를 실행하도록 했다.
 - [x] asset manifest가 파일별 receipt 누락·중복·hash 불일치와 license family 미분류를 거부한다.
 - [ ] `LICENSE-MANIFEST.json`의 artifact family와 distribution terms를 최종 link inventory에 맞춰 확정한다.
-- [ ] `fresh-release-artifacts`, `third-party-notices-and-relink`, `compatibility-security`, `complete-corresponding-source`, `public-repository-audit` 차단 사유를 각각 증거와 함께 해소한다.
+- [x] `fresh-release-artifacts` 차단 사유를 새 receipt와 link inventory 증거로 해소한다.
+- [ ] `third-party-notices-and-relink`, `compatibility-security`, `complete-corresponding-source`, `public-repository-audit` 차단 사유를 각각 증거와 함께 해소한다.
 - [ ] 모든 차단 사유가 해소된 뒤에만 `releaseStatus`를 `release-cleared`로 변경한다.
 - [ ] `node scripts/gen-asset-manifest.mjs 2025 --release`가 최종 asset directory에서 통과하는지 확인한다.
 - [ ] `npm run check:licenses -- --release`가 통과하는지 확인한다.

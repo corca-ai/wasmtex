@@ -123,10 +123,6 @@
   ],
   "releaseBlockers": [
     {
-      "id": "fresh-release-artifacts",
-      "detail": "Rebuild every engine family and format from the current audited source and bind each file to a build receipt."
-    },
-    {
       "id": "third-party-notices-and-relink",
       "detail": "Finish the exact linked-component notices, license choices, and any required LGPL relink materials."
     },
