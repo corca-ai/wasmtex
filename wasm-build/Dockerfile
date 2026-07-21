@@ -23,7 +23,7 @@
 #
 # =============================================================================
 
-FROM emscripten/emsdk:3.1.46
+FROM emscripten/emsdk:3.1.46@sha256:2491bc4bf6caf8c41993660822341bc72759cb577363dfe0781f0a2d05f7d357
 
 LABEL maintainer="wasmtex"
 LABEL description="pdfTeX WASM build environment with SyncTeX support (TeX Live 2025)"

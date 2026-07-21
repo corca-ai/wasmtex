@@ -14,6 +14,9 @@ on:
       - 'wasm-build/kpse-hook.c'
       - 'wasm-build/library.js'
       - 'wasm-build/texlive-source.ref'
+      - 'scripts/gen-engine-build-receipt.mjs'
+      - 'scripts/lib/engine-build-receipt.mjs'
+      - 'scripts/corresponding-source-2025.json'
       - '.github/workflows/wasm-makeindex.yml'
   pull_request:
     paths:
@@ -81,6 +84,12 @@ jobs:
             console.log('entry + hook symbols present');
           "
 
+      - name: Record exact MakeIndex build inputs and outputs
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            makeindex wasm-build/dist-makeindex wasm-build/dist-makeindex/BUILD-RECEIPT.makeindex.json \
+            wasmtex-makeindex.js wasmtex-makeindex.worker.js wasmtex-makeindex.wasm
+
       - name: Upload makeindex WASM artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -89,6 +98,7 @@ jobs:
             wasm-build/dist-makeindex/wasmtex-makeindex.js
             wasm-build/dist-makeindex/wasmtex-makeindex.worker.js
             wasm-build/dist-makeindex/wasmtex-makeindex.wasm
+            wasm-build/dist-makeindex/BUILD-RECEIPT.makeindex.json
           retention-days: 90
 
       - name: List build outputs

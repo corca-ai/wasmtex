@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateSourceConfig } from './lib/engine-build-receipt.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const positional = process.argv.slice(2).filter((arg) => !arg.startsWith('--'))
@@ -56,7 +57,10 @@ for (const path of [
   'docs/proprietary-integration.md',
   'fix-license.md',
   'scripts/check-texlive-provenance.mjs',
+  'scripts/corresponding-source-2025.json',
+  'scripts/gen-engine-build-receipt.mjs',
   'scripts/gen-texlive-provenance.mjs',
+  'scripts/lib/engine-build-receipt.mjs',
   'scripts/lib/texlive-provenance.mjs',
   'scripts/texlive-mirror-2025.json',
   'scripts/texlive-mirror-overrides-2025.json',
@@ -70,7 +74,41 @@ const manifestRelativePath = `public/wasmtex/${version}/LICENSE-MANIFEST.json`
 const manifest = readJson(manifestRelativePath)
 const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
 const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
+const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
+
+if (sourceConfig) {
+  try {
+    validateSourceConfig(sourceConfig)
+  } catch (error) {
+    fail(`corresponding-source config: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (sourceConfig.texliveYear !== version) {
+    fail(`corresponding-source config year must be ${version}`)
+  }
+  if (manifest && sourceConfig.emscripten?.version !== manifest.emscriptenVersion) {
+    fail('corresponding-source Emscripten version does not match license manifest')
+  }
+  const portNames = new Set(sourceConfig.ports?.map((port) => port.name))
+  for (const requiredPort of ['freetype', 'icu', 'libpng', 'zlib']) {
+    if (!portNames.has(requiredPort)) {
+      fail(`corresponding-source config omits Emscripten port: ${requiredPort}`)
+    }
+  }
+  const dockerImage = sourceConfig.emscripten?.dockerImage
+  for (const dockerfile of [
+    'wasm-build/Dockerfile',
+    'wasm-build/Dockerfile.bibtex8',
+    'wasm-build/Dockerfile.luatex',
+    'wasm-build/Dockerfile.makeindex',
+    'wasm-build/Dockerfile.xetex',
+  ]) {
+    const text = readFileSync(resolve(root, dockerfile), 'utf8')
+    if (!text.includes(`FROM ${dockerImage}`)) {
+      fail(`${dockerfile} does not use the pinned corresponding-source Docker image`)
+    }
+  }
+}
 
 if (mirrorConfig) {
   if (mirrorConfig.schemaVersion !== 1) fail('TeX Live mirror config schemaVersion must be 1')
@@ -346,6 +384,27 @@ if (existsSync(texliveBundle)) {
   const text = readFileSync(texliveBundle, 'utf8')
   for (const required of ['TEXLIVE_PROVENANCE_MANIFEST', 'record.sha256', 'developmentOnly']) {
     if (!text.includes(required)) fail(`TeX Live development capture gate is missing marker: ${required}`)
+  }
+}
+
+const assetManifestGenerator = resolve(root, 'scripts/gen-asset-manifest.mjs')
+if (existsSync(assetManifestGenerator)) {
+  const text = readFileSync(assetManifestGenerator, 'utf8')
+  for (const required of ['validateBuildReceipt', 'buildReceipts', 'releaseId', 'receiptCoverage']) {
+    if (!text.includes(required)) fail(`asset manifest build-receipt gate is missing marker: ${required}`)
+  }
+}
+
+for (const workflow of [
+  '.github/workflows/wasm-build.yml',
+  '.github/workflows/wasm-bibtex8.yml',
+  '.github/workflows/wasm-luatex.yml',
+  '.github/workflows/wasm-makeindex.yml',
+  '.github/workflows/wasm-xetex.yml',
+]) {
+  const text = readFileSync(resolve(root, workflow), 'utf8')
+  if (!text.includes('gen-engine-build-receipt.mjs') || !text.includes('BUILD-RECEIPT.')) {
+    fail(`${workflow} does not publish an engine build receipt`)
   }
 }
 

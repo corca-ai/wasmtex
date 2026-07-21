@@ -34,6 +34,9 @@ on:
       - 'scripts/build-xetex-fromsource.sh'
       - 'scripts/build-xetex-pdf-visual-fixture.mjs'
       - 'scripts/test-xetex-pdf-geometry.mjs'
+      - 'scripts/gen-engine-build-receipt.mjs'
+      - 'scripts/lib/engine-build-receipt.mjs'
+      - 'scripts/corresponding-source-2025.json'
       - '.github/workflows/wasm-xetex.yml'
 
 jobs:
@@ -118,6 +121,14 @@ jobs:
             > wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
           ls -lh wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
 
+      - name: Record exact XeTeX/dvipdfmx build inputs and outputs
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            xetex wasm-build/dist-xetex wasm-build/dist-xetex/BUILD-RECEIPT.xetex.json \
+            wasmtex-xetex.js wasmtex-xetex.worker.js wasmtex-xetex.wasm \
+            wasmtex-xetex.fmt.gz \
+            wasmtex-dvipdfm.js wasmtex-dvipdfm.worker.js wasmtex-dvipdfm.wasm
+
       - name: Upload XeLaTeX WASM artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -126,9 +137,16 @@ jobs:
             wasm-build/dist-xetex/wasmtex-xetex.js
             wasm-build/dist-xetex/wasmtex-xetex.worker.js
             wasm-build/dist-xetex/wasmtex-xetex.wasm
-            wasm-build/dist-xetex/wasmtex-xetex.map
             wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
             wasm-build/dist-xetex/wasmtex-dvipdfm.js
             wasm-build/dist-xetex/wasmtex-dvipdfm.worker.js
             wasm-build/dist-xetex/wasmtex-dvipdfm.wasm
+            wasm-build/dist-xetex/BUILD-RECEIPT.xetex.json
+          retention-days: 90
+
+      - name: Upload non-release XeTeX link-map evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-xetex-link-map
+          path: wasm-build/dist-xetex/wasmtex-xetex.map
           retention-days: 90

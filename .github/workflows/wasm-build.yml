@@ -12,6 +12,9 @@ on:
       - '!wasm-build/Dockerfile.luatex'
       - '!wasm-build/build-luatex.sh'
       - '!wasm-build/xetex-*'
+      - 'scripts/gen-engine-build-receipt.mjs'
+      - 'scripts/lib/engine-build-receipt.mjs'
+      - 'scripts/corresponding-source-2025.json'
 
 jobs:
   build-wasm:
@@ -96,6 +99,20 @@ jobs:
             console.log('BibTeX core exports and controller hooks present');
           "
 
+      - name: Record exact pdfTeX build inputs and outputs
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex.json \
+            wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
+            wasmtex-kpse-resolve.js
+
+      - name: Record exact BibTeX build inputs and outputs
+        if: steps.bibtex-smoke.outcome == 'success'
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            bibtex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.bibtex.json \
+            wasmtex-bibtex.js wasmtex-bibtex.worker.js wasmtex-bibtex.wasm
+
       - name: Upload pdfTeX WASM artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -105,6 +122,7 @@ jobs:
             wasm-build/dist/wasmtex-pdftex.worker.js
             wasm-build/dist/wasmtex-pdftex.wasm
             wasm-build/dist/wasmtex-kpse-resolve.js
+            wasm-build/dist/BUILD-RECEIPT.pdftex.json
           retention-days: 90
 
       - name: Upload BibTeX WASM artifacts
@@ -116,6 +134,7 @@ jobs:
             wasm-build/dist/wasmtex-bibtex.js
             wasm-build/dist/wasmtex-bibtex.worker.js
             wasm-build/dist/wasmtex-bibtex.wasm
+            wasm-build/dist/BUILD-RECEIPT.bibtex.json
           retention-days: 90
 
       - name: List build outputs

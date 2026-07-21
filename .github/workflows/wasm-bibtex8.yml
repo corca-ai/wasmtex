@@ -14,6 +14,9 @@ on:
       - 'wasm-build/kpse-hook.c'
       - 'wasm-build/library.js'
       - 'wasm-build/texlive-source.ref'
+      - 'scripts/gen-engine-build-receipt.mjs'
+      - 'scripts/lib/engine-build-receipt.mjs'
+      - 'scripts/corresponding-source-2025.json'
       - '.github/workflows/wasm-bibtex8.yml'
   pull_request:
     paths:
@@ -80,6 +83,12 @@ jobs:
             console.log('entry + hook symbols present');
           "
 
+      - name: Record exact BibTeX8 build inputs and outputs
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            bibtex8 wasm-build/dist-bibtex8 wasm-build/dist-bibtex8/BUILD-RECEIPT.bibtex8.json \
+            wasmtex-bibtex8.js wasmtex-bibtex8.worker.js wasmtex-bibtex8.wasm
+
       - name: Upload bibtex8 WASM artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -88,6 +97,7 @@ jobs:
             wasm-build/dist-bibtex8/wasmtex-bibtex8.js
             wasm-build/dist-bibtex8/wasmtex-bibtex8.worker.js
             wasm-build/dist-bibtex8/wasmtex-bibtex8.wasm
+            wasm-build/dist-bibtex8/BUILD-RECEIPT.bibtex8.json
           retention-days: 90
 
       - name: List build outputs

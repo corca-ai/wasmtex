@@ -205,6 +205,9 @@ XeLaTeX is built and deployed in CI as a version-matched artifact:
 
 Self-hosting your own assets? Publish a manifest next to the versioned assets, then use
 `npm run sync-engine-assets` to fetch and verify the complete set.
+Release manifests contain a content-derived release ID and per-engine build receipts;
+release mode rejects an engine byte that is not covered by exactly one receipt and
+one license artifact family.
 
 XeTeX is built **from `texlive-source` against the real `libkpathsea`** ([issue
 #52][i52], done), with no separate engine source tree or `kpseemu` shim. `wasm-build/Dockerfile.xetex`

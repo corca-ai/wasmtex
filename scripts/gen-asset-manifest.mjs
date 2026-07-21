@@ -19,12 +19,14 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateBuildReceipt } from './lib/engine-build-receipt.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const version = process.argv[2] ?? '2025'
 const requireReleaseCleared = process.argv.includes('--release')
 const dir = join(root, `public/wasmtex/${version}`)
 const licenseManifestPath = join(dir, 'LICENSE-MANIFEST.json')
+const sourceConfigPath = join(root, `scripts/corresponding-source-${version}.json`)
 
 if (!existsSync(dir)) {
   console.error(`No asset dir: ${dir}`)
@@ -35,8 +37,13 @@ if (!existsSync(licenseManifestPath)) {
   console.error(`Missing engine license manifest: ${licenseManifestPath}`)
   process.exit(1)
 }
+if (!existsSync(sourceConfigPath)) {
+  console.error(`Missing corresponding-source config: ${sourceConfigPath}`)
+  process.exit(1)
+}
 
 const legal = JSON.parse(readFileSync(licenseManifestPath, 'utf8'))
+const sourceConfig = JSON.parse(readFileSync(sourceConfigPath, 'utf8'))
 if (legal.texliveVersion !== version) {
   console.error(
     `License manifest version ${String(legal.texliveVersion)} does not match asset version ${version}`,
@@ -91,8 +98,86 @@ const files = readdirSync(dir)
     return { name, bytes: buf.length, sha256: createHash('sha256').update(buf).digest('hex') }
   })
 
+const receiptFiles = files.filter((file) => /^BUILD-RECEIPT\.[a-zA-Z0-9_-]+\.json$/.test(file.name))
+const buildReceipts = []
+const receiptCoverage = new Map()
+const receiptErrors = []
+for (const receiptFile of receiptFiles) {
+  let receipt
+  try {
+    receipt = JSON.parse(readFileSync(join(dir, receiptFile.name), 'utf8'))
+  } catch (error) {
+    receiptErrors.push(`${receiptFile.name}: ${error instanceof Error ? error.message : String(error)}`)
+    continue
+  }
+  const filenameFamily = receiptFile.name.match(/^BUILD-RECEIPT\.([a-zA-Z0-9_-]+)\.json$/)?.[1]
+  if (receipt.family !== filenameFamily) {
+    receiptErrors.push(`${receiptFile.name}: filename family does not match receipt family`)
+  }
+  if (receipt.texliveSourceCommit !== legal.texliveSourceCommit) {
+    receiptErrors.push(`${receiptFile.name}: TeX Live source commit does not match license manifest`)
+  }
+  for (const error of validateBuildReceipt(receipt, { config: sourceConfig, actualDirectory: dir })) {
+    receiptErrors.push(`${receiptFile.name}: ${error}`)
+  }
+  for (const artifact of receipt.files ?? []) {
+    const owners = receiptCoverage.get(artifact.name) ?? []
+    owners.push(receiptFile.name)
+    receiptCoverage.set(artifact.name, owners)
+  }
+  buildReceipts.push({
+    name: receiptFile.name,
+    sha256: receiptFile.sha256,
+    family: receipt.family,
+    buildId: receipt.buildId,
+    sourceRevision: receipt.sourceRevision,
+  })
+}
+
+function patternRegex(pattern) {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*')
+  return new RegExp(`^${escaped}$`)
+}
+
+const metadataNames = new Set(['LICENSE-MANIFEST.json', ...receiptFiles.map((file) => file.name)])
+for (const file of files) {
+  if (metadataNames.has(file.name)) continue
+  const coverage = receiptCoverage.get(file.name) ?? []
+  if (coverage.length !== 1) {
+    receiptErrors.push(
+      `${file.name}: expected exactly one build receipt, found ${coverage.length} (${coverage.join(', ')})`,
+    )
+  }
+  const legalFamilies = legal.artifactFamilies.filter((family) =>
+    family.patterns.some((pattern) => patternRegex(pattern).test(file.name)),
+  )
+  if (legalFamilies.length !== 1) {
+    receiptErrors.push(
+      `${file.name}: expected exactly one license artifact family, found ${legalFamilies.length}`,
+    )
+  }
+}
+
+for (const name of receiptCoverage.keys()) {
+  if (!files.some((file) => file.name === name)) {
+    receiptErrors.push(`${name}: build receipt names an artifact absent from the release directory`)
+  }
+}
+
+if (requireReleaseCleared && (buildReceipts.length === 0 || receiptErrors.length > 0)) {
+  console.error('Refusing release manifest because build receipts are incomplete:')
+  if (buildReceipts.length === 0) console.error('- no build receipts found')
+  for (const error of receiptErrors) console.error(`- ${error}`)
+  process.exit(1)
+}
+
+const releaseHash = createHash('sha256')
+  .update(JSON.stringify({ version, files, buildReceipts }))
+  .digest('hex')
+
 const manifest = {
   version,
+  releaseId: `${version}-${releaseHash.slice(0, 16)}`,
   legal: {
     manifest: 'LICENSE-MANIFEST.json',
     releaseStatus: legal.releaseStatus,
@@ -102,11 +187,15 @@ const manifest = {
     texliveProvenance: legal.texliveProvenance,
     releaseBlockers: legal.releaseBlockers,
   },
+  buildReceipts,
   files,
 }
 writeFileSync(join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 console.log(`wrote ${dir}/manifest.json (${files.length} files)`)
 if (legal.releaseStatus !== 'release-cleared') {
   console.warn(`warning: engine license status is ${legal.releaseStatus}`)
+}
+if (receiptErrors.length > 0) {
+  console.warn(`warning: ${receiptErrors.length} build receipt/classification issue(s) in development assets`)
 }
 for (const f of files) console.log(`  ${f.sha256.slice(0, 12)}  ${String(f.bytes).padStart(9)}  ${f.name}`)

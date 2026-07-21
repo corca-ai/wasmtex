@@ -72,6 +72,7 @@
     "extract-xetex-format": "node scripts/extract-xetex-format.mjs",
     "gen-luatex-manifest": "node scripts/gen-luatex-manifest.mjs",
     "gen-asset-manifest": "node scripts/gen-asset-manifest.mjs",
+    "gen-engine-build-receipt": "node scripts/gen-engine-build-receipt.mjs",
     "gen-texlive-provenance": "node scripts/gen-texlive-provenance.mjs",
     "build:lib": "BUILD_MODE=lib vite build && node scripts/check-dts-exports.mjs",
     "prepare": "npm run build:lib"

@@ -544,6 +544,10 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [ ] 라이선스 미확인 CDN 파일이 production allowlist에 들어오지 못하게 한다.
 - [ ] 엔진별 `LICENSE-MANIFEST.json`에 source URL, commit, hash, license, notice 경로를 기록한다.
 - [ ] 완전한 대응 소스 archive를 engine release와 같은 기간 동안 안정적으로 호스팅한다.
+- [x] Emscripten 3.1.46 base image를 registry digest로 고정하고 Emscripten Git commit 및 사용 ports source URL/SHA-512를 기록했다.
+- [x] engine artifact마다 byte hash, WasmTex commit, TeX Live commit, Emscripten commit, Docker digest를 묶는 deterministic build receipt를 생성하도록 workflow를 변경했다.
+- [x] release asset manifest가 모든 engine file의 receipt 누락·중복·hash 불일치·license family 미분류를 거부하도록 했다.
+- [ ] 새 receipt workflow로 모든 release engine을 다시 빌드하고 동일 release manifest에 모은다.
 - [ ] artifact, manifest, source archive에 동일 release ID를 넣는다.
 - [ ] 브라우저 UI에서 licenses/notices/source로 가는 링크를 제공한다.
 - [ ] `THIRD_PARTY_NOTICES.md`, `docs/licensing.md`, `docs/proprietary-integration.md`를 최종 산출물에 맞게 갱신한다.

@@ -88,6 +88,10 @@ Do not publish a versioned engine directory until all of the following are true:
 1. Its manifest identifies the TeX Live commit, Emscripten version, component name,
    license expression or reference, notice path, corresponding-source location, and
    hashes for both binary and source artifacts.
+   Every engine artifact set also carries a `BUILD-RECEIPT.<family>.json` that binds
+   its exact bytes to the WasmTex Git commit, TeX Live commit, Emscripten commit, and
+   digest-pinned build image. The final asset manifest rejects missing, overlapping,
+   stale, or unclassified receipt coverage in release mode.
 2. The corresponding-source archive contains the pinned TeX Live source, WasmTex
    worker/glue source, Dockerfiles, build scripts, and all local modifications used to
    produce the binary.
@@ -107,6 +111,11 @@ The committed or locally downloaded files under `public/wasmtex/<version>/` are
 development inputs, not evidence that the release gate has passed. A public product
 must publish a release-specific manifest and source bundle for the exact bytes it
 serves.
+
+The Emscripten base is pinned by registry digest, not only by the mutable `3.1.46`
+tag. `scripts/corresponding-source-2025.json` also pins the Emscripten Git commit and
+the exact FreeType, ICU, libpng, and zlib port source archives and hashes. Changing
+any Dockerfile to a different base makes `npm run check:licenses` fail.
 
 `scripts/gen-asset-manifest.mjs <version> --release` enforces the recorded status,
 and the Pages workflow uses that mode. `scripts/sync-engine-assets.mjs` also refuses

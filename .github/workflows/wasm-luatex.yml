@@ -25,6 +25,9 @@ on:
       - 'wasm-build/pdf-backend/wtpdf-smoke.cc'
       - 'wasm-build/sha2/**'
       - 'wasm-build/kpse-hook.c'
+      - 'scripts/gen-engine-build-receipt.mjs'
+      - 'scripts/lib/engine-build-receipt.mjs'
+      - 'scripts/corresponding-source-2025.json'
       - '.github/workflows/wasm-luatex.yml'
 
 jobs:
@@ -127,6 +130,13 @@ jobs:
             console.log('own glue OK');
           "
 
+      - name: Record exact LuaHBTeX build inputs and outputs
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            luahbtex wasm-build/dist-luatex wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json \
+            wasmtex-luatex.js wasmtex-luatex.worker.js wasmtex-luatex.wasm \
+            wasmtex-luatex.fmt.gz
+
       - name: Upload LuaTeX WASM artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -136,6 +146,7 @@ jobs:
             wasm-build/dist-luatex/wasmtex-luatex.worker.js
             wasm-build/dist-luatex/wasmtex-luatex.wasm
             wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
+            wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json
           retention-days: 90
 
       - name: List build outputs
