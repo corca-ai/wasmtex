@@ -10,22 +10,33 @@
 
 ## 1. 목표
 
-이 작업의 목표는 다음 네 가지를 동시에 만족하는 것이다.
+이 작업의 최상위 목표는 **WasmTex는 공개하고 Cortex는 공개하지 않으면서, 두 프로젝트와 실제 웹 배포물 모두의 라이선스 의무를 충족하는 것**이다. WasmTex의 원저작 코드에 적용할 라이선스는 이 목표를 위한 설계 변수이며 MIT로 고정하지 않는다.
 
-1. WasmTex가 브라우저에서 pdfLaTeX, XeLaTeX, LuaLaTeX를 계속 제공한다.
-2. 사용자가 내려받는 엔진 바이너리의 소스·라이선스·고지 의무를 충족한다.
-3. `pplib`처럼 재배포 권한을 입증할 수 없는 구성요소를 공개 배포물에서 제거하거나, 권리자로부터 충분한 라이선스를 확보한다.
-4. Cortex의 제품 UI, 협업 기능, 인증, 결제, 저장소, AI 기능과 서버 코드는 비공개로 유지할 수 있는 명확한 기술적·배포상 경계를 만든다.
+구체적으로 다음 다섯 가지를 동시에 만족해야 한다.
+
+1. WasmTex source 저장소와 필요한 engine release source를 공개한다.
+2. Cortex의 제품 UI, 협업 기능, 인증, 결제, 저장소, AI 기능과 서버 코드는 비공개로 유지한다.
+3. WasmTex가 브라우저에서 pdfLaTeX, XeLaTeX, LuaLaTeX를 계속 제공한다.
+4. 사용자가 내려받는 엔진 바이너리의 소스·라이선스·고지 의무를 충족한다.
+5. `pplib`처럼 재배포 권한을 입증할 수 없는 구성요소를 공개 배포물에서 제거하거나, 권리자로부터 충분한 라이선스를 확보한다.
 
 목표는 생성 PDF의 바이트가 과거 구현과 항상 동일하도록 만드는 것이 아니다. 시각 결과, 페이지 기하, TeX 동작, Lua API 호환성을 검증 가능한 수준으로 유지하는 것이 목표다. PDF의 객체 순서, 압축 방식, 생성 시각과 같은 내부 바이트는 구현이 바뀌면 달라질 수 있다.
 
 ## 2. 현재 결론
 
-### 2.1 저장소 전체를 MIT라고만 표시해서는 안 된다
+### 2.1 WasmTex 원저작 코드의 라이선스는 아직 고정된 요구사항이 아니다
 
-WasmTex가 직접 작성한 TypeScript SDK, UI 연결 코드와 그 밖의 독자 코드는 MIT로 유지할 수 있다. 그러나 TeX 엔진 WASM, Emscripten 생성 코드, TeX Live 코드 및 정적으로 링크된 라이브러리에는 각각의 상위 라이선스가 적용된다.
+현재 WasmTex가 직접 작성한 TypeScript SDK, UI 연결 코드와 그 밖의 독자 코드는 MIT로 표시되어 있다. 이것은 현 상태일 뿐 최종 목표가 아니다. Cortex를 비공개로 유지하면서 WasmTex를 공개할 수 있다면 WasmTex 원저작 코드는 MIT, BSD, MPL, LGPL, GPL, dual license 또는 구성요소별 서로 다른 라이선스를 선택할 수 있다. 실제 선택은 Cortex가 어떤 WasmTex 코드를 직접 import/link하는지와 engine Worker 경계에 따라 정한다.
 
-따라서 루트 `LICENSE`와 npm 패키지의 `MIT` 표시는 **직접 작성한 SDK에 대한 표시**로 한정해야 한다. 다운로드 가능한 엔진을 MIT 라이선스만 적용되는 것처럼 소개해서는 안 된다. 엔진별 manifest, 제3자 고지, 해당 소스 링크가 별도로 필요하다.
+다만 Cortex가 WasmTex의 host-facing SDK를 main bundle에 직접 import하는 현재와 같은 사용 형태를 유지한다면, 그 SDK에는 proprietary 사용을 허용하는 permissive license 또는 별도 commercial license를 두는 것이 가장 단순하다. WasmTex 원저작 코드 전체를 GPL로 바꾸면서 Cortex가 이를 직접 결합하면 오히려 Cortex 비공개 목표가 어려워질 수 있다. 전체를 GPL로 공개하려면 Cortex는 GPL 코드를 직접 import하지 않고 독립 Worker protocol만 소비하도록 경계를 더 엄격히 만들어야 한다.
+
+따라서 권장되는 기본 구조는 다음과 같지만, 검토 결과에 따라 변경할 수 있다.
+
+- Cortex가 직접 사용하는 host SDK와 protocol 정의: proprietary 결합을 허용하는 permissive 또는 dual license
+- TeX 엔진 Worker, WASM, Emscripten glue와 대응 소스: 결합된 상위 구성요소가 요구하는 GPL 조건
+- TeX Live 패키지·폰트·데이터와 그 밖의 제3자 구성요소: 각자의 원래 라이선스
+
+저장소가 공개된다는 사실이 모든 파일을 하나의 라이선스로 재허가해야 한다는 뜻은 아니다. 루트 `LICENSE`, 파일별 SPDX, `LICENSES/`, manifest와 notices가 각 범위를 모호하지 않게 나타내야 한다. 현재 루트 `LICENSE`와 npm 패키지의 `MIT` 표시는 변경하기 전까지는 **직접 작성한 SDK의 현행 라이선스**일 뿐 엔진과 제3자 자료에 적용되지 않는다.
 
 ### 2.2 사용하는 엔진과 주요 라이선스 성격
 
@@ -60,9 +71,11 @@ WasmTex가 직접 작성한 TypeScript SDK, UI 연결 코드와 그 밖의 독�
 
 ## 3. 대화에서 도출된 판단 기록
 
-### 3.1 최초 MIT 검토
+### 3.1 최초 MIT 검토와 목표의 수정
 
-고정된 TeX Live 소스를 직접 빌드한다는 점 때문에 “외부 바이너리를 쓰지 않는다”는 사실은 면책 사유가 아니다. 소스를 직접 컴파일하고 정적으로 링크하면 오히려 완성된 WASM에 각 구성요소의 결합·소스 제공 의무가 직접 적용된다. 결론은 “WasmTex의 원저작 부분은 MIT, 엔진과 데이터는 개별 라이선스”라는 다층 구조다.
+고정된 TeX Live 소스를 직접 빌드한다는 점 때문에 “외부 바이너리를 쓰지 않는다”는 사실은 면책 사유가 아니다. 소스를 직접 컴파일하고 정적으로 링크하면 오히려 완성된 WASM에 각 구성요소의 결합·소스 제공 의무가 직접 적용된다.
+
+최초 검토에서는 현재 상태에 맞춰 “WasmTex 원저작 부분은 MIT, 엔진과 데이터는 개별 라이선스”라는 구조를 설명했다. 이후 목표를 “MIT 유지”가 아니라 “WasmTex 공개, Cortex 비공개, 양쪽 모두 준수”로 명확히 수정했다. 그러므로 MIT는 가능한 선택지이자 현재 상태이지 불변 조건이 아니다. 향후 라이선스 선택은 이 최상위 목표에 유리한지를 기준으로 다시 결정한다.
 
 ### 3.2 pdfLaTeX, XeLaTeX, LuaLaTeX 사용 여부
 
@@ -508,7 +521,11 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### G. 엔진 라이선스 배포물
 
-- [ ] WasmTex 원저작 SDK에 MIT가 적용되고 engine artifact에는 개별 라이선스가 적용된다는 범위를 루트 `LICENSE`와 README에 명시한다.
+- [ ] Cortex가 실제로 import하는 WasmTex 코드와 Worker protocol 경계를 확정한다.
+- [ ] Cortex 비공개 목표를 기준으로 WasmTex 원저작 SDK의 라이선스를 permissive, weak-copyleft, GPL, dual/commercial 선택지 중에서 결정한다.
+- [ ] WasmTex 원저작 코드, 공개 engine code, generated artifact와 제3자 자료의 라이선스 범위를 파일·디렉터리 단위로 정한다.
+- [ ] 선택한 구조를 루트 `LICENSE`, README, 파일별 SPDX, `LICENSES/`와 manifest에 일관되게 명시한다.
+- [ ] WasmTex 원저작 코드를 GPL로 선택한다면 Cortex가 해당 코드를 main bundle에 직접 import/link하지 않는지 별도 검토한다.
 - [ ] pdfTeX, XeTeX/dvipdfmx, LuaHBTeX 각각의 최종 결합물 라이선스를 확정한다.
 - [ ] Emscripten 및 ports의 license text와 copyright notice를 수집한다.
 - [ ] LGPL 정적 링크가 있는 구성요소별 relink 준수 방식을 구현한다.
