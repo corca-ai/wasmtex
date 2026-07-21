@@ -4,10 +4,13 @@ WTPDF is WasmTex's small, independently designed C ABI between TeX engines and
 a read-only PDF parser. It does not implement or emulate `pplib`'s public API,
 names, data structures, or ownership rules.
 
-The first ABI revision exposes only the document and page operations needed by
-XeTeX. The ABI v2 design below defines the native WTPDF concepts that must be
-implemented and tested before LuaHBTeX can migrate. It is a behavioral contract,
-not a set of aliases for another parser API.
+ABI v2 retains the document and page operations used by XeTeX and implements the
+first LuaHBTeX-facing core: roots, pages, indirect lookup, scalar values, ordered
+arrays/dictionaries, reference resolution, and independent raw/decoded stream
+readers. LuaHBTeX has not migrated yet. String lexical-form tracking,
+authentication-after-open, decoded-output limits, and aggregate resource limits
+remain required before the v2 contract below is complete. This is a behavioral
+contract, not a set of aliases for another parser API.
 
 | WTPDF operation | Current caller | Observable behavior to preserve |
 | --- | --- | --- |
@@ -18,10 +21,10 @@ not a set of aliases for another parser API.
 | page rotation | XeTeX `pdf_get_rect` | normalized degrees and width/height swap at 90 or 270 degrees |
 | PDF version/encryption | future LuaHBTeX | parser value and password outcome without rewriting the input PDF |
 
-Future LuaHBTeX operations must preserve direct objects versus references,
+LuaHBTeX operations must preserve direct objects versus references,
 object and generation numbers, integer versus real values, binary string bytes
 and hex spelling, dictionary iteration order where exposed, and raw versus
-decoded streams. Those guarantees are intentionally not claimed by ABI v1.
+decoded streams. The current v2 smoke test claims the implemented subset only.
 
 ## ABI v2 object model
 
