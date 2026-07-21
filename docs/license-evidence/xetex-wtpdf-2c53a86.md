@@ -46,11 +46,13 @@ The dvipdfmx path was not modified by the commits between the earlier full-pipel
 evidence and this XeTeX-only rebuild. A release must nevertheless rebuild and hash
 the whole engine set from its final exact commit.
 
-The old-parser geometry comparison that followed this build is recorded in
-[`xetex-geometry-differential-dba9069.md`](xetex-geometry-differential-dba9069.md).
+The old-parser comparisons that followed this build are recorded in
+[`xetex-geometry-differential-dba9069.md`](xetex-geometry-differential-dba9069.md)
+and
+[`xetex-visual-differential-6daf095.md`](xetex-visual-differential-6daf095.md).
 
 ## Remaining scope
 
-- fixed-renderer visual and extended PDF corpus differential testing;
+- extended real-world, malformed, and encrypted PDF corpus testing;
 - LuaHBTeX removal of `pplib`;
 - complete corresponding source, relink compliance, notices, and provenance.

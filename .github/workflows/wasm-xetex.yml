@@ -32,6 +32,7 @@ on:
       - 'wasm-build/dvipdfm-entry.c'
       - 'wasm-build/dvipdfm-stubs.c'
       - 'scripts/build-xetex-fromsource.sh'
+      - 'scripts/build-xetex-pdf-visual-fixture.mjs'
       - 'scripts/test-xetex-pdf-geometry.mjs'
       - '.github/workflows/wasm-xetex.yml'
 

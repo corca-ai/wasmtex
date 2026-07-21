@@ -44,6 +44,17 @@ docker run --rm --platform linux/amd64 \
   --entrypoint node wasmtex-xetex-wasm \
   /test-xetex-pdf-geometry.mjs /build/native/texk/web2c/xetex /xetex-geometry.expected.json
 
+echo "Checking deterministic XeTeX PDF inclusion XDV ..."
+docker run --rm --platform linux/amd64 --tmpfs /work \
+  -v "$REPO_ROOT/scripts/build-xetex-pdf-visual-fixture.mjs:/fixture.mjs:ro" \
+  -v "$REPO_ROOT/wasm-build/pdf-backend/fixtures/xetex-visual.expected.sha256:/expected.sha256:ro" \
+  --entrypoint sh wasmtex-xetex-wasm -c '
+    set -eu
+    node /fixture.mjs /build/native/texk/web2c/xetex /work
+    cd /work
+    sha256sum -c /expected.sha256
+  '
+
 docker run --rm --platform linux/amd64 -v "$OUT_ABS:/dist" wasmtex-xetex-wasm
 [ -f "$OUT_DIR/wasmtex-xetex.wasm" ] || { echo "xetex build produced no wasm"; exit 1; }
 echo "Built: $(wc -c < "$OUT_DIR/wasmtex-xetex.js") + $(wc -c < "$OUT_DIR/wasmtex-xetex.wasm") bytes"

@@ -43,7 +43,7 @@
 | 사용자 기능 | 실제 파이프라인 | 주요 라이선스 성격 | 현재 판단 |
 | --- | --- | --- | --- |
 | pdfLaTeX | pdfTeX → PDF | pdfTeX 및 결합 라이브러리 때문에 GPL 배포물 | 브라우저 배포 가능하나 GPL 대응 소스 필요 |
-| XeLaTeX | XeTeX → XDV → dvipdfmx → PDF | XeTeX 자체 고지 외에 dvipdfmx와 결합 라이브러리의 GPL 의무 존재 | WTPDF/Xpdf 후보에서 `pplib` 제거와 기본 geometry parity를 확인했으나 대응 소스·고지·전체 compatibility gate가 남음 |
+| XeLaTeX | XeTeX → XDV → dvipdfmx → PDF | XeTeX 자체 고지 외에 dvipdfmx와 결합 라이브러리의 GPL 의무 존재 | WTPDF/Xpdf 후보에서 `pplib` 제거와 자체 corpus의 geometry/visual parity를 확인했으나 대응 소스·고지·확장 compatibility gate가 남음 |
 | LuaLaTeX | LuaHBTeX → PDF | GPL-2.0-or-later 계열 배포물 | 현재 LuaHBTeX WASM의 `pplib` 정적 링크가 차단 요소 |
 | SyncTeX | TeX Live reference parser를 TypeScript로 포팅 | 상위 MIT 유사 고지 유지 필요 | 원저작권·허가문을 소스와 배포 고지에 보존 |
 | TeX Live 패키지·폰트·Lua·포맷·ICU 데이터 | 버전별 CDN에서 지연 로드 | 파일마다 라이선스가 다름 | CDN manifest와 파일별 provenance가 필요 |
@@ -466,7 +466,8 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] XeTeX build metadata에서 `pplib` dependency를 제거한다.
 - [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `2c53a86`의 원격 link map과 artifact 감사를 통과했다.
 - [x] 자체 생성 XeTeX PDF corpus의 page selection/box fallback/rotation/inclusion geometry differential test를 통과한다. `docs/license-evidence/xetex-geometry-differential-dba9069.md`에 같은 TeX Live revision의 결과와 hash를 기록했다.
-- [ ] 고정 renderer와 실제 PDF corpus를 사용한 XeTeX visual differential test를 통과한다.
+- [x] 자체 생성 vector PDF corpus를 고정 xdvipdfmx와 144 DPI renderer로 변환한 XeTeX visual differential test를 통과한다. `docs/license-evidence/xetex-visual-differential-6daf095.md`에 11페이지 결과를 기록했다.
+- [ ] xref stream, object stream, 암호화·손상 PDF와 실제 문서 corpus를 포함한 확장 XeTeX visual differential test를 통과한다.
 - [x] dvipdfmx embedding 경로가 변경되지 않았음을 확인한다. TeX Live patch는 dvipdfmx 소스를 수정하지 않으며 같은 원격 빌드에서 dvipdfmx WASM 재빌드와 validation을 통과했다.
 
 ### D. LuaHBTeX 교체
@@ -499,6 +500,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [ ] LuaHBTeX build script에서 `libpplib.a`를 제거한다.
 - [x] XeTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
 - [ ] LuaHBTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
+- [x] XeTeX build가 자체 생성 PDF의 deterministic XDV golden hash를 artifact 추출 전에 검사한다.
 - [ ] 대응 소스 archive에 `libs/pplib`가 없음을 자동 검사한다.
 - [ ] 네트워크가 제한된 깨끗한 builder에서 source archive만으로 동일 release를 재빌드한다.
 - [ ] 재빌드 산출물과 release artifact의 hash 또는 차이 원인을 기록한다.
@@ -509,7 +511,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] `pplib` 기준 빌드와 WTPDF 후보 빌드를 같은 TeX Live revision과 같은 XeTeX initialization mode로 만든다. 기준 바이너리는 비교에만 사용하고 배포하지 않는다.
 - [ ] PDF parser corpus의 출처·라이선스·기대 결과를 기록한다.
 - [x] 자체 생성 classic-xref fixture의 page selection boundary, page size, box fallback, rotation과 XeTeX inclusion geometry 비교를 자동화한다.
-- [ ] 고정 renderer와 DPI로 raster pixel diff를 자동화한다.
+- [x] 비배포 기준 이미지와 후보를 같은 xdvipdfmx 및 `pdftoppm` 144 DPI로 실행하는 11페이지 raster byte diff를 자동화한다.
 - [ ] text와 위치 비교를 자동화한다.
 - [ ] 두 개 이상의 PDF 구조 검사기로 결과를 검증한다.
 - [ ] `pdfe`와 `pdfscanner` 결과를 JSON fixture로 비교한다.
