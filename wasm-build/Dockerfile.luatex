@@ -70,7 +70,7 @@ RUN cd /src/texlive-source && \
     git apply --check /src/patches/texlive-wtpdf.patch && \
     git apply /src/patches/texlive-wtpdf.patch && \
     ./reautoconf --force texk/web2c && \
-    ! grep -E 'pplib|pp(doc|dict|array|stream|ref|xref)_' \
+    ! grep -E 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' \
         texk/web2c/luatexdir/image/epdf.h \
         texk/web2c/luatexdir/image/pdftoepdf.c \
         texk/web2c/luatexdir/lua/lpdfelib.c \

@@ -5,21 +5,22 @@ a read-only PDF parser. It does not implement or emulate `pplib`'s public API,
 names, data structures, or ownership rules.
 
 ABI v2 retains the document and page operations used by XeTeX and implements the
-first LuaHBTeX-facing core: roots, pages, indirect lookup, scalar values, ordered
+LuaHBTeX-facing core: roots, pages, indirect lookup, scalar values, ordered
 arrays/dictionaries, reference resolution, and independent raw/decoded stream
-readers. LuaHBTeX has not migrated yet. Authentication-after-open,
-decoded-output limits, and aggregate resource limits remain required before the
-v2 contract below is complete. This is a behavioral contract, not a set of
-aliases for another parser API.
+readers. LuaHBTeX's image inclusion, `pdfe`, and `pdfscanner` callers now compile
+against this API. Authentication-after-open, exact memory-accounting parity,
+decoded-output limits, aggregate resource limits, and full differential fixtures
+remain required before the v2 contract below is release-complete. This is a
+behavioral contract, not a set of aliases for another parser API.
 
 | WTPDF operation | Current caller | Observable behavior to preserve |
 | --- | --- | --- |
 | file open/close | XeTeX `pdfimage.cpp` | open errors fail the image query; document resources are released on every path |
-| memory open/close | unit tests; future LuaHBTeX | input bytes remain stable for the whole document lifetime |
+| memory open/close | unit tests; LuaHBTeX | input bytes remain stable for the whole document lifetime |
 | page count | XeTeX `pdf_count_pages` | invalid inputs report zero pages at the XeTeX boundary |
 | five page boxes | XeTeX `pdf_get_rect` | one-based page selection, inherited attributes, TeX-point conversion in the caller |
 | page rotation | XeTeX `pdf_get_rect` | normalized degrees and width/height swap at 90 or 270 degrees |
-| PDF version/encryption | future LuaHBTeX | parser value and password outcome without rewriting the input PDF |
+| PDF version/encryption | LuaHBTeX | parser value and password outcome without rewriting the input PDF |
 
 LuaHBTeX operations must preserve direct objects versus references,
 object and generation numbers, integer versus real values, binary string bytes

@@ -270,13 +270,16 @@ split into the same two phases:
    (`ctangle`/`tangle`/`web2c`). Both are reused in Phase 2, because those tools can't
    run once compiled to wasm (the classic two-phase problem).
 2. **`wasm-build/build-luatex.sh`** — Phase 2 (`docker run`): cross-compile the source
-   graph with emscripten — `lua53`/`harfbuzz`/`graphite2`/`pplib`/`zziplib`/`kpathsea`
+   graph with emscripten — `lua53`/`harfbuzz`/`graphite2`/`Xpdf`/`zziplib`/`kpathsea`
    from TeX Live's bundled sources — reusing the native-generated C + tools, then
    relink with this repo's own controller and glue: `luatex-worker.js`,
    `luatex-library.js` (`--js-library`), `luatex-entry.c` (the `compileLaTeX`/
    `compileFormat`/`setMainEntry` shim) and `kpse-hook.c` (`-Wl,--wrap=kpse_find_file`
-   for the CDN HTTP fallback). A 32 MB stack and 768 MB initial memory accommodate
-   LuaTeX + the Lua interpreter.
+   for the CDN HTTP fallback). The independently named WTPDF adapter connects
+   LuaHBTeX's PDF inclusion, `pdfe`, and `pdfscanner` callers to Xpdf; the build
+   rejects `pplib` and its legacy SHA helper symbols in the link map and release
+   bytes. A 32 MB stack and 768 MB initial memory accommodate LuaTeX + the Lua
+   interpreter.
 
 The build is **validated end-to-end**: it produces the `lualatex` format and compiles
 a real document (with math and CDN font fetch) to a valid PDF.
@@ -422,7 +425,8 @@ known-incomplete development set from being mistaken for a redistributable relea
 > artifacts. The deployed **manifest is authoritative** — sync/verify against it
 > rather than shipping a copied (possibly older) tree. The current 2025 development
 > set is intentionally not release-cleared while its recorded source, provenance,
-> and `pplib` blockers remain unresolved.
+> and compatibility blockers remain unresolved. New audited XeTeX/LuaHBTeX builds
+> reject `pplib`; copied legacy binaries are not cleared substitutes.
 
 ## Preamble snapshots
 

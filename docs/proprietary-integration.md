@@ -83,10 +83,10 @@ later distributes a container, appliance, desktop build, or on-premises deployme
 the distribution obligations apply to the engine copies in that product.
 
 Server-only operation does not cure a missing redistribution permission in a
-dependency. Resolve the `pplib` evidence issue before distributing LuaHBTeX or any
-legacy `pplib`-linked XeTeX artifact in any form. New WTPDF/Xpdf XeTeX builds must
-instead satisfy their GPL and corresponding-source gates. Obtain legal review before
-a commercial launch.
+dependency. Never distribute a legacy `pplib`-linked LuaHBTeX or XeTeX artifact.
+New WTPDF/Xpdf builds remove that dependency but must still satisfy their GPL,
+corresponding-source, notice, provenance, and compatibility gates. Obtain legal
+review before a commercial launch.
 
 ## Product release checklist
 

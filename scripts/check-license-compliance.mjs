@@ -158,6 +158,16 @@ if (packageJson && manifest) {
   if (xetex?.releaseBlocker === 'pplib-license-evidence') {
     fail('the WTPDF/Xpdf xetex family must not retain the legacy pplib release blocker')
   }
+  const luahbtex = (families ?? []).find((family) => family?.name === 'luahbtex')
+  if (!luahbtex?.distributionTerms?.includes('GPL-2.0-only OR GPL-3.0-only')) {
+    fail('luahbtex distribution terms must record the linked Xpdf GPL-2.0/GPL-3.0 choice')
+  }
+  if (luahbtex?.releaseBlocker === 'pplib-license-evidence') {
+    fail('the WTPDF/Xpdf luahbtex family must not retain the legacy pplib release blocker')
+  }
+  if (blockerIds.has('pplib-license-evidence')) {
+    fail('the current WTPDF/Xpdf engine build must not retain the legacy pplib release blocker')
+  }
 
   if (!['development-only', 'release-cleared'].includes(manifest.releaseStatus)) {
     fail(`unsupported license manifest releaseStatus: ${String(manifest.releaseStatus)}`)
@@ -223,6 +233,36 @@ if (existsSync(xetexBuild)) {
   }
   for (const required of ['wtpdf-xpdf.cc', 'libxpdf.a', 'wasmtex-xetex.map']) {
     if (!text.includes(required)) fail(`XeTeX WTPDF build gate is missing marker: ${required}`)
+  }
+}
+
+const luatexBuild = resolve(root, 'wasm-build/build-luatex.sh')
+if (existsSync(luatexBuild)) {
+  const text = readFileSync(luatexBuild, 'utf8')
+  for (const forbiddenLink of [/find\s+"\$WB\/libs\/pplib"/, /"\$WB"\/libs\/pplib/]) {
+    if (forbiddenLink.test(text)) fail('LuaHBTeX build still links the forbidden pplib dependency')
+  }
+  for (const required of [
+    'wtpdf-xpdf.cc',
+    'libxpdf.a',
+    'wasmtex-luatex.map',
+    'wasmtex-sha2-smoke.c',
+    'sha(256|384|512)_digest',
+  ]) {
+    if (!text.includes(required)) fail(`LuaHBTeX WTPDF build gate is missing marker: ${required}`)
+  }
+}
+
+const luatexDockerfile = resolve(root, 'wasm-build/Dockerfile.luatex')
+if (existsSync(luatexDockerfile)) {
+  const text = readFileSync(luatexDockerfile, 'utf8')
+  for (const required of [
+    'git apply --check',
+    'luatexdir/luamd5/md5lib.c',
+    'utilsha',
+    'sha(256|384|512)_digest',
+  ]) {
+    if (!text.includes(required)) fail(`LuaHBTeX source audit is missing marker: ${required}`)
   }
 }
 

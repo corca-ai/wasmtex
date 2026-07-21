@@ -36,6 +36,7 @@ ship the notices from its exact corresponding source archive.
 
 There is deliberately no `pplib` license file here. The copies inspected in the
 pinned TeX Live source and public upstream repository do not provide a standalone
-license grant that WasmTex can reproduce. This remains relevant to LuaHBTeX and
-legacy XeTeX builds. See the release blocker in
-[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#unresolved-pplib-licensing-evidence).
+license grant that WasmTex can reproduce. This remains relevant to legacy
+LuaHBTeX and XeTeX artifacts, which must not be released. New builds use WTPDF/Xpdf
+and reject `pplib` at the source, link-map, and release-byte gates. See
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#legacy-pplib-licensing-evidence).

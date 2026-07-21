@@ -58,9 +58,10 @@
       ],
       "distributionTerms": [
         "GPL-2.0-or-later",
+        "GPL-2.0-only OR GPL-3.0-only",
+        "MIT",
         "LicenseRef-Linked-Component-Notices"
-      ],
-      "releaseBlocker": "pplib-license-evidence"
+      ]
     },
     {
       "name": "latex-formats",
@@ -117,10 +118,6 @@
     {
       "id": "complete-corresponding-source",
       "detail": "Publish and hash the complete source archive for the exact engine bytes."
-    },
-    {
-      "id": "pplib-license-evidence",
-      "detail": "Resolve the missing public pplib license evidence before distributing LuaHBTeX or a legacy pplib-linked XeTeX build."
     },
     {
       "id": "texlive-provenance",

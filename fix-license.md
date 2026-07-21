@@ -6,7 +6,7 @@
 
 기본 전제: pdfLaTeX, XeLaTeX, LuaLaTeX를 브라우저에서 실행하며 XeLaTeX/LuaLaTeX 서버 실행으로 회피하지 않는다.
 
-> 이 문서는 기술적 라이선스 준수 계획이며 법률 자문이 아니다. 특히 `pplib`의 권리 상태와 GPL 프로그램 및 Cortex 사이의 결합 정도는 상용 공개 전에 오픈 소스 전문 변호사의 검토를 받아야 한다.
+> 이 문서는 기술적 라이선스 준수 계획이며 법률 자문이 아니다. 특히 legacy `pplib` 산출물의 권리 상태와 GPL 프로그램 및 Cortex 사이의 결합 정도는 상용 공개 전에 오픈 소스 전문 변호사의 검토를 받아야 한다.
 
 ## 1. 목표
 
@@ -44,7 +44,7 @@
 | --- | --- | --- | --- |
 | pdfLaTeX | pdfTeX → PDF | pdfTeX 및 결합 라이브러리 때문에 GPL 배포물 | 브라우저 배포 가능하나 GPL 대응 소스 필요 |
 | XeLaTeX | XeTeX → XDV → dvipdfmx → PDF | XeTeX 자체 고지 외에 dvipdfmx와 결합 라이브러리의 GPL 의무 존재 | WTPDF/Xpdf 후보에서 `pplib` 제거와 자체 corpus의 geometry/visual parity를 확인했으나 대응 소스·고지·확장 compatibility gate가 남음 |
-| LuaLaTeX | LuaHBTeX → PDF | GPL-2.0-or-later 계열 배포물 | 현재 LuaHBTeX WASM의 `pplib` 정적 링크가 차단 요소 |
+| LuaLaTeX | LuaHBTeX → PDF | LuaHBTeX와 Xpdf 때문에 GPL 배포물 | WTPDF/Xpdf 전환 빌드에서 `pplib` 제거와 원격 WASM/link-map 검사를 통과했으나 대응 소스·고지·호환성 gate가 남음 |
 | SyncTeX | TeX Live reference parser를 TypeScript로 포팅 | 상위 MIT 유사 고지 유지 필요 | 원저작권·허가문을 소스와 배포 고지에 보존 |
 | TeX Live 패키지·폰트·Lua·포맷·ICU 데이터 | 버전별 CDN에서 지연 로드 | 파일마다 라이선스가 다름 | CDN manifest와 파일별 provenance가 필요 |
 | Monaco Editor, PDF.js | host가 제공하는 peer | host의 실제 번들 여부에 따라 의무 발생 | WasmTex가 복제해 배포하지 않으면 peer로 명시 |
@@ -52,18 +52,15 @@
 
 웹에서 WASM, JavaScript glue, TeX Live 파일을 사용자 브라우저로 전송하는 것은 단순한 서버 내부 사용이 아니라 배포로 취급해 준비해야 한다. GPL 엔진을 웹에서 실행한다는 사실 자체가 Cortex의 모든 서버 코드를 자동으로 공개하게 만드는 것은 아니지만, 사용자에게 전달되는 결합물과 엔진의 완전한 대응 소스는 공개해야 한다.
 
-### 2.3 FastLaTeX를 WasmTex로 바꾸는 것만으로 `pplib` 문제가 없어지지는 않는다
+### 2.3 FastLaTeX를 새 WTPDF 기반 WasmTex로 교체해야 한다
 
-조사 당시 FastLaTeX와 WasmTex는 동일한 TeX Live 계열 소스와 `pplib` 정적 링크를 사용했다. 이후 WasmTex의 XeTeX 후보는 독립 WTPDF/Xpdf adapter로 전환해 `pplib`를 link line과 산출물에서 제거했다. LuaHBTeX는 아직 다음 지점에서 `pplib`를 링크한다.
+조사 당시 FastLaTeX와 WasmTex는 동일한 TeX Live 계열 소스와 `pplib` 정적 링크를 사용했다. 이후 WasmTex의 XeTeX와 LuaHBTeX 후보는 독립 WTPDF/Xpdf adapter로 전환했고, 새 LuaHBTeX 빌드는 숨은 SHA-2 의존성까지 독립 구현으로 교체했다. remote-builder의 정확한 커밋 빌드에서 native/WASM smoke, 최종 link map, JavaScript/WASM byte 검사가 모두 통과해 새 산출물에는 `pplib` archive와 legacy symbol이 없음을 확인했다.
 
-- `wasm-build/build-luatex.sh`
-
-그러므로 Cortex에서 FastLaTeX asset URL을 WasmTex asset URL로 바꾸는 일은 구조와 유지보수 측면에서는 개선이지만 라이선스 해결 자체는 아니다. WasmTex가 더 적합한 이유는 엔진 배포 manifest와 release gate를 갖고 있어 문제를 명시적으로 차단할 수 있기 때문이다.
+따라서 Cortex가 FastLaTeX를 **새로 빌드된 WTPDF 기반 WasmTex engine release**로 교체하면 `pplib` 재배포 문제를 제거할 수 있다. 단순히 asset URL만 바꾸면서 과거 `pplib`-linked WasmTex 바이너리를 재사용해서는 안 된다. 릴리스 manifest의 hash와 대응 소스가 감사된 새 byte를 가리켜야 한다.
 
 현재 `public/wasmtex/2025/LICENSE-MANIFEST.json`은 엔진을 `development-only`로 표시하고 다음 차단 사유를 기록한다.
 
 - `complete-corresponding-source`
-- `pplib-license-evidence`
 - `texlive-provenance`
 
 이 상태에서 label만 변경하거나 차단 목록만 지우고 상용 배포해서는 안 된다.
@@ -92,7 +89,7 @@ GPL 엔진을 독립된 Worker 배포 단위로 만들고 Cortex가 단순한 �
 
 ### 3.5 `pplib`가 무엇이며 왜 문제가 되는가
 
-`pplib`는 LuaTeX를 위해 만들어진 read-only PDF parsing/disassembly 라이브러리다. 고정한 원본 TeX Live 빌드 설정은 XeTeX, LuaTeX, LuaHBTeX의 필수 라이브러리로 이를 선언한다. WasmTex patch는 XeTeX dependency를 Xpdf/WTPDF로 바꿨지만 LuaHBTeX WASM은 아직 `pplib`를 정적으로 링크한다. 교체 전 XeTeX는 비공개 비교 기준에만 남기고 공개 artifact로 배포하지 않는다.
+`pplib`는 LuaTeX를 위해 만들어진 read-only PDF parsing/disassembly 라이브러리다. 고정한 원본 TeX Live 빌드 설정은 XeTeX, LuaTeX, LuaHBTeX의 필수 라이브러리로 이를 선언한다. WasmTex patch는 이 dependency와 PDF caller를 Xpdf/WTPDF로 바꾸고, `pplib`에서 우연히 가져오던 Lua SHA-2 helper도 WasmTex의 독립 MIT 구현으로 교체한다. 과거 `pplib` 빌드는 비공개 비교 기준에만 남기고 공개 artifact로 배포하지 않는다.
 
 공개 `pplib` 저장소와 확인 가능한 이력에서는 라이브러리 본체 전체를 포괄하는 `LICENSE` 또는 `COPYING` 파일을 찾지 못했다. 일부 유틸리티 파일의 개별 라이선스가 라이브러리 전체의 허가를 대신하지 않는다. 이는 “반드시 독점 소프트웨어”라는 증명은 아니지만, 제3자가 브라우저 바이너리와 대응 소스를 재배포할 충분한 권리를 입증할 수 없는 상태다.
 
@@ -100,7 +97,7 @@ TeX Live의 일반 정책은 포함 자료를 자유롭게 사용·복사·수�
 
 ### 3.6 `pplib`만 해결하면 모든 문제가 끝나는가
 
-아니다. `pplib`는 현재 XeTeX/LuaHBTeX 배포를 막는 핵심적인 불명확성이다. 이를 적법하게 라이선스하거나 제거하면 가장 큰 차단 요소 하나가 해소된다. 그러나 GPL 대응 소스, LGPL 정적 링크의 relink 가능 자료, Emscripten ports 고지, TeX Live 패키지·폰트·데이터의 provenance, SyncTeX와 makeindex의 별도 고지는 계속 필요하다.
+아니다. `pplib`는 XeTeX/LuaHBTeX 배포를 막던 핵심적인 불명확성이었고, 새 WTPDF/Xpdf 빌드에서는 제거되었다. 그러나 GPL 대응 소스, LGPL 정적 링크의 relink 가능 자료, Emscripten ports 고지, TeX Live 패키지·폰트·데이터의 provenance, SyncTeX와 makeindex의 별도 고지는 계속 필요하다. LuaHBTeX의 광범위한 PDF/Lua API 호환성도 아직 release gate다.
 
 ### 3.7 Cortex 일부 공개의 효과
 
@@ -121,7 +118,7 @@ Cortex 일부 또는 전체를 공개해도 `pplib` 권리자가 부여하지 �
 
 ## 4. `pplib` 해결 경로
 
-두 경로 중 하나를 완료해야 한다. 두 경로를 동시에 진행할 수 있지만 공개 릴리스에는 하나의 명확한 근거가 필요하다.
+두 경로 중 경로 B를 현재 구현 결정으로 채택했다. 경로 A의 upstream 문의는 legacy artifact를 다시 배포해야 할 때만 필요한 대안이며, 새 공개 릴리스의 근거는 `pplib`가 없는 WTPDF/Xpdf 빌드와 artifact audit이다.
 
 ### 경로 A: 명시적 upstream 라이선스 확보
 
@@ -435,14 +432,14 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### A. 사실관계와 권리 근거 고정
 
-- [ ] 배포 예정인 pdfTeX, XeTeX, dvipdfmx, LuaHBTeX, BibTeX, BibTeX8, makeindex, kpathsea의 정확한 TeX Live commit을 고정한다.
+- [x] 모든 엔진의 TeX Live source를 `143f1723353b20202645f241db429b080a8adcdf`로 고정한다. 최종 release byte hash 고정은 별도 항목으로 남는다.
 - [ ] Emscripten 3.1.46과 모든 ports의 exact source revision 및 archive hash를 기록한다.
 - [ ] 각 최종 WASM의 link map을 생성하고 정적·동적 구성요소 inventory를 만든다.
-- [ ] 현재 `pplib` 공개 저장소와 TeX Live 사본에서 본체 전체를 포괄하는 라이선스가 없는지 legal review용 증거를 보존한다.
-- [ ] `pplib` 저작권자와 TeX Live maintainer에게 표준 upstream 라이선스 추가 가능성을 문의한다.
-- [ ] 확보한 회신이 사용·수정·정적 링크·WASM 및 상업 재배포·downstream 재배포를 실제로 허용하는지 법률 검토한다.
-- [ ] upstream 라이선스가 확보되면 해당 commit, 원문, 적용되는 과거 버전 범위를 archive한다.
-- [ ] upstream 라이선스가 충분하지 않으면 Xpdf 교체 경로를 최종 결정으로 기록한다.
+- [ ] legacy `pplib` artifact를 다시 배포할 경우에만, 공개 저장소와 TeX Live 사본에서 본체 전체를 포괄하는 라이선스가 없는지 legal review용 증거를 보존한다.
+- [ ] 경로 A를 재개할 경우에만, `pplib` 저작권자와 TeX Live maintainer에게 표준 upstream 라이선스 추가 가능성을 문의한다.
+- [ ] 경로 A의 회신을 사용할 경우에만, 사용·수정·정적 링크·WASM 및 상업 재배포·downstream 재배포를 실제로 허용하는지 법률 검토한다.
+- [ ] 경로 A에서 upstream 라이선스를 확보할 경우에만 해당 commit, 원문, 적용되는 과거 버전 범위를 archive한다.
+- [x] 새 공개 빌드의 해결책으로 Xpdf/WTPDF 교체 경로를 최종 결정하고 XeTeX와 LuaHBTeX link audit로 입증한다.
 
 ### B. WTPDF/Xpdf 설계
 
@@ -477,29 +474,31 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] WTPDF v2에 direct object, indirect reference, object number/generation 보존과 명시적 resolve를 구현한다.
 - [ ] classic xref, xref stream, object stream을 지원한다.
 - [x] WTPDF v2에 독립 cursor를 사용하는 raw stream과 decoded stream reader를 구분해 구현한다. filter별 differential coverage와 decoded-output limit은 남아 있다.
-- [x] WTPDF v2가 embedded-NUL string bytes, literal/hex lexical form과 decoded name bytes를 보존한다. `docs/license-evidence/wtpdf-string-syntax-c9b49a4.md`에 native/WASM 결과를 기록했으며 LuaHBTeX serializer와 `pdfe` 연결은 아직 남아 있다.
-- [ ] `epdf.h`를 WTPDF abstraction으로 전환한다.
-- [ ] `pdftoepdf.c`를 WTPDF API로 전환하되 기존 output serializer를 유지한다.
-- [ ] `lpdfelib.c`의 `pdfe` API를 기존 observable contract에 맞게 전환한다.
-- [ ] `lpdfscannerlib.c`의 `pdfscanner` API를 기존 observable contract에 맞게 전환한다.
-- [ ] 암호화 PDF와 password 오류를 구현한다.
+- [x] WTPDF v2가 embedded-NUL string bytes, literal/hex lexical form과 decoded name bytes를 보존하고 LuaHBTeX serializer/`pdfe` caller에 연결된다. adapter smoke는 통과했으며 Lua API differential parity는 남아 있다.
+- [x] `epdf.h`를 WTPDF abstraction으로 전환하고 native/Emscripten compile을 통과한다.
+- [x] `pdftoepdf.c`를 WTPDF API로 전환하되 기존 output serializer를 유지하고 native/Emscripten compile을 통과한다.
+- [x] `lpdfelib.c`의 `pdfe` 구현을 WTPDF API로 전환하고 native/Emscripten compile을 통과한다.
+- [ ] `pdfe`의 post-open 인증, memory-usage 숫자와 모든 observable 반환값을 differential fixture로 승인한다.
+- [x] `lpdfscannerlib.c`의 `pdfscanner` 구현을 WTPDF decoded stream reader로 전환하고 native/Emscripten compile을 통과한다.
+- [x] open-time owner/user password와 암호화 PDF 오류 모델을 구현한다.
+- [ ] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다.
 - [ ] malformed PDF의 복구/실패 동작과 resource limit을 구현한다.
 - [ ] 모든 성공·실패 경로에서 document/object/stream memory가 해제되는지 검증한다.
-- [ ] LuaHBTeX build metadata와 link line에서 `pplib`를 제거한다.
+- [x] LuaHBTeX build metadata와 link line에서 `pplib`를 제거하고 Xpdf/WTPDF를 연결한다. `docs/license-evidence/luahbtex-wtpdf-b1888f4.md`의 원격 build audit로 확인했다.
 - [ ] `graphicx`, `pdfpages`, TikZ PDF import differential test를 통과한다.
 - [ ] `pdfe`와 `pdfscanner` fixture parity test를 통과한다.
 
 ### E. TeX Live patch와 재현 빌드
 
-- [x] `wasm-build/patches/texlive-wtpdf.patch`를 XeTeX 범위의 최소 변경으로 작성한다. LuaHBTeX 전환은 후속 patch 확장으로 남아 있다.
+- [x] `wasm-build/patches/texlive-wtpdf.patch`를 XeTeX와 LuaHBTeX의 필요한 caller/build metadata 범위로 확장하고 고정 upstream에 exact apply를 검증한다.
 - [x] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
 - [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
 - [x] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다. XeTeX 원격 build에서 TeX Live Xpdf 4.04 archive 생성을 확인했다.
-- [x] Phase 1 native build가 `pplib` 없이 native XeTeX와 필요한 code-generation tool을 만들도록 한다. `2c53a86` 원격 빌드에서 각 필수 출력을 fail-loud 검사했다.
+- [x] Phase 1 native build가 `pplib` 없이 native XeTeX/LuaHBTeX와 필요한 code-generation tool을 만들도록 한다. XeTeX `2c53a86`과 LuaHBTeX `b1888f4` 원격 빌드에서 각 필수 출력을 fail-loud 검사했다.
 - [x] XeTeX build script에서 `libpplib.a`를 제거한다.
-- [ ] LuaHBTeX build script에서 `libpplib.a`를 제거한다.
+- [x] LuaHBTeX build script에서 `libpplib.a`를 제거하고 `libxpdf.a`를 `em++`로 링크한다.
 - [x] XeTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
-- [ ] LuaHBTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
+- [x] LuaHBTeX final link map과 JS/WASM에 `pplib`, old parser symbol, legacy SHA helper가 없음을 자동 검사하고 `b1888f4` artifact에서 통과한다.
 - [x] XeTeX build가 자체 생성 PDF의 deterministic XDV golden hash를 artifact 추출 전에 검사한다.
 - [ ] 대응 소스 archive에 `libs/pplib`가 없음을 자동 검사한다.
 - [ ] 네트워크가 제한된 깨끗한 builder에서 source archive만으로 동일 release를 재빌드한다.
@@ -575,7 +574,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [ ] `pplib` 명시적 라이선스를 확보했거나, 모든 공개 배포물에서 `pplib`를 완전히 제거했다.
 - [ ] `complete-corresponding-source` 차단 사유를 실제 재현 빌드 증거로 해소했다.
 - [ ] `texlive-provenance` 차단 사유를 파일별 manifest와 allowlist로 해소했다.
-- [ ] `pplib-license-evidence` 차단 사유의 해소 근거를 manifest에 연결했다.
+- [x] 새 XeTeX/LuaHBTeX의 `pplib` 제거 근거를 evidence 문서에 연결하고 manifest에서 legacy `pplib-license-evidence` blocker를 제거했다. 다른 blocker 때문에 상태는 계속 `development-only`다.
 - [x] `LICENSE-MANIFEST.json`과 source repository 정책을 자동 검증하는 CI를 모든 engine workflow에 연결한다. `npm run check:licenses`가 현재 source mode에서 통과한다.
 - [x] public repository의 engine workflow가 artifact 생성·업로드 전에 strict `--release` gate를 실행한다. 현재 `development-only` manifest는 의도대로 거부된다.
 - [ ] 보안·호환성·성능 gate가 통과했다.
@@ -610,7 +609,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 다음 중 하나라도 해당하면 XeLaTeX/LuaLaTeX production 배포를 중단한다.
 
 - 최종 또는 중간 link artifact에 `pplib`가 남아 있다.
-- `pplib` 사용 권리의 범위가 상업적 WASM 재배포와 downstream 수정·재배포를 포함하지 않는다.
+- `pplib`가 산출물에 남아 있는데 그 사용 권리의 범위가 상업적 WASM 재배포와 downstream 수정·재배포를 포함하지 않는다.
 - 공개 source archive만으로 배포 엔진을 재빌드할 수 없다.
 - TeX Live CDN 파일의 출처·라이선스를 확인하지 못했다.
 - Lua `pdfe`/`pdfscanner` 회귀가 있는데도 호환 변경으로 문서화·versioning하지 않았다.

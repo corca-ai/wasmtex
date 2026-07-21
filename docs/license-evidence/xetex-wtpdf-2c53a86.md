@@ -54,5 +54,6 @@ and
 ## Remaining scope
 
 - extended real-world, malformed, and encrypted PDF corpus testing;
-- LuaHBTeX removal of `pplib`;
+- LuaHBTeX removal of `pplib` (later completed at the build-audit level in
+  [`luahbtex-wtpdf-b1888f4.md`](luahbtex-wtpdf-b1888f4.md));
 - complete corresponding source, relink compliance, notices, and provenance.

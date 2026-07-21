@@ -52,16 +52,16 @@ The practical engine classification is:
 | --- | --- |
 | pdfLaTeX | Treat the pdfTeX JavaScript/WASM distribution unit as GPL-2.0-or-later and retain all linked-component notices. The LaTeX format and packages retain LPPL or other input licenses. |
 | XeLaTeX | XeTeX changes use the permissive XeTeX notice, while the WTPDF build links Xpdf 4.04 under GPL v2 and/or GPL v3. The pipeline also distributes GPL-2.0-or-later dvipdfmx and other linked libraries. It is not an MIT-only distribution. |
-| LuaLaTeX | Treat the LuaHBTeX JavaScript/WASM distribution unit as GPL-2.0-or-later and retain all linked-component notices. The format, Lua modules, packages, and fonts retain their own licenses. |
+| LuaLaTeX | Treat the LuaHBTeX JavaScript/WASM distribution unit as GPL-2.0-or-later, select a compatible GPL option for linked Xpdf 4.04, and retain the MIT WTPDF/SHA-2 and all linked-component notices. The format, Lua modules, packages, and fonts retain their own licenses. |
 
-The WTPDF/Xpdf XeTeX candidate no longer links `pplib`; the exact remote build and
-link-map evidence is recorded in
-[`license-evidence/xetex-wtpdf-2c53a86.md`](license-evidence/xetex-wtpdf-2c53a86.md).
-LuaHBTeX still links `pplib`, whose public source copy does not provide a standalone
-license grant that this project can reproduce. LuaHBTeX and any older XeTeX artifact
-remain blocked by the evidence issue in
-[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#unresolved-pplib-licensing-evidence).
-The new XeTeX candidate is still development-only until its other release gates pass.
+The WTPDF/Xpdf XeTeX and LuaHBTeX candidates no longer link `pplib`. The exact
+remote build and link-map evidence is recorded in
+[`license-evidence/xetex-wtpdf-2c53a86.md`](license-evidence/xetex-wtpdf-2c53a86.md)
+and
+[`license-evidence/luahbtex-wtpdf-b1888f4.md`](license-evidence/luahbtex-wtpdf-b1888f4.md).
+Any older LuaHBTeX or XeTeX artifact that was linked with `pplib` remains uncleared
+and must not be substituted into a release. The new candidates are still
+development-only until their compatibility and other release gates pass.
 
 For the boundary that lets a commercial or otherwise closed-source application use
 WasmTex, see [Proprietary integration](proprietary-integration.md).
@@ -99,9 +99,9 @@ Do not publish a versioned engine directory until all of the following are true:
    conspicuous, working source-obtainment statement.
 6. Generated Emscripten JavaScript retains its license output, and the complete
    third-party notice set accompanies the release.
-7. Every linked component has an affirmative, recorded redistribution basis. In
-   particular, a release containing XeTeX or LuaHBTeX must resolve the current
-   `pplib` evidence blocker.
+7. Every linked component has an affirmative, recorded redistribution basis. A
+   release containing XeTeX or LuaHBTeX must use the audited WTPDF/Xpdf build and
+   reject any legacy `pplib`-linked artifact.
 
 The committed or locally downloaded files under `public/wasmtex/<version>/` are
 development inputs, not evidence that the release gate has passed. A public product

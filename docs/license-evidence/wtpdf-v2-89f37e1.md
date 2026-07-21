@@ -3,7 +3,9 @@
 This record covers the first independently named WTPDF object API needed for the
 LuaHBTeX migration. It verifies the adapter itself and confirms that adding the
 API does not break the already-migrated XeTeX link. LuaHBTeX still uses `pplib`;
-this is not release clearance.
+this is not release clearance. That statement describes commit `89f37e1`; the later
+LuaHBTeX migration is recorded in
+[`luahbtex-wtpdf-b1888f4.md`](luahbtex-wtpdf-b1888f4.md).
 
 ## Fixed inputs
 
@@ -74,4 +76,6 @@ authentication after a locked open, impose decoded-output/depth/aggregate-memory
 limits, or report a parity-defined allocator metric. Xref streams, object streams,
 malformed/encrypted inputs, filtered-stream breadth, and allocation failure paths
 need dedicated fixtures. Most importantly, the LuaHBTeX callers and link metadata
-have not migrated, so the LuaHBTeX artifact remains blocked by `pplib`.
+had not migrated at this evidence commit. See
+[`luahbtex-wtpdf-b1888f4.md`](luahbtex-wtpdf-b1888f4.md) for the later build and
+dependency audit.
