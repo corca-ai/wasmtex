@@ -62,6 +62,7 @@ setup and copy-pasteable recipes. A minimal example lives in
 - **[Execution Model](docs/execution-model.md)** — client/server hybrid, pluggable per-stage backends.
 - **[Engine & TeX Live](docs/engine.md)** — WASM engines, multi-engine routing, CDN.
 - **[Licensing](docs/licensing.md)** — license scope and engine/CDN release requirements.
+- **[Corresponding source](docs/corresponding-source.md)** — exact engine source archive and verification workflow.
 - **[Proprietary integration](docs/proprietary-integration.md)** — keep a host application closed-source while distributing engines compliantly.
 - **[Bibliography](docs/bibliography.md)** · **[Warmup](docs/warmup.md)** · **[Contributing](docs/develop.md)**
 

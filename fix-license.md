@@ -500,7 +500,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] XeTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
 - [x] LuaHBTeX final link map과 JS/WASM에 `pplib`, old parser symbol, legacy SHA helper가 없음을 자동 검사하고 `b1888f4` artifact에서 통과한다.
 - [x] XeTeX build가 자체 생성 PDF의 deterministic XDV golden hash를 artifact 추출 전에 검사한다.
-- [ ] 대응 소스 archive에 `libs/pplib`가 없음을 자동 검사한다.
+- [x] 대응 소스 archive에서 사용하지 않는 `libs/pplib`를 제외하고 checker가 재검출하면 실패하도록 구현·fixture 검증했다.
 - [ ] 네트워크가 제한된 깨끗한 builder에서 source archive만으로 동일 release를 재빌드한다.
 - [ ] 재빌드 산출물과 release artifact의 hash 또는 차이 원인을 기록한다.
 - [x] TeX Live 연도 업그레이드 CI에서 patch drift를 감지한다. `texlive-source.ref` 또는 patch 변경이 XeTeX workflow를 실행하고 exact `git apply --check`를 거친다.
@@ -548,6 +548,8 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] engine artifact마다 byte hash, WasmTex commit, TeX Live commit, Emscripten commit, Docker digest를 묶는 deterministic build receipt를 생성하도록 workflow를 변경했다.
 - [x] release asset manifest가 모든 engine file의 receipt 누락·중복·hash 불일치·license family 미분류를 거부하도록 했다.
 - [ ] 새 receipt workflow로 모든 release engine을 다시 빌드하고 동일 release manifest에 모은다.
+- [x] receipt가 가리키는 모든 WasmTex commit, pinned TeX Live/Emscripten source, ports source archive, build control file을 동일 release ID로 묶는 deterministic source archive builder/checker를 구현했다.
+- [ ] 새 receipt artifact로 source archive를 실제 생성하고 clean-builder rebuild evidence를 기록한다.
 - [ ] artifact, manifest, source archive에 동일 release ID를 넣는다.
 - [ ] 브라우저 UI에서 licenses/notices/source로 가는 링크를 제공한다.
 - [ ] `THIRD_PARTY_NOTICES.md`, `docs/licensing.md`, `docs/proprietary-integration.md`를 최종 산출물에 맞게 갱신한다.

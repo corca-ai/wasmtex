@@ -26,6 +26,9 @@ export function validateSourceConfig(config) {
   if (!/^\d{4}$/.test(config.texliveYear ?? '')) {
     throw new Error('source config texliveYear must be a year')
   }
+  if (!/^https:\/\//.test(config.wasmtex?.repository ?? '')) {
+    throw new Error('source config must declare the WasmTex repository')
+  }
   if (!/^https:\/\//.test(config.texliveSource?.repository ?? '')) {
     throw new Error('source config must declare the TeX Live repository')
   }

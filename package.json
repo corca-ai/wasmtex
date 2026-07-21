@@ -63,6 +63,7 @@
     "test:e2e": "playwright test",
     "test:golden": "playwright test golden-output",
     "check:licenses": "node scripts/check-license-compliance.mjs 2025",
+    "check:corresponding-source": "node scripts/check-corresponding-source.mjs",
     "check:texlive-provenance": "node scripts/check-texlive-provenance.mjs",
     "test:license-tools": "node --test scripts/*.test.mjs",
     "update:golden": "GOLDEN_UPDATE=1 playwright test golden-output",
@@ -73,6 +74,7 @@
     "gen-luatex-manifest": "node scripts/gen-luatex-manifest.mjs",
     "gen-asset-manifest": "node scripts/gen-asset-manifest.mjs",
     "gen-engine-build-receipt": "node scripts/gen-engine-build-receipt.mjs",
+    "build:corresponding-source": "node scripts/build-corresponding-source.mjs",
     "gen-texlive-provenance": "node scripts/gen-texlive-provenance.mjs",
     "build:lib": "BUILD_MODE=lib vite build && node scripts/check-dts-exports.mjs",
     "prepare": "npm run build:lib"

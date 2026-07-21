@@ -8,6 +8,11 @@ import {
   validateBuildReceipt,
   validateSourceConfig,
 } from './lib/engine-build-receipt.mjs'
+import {
+  inspectReleaseAssets,
+  releaseIdFor,
+  validateWrittenAssetManifest,
+} from './lib/release-assets.mjs'
 
 const COMMIT = '1234567890abcdef1234567890abcdef12345678'
 const temporary = []
@@ -25,6 +30,7 @@ function fixture() {
   const config = {
     schemaVersion: 1,
     texliveYear: '2025',
+    wasmtex: { repository: 'https://example.test/wasmtex.git' },
     texliveSource: { repository: 'https://example.test/texlive.git', commitFile: 'ref' },
     emscripten: {
       version: '3.1.46',
@@ -93,5 +99,37 @@ test('refuses artifacts containing a legacy pplib marker', () => {
         config,
       }),
     /forbidden legacy dependency marker/,
+  )
+})
+
+test('binds every release file to one receipt and one license family', () => {
+  const { artifacts, config } = fixture()
+  const receipt = createBuildReceipt({
+    family: 'pdftex',
+    directory: artifacts,
+    filenames: ['engine.wasm', 'engine.js'],
+    sourceRevision: COMMIT,
+    texliveSourceCommit: COMMIT,
+    config,
+  })
+  writeFileSync(join(artifacts, 'BUILD-RECEIPT.pdftex.json'), `${JSON.stringify(receipt)}\n`)
+  writeFileSync(join(artifacts, 'LICENSE-MANIFEST.json'), '{}\n')
+  const legal = {
+    texliveSourceCommit: COMMIT,
+    artifactFamilies: [{ name: 'pdftex', patterns: ['engine.*'] }],
+  }
+  const inspected = inspectReleaseAssets({ directory: artifacts, legal, sourceConfig: config })
+  assert.deepEqual(inspected.errors, [])
+  const manifest = {
+    version: '2025',
+    releaseId: releaseIdFor('2025', inspected.files, inspected.buildReceipts),
+    files: inspected.files,
+    buildReceipts: inspected.buildReceipts,
+  }
+  assert.deepEqual(validateWrittenAssetManifest(manifest, inspected), [])
+  writeFileSync(join(artifacts, 'unclassified.map'), 'map\n')
+  assert.match(
+    inspectReleaseAssets({ directory: artifacts, legal, sourceConfig: config }).errors.join('\n'),
+    /expected exactly one build receipt/,
   )
 })

@@ -28,6 +28,7 @@ or relink an engine.
 - **[TeX Live Internals & Upgrade](docs/texlive-upgrade.md)**: Deep dive into the kpathsea fallback, S3 structure, the [upstream-maintenance philosophy (interpose, don't patch)](docs/texlive-upgrade.md#upstream-maintenance-interpose-dont-patch), and the guide for upgrading to a new TeX Live year.
 - **[Development Guide](docs/develop.md)**: Essential guide for contributors, covering environment setup, CLI commands, and testing strategies (Vitest/Playwright).
 - **[Licensing](docs/licensing.md)**: License scope, engine/CDN release gates, and third-party compliance requirements.
+- **[Corresponding Source](docs/corresponding-source.md)**: Receipt-bound source archive creation, verification, and clean-builder release requirements.
 - **[Proprietary Integration](docs/proprietary-integration.md)**: Required SDK/engine boundary for closed-source host applications.
 
 ---

@@ -54,13 +54,18 @@ for (const path of [
   'LICENSES/Xpdf-4.04-README.txt',
   'THIRD_PARTY_NOTICES.md',
   'docs/licensing.md',
+  'docs/corresponding-source.md',
   'docs/proprietary-integration.md',
   'fix-license.md',
+  'scripts/build-corresponding-source.mjs',
+  'scripts/check-corresponding-source.mjs',
   'scripts/check-texlive-provenance.mjs',
   'scripts/corresponding-source-2025.json',
   'scripts/gen-engine-build-receipt.mjs',
   'scripts/gen-texlive-provenance.mjs',
   'scripts/lib/engine-build-receipt.mjs',
+  'scripts/lib/corresponding-source.mjs',
+  'scripts/lib/release-assets.mjs',
   'scripts/lib/texlive-provenance.mjs',
   'scripts/texlive-mirror-2025.json',
   'scripts/texlive-mirror-overrides-2025.json',
@@ -390,8 +395,24 @@ if (existsSync(texliveBundle)) {
 const assetManifestGenerator = resolve(root, 'scripts/gen-asset-manifest.mjs')
 if (existsSync(assetManifestGenerator)) {
   const text = readFileSync(assetManifestGenerator, 'utf8')
-  for (const required of ['validateBuildReceipt', 'buildReceipts', 'releaseId', 'receiptCoverage']) {
+  for (const required of ['inspectReleaseAssets', 'buildReceipts', 'releaseIdFor']) {
     if (!text.includes(required)) fail(`asset manifest build-receipt gate is missing marker: ${required}`)
+  }
+}
+
+const sourceBuilder = resolve(root, 'scripts/build-corresponding-source.mjs')
+if (existsSync(sourceBuilder)) {
+  const text = readFileSync(sourceBuilder, 'utf8')
+  for (const required of [
+    'inspectReleaseAssets',
+    'validateWrittenAssetManifest',
+    'libs/pplib',
+    'source/emscripten',
+    'source/ports',
+    'SOURCE-MANIFEST.json',
+    '--sort=name',
+  ]) {
+    if (!text.includes(required)) fail(`corresponding-source builder is missing marker: ${required}`)
   }
 }
 
