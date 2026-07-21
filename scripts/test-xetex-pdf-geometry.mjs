@@ -89,6 +89,7 @@ try {
   const result = spawnSync(resolve(xetex), ['-ini', '-no-pdf', '-interaction=nonstopmode', 'probe.tex'], {
     cwd: directory,
     encoding: 'utf8',
+    env: { ...process.env, TEXINPUTS: '.', TEXMFOUTPUT: directory },
     timeout: 60_000,
   })
   if (result.error) throw result.error
