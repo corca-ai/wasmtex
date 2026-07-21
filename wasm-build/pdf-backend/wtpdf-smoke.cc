@@ -105,6 +105,8 @@ void check_document(wtpdf_document *document) {
 int main() {
   require(wtpdf_abi_version() == WTPDF_ABI_VERSION, "ABI version mismatch");
   require(std::string(wtpdf_backend_name()) == "xpdf", "backend name mismatch");
+  require(std::string(wtpdf_backend_version()) == "4.04",
+          "backend version mismatch");
 
   const std::string original = make_fixture();
   std::string memory_input = original;

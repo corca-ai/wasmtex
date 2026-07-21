@@ -132,7 +132,9 @@ unsigned int wtpdf_abi_version(void) { return WTPDF_ABI_VERSION; }
 const char *wtpdf_backend_name(void) { return "xpdf"; }
 
 const char *wtpdf_backend_version(void) {
-#ifdef XPDF_VERSION
+#ifdef XPDF_PACKAGE_VERSION
+  return XPDF_PACKAGE_VERSION;
+#elif defined(XPDF_VERSION)
   return XPDF_VERSION;
 #else
   return "unknown";
