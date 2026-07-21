@@ -25,7 +25,7 @@ GLUE=/src                   # COPY'd glue + entry + kpse-hook live here
 
 # Engine selection: only LuaHBTeX (+ its libs). Disabling the others avoids
 # XeTeX's system fontconfig dep and the MetaPost-standalone math libs.
-DISABLES="--disable-pdftex --disable-bibtex --disable-xetex \
+DISABLES="--disable-pdftex --disable-bibtex --disable-xetex --disable-luatex \
   --disable-luajittex --disable-luajithbtex --disable-mfluajit \
   --disable-mf --disable-mp \
   --disable-ptex --disable-eptex --disable-uptex --disable-euptex"

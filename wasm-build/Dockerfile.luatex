@@ -92,7 +92,7 @@ RUN set -eu; \
     cd /build/native && \
     if ! CPPFLAGS=-D_LARGEFILE64_SOURCE /src/texlive-source/configure \
         --disable-all-pkgs --enable-web2c --enable-luahbtex \
-        --disable-pdftex --disable-bibtex --disable-xetex \
+        --disable-pdftex --disable-bibtex --disable-xetex --disable-luatex \
         --disable-luajittex --disable-luajithbtex --disable-mfluajit \
         --disable-mf --disable-mp \
         --disable-ptex --disable-eptex --disable-uptex --disable-euptex \
