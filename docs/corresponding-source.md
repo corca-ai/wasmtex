@@ -2,8 +2,8 @@
 
 Every browser-distributed engine release must have a source archive bound to the
 exact JavaScript, WebAssembly, worker, and format bytes that recipients receive.
-This source unit is separate from the MIT host SDK and from a proprietary
-integrator such as Cortex.
+This source unit is separate from the MIT host SDK and from any integrating
+application.
 
 ## Required inputs
 
@@ -64,12 +64,10 @@ Creating an archive does not by itself clear the release. Before changing
 1. rebuild every engine from the archive inputs in a clean Linux build environment;
 2. compare outputs with the receipt-bound release files and explain any
    nondeterministic difference;
-3. run the compatibility, security, LGPL/relink, notice, and TeX Live provenance
-   gates;
+3. run the compatibility, security, LGPL/relink, and notice gates;
 4. publish the source archive beside the engine release for the required duration;
 5. record its public HTTPS URL and SHA-256 in `correspondingSource`; and
 6. rerun `npm run check:licenses -- --release`.
 
-The archive must not contain Cortex authentication, collaboration, billing, storage,
-AI, product UI, or other proprietary application source. Those components are not
-needed to build the separately distributed engine.
+The archive must not contain unrelated integrating-application source. Such source is
+not needed to build the separately distributed engine.

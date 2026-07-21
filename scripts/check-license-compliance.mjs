@@ -285,7 +285,6 @@ if (packageJson && manifest) {
       fail('release-cleared manifest has an artifact-family release blocker')
     }
     validateDownload(manifest.correspondingSource, 'correspondingSource')
-    validateDownload(manifest.texliveProvenance, 'texliveProvenance')
   }
   if (requireReleaseCleared && manifest.releaseStatus !== 'release-cleared') {
     fail(

@@ -77,7 +77,7 @@ dependency. Their build evidence is recorded in
 and
 [`docs/license-evidence/luahbtex-wtpdf-666663b.md`](docs/license-evidence/luahbtex-wtpdf-666663b.md).
 Those results remove the `pplib` evidence blocker for new builds only; the remaining
-corresponding-source, notices, provenance, security, and compatibility gates still
+corresponding-source, notices, relink, security, and compatibility gates still
 apply.
 
 ## Emscripten and ports
@@ -109,11 +109,11 @@ license and the third-party notices contained in the exact ICU 68.2 release. See
 
 ## TeX Live packages, fonts, Lua files, and formats
 
-The versioned TeX Live mirror redistributes selected files from the TeX Live
-`texmf-dist` archive. TeX Live is an aggregation: individual packages and fonts can
-use LPPL, SIL OFL, GPL, permissive, public-domain, or other terms. Generated `.fmt`
-files are compiled works whose source inputs retain their own terms. These CDN files
-are not licensed by WasmTex under MIT.
+The separately operated versioned CDN mirrors the full official TeX Live 2025
+distribution. TeX Live is an aggregation: individual packages and fonts can use
+LPPL, SIL OFL, GPL, permissive, public-domain, or other terms. Generated `.fmt` files
+are compiled works whose source inputs retain their own terms. None of these files is
+licensed by WasmTex under MIT.
 
 The LaTeX kernel and many base packages use LPPL 1.3c. The authoritative license
 text is available from the LaTeX Project at
@@ -121,9 +121,11 @@ text is available from the LaTeX Project at
 license and source material belonging to each mirrored package rather than assuming
 that every TeX Live file uses LPPL.
 
-Each mirror release must retain a mapping from every redistributed file to its
-original TeX Live path, package, version, license notice, and corresponding source.
-See <https://tug.org/texlive/copying.html> and the release requirements in
+The full mirror must preserve the official distribution's copying information and
+the license/source materials shipped for its packages. A package-by-package manual
+override database is not a WasmTex engine-release gate. The exact inputs and creation
+procedure for `.fmt` files distributed with an engine release remain part of that
+release's evidence. See <https://tug.org/texlive/copying.html> and the scope in
 [`docs/licensing.md`](docs/licensing.md).
 
 ## Host-provided and optional peers

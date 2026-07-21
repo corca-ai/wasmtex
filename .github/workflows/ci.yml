@@ -94,7 +94,7 @@ jobs:
         run: node scripts/gen-asset-manifest.mjs 2025
       # A Pages deploy distributes the engine files to browsers. Refuse a main-branch
       # deploy until the per-version license manifest records complete
-      # source/provenance and has no unresolved component-license blocker.
+      # corresponding source and has no unresolved component-license blocker.
       - name: Verify and generate releasable asset manifest
         if: github.ref == 'refs/heads/main'
         run: node scripts/gen-asset-manifest.mjs 2025 --release

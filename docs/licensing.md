@@ -43,7 +43,7 @@ The repository is deliberately multi-license:
 | `src/synctex/` port | MIT SDK distribution plus the retained upstream SyncTeX permission and non-endorsement notice. |
 | `lib/` | Generated form of the corresponding `src/` code; ship the same notices as the source package. |
 | Engine Worker/glue/WASM release | The terms of the complete linked engine unit, including GPL and linked-component notices; never described by npm's MIT metadata alone. |
-| TeX Live packages, formats, fonts, Lua and ICU data | Each input's own license and release-specific provenance. |
+| TeX Live packages, fonts and Lua files | Their upstream terms as part of the separately operated full TeX Live distribution. Generated engine formats and ICU data remain part of the exact engine-release audit. |
 | `LICENSES/` and third-party notices | Preserved license evidence; inclusion does not relicense the covered component. |
 
 The practical engine classification is:
@@ -74,7 +74,8 @@ WasmTex, see [Proprietary integration](proprietary-integration.md).
 | npm/GitHub package | The same files, including the full SyncTeX notice. Peer notices are needed only when the peer code is copied into the package. |
 | Standalone demo | The same files, plus notices for bundled Monaco Editor, PDF.js, and pdf-lib when present. |
 | Engine asset host | Per-version notices and complete corresponding source for every distributed binary, including WasmTex glue and build scripts. |
-| TeX Live/ICU mirror | Per-file/package provenance, exact license notices, corresponding source where required, and the ICU 68.2 license bundle. |
+| Full TeX Live mirror | Retain the official distribution's copying and package license material. It is operated separately from the engine release gate described here. |
+| ICU data | Retain the ICU 68.2 license bundle and exact source/version evidence. |
 
 Serving JavaScript, WebAssembly, formats, packages, fonts, or data to a browser is a
 distribution of those files. Running the same engine only on infrastructure operated
@@ -131,54 +132,24 @@ GitHub repository is public, those workflows additionally run the strict `--rele
 mode before building or uploading an Actions artifact, so a `development-only`
 manifest fails closed rather than making uncleared binaries downloadable.
 
-## TeX Live mirror gate
+## TeX Live CDN scope
 
-The current mirror layout uses flattened basenames for kpathsea lookup. Flattening
-must not be the only record of the source files. Before upload, generate and retain a
-provenance manifest containing at least:
+The production TeX Live 2025 CDN is treated as a separately operated mirror of the
+full official distribution. Its package-by-package manual review, per-file provenance
+overrides, and CDN object comparison are not prerequisites for clearing a WasmTex
+engine release. Keep the official TeX Live copying information and the license/source
+material shipped with that distribution.
 
-- mirrored key and SHA-256;
-- original `texmf-dist` path and TeX Live package;
-- TeX Live release/year;
-- license identifier or a stable license reference;
-- copyright/notice file paths;
-- corresponding source archive or source path;
-- collision decision when multiple source paths share a basename.
+The provenance scripts in this repository remain useful integrity and collision-audit
+tools for a transformed or flattened mirror, but their `provenance-reviewed` state is
+not part of `LICENSE-MANIFEST.json` and does not determine whether engine artifacts
+are `release-cleared`. If a future deployment selects, modifies, or repackages TeX
+Live files instead of mirroring the full distribution, review that distribution as a
+separate project before publishing it.
 
-Fonts and generated formats require the same provenance treatment. A generic TeX Live
-notice is not a replacement for package-specific terms.
-
-For the 2025 package mirror, `scripts/texlive-mirror-2025.json` pins the official
-dated `texmf` and `extra` archives plus the extracted `texlive.tlpdb` digest.
-`scripts/sync-texlive-s3.sh` delegates selection and manifest generation to
-`scripts/gen-texlive-provenance.mjs`; `scripts/check-texlive-provenance.mjs` verifies
-the emitted files. Identical-content basename collisions are recorded, while
-different-content collisions require an exact-path override and rationale.
-
-The TLPDB `catalogue-license` field is metadata, not a completed legal review.
-Production upload requires a reviewed per-package override with exact license and
-notice evidence. The generated manifest remains `review-required` while even one
-mirrored package lacks that review or a notice path; `provenance-reviewed` means only
-that this mirror-specific review is complete, not that the engine release is cleared.
-The repository-wide strict license gate is also run immediately before any S3 upload.
-
-Use the metadata-only audit before downloading the multi-gigabyte `texmf` archive. It
-reads only the digest-pinned TLPDB and produces a deduplicated package review queue
-plus the flattened-name collisions that still require byte inspection:
-
-```bash
-npm run audit:texlive-provenance -- \
-  --metadata-only \
-  --tlpdb <extracted-texlive.tlpdb> \
-  --output <audit.json>
-```
-
-An exit status of 2 means the queue contains unresolved package metadata; it is the
-expected result until all entries are reviewed. This inventory does not replace the
-full-byte audit: notice files must be checked in the extracted tree, and collision
-candidates must be resolved from actual hashes before mirror generation.
-The first 2025 inventory and its unresolved counts are recorded in
-[`license-evidence/texlive-2025-metadata-audit-124bfca.md`](license-evidence/texlive-2025-metadata-audit-124bfca.md).
+This scope decision does not remove TeX Live source used to compile the engines from
+the complete corresponding source. It also does not remove generated `.fmt` inputs or
+ICU 68.2 data from the exact engine-release inventory.
 
 ## Updating dependencies
 
@@ -186,7 +157,7 @@ When bumping TeX Live, Emscripten, ICU, or a peer dependency:
 
 1. compare the exact upstream license and notice files;
 2. update `THIRD_PARTY_NOTICES.md` and `LICENSES/`;
-3. regenerate binary and mirror provenance;
+3. regenerate engine build receipts, formats, and corresponding-source metadata;
 4. verify that packaged and deployed outputs contain the legal files; and
 5. record any newly linked library rather than assuming it inherits another
    component's license.

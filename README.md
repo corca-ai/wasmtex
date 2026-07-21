@@ -61,7 +61,7 @@ setup and copy-pasteable recipes. A minimal example lives in
 - **[Architecture](docs/architecture.md)** — SDK structure, VFS, LSP internals.
 - **[Execution Model](docs/execution-model.md)** — client/server hybrid, pluggable per-stage backends.
 - **[Engine & TeX Live](docs/engine.md)** — WASM engines, multi-engine routing, CDN.
-- **[Licensing](docs/licensing.md)** — license scope and engine/CDN release requirements.
+- **[Licensing](docs/licensing.md)** — SDK/engine license scope and release requirements.
 - **[Corresponding source](docs/corresponding-source.md)** — exact engine source archive and verification workflow.
 - **[Proprietary integration](docs/proprietary-integration.md)** — keep a host application closed-source while distributing engines compliantly.
 - **[Bibliography](docs/bibliography.md)** · **[Warmup](docs/warmup.md)** · **[Contributing](docs/develop.md)**

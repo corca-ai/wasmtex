@@ -224,21 +224,18 @@ The release path therefore has no externally downloaded engine or worker artifac
 
 [i52]: https://github.com/corca-ai/wasmtex/issues/52
 
-`scripts/sync-texlive-s3.sh` builds the TeX Live mirror from the pinned 2025 `texmf`
-archive and the same release's `texlive.tlpdb`. It verifies both archive hashes,
-records every flattened key's original path, package, hash, catalogue license, notice
-paths, and collision decision, then checks the emitted bytes against
-`texlive-provenance.json`. A differing basename collision, missing package owner, or
-missing license metadata fails before output is installed. Upload additionally
-requires reviewed per-package overrides, notice evidence, and the repository-wide
-strict release gate; the current `development-only` engine manifest therefore blocks
-upload as intended.
+`scripts/sync-texlive-s3.sh` is a conservative helper for constructing and auditing a
+transformed, flattened TeX Live mirror from pinned archives. It verifies archive
+hashes and records flattened-name collision decisions. The production TeX Live 2025
+CDN is operated separately as a mirror of the full official distribution, so this
+helper's package-review state is not part of the engine `LICENSE-MANIFEST.json` and
+does not decide whether engine artifacts are release-cleared.
 
 The mirror includes OpenType/TrueType/AFM fonts, the
 `tex/{xetex,xelatex,luatex,lualatex}` trees (so engine-specific packages like
 `xetexko`, `xeCJK`, and `luatexja` are included), glyph lists, and Lua runtime files.
 `scripts/audit-mirror.mjs` reports coverage; `--check` gates a curated common-package
-set so per-tree gaps fail loudly. After a cleared mirror changes, regenerate the bloom
+set so per-tree gaps fail loudly. After the CDN changes, regenerate the bloom
 filter (`gen-bloom-filter.mjs --upload`) and invalidate the CDN, or the engine will
 skip the new files.
 

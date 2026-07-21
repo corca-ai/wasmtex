@@ -94,9 +94,8 @@ review before a commercial launch.
 - Keep engine files out of the proprietary application bundle.
 - Publish complete corresponding source for the exact engine bytes.
 - Publish all engine, format, package, data, and font notices.
-- Consume only a TeX Live mirror whose archive hashes, original paths, package owners,
-  licenses, notices, and flattened-name collision decisions are in the published
-  `texlive-provenance.json`; do not consume a basename-only mirror.
+- Use a versioned full TeX Live distribution that retains its upstream copying,
+  package-license, and source materials.
 - Link the loaded asset version to its notice and source from the product UI.
 - Exempt open-source components from conflicting product terms.
 - Re-run the audit whenever TeX Live, Emscripten, ICU, ports, or engine glue changes.

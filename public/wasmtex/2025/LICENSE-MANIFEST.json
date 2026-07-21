@@ -9,7 +9,6 @@
   "licenseDirectoryPath": "../../../LICENSES/",
   "requirementsPath": "../../../docs/licensing.md",
   "correspondingSource": null,
-  "texliveProvenance": null,
   "artifactFamilies": [
     {
       "name": "pdftex",
@@ -116,12 +115,24 @@
   ],
   "releaseBlockers": [
     {
+      "id": "fresh-release-artifacts",
+      "detail": "Rebuild every engine family and format from the current audited source and bind each file to a build receipt."
+    },
+    {
+      "id": "third-party-notices-and-relink",
+      "detail": "Finish the exact linked-component notices, license choices, and any required LGPL relink materials."
+    },
+    {
+      "id": "compatibility-security",
+      "detail": "Complete the WTPDF compatibility, malformed-input, memory, cross-host, and performance release gates."
+    },
+    {
       "id": "complete-corresponding-source",
       "detail": "Publish and hash the complete source archive for the exact engine bytes."
     },
     {
-      "id": "texlive-provenance",
-      "detail": "Publish package, format, font, Lua, and ICU provenance for every mirrored file."
+      "id": "public-repository-audit",
+      "detail": "Complete the repository history, secret, binary, provenance, license-scan, and SBOM audit before public release."
     }
   ]
 }

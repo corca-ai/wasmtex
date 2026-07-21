@@ -56,10 +56,6 @@ function clearedReleaseErrors(value) {
   if (!/^[a-f0-9]{64}$/i.test(value.correspondingSource?.sha256 ?? '')) {
     errors.push('missing or invalid correspondingSource.sha256')
   }
-  if (!value.texliveProvenance?.url) errors.push('missing texliveProvenance.url')
-  if (!/^[a-f0-9]{64}$/i.test(value.texliveProvenance?.sha256 ?? '')) {
-    errors.push('missing or invalid texliveProvenance.sha256')
-  }
   if (!Array.isArray(value.releaseBlockers) || value.releaseBlockers.length > 0) {
     errors.push('releaseBlockers is not an empty array')
   }
@@ -108,7 +104,6 @@ const manifest = {
     noticePath: legal.noticePath,
     requirementsPath: legal.requirementsPath,
     correspondingSource: legal.correspondingSource,
-    texliveProvenance: legal.texliveProvenance,
     releaseBlockers: legal.releaseBlockers,
   },
   buildReceipts,

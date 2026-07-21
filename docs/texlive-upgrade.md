@@ -127,41 +127,24 @@ Upgrading requires updating the WASM engine, the S3 package repository, and the 
 
 ### Step 1: Update S3 Packages
 
-Add a new versioned mirror config instead of editing archive constants in the shell
-script. Pin the `texmf` archive and the same dated `extra` archive, which contains the
-matching `tlpkg/texlive.tlpdb`; record both SHA-512 digests and the extracted TLPDB's
-SHA-256. Then update the script/config selection for the new year.
+Provision the new year's full official TeX Live distribution under a new versioned
+CDN prefix and preserve the copying, package-license, and source materials shipped by
+that distribution. Record the release year and CDN base URL used by the engine. This
+CDN operation is independent of the WasmTex engine release checklist; the engine
+manifest does not wait for a package-by-package override review.
+
+The repository's `sync-texlive-s3.sh` and `texlive-provenance` tools remain available
+for anyone intentionally constructing a transformed or flattened subset. That is a
+separate distribution workflow with its own conservative checks, not the production
+full-mirror procedure documented here.
+
+After provisioning, run the read-only runtime coverage audit. It flags formats
+expected but absent, such as OpenType/TrueType fonts required by XeLaTeX and
+LuaLaTeX:
 
 ```bash
-# Inventory package review work from the pinned TLPDB before downloading texmf.
-# Exit 2 means unresolved review entries were found and is expected initially.
-npm run audit:texlive-provenance -- \
-  --metadata-only \
-  --tlpdb <extracted-texlive.tlpdb> \
-  --output <audit.json>
-
-# Build and structurally verify a local mirror first. This does not upload.
-./scripts/sync-texlive-s3.sh
-
-# Upload is fail-closed: the package reviews, notices, engine corresponding source,
-# and every other strict release requirement must already be cleared.
-./scripts/sync-texlive-s3.sh --upload
-
-# Replacing an existing version prefix is destructive and must be explicit.
-./scripts/sync-texlive-s3.sh --upload --replace-existing
-
-# Audit coverage afterward (read-only; writes compat/mirror-coverage.md). Flags
-# formats expected but absent — e.g. OpenType/TrueType fonts the XeLaTeX/LuaLaTeX
-# engines need.
-AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket corca-wasmtex-texlib --year 2025
+AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket <bucket> --year <year>
 ```
-
-Review `release/texlive-provenance.json` before upload. TLPDB catalogue metadata is
-an inventory starting point, not legal approval: every package used by the mirror
-must have a reviewed entry in `scripts/texlive-mirror-overrides-<year>.json`, exact
-notice evidence, and a resolved decision for every non-identical flattened-name
-collision. Never carry an override forward to a new TeX Live year without rechecking
-the package bytes and notices.
 
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.
