@@ -40,7 +40,7 @@ emconfigure "$SRC/configure" \
   >emconf.out 2>&1 || { echo "emconfigure failed"; tail -30 emconf.out; exit 1; }
 
 echo "=== Phase 2b: trim libs to what luahbtex links ==="
-# luahbtex links: zlib lua53 libpng zziplib graphite2 harfbuzz pplib. Drop the
+# luahbtex links: zlib lua53 libpng zziplib graphite2 harfbuzz Xpdf. Drop the
 # MetaPost/ICU libs (their native codegen tools — gmp gen-fib, icupkg — can't run
 # under emscripten, and luahbtex links none of them).
 sed -i -E '/^(MAKE_SUBDIRS|CONF_SUBDIRS)/ s/\<(mpfr|mpfi|cairo|pixman|potrace|gmp|icu)\>//g' libs/Makefile
@@ -48,6 +48,44 @@ sed -i -E '/^(MAKE_SUBDIRS|CONF_SUBDIRS)/ s/\<(mpfr|mpfi|cairo|pixman|potrace|gm
 echo "=== Phase 2c: build the needed libs (native codegen via CC_FOR_BUILD) ==="
 emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C libs -j"$(nproc)" \
   >emmake-libs.out 2>&1 || { echo "libs build failed"; tail -30 emmake-libs.out; exit 1; }
+XPDFLIB="$(find "$WB/libs/xpdf" -name libxpdf.a | head -1)"
+if [ -z "$XPDFLIB" ]; then
+  echo "Xpdf was configured but not reached by the recursive libs target; building it explicitly"
+  emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc \
+    -C "$WB/libs/xpdf" -j"$(nproc)" >emmake-xpdf.out 2>&1 || {
+      echo "Xpdf build failed"
+      tail -60 emmake-xpdf.out
+      exit 1
+    }
+  XPDFLIB="$(find "$WB/libs/xpdf" -name libxpdf.a | head -1)"
+fi
+[ -n "$XPDFLIB" ] && [ -s "$XPDFLIB" ] || {
+  echo "Xpdf library missing after the LuaHBTeX dependency build"
+  exit 1
+}
+
+echo "=== Phase 2c.1: WTPDF WebAssembly smoke test ==="
+XPDF_INCLUDES=(
+  -I"$GLUE/pdf-backend"
+  -I"$SRC/libs/xpdf"
+  -I"$SRC/libs/xpdf/xpdf-src/goo"
+  -I"$SRC/libs/xpdf/xpdf-src/fofi"
+  -I"$SRC/libs/xpdf/xpdf-src/xpdf"
+  -I"$WB/libs/xpdf"
+)
+em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
+  "${XPDF_INCLUDES[@]}" \
+  "$GLUE/pdf-backend/wtpdf-xpdf.cc" \
+  "$GLUE/pdf-backend/wtpdf-smoke.cc" \
+  "$XPDFLIB" "$WB/libs/zlib/libz.a" \
+  -sEXIT_RUNTIME=1 -o /tmp/wtpdf-smoke.js || {
+    echo "WTPDF WebAssembly smoke-test build failed"
+    exit 1
+  }
+node /tmp/wtpdf-smoke.js || {
+  echo "WTPDF WebAssembly smoke test failed"
+  exit 1
+}
 
 echo "=== Phase 2d: configure texk/web2c (top-level make; codegen step fails as wasm — ok) ==="
 emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -j"$(nproc)" >emmake-top.out 2>&1 || true
@@ -104,7 +142,7 @@ if [ -n "$NM" ]; then
     echo "ERROR: kpse_find_file not defined in '$KPLIB' — -Wl,--wrap=kpse_find_file would no-op (interposition drift)" >&2; exit 1
   fi
 fi
-emcc -O2 -g0 \
+em++ -O2 -g0 \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   luatex-entry.o kpse-hook.o \
   luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
@@ -113,14 +151,33 @@ emcc -O2 -g0 \
   "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a \
   "$WB"/libs/zziplib/libzzip.a "$WB"/libs/libpng/libpng.a \
   "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a \
-  "$WB"/libs/pplib/libpplib.a "$WB"/libs/zlib/libz.a \
+  "$XPDFLIB" "$WB"/libs/zlib/libz.a \
   lib/lib.a "$WB"/texk/kpathsea/.libs/libkpathsea.a libmputil.a libunilib.a libmd5.a \
+  -Wl,-Map="$OUT/wasmtex-luatex.map" \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
   -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
   -sINITIAL_MEMORY=805306368 \
   --js-library "$GLUE/luatex-library.js" \
   -o "$OUT/wasmtex-luatex.js"
+[ -s "$OUT/wasmtex-luatex.map" ] || { echo "LuaHBTeX link map was not generated"; exit 1; }
+if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-luatex.map"; then
+  echo "ERROR: forbidden pplib archive or symbol remains in the LuaHBTeX link map" >&2
+  exit 1
+fi
+grep -F 'libxpdf.a' "$OUT/wasmtex-luatex.map" >/dev/null || {
+  echo "ERROR: LuaHBTeX link map does not contain the required Xpdf backend" >&2
+  exit 1
+}
+grep -F 'wtpdf_' "$OUT/wasmtex-luatex.map" >/dev/null || {
+  echo "ERROR: LuaHBTeX link map does not contain the required WTPDF adapter" >&2
+  exit 1
+}
+if grep -aE 'pplib|pp(doc|dict|array|stream|ref|xref)_' \
+    "$OUT/wasmtex-luatex.js" "$OUT/wasmtex-luatex.wasm"; then
+  echo "ERROR: forbidden pplib marker remains in the LuaHBTeX release bytes" >&2
+  exit 1
+fi
 cp "$GLUE/luatex-worker.js" "$OUT/wasmtex-luatex.worker.js"
 
 echo ""

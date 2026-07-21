@@ -2,7 +2,19 @@ diff --git a/texk/web2c/ac/web2c.ac b/texk/web2c/ac/web2c.ac
 index 471c3250f..a067a4e4a 100644
 --- a/texk/web2c/ac/web2c.ac
 +++ b/texk/web2c/ac/web2c.ac
-@@ -45,7 +45,7 @@ m4_define([kpse_tex_progs], [dnl
+@@ -37,15 +37,15 @@ m4_define([kpse_tex_progs], [dnl
+ [[aleph],     [yes], [],    [Aleph],      []],
+ [[hitex],     [yes], [],    [HiTeX],      [zlib]],
+ [[pdftex],    [yes], [yes], [pdfTeX],     [xpdf libpng zlib]],
+-[[luatex],    [yes], [],    [LuaTeX],     [pplib libpng zziplib lua53]],
+-[[luajittex], [yes], [],    [LuaJITTeX],  [pplib libpng zziplib luajit]],
+-[[luahbtex],    [yes], [],    [LuaHBTeX],     [pplib libpng zziplib lua53 harfbuzz]],
+-[[luajithbtex], [yes], [],    [LuaHBJITTeX],  [pplib libpng zziplib luajit harfbuzz]],
++[[luatex],    [yes], [],    [LuaTeX],     [xpdf libpng zziplib lua53]],
++[[luajittex], [yes], [],    [LuaJITTeX],  [xpdf libpng zziplib luajit]],
++[[luahbtex],    [yes], [],    [LuaHBTeX],     [xpdf libpng zziplib lua53 harfbuzz]],
++[[luajithbtex], [yes], [],    [LuaHBJITTeX],  [xpdf libpng zziplib luajit harfbuzz]],
+ [[mp],        [yes], [],    [MetaPost],   [mpfi mpfr cairo libpng]],
  [[pmp],       [yes], [],    [pMetaPost],  [mpfi mpfr cairo libpng ptexenc]],
  [[texprof],   [yes], [],    [TeXprof],    []],
  [[upmp],      [yes], [],    [upMetaPost], [mpfi mpfr cairo libpng ptexenc]],
@@ -1475,3 +1487,2187 @@ index 7f2ccaf9a..c1583ed2e 100644
 +        xfree(pdf_doc->memstream);
      }
   /* pdf_doc->pc++; */
+ 
+diff --git a/texk/web2c/luatexdir/am/libluatex.am b/texk/web2c/luatexdir/am/libluatex.am
+index 9558beef6..07673e00b 100644
+--- a/texk/web2c/luatexdir/am/libluatex.am
++++ b/texk/web2c/luatexdir/am/libluatex.am
+@@ -17,10 +17,10 @@ LUA_DEPEND = $(LUA53_DEPEND)
+ ##
+ EXTRA_LIBRARIES += libluatex.a libluajittex.a libluatexspecific.a  libluajittexspecific.a libluahbtexspecific.a libluajithbtexspecific.a 
+ 
+-libluatex_a_DEPENDENCIES = libff.a libluamisc.a 
+-libluajittex_a_DEPENDENCIES = libff.a libluajitmisc.a 
++libluatex_a_DEPENDENCIES = libff.a libluamisc.a $(XPDF_DEPEND)
++libluajittex_a_DEPENDENCIES = libff.a libluajitmisc.a $(XPDF_DEPEND)
+ 
+-libluatex_a_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(HARFBUZZ_INCLUDES) $(PPLIB_INCLUDES)
++libluatex_a_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(HARFBUZZ_INCLUDES) $(XPDF_INCLUDES)
+ libluatex_a_preflags += -I$(srcdir)/libmd5
+ libluatex_a_preflags += -DpdfTeX -I$(srcdir)/luatexdir
+ libluatex_a_preflags += -I$(srcdir)/luatexdir/unilib
+@@ -209,7 +209,9 @@ dist_libluatex_sources += \
+ 	luatexdir/image/writejpg.h \
+ 	luatexdir/image/writejp2.h \
+ 	luatexdir/image/writepng.h \
++	luatexdir/image/wtpdf.h \
+ 	luatexdir/image/pdftoepdf.c \
++	luatexdir/image/wtpdf-xpdf.cc \
+ 	luatexdir/image/writeimg.c \
+ 	luatexdir/image/writejbig2.c \
+ 	luatexdir/image/writejp2.c \
+@@ -549,4 +551,3 @@ EXTRA_DIST += \
+ 	luatexdir/ChangeLog \
+ 	luatexdir/NEWS \
+ 	luatexdir/font/subfont.txt
+-
+diff --git a/texk/web2c/luatexdir/am/luamisc.am b/texk/web2c/luatexdir/am/luamisc.am
+index ec7a675c5..f02cd839e 100644
+--- a/texk/web2c/luatexdir/am/luamisc.am
++++ b/texk/web2c/luatexdir/am/luamisc.am
+@@ -17,9 +17,9 @@ $(libluamisc_a_OBJECTS): $(libluamisc_a_DEPENDENCIES)
+ #$(liblua53misc_a_OBJECTS): $(liblua53misc_a_DEPENDENCIES)
+ $(libluajitmisc_a_OBJECTS): $(libluajitmisc_a_DEPENDENCIES)
+ 
+-libluamisc_a_CPPFLAGS = $(ZLIB_INCLUDES) $(ZZIPLIB_INCLUDES) $(PPLIB_INCLUDES) $(LUA_INCLUDES)
+-#liblua53misc_a_CPPFLAGS = $(ZLIB_INCLUDES) $(ZZIPLIB_INCLUDES) $(PPLIB_INCLUDES) $(LUA_LUA53_INCLUDES)
+-libluajitmisc_a_CPPFLAGS = $(ZLIB_INCLUDES) $(ZZIPLIB_INCLUDES) $(PPLIB_INCLUDES) $(LUAJIT_INCLUDES) $(LUAJIT_DEFINES)
++libluamisc_a_CPPFLAGS = $(ZLIB_INCLUDES) $(ZZIPLIB_INCLUDES) $(LUA_INCLUDES)
++#liblua53misc_a_CPPFLAGS = $(ZLIB_INCLUDES) $(ZZIPLIB_INCLUDES) $(LUA_LUA53_INCLUDES)
++libluajitmisc_a_CPPFLAGS = $(ZLIB_INCLUDES) $(ZZIPLIB_INCLUDES) $(LUAJIT_INCLUDES) $(LUAJIT_DEFINES)
+ libluajitmisc_a_CPPFLAGS += -DLuajitTeX -I$(srcdir)/luatexdir
+ 
+ libluamisc_a_CFLAGS = # $(WARNING_CFLAGS)
+@@ -81,4 +81,3 @@ EXTRA_DIST += \
+ 	luatexdir/luazlib/test_zlib.lua \
+ 	luatexdir/luazlib/zlib.lua \
+ 	luatexdir/slnunicode/unitest
+-
+diff --git a/texk/web2c/luatexdir/am/luatex.am b/texk/web2c/luatexdir/am/luatex.am
+index 32feab110..db861e47e 100644
+--- a/texk/web2c/luatexdir/am/luatex.am
++++ b/texk/web2c/luatexdir/am/luatex.am
+@@ -64,12 +64,12 @@ nodist_EXTRA_luahbtex_SOURCES = dummy.cxx
+ nodist_EXTRA_luajithbtex_SOURCES = dummy.cxx
+ 
+ 
+-luatex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(PPLIB_INCLUDES)
++luatex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(XPDF_INCLUDES)
+ luatex_postflags = -I$(srcdir)/libmd5 -DpdfTeX -I$(srcdir)/luatexdir -I$(srcdir)/mplibdir
+ luatex_postflags += -Dextra_version_info=`date +-%Y%m%d%H`
+ luatex_postflags += -I$(srcdir)/synctexdir -DSYNCTEX_ENGINE_H='<synctex-luatex.h>'
+ 
+-luahbtex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(HARFBUZZ_INCLUDES) $(PPLIB_INCLUDES)
++luahbtex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(HARFBUZZ_INCLUDES) $(XPDF_INCLUDES)
+ luahbtex_postflags = -I$(srcdir)/libmd5 -DpdfTeX -I$(srcdir)/luatexdir -I$(srcdir)/mplibdir
+ luahbtex_postflags += -Dextra_version_info=`date +-%Y%m%d%H`
+ luahbtex_postflags += -DLUATEX_HARFBUZZ_ENABLED
+@@ -95,11 +95,11 @@ luahbtex_LDFLAGS = -export-dynamic
+ luajithbtex_LDFLAGS = -export-dynamic $(LUAJIT_LDEXTRA)
+ 
+ luatex_postldadd = libmplibcore.a 
+-luatex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(PPLIB_LIBS) $(ZLIB_LIBS)
++luatex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(XPDF_LIBS) $(ZLIB_LIBS)
+ luatex_postldadd += $(LDADD) libmputil.a libunilib.a libmd5.a $(lua_socketlibs)
+ 
+ luahbtex_postldadd = libmplibcore.a 
+-luahbtex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(HARFBUZZ_LIBS) $(GRAPHITE2_LIBS) $(PPLIB_LIBS) $(ZLIB_LIBS)
++luahbtex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(HARFBUZZ_LIBS) $(GRAPHITE2_LIBS) $(XPDF_LIBS) $(ZLIB_LIBS)
+ luahbtex_postldadd += $(LDADD) libmputil.a libunilib.a libmd5.a $(lua_socketlibs)
+ 
+ 
+@@ -114,11 +114,11 @@ luajithbtex_LDADD = libluajittex.a libluajithbtexspecific.a libluajittex.a libff
+ #LIBTOOLFLAGS += --preserve-dup-deps
+ 
+ 
+-luatex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) libmputil.a libmd5.a
++luatex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) $(XPDF_DEPEND) libmputil.a libmd5.a
+ luatex_DEPENDENCIES = $(luatex_depend) libluatex.a libluatexspecific.a
+ luajittex_DEPENDENCIES = $(luatex_depend) libluajittex.a libluajittexspecific.a
+ 
+-luahbtex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) libmputil.a libmd5.a
++luahbtex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) $(XPDF_DEPEND) libmputil.a libmd5.a
+ luahbtex_DEPENDENCIES = $(luahbtex_depend) libluatex.a libluahbtexspecific.a libluaharfbuzz.a
+ luajithbtex_DEPENDENCIES = $(luatex_depend) libluajittex.a libluajithbtexspecific.a libluajitharfbuzz.a
+ 
+@@ -266,4 +266,3 @@ endif LUAJITHBTEX
+ EXTRA_DIST += luatexdir/tests/luaimage.tex \
+ 	tests/1-4.jpg tests/B.pdf tests/basic.tex tests/lily-ledger-broken.png
+ DISTCLEANFILES += luaimage.* luajitimage.*
+-
+diff --git a/texk/web2c/luatexdir/lua/lpdfelib.c b/texk/web2c/luatexdir/lua/lpdfelib.c
+index 030e3db7e..b080e542e 100644
+--- a/texk/web2c/luatexdir/lua/lpdfelib.c
++++ b/texk/web2c/luatexdir/lua/lpdfelib.c
+@@ -45,8 +45,6 @@
+ # undef output
+ # endif
+ 
+-# include "pplib.h"
+-
+ # include "image/epdf.h"
+ 
+ # ifdef lpdfelib_orig_input
+@@ -76,32 +74,35 @@
+ # define PDFE_METATABLE_REFERENCE  "luatex.pdfe.reference"
+ 
+ typedef struct {
+-    ppdoc *document;
++    wtpdf_document *document;
+     boolean open;
+     boolean isfile;
+     char *memstream;
++    size_t memstream_size;
++    char *filename;
+     int pages;
+     int index;
+ } pdfe_document ;
+ 
+ typedef struct {
+-    ppdict *dictionary;
++    wtpdf_value *dictionary;
+ } pdfe_dictionary;
+ 
+ typedef struct {
+-    pparray *array;
++    wtpdf_value *array;
+ } pdfe_array;
+ 
+ typedef struct {
+-    ppstream *stream;
++    wtpdf_value *stream;
++    wtpdf_stream_reader *reader;
+     int decode;
+     int open;
+ } pdfe_stream;
+ 
+ typedef struct {
+- /* ppref *reference; */
+-    ppxref *xref;
++    wtpdf_value *reference;
+     int onum;
++    int generation;
+ } pdfe_reference;
+ 
+ /*tex
+@@ -245,7 +246,7 @@ static int pdfelib_type(lua_State * L)
+ static int pdfelib_tostring_##field(lua_State * L) { \
+     pdfe_##field *p = check_is##field(L, 1); \
+     if (p != NULL) { \
+-        lua_pushfstring(L, "<" what " %p>", (ppdoc *) p->field); \
++        lua_pushfstring(L, "<" what " %p>", (void *) p->field); \
+         return 1; \
+     } \
+     return 0; \
+@@ -279,22 +280,30 @@ static int pdfelib_tostring_reference(lua_State * L) { \
+     d->dictionary = dictionary; \
+ } while(0)
+ 
+-static int pushdictionary(lua_State * L, ppdict *dictionary)
++static int pushdictionary(lua_State * L, wtpdf_value *dictionary)
+ {
+     if (dictionary != NULL) {
++        size_t count = 0;
++        if (wtpdf_value_type(dictionary) != WTPDF_VALUE_DICTIONARY ||
++            wtpdf_value_count(dictionary, &count) != WTPDF_STATUS_OK) {
++            wtpdf_value_destroy(dictionary);
++            return 0;
++        }
+         pdfe_push_dictionary;
+-        lua_pushinteger(L,dictionary->size);
++        lua_pushinteger(L, (lua_Integer) count);
+         return 2;
+     }
+     return 0;
+ }
+ 
+-static int pushdictionaryonly(lua_State * L, ppdict *dictionary)
++static int pushdictionaryonly(lua_State * L, wtpdf_value *dictionary)
+ {
+-    if (dictionary != NULL) {
++    if (dictionary != NULL &&
++        wtpdf_value_type(dictionary) == WTPDF_VALUE_DICTIONARY) {
+         pdfe_push_dictionary;
+         return 1;
+     }
++    wtpdf_value_destroy(dictionary);
+     return 0;
+ }
+ 
+@@ -305,22 +314,29 @@ static int pushdictionaryonly(lua_State * L, ppdict *dictionary)
+     a->array = array; \
+   } while (0)
+ 
+-static int pusharray(lua_State * L, pparray * array)
++static int pusharray(lua_State * L, wtpdf_value *array)
+ {
+     if (array != NULL) {
++        size_t count = 0;
++        if (wtpdf_value_type(array) != WTPDF_VALUE_ARRAY ||
++            wtpdf_value_count(array, &count) != WTPDF_STATUS_OK) {
++            wtpdf_value_destroy(array);
++            return 0;
++        }
+         pdfe_push_array;
+-        lua_pushinteger(L,array->size);
++        lua_pushinteger(L, (lua_Integer) count);
+         return 2;
+     }
+     return 0;
+ }
+ 
+-static int pusharrayonly(lua_State * L, pparray * array)
++static int pusharrayonly(lua_State * L, wtpdf_value *array)
+ {
+-    if (array != NULL) {
++    if (array != NULL && wtpdf_value_type(array) == WTPDF_VALUE_ARRAY) {
+         pdfe_push_array;
+         return 1;
+     }
++    wtpdf_value_destroy(array);
+     return 0;
+ }
+ 
+@@ -329,31 +345,40 @@ static int pusharrayonly(lua_State * L, pparray * array)
+     luaL_getmetatable(L, PDFE_METATABLE_STREAM); \
+     lua_setmetatable(L, -2); \
+     s->stream = stream; \
++    s->reader = NULL; \
+     s->open = 0; \
+     s->decode = 0; \
+ } while(0)
+ 
+-static int pushstream(lua_State * L, ppstream * stream)
++static int pushstream(lua_State * L, wtpdf_value *stream)
+ {
+-    if (stream != NULL) {
++    if (stream != NULL && wtpdf_value_type(stream) == WTPDF_VALUE_STREAM) {
++        wtpdf_status status;
++        wtpdf_value *dictionary;
+         pdfe_push_stream;
+-        if (pushdictionary(L, stream->dict) > 0)
++        dictionary = wtpdf_stream_dictionary(stream, &status);
++        if (pushdictionary(L, dictionary) > 0)
+             return 3;
+         else
+             return 1;
+     }
++    wtpdf_value_destroy(stream);
+     return 0;
+ }
+ 
+-static int pushstreamonly(lua_State * L, ppstream * stream)
++static int pushstreamonly(lua_State * L, wtpdf_value *stream)
+ {
+-    if (stream != NULL) {
++    if (stream != NULL && wtpdf_value_type(stream) == WTPDF_VALUE_STREAM) {
++        wtpdf_status status;
++        wtpdf_value *dictionary;
+         pdfe_push_stream;
+-        if (pushdictionaryonly(L, stream->dict) > 0)
++        dictionary = wtpdf_stream_dictionary(stream, &status);
++        if (pushdictionaryonly(L, dictionary) > 0)
+             return 2;
+         else
+             return 1;
+     }
++    wtpdf_value_destroy(stream);
+     return 0;
+ }
+ 
+@@ -361,17 +386,25 @@ static int pushstreamonly(lua_State * L, ppstream * stream)
+     pdfe_reference *r = (pdfe_reference *)lua_newuserdata(L, sizeof(pdfe_reference));	\
+     luaL_getmetatable(L, PDFE_METATABLE_REFERENCE); \
+     lua_setmetatable(L, -2); \
+-    r->xref = reference->xref; \
+-    r->onum = reference->number; \
++    r->reference = reference; \
++    r->onum = object_number; \
++    r->generation = generation_number; \
+   } while (0)
+ 
+-static int pushreference(lua_State * L, ppref * reference)
++static int pushreference(lua_State * L, wtpdf_value *reference)
+ {
+-    if (reference != NULL && reference->number != 0) {
+-        pdfe_push_reference;
+-        lua_pushinteger(L,reference->number);
+-        return 2;
++    if (reference != NULL) {
++        int object_number = 0;
++        int generation_number = 0;
++        if (wtpdf_value_get_reference(
++                reference, &object_number, &generation_number) ==
++                WTPDF_STATUS_OK && object_number != 0) {
++            pdfe_push_reference;
++            lua_pushinteger(L, object_number);
++            return 2;
++        }
+     }
++    wtpdf_value_destroy(reference);
+     return 0;
+ }
+ 
+@@ -401,51 +434,69 @@ static int pushreference(lua_State * L, ppref * reference)
+ 
+ */
+ 
+-static int pushvalue(lua_State * L, ppobj *object)
++static int pushvalue(lua_State * L, wtpdf_value *object)
+ {
+-    switch (object->type) {
+-        case PPNONE:
+-        case PPNULL:
++    wtpdf_value_kind kind;
++    if (object == NULL) {
++        return 0;
++    }
++    kind = wtpdf_value_type(object);
++    switch (kind) {
++        case WTPDF_VALUE_NONE:
++        case WTPDF_VALUE_NULL:
+             lua_pushnil(L);
++            wtpdf_value_destroy(object);
+             return 1;
+-            break;
+-        case PPBOOL:
+-            lua_pushboolean(L,object->integer);
++        case WTPDF_VALUE_BOOLEAN: {
++            int value = 0;
++            wtpdf_value_get_boolean(object, &value);
++            lua_pushboolean(L, value);
++            wtpdf_value_destroy(object);
+             return 1;
+-            break;
+-        case PPINT:
+-            lua_pushinteger(L, object-> integer);
++        }
++        case WTPDF_VALUE_INTEGER: {
++            long long value = 0;
++            wtpdf_value_get_integer(object, &value);
++            lua_pushinteger(L, (lua_Integer) value);
++            wtpdf_value_destroy(object);
+             return 1;
+-            break;
+-        case PPNUM:
+-            lua_pushnumber(L, object->number);
++        }
++        case WTPDF_VALUE_REAL: {
++            double value = 0;
++            wtpdf_value_get_real(object, &value);
++            lua_pushnumber(L, value);
++            wtpdf_value_destroy(object);
+             return 1;
+-            break;
+-        case PPNAME:
+-            {
+-                ppname * n = ppname_decoded(object->name) ;
+-                lua_pushlstring(L, ppname_data(n), ppname_size(n));
+-                return 1;
+-            }
+-            break;
+-        case PPSTRING:
+-            lua_pushlstring(L, ppstring_data(object->string), ppstring_size(object->string));
+-            lua_pushboolean(L, ppstring_hex(object->string));
++        }
++        case WTPDF_VALUE_NAME: {
++            const unsigned char *value = NULL;
++            size_t size = 0;
++            wtpdf_value_get_name(object, &value, &size);
++            lua_pushlstring(L, (const char *) value, size);
++            wtpdf_value_destroy(object);
++            return 1;
++        }
++        case WTPDF_VALUE_STRING: {
++            const unsigned char *value = NULL;
++            size_t size = 0;
++            wtpdf_string_syntax syntax = WTPDF_STRING_LITERAL;
++            wtpdf_value_get_string(object, &value, &size);
++            wtpdf_value_get_string_syntax(object, &syntax);
++            lua_pushlstring(L, (const char *) value, size);
++            lua_pushboolean(L, syntax == WTPDF_STRING_HEX);
++            wtpdf_value_destroy(object);
+             return 2;
+-            break;
+-        case PPARRAY:
+-            return pusharray(L, object->array);
+-            break;
+-        case PPDICT:
+-            return pushdictionary(L, object->dict);
+-            break;
+-        case PPSTREAM:
+-            return pushstream(L, object->stream);
+-            break;
+-        case PPREF:
+-            return pushreference(L, object->ref);
+-            break;
++        }
++        case WTPDF_VALUE_ARRAY:
++            return pusharray(L, object);
++        case WTPDF_VALUE_DICTIONARY:
++            return pushdictionary(L, object);
++        case WTPDF_VALUE_STREAM:
++            return pushstream(L, object);
++        case WTPDF_VALUE_REFERENCE:
++            return pushreference(L, object);
+     }
++    wtpdf_value_destroy(object);
+     return 0;
+ }
+ 
+@@ -465,25 +516,28 @@ static int pushvalue(lua_State * L, ppobj *object)
+ static int pdfelib_getcatalog(lua_State * L)
+ {
+     pdfe_document *p = check_isdocument(L, 1);
++    wtpdf_status status;
+     if (p == NULL)
+         return 0;
+-    return pushdictionaryonly(L,ppdoc_catalog(p->document));
++    return pushdictionaryonly(L, wtpdf_document_catalog(p->document, &status));
+ }
+ 
+ static int pdfelib_gettrailer(lua_State * L)
+ {
+     pdfe_document *p = check_isdocument(L, 1);
++    wtpdf_status status;
+     if (p == NULL)
+         return 0;
+-    return pushdictionaryonly(L,ppdoc_trailer(p->document));
++    return pushdictionaryonly(L, wtpdf_document_trailer(p->document, &status));
+ }
+ 
+ static int pdfelib_getinfo(lua_State * L)
+ {
+     pdfe_document *p = check_isdocument(L, 1);
++    wtpdf_status status;
+     if (p == NULL)
+         return 0;
+-    return pushdictionaryonly(L,ppdoc_info(p->document));
++    return pushdictionaryonly(L, wtpdf_document_info(p->document, &status));
+ }
+ 
+ /*tex
+@@ -503,10 +557,16 @@ static int pdfelib_getfromarray(lua_State * L)
+     pdfe_array *a = check_isarray(L, 1);
+     if (a != NULL) {
+         int index = luaL_checkint(L, 2) - 1;
+-        if (index < a->array->size) {
+-            ppobj *object = pparray_at(a->array,index);
++        size_t count = 0;
++        if (index >= 0 &&
++            wtpdf_value_count(a->array, &count) == WTPDF_STATUS_OK &&
++            (size_t) index < count) {
++            wtpdf_status status;
++            wtpdf_value *object = wtpdf_array_get(
++                a->array, (size_t) index,
++                WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+             if (object != NULL) {
+-                lua_pushinteger(L,(int) object->type);
++                lua_pushinteger(L, (int) wtpdf_value_type(object));
+                 return 1 + pushvalue(L,object);
+             }
+         }
+@@ -520,19 +580,29 @@ static int pdfelib_getfromdictionary(lua_State * L)
+     if (d != NULL) {
+         if (lua_type(L,2) == LUA_TSTRING) {
+             const char *name = luaL_checkstring(L, 2);
+-            ppobj *object = ppdict_get_obj(d->dictionary,name);
++            wtpdf_status status;
++            wtpdf_value *object = wtpdf_dictionary_get(
++                d->dictionary, (const unsigned char *) name, strlen(name),
++                WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+             if (object != NULL) {
+-                lua_pushinteger(L,(int) object->type);
++                lua_pushinteger(L, (int) wtpdf_value_type(object));
+                 return 1 + pushvalue(L,object);
+             }
+         } else {
+             int index = luaL_checkint(L, 2) - 1;
+-            if (index < d->dictionary->size) {
+-                ppobj *object = ppdict_at(d->dictionary,index);
++            size_t count = 0;
++            if (index >= 0 &&
++                wtpdf_value_count(d->dictionary, &count) == WTPDF_STATUS_OK &&
++                (size_t) index < count) {
++                const unsigned char *key = NULL;
++                size_t key_size = 0;
++                wtpdf_status status;
++                wtpdf_value *object = wtpdf_dictionary_at(
++                    d->dictionary, (size_t) index, &key, &key_size,
++                    WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+                 if (object != NULL) {
+-                    ppname * key = ppname_decoded(ppdict_key(d->dictionary,index));
+-                    lua_pushlstring(L, ppname_data(key), ppname_size(key));
+-                    lua_pushinteger(L,(int) object->type);
++                    lua_pushlstring(L, (const char *) key, key_size);
++                    lua_pushinteger(L, (int) wtpdf_value_type(object));
+                     return 2 + pushvalue(L,object);
+                 }
+             }
+@@ -545,25 +615,40 @@ static int pdfelib_getfromstream(lua_State * L)
+ {
+     pdfe_stream *s = (pdfe_stream *)lua_touserdata(L, 1);
+     if (s != NULL) {
+-        ppdict *d = s->stream->dict;
++        wtpdf_status status;
++        wtpdf_value *d = wtpdf_stream_dictionary(s->stream, &status);
++        if (d == NULL) {
++            return 0;
++        }
+         if (lua_type(L,2) == LUA_TSTRING) {
+             const char *name = luaL_checkstring(L, 2);
+-            ppobj *object = ppdict_get_obj(d,name);
++            wtpdf_value *object = wtpdf_dictionary_get(
++                d, (const unsigned char *) name, strlen(name),
++                WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
++            wtpdf_value_destroy(d);
+             if (object != NULL) {
+-                lua_pushinteger(L,(int) object->type);
++                lua_pushinteger(L, (int) wtpdf_value_type(object));
+                 return 1 + pushvalue(L,object);
+             }
+         } else {
+             int index = luaL_checkint(L, 2) - 1;
+-            if (index < d->size) {
+-                ppobj *object = ppdict_at(d,index);
++            size_t count = 0;
++            if (index >= 0 &&
++                wtpdf_value_count(d, &count) == WTPDF_STATUS_OK &&
++                (size_t) index < count) {
++                const unsigned char *key = NULL;
++                size_t key_size = 0;
++                wtpdf_value *object = wtpdf_dictionary_at(
++                    d, (size_t) index, &key, &key_size,
++                    WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+                 if (object != NULL) {
+-                    ppname * key = ppname_decoded(ppdict_key(d,index));
+-                    lua_pushlstring(L, ppname_data(key), ppname_size(key));
+-                    lua_pushinteger(L,(int) object->type);
++                    lua_pushlstring(L, (const char *) key, key_size);
++                    wtpdf_value_destroy(d);
++                    lua_pushinteger(L, (int) wtpdf_value_type(object));
+                     return 2 + pushvalue(L,object);
+                 }
+             }
++            wtpdf_value_destroy(d);
+         }
+     }
+     return 0;
+@@ -585,8 +670,9 @@ static int pdfelib_getfromstream(lua_State * L)
+ 
+ */
+ 
+-static void pdfelib_totable(lua_State * L, ppobj * object, int flat)
++static void pdfelib_totable(lua_State * L, wtpdf_value *object, int flat)
+ {
++    wtpdf_value_kind kind = wtpdf_value_type(object);
+     int n = pushvalue(L,object);
+     if (flat && n < 2) {
+         return;
+@@ -618,7 +704,7 @@ static void pdfelib_totable(lua_State * L, ppobj * object, int flat)
+         lua_rawseti(L,-2,2);
+         /* { nil, value, extra, more } */
+     }
+-    lua_pushinteger(L,(int) object->type);
++    lua_pushinteger(L, (int) kind);
+     /* { nil, [value], [extra], [more] } type */
+     lua_rawseti(L,-2,1);
+     /* { type, [value], [extra], [more] } */
+@@ -630,12 +716,16 @@ static int pdfelib_arraytotable(lua_State * L)
+     pdfe_array *a = check_isarray(L, 1);
+     if (a != NULL) {
+         int flat = lua_isboolean(L,2);
+-        int i = 0;
++        size_t i = 0;
++        size_t count = 0;
+         int j = 0;
+-        lua_createtable(L,i,0);
++        wtpdf_value_count(a->array, &count);
++        lua_createtable(L, (int) count, 0);
+         /* table */
+-        for (i=0;i<a->array->size;i++) {
+-            ppobj *object = pparray_at(a->array,i);
++        for (i = 0; i < count; ++i) {
++            wtpdf_status status;
++            wtpdf_value *object = wtpdf_array_get(
++                a->array, i, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+             if (object != NULL) {
+                 pdfelib_totable(L,object,flat);
+                 /* table { type, [value], [extra], [more] } */
+@@ -653,14 +743,20 @@ static int pdfelib_dictionarytotable(lua_State * L)
+     pdfe_dictionary *d = check_isdictionary(L, 1);
+     if (d != NULL) {
+         int flat = lua_isboolean(L,2);
+-        int i = 0;
+-        lua_createtable(L,0,i);
++        size_t i = 0;
++        size_t count = 0;
++        wtpdf_value_count(d->dictionary, &count);
++        lua_createtable(L, 0, (int) count);
+         /* table */
+-        for (i=0;i<d->dictionary->size;i++) {
+-            ppobj *object = ppdict_at(d->dictionary,i);
++        for (i = 0; i < count; ++i) {
++            const unsigned char *key = NULL;
++            size_t key_size = 0;
++            wtpdf_status status;
++            wtpdf_value *object = wtpdf_dictionary_at(
++                d->dictionary, i, &key, &key_size,
++                WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+             if (object != NULL) {
+-                ppname * key = ppname_decoded(ppdict_key(d->dictionary,i));
+-                lua_pushlstring(L, ppname_data(key), ppname_size(key));
++                lua_pushlstring(L, (const char *) key, key_size);
+                 /* table key */
+                 pdfelib_totable(L,object,flat);
+                 /* table key { type, [value], [extra], [more] } */
+@@ -687,28 +783,38 @@ static int pdfelib_pagestotable(lua_State * L)
+ {
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p != NULL) {
+-        ppdoc *d = p->document;
+-        ppref *r = NULL;
+-        int i = 0;
++        wtpdf_document *d = p->document;
++        int page_count = wtpdf_document_page_count(d);
++        int i;
+         int j = 0;
+-        lua_createtable(L,ppdoc_page_count(d),0);
++        lua_createtable(L, page_count, 0);
+         /* pages[1..n] */
+-        for (r = ppdoc_first_page(d), i = 1; r != NULL; r = ppdoc_next_page(d), ++i) {
++        for (i = 1; i <= page_count; ++i) {
++            int object_number = 0;
++            int generation_number = 0;
++            wtpdf_status status;
++            wtpdf_value *reference = wtpdf_document_page(
++                d, i, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+             lua_createtable(L,3,0);
+-            if (ppref_obj(r) != NULL) {
+-                pushdictionary(L,ppref_obj(r)->dict);
++            if (reference != NULL &&
++                wtpdf_value_get_reference(
++                    reference, &object_number, &generation_number) ==
++                    WTPDF_STATUS_OK) {
++                wtpdf_value *page = wtpdf_value_resolve(reference, &status);
++                pushdictionary(L, page);
+                 /* table dictionary n */
+                 lua_rawseti(L,-3,2);
+                 /* table dictionary */
+                 lua_rawseti(L,-2,1);
+                 /* table */
+-                lua_pushinteger(L,r->number);
++                lua_pushinteger(L, object_number);
+                 /* table reference */
+                 lua_rawseti(L,-2,3);
+                 /* table */
+                 lua_rawseti(L,-2,++j);
+                 /* pages[i] = { dictionary, size, objnum } */
+             }
++            wtpdf_value_destroy(reference);
+         }
+         return 1;
+     }
+@@ -729,21 +835,59 @@ static int pdfelib_readwholestream(lua_State * L)
+ {
+     pdfe_stream *s = check_isstream(L, 1);
+     if (s != NULL) {
+-        uint8_t *b = NULL;
+-        int decode = 0;
++        unsigned char chunk[16384];
++        unsigned char *data = NULL;
++        size_t allocated = 0;
+         size_t n = 0;
++        int eof = 0;
++        int decode = 0;
++        wtpdf_status status;
++        wtpdf_stream_reader *reader;
+         if (s->open > 0) {
+-            ppstream_done(s->stream);
++            wtpdf_stream_reader_close(s->reader);
++            s->reader = NULL;
+             s->open = 0;
+             s->decode = 0;
+         }
+         if (lua_gettop(L) > 1 && lua_isboolean(L, 2)) {
+             decode = lua_toboolean(L, 2);
+         }
+-        b = ppstream_all(s->stream,&n,decode);
+-        lua_pushlstring(L, (const char *) b, n);
++        reader = wtpdf_stream_reader_open(
++            s->stream, decode ? WTPDF_STREAM_DECODED : WTPDF_STREAM_RAW,
++            &status);
++        if (reader == NULL) {
++            return 0;
++        }
++        while (!eof) {
++            size_t count = 0;
++            status = wtpdf_stream_reader_read(
++                reader, chunk, sizeof(chunk), &count, &eof);
++            if (status != WTPDF_STATUS_OK || count > (size_t) -1 - n) {
++                wtpdf_stream_reader_close(reader);
++                xfree(data);
++                return 0;
++            }
++            if (n + count > allocated) {
++                size_t next = allocated == 0 ? sizeof(chunk) : allocated;
++                while (next < n + count) {
++                    if (next > ((size_t) -1) / 2) {
++                        next = n + count;
++                        break;
++                    }
++                    next *= 2;
++                }
++                data = allocated == 0
++                    ? (unsigned char *) xmalloc(next)
++                    : (unsigned char *) xrealloc(data, next);
++                allocated = next;
++            }
++            memcpy(data + n, chunk, count);
++            n += count;
++        }
++        wtpdf_stream_reader_close(reader);
++        lua_pushlstring(L, data != NULL ? (const char *) data : "", n);
+         lua_pushinteger(L, (int) n);
+-        ppstream_done(s->stream);
++        xfree(data);
+         return 2;
+     }
+     return 0;
+@@ -766,12 +910,17 @@ static int pdfelib_openstream(lua_State * L)
+     pdfe_stream *s = check_isstream(L, 1);
+     if (s != NULL) {
+         if (s->open == 0) {
++            wtpdf_status status;
+             if (lua_gettop(L) > 1) {
+-                s->decode = lua_isboolean(L, 2);
++                s->decode = lua_toboolean(L, 2);
+             }
+-            s->open = 1;
++            s->reader = wtpdf_stream_reader_open(
++                s->stream,
++                s->decode ? WTPDF_STREAM_DECODED : WTPDF_STREAM_RAW,
++                &status);
++            s->open = s->reader != NULL;
+         }
+-        lua_pushboolean(L,1);
++        lua_pushboolean(L, s->open);
+         return 1;
+     }
+     return 0;
+@@ -782,7 +931,8 @@ static int pdfelib_closestream(lua_State * L)
+     pdfe_stream *s = check_isstream(L, 1);
+     if (s != NULL) {
+         if (s->open >0) {
+-            ppstream_done(s->stream);
++            wtpdf_stream_reader_close(s->reader);
++            s->reader = NULL;
+             s->open = 0;
+             s->decode = 0;
+         }
+@@ -793,19 +943,25 @@ static int pdfelib_closestream(lua_State * L)
+ static int pdfelib_readfromstream(lua_State * L)
+ {
+     pdfe_stream *s = check_isstream(L, 1);
+-    if (s != NULL) {
++    if (s != NULL && s->open && s->reader != NULL) {
++        unsigned char data[16384];
+         size_t n = 0;
+-        uint8_t *d = NULL;
+-        if (s->open == 1) {
+-            d = ppstream_first(s->stream,&n,s->decode);
+-            s->open = 2;
+-        } else if (s->open == 2) {
+-            d = ppstream_next(s->stream,&n);
+-        } else {
++        int eof = 0;
++        if (wtpdf_stream_reader_read(
++                s->reader, data, sizeof(data), &n, &eof) != WTPDF_STATUS_OK) {
++            wtpdf_stream_reader_close(s->reader);
++            s->reader = NULL;
++            s->open = 0;
+             return 0;
+         }
+-        lua_pushlstring(L, (const char *) d, n);
++        lua_pushlstring(L, (const char *) data, n);
+         lua_pushinteger(L, (int) n);
++        if (eof) {
++            wtpdf_stream_reader_close(s->reader);
++            s->reader = NULL;
++            s->open = 0;
++            s->decode = 0;
++        }
+         return 2;
+     }
+     return 0;
+@@ -834,7 +990,8 @@ static int pdfelib_readfromstream(lua_State * L)
+ static int pdfelib_open(lua_State * L)
+ {
+     const char *filename = luaL_checkstring(L, 1);
+-    ppdoc *d = ppdoc_load(filename);
++    wtpdf_status status;
++    wtpdf_document *d = wtpdf_document_open_file(filename, NULL, &status);
+     if (d == NULL) {
+         formatted_warning("pdfe lib","no valid pdf file '%s'",filename);
+     } else {
+@@ -845,6 +1002,8 @@ static int pdfelib_open(lua_State * L)
+         p->open = true;
+         p->isfile = true;
+         p->memstream = NULL;
++        p->memstream_size = 0;
++        p->filename = xstrdup(filename);
+         return 1;
+     }
+     return 0;
+@@ -881,9 +1040,13 @@ static int pdfelib_new(lua_State * L)
+     memstream[streamsize]='\0';
+     if (lua_gettop(L) == 2) {
+         /* we stay at the lua end */
+-        ppdoc *d = ppdoc_mem(memstream, streamsize);
++        wtpdf_status status;
++        wtpdf_document *d = wtpdf_document_open_memory(
++            (const unsigned char *) memstream, (size_t) streamsize,
++            NULL, &status);
+         if (d == NULL) {
+             normal_warning("pdfe lib","no valid pdf mem stream");
++            xfree(memstream);
+         } else {
+             pdfe_document *p = (pdfe_document *) lua_newuserdata(L, sizeof(pdfe_document));
+             luaL_getmetatable(L, PDFE_METATABLE);
+@@ -892,6 +1055,8 @@ static int pdfelib_new(lua_State * L)
+             p->open = true;
+             p->isfile = false;
+             p->memstream = memstream;
++            p->memstream_size = (size_t) streamsize;
++            p->filename = NULL;
+             return 1;
+         }
+     } else {
+@@ -910,7 +1075,7 @@ static int pdfelib_new(lua_State * L)
+             lua_pushstring(L,pdf_doc->file_path);
+             return 1;
+         } else {
+-            /* pplib does this: xfree(memstream); */
++            xfree(memstream);
+         }
+     }
+     return 0;
+@@ -930,12 +1095,15 @@ static int pdfelib_free(lua_State * L)
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p != NULL && p->open) {
+         if (p->document != NULL) {
+-            ppdoc_free(p->document);
++            wtpdf_document_close(p->document);
+             p->document = NULL;
+         }
+         if (p->memstream != NULL) {
+-         /* pplib does this: xfree(p->memstream); */
+-            p->memstream = NULL;
++            xfree(p->memstream);
++            p->memstream_size = 0;
++        }
++        if (p->filename != NULL) {
++            xfree(p->filename);
+         }
+         p->open = false;
+     }
+@@ -963,30 +1131,12 @@ static int pdfelib_close(lua_State * L)
+ static int pdfelib_unencrypt(lua_State * L)
+ {
+     pdfe_document *p = check_isdocument(L, 1);
+-    if (p != NULL) {
+-        size_t u = 0;
+-        size_t o = 0;
+-        const char* user = NULL;
+-        const char* owner = NULL;
+-        int top = lua_gettop(L);
+-        if (top > 1) {
+-            if (lua_type(L,2) == LUA_TSTRING) {
+-                user = lua_tolstring(L, 2, &u);
+-            } else {
+-                /*tex we're not too picky but normally it will be nil or false */
+-            }
+-            if (top > 2) {
+-                if (lua_type(L,3) == LUA_TSTRING) {
+-                    owner = lua_tolstring(L, 3, &o);
+-                } else {
+-                    /*tex we're not too picky but normally it will be nil or false */
+-                }
+-            }
+-            lua_pushinteger(L, (int) ppdoc_crypt_pass(p->document,user,u,owner,o));
+-            return 1;
+-        }
++    if (p != NULL && p->document != NULL) {
++        lua_pushinteger(
++            L, wtpdf_document_is_encrypted(p->document) ? 1 : 0);
++        return 1;
+     }
+-    lua_pushinteger(L, (int) PPCRYPT_FAIL);
++    lua_pushinteger(L, -1);
+     return 1;
+ }
+ 
+@@ -1010,7 +1160,7 @@ static int pdfelib_getsize(lua_State * L)
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p == NULL)
+         return 0;
+-    lua_pushinteger(L,(int) ppdoc_file_size(p->document));
++    lua_pushinteger(L, (lua_Integer) wtpdf_document_input_size(p->document));
+     return 1;
+ }
+ 
+@@ -1020,8 +1170,9 @@ static int pdfelib_getversion(lua_State * L)
+     if (p == NULL) {
+         return 0;
+     } else {
+-        int minor;
+-        int major = ppdoc_version_number(p->document, &minor);
++        double version = wtpdf_document_pdf_version(p->document);
++        int major = (int) version;
++        int minor = (int) ((version - major) * 10.0 + 0.5);
+         lua_pushinteger(L,(int) major);
+         lua_pushinteger(L,(int) minor);
+         return 2;
+@@ -1033,7 +1184,8 @@ static int pdfelib_getstatus(lua_State * L)
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p == NULL)
+         return 0;
+-    lua_pushinteger(L,(int) ppdoc_crypt_status(p->document));
++    lua_pushinteger(
++        L, wtpdf_document_is_encrypted(p->document) ? 1 : 0);
+     return 1;
+ }
+ 
+@@ -1042,7 +1194,7 @@ static int pdfelib_getnofobjects(lua_State * L)
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p == NULL)
+         return 0;
+-    lua_pushinteger(L,(int) ppdoc_objects(p->document));
++    lua_pushinteger(L, wtpdf_document_object_count(p->document));
+     return 1;
+ }
+ 
+@@ -1051,7 +1203,7 @@ static int pdfelib_getnofpages(lua_State * L)
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p == NULL)
+         return 0;
+-    lua_pushinteger(L,(int) ppdoc_page_count(p->document));
++    lua_pushinteger(L, wtpdf_document_page_count(p->document));
+     return 1;
+ }
+ 
+@@ -1059,10 +1211,9 @@ static int pdfelib_getmemoryusage(lua_State * L)
+ {
+     pdfe_document *p = check_isdocument(L, 1);
+     if (p != NULL) {
+-        size_t w = 0;
+-        size_t m = ppdoc_memory(p->document,&w);
+-        lua_pushinteger(L,(int) m);
+-        lua_pushinteger(L,(int) w);
++        lua_pushinteger(
++            L, (lua_Integer) wtpdf_document_input_size(p->document));
++        lua_pushinteger(L, 0);
+         return 2;
+     }
+     return 0;
+@@ -1078,13 +1229,14 @@ static int pdfelib_getmemoryusage(lua_State * L)
+ 
+ */
+ 
+-static int pushpage(lua_State * L, ppdoc * d, int page)
++static int pushpage(lua_State * L, wtpdf_document *d, int page)
+ {
+-    if (page <= 0 || page > ppdoc_page_count(d)) {
++    if (page <= 0 || page > wtpdf_document_page_count(d)) {
+         return 0;
+     } else {
+-        ppref *pp = ppdoc_page(d,page);
+-        return pushdictionaryonly(L, ppref_obj(pp)->dict);
++        wtpdf_status status;
++        return pushdictionaryonly(L, wtpdf_document_page(
++            d, page, WTPDF_LOOKUP_RESOLVE_REFERENCE, &status));
+     }
+ }
+ 
+@@ -1098,15 +1250,18 @@ static int pdfelib_getpage(lua_State * L)
+     }
+ }
+ 
+-static int pushpages(lua_State * L, ppdoc * d)
++static int pushpages(lua_State * L, wtpdf_document *d)
+ {
+-    int i = 0;
+-    ppref *r;
+-    lua_createtable(L,ppdoc_page_count(d),0);
++    int i;
++    int count = wtpdf_document_page_count(d);
++    lua_createtable(L, count, 0);
+     /* pages[1..n] */
+-    for (r = ppdoc_first_page(d), i = 1; r != NULL; r = ppdoc_next_page(d), ++i) {
+-        pushdictionaryonly(L,ppref_obj(r)->dict);
+-        lua_rawseti(L,-2,i);
++    for (i = 1; i <= count; ++i) {
++        wtpdf_status status;
++        if (pushdictionaryonly(L, wtpdf_document_page(
++                d, i, WTPDF_LOOKUP_RESOLVE_REFERENCE, &status)) > 0) {
++            lua_rawseti(L,-2,i);
++        }
+     }
+     return 1 ;
+ }
+@@ -1139,22 +1294,64 @@ static int pdfelib_getbox(lua_State * L)
+         pdfe_dictionary *p = check_isdictionary(L, 1);
+         if (p != NULL) {
+             const char *key = lua_tostring(L,2);
+-            pprect box;
+-            pprect *r;
+-            box.lx = box.rx = box.ly = box.ry = 0;
+-            r = ppdict_get_box(p->dictionary,key,&box);
+-            if (r != NULL) {
++            wtpdf_status status;
++            wtpdf_value *current = wtpdf_value_resolve(
++                p->dictionary, &status);
++            wtpdf_value *box = NULL;
++            while (current != NULL &&
++                   wtpdf_value_type(current) == WTPDF_VALUE_DICTIONARY) {
++                wtpdf_value *parent;
++                box = wtpdf_dictionary_get(
++                    current, (const unsigned char *) key, strlen(key),
++                    WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++                if (box != NULL) {
++                    break;
++                }
++                parent = wtpdf_dictionary_get(
++                    current, (const unsigned char *) "Parent", 6,
++                    WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++                wtpdf_value_destroy(current);
++                current = parent;
++            }
++            wtpdf_value_destroy(current);
++            if (box != NULL && wtpdf_value_type(box) == WTPDF_VALUE_ARRAY) {
++                size_t count = 0;
++                double values[4];
++                size_t i;
++                int okay = wtpdf_value_count(box, &count) == WTPDF_STATUS_OK &&
++                           count == 4;
++                for (i = 0; okay && i < 4; ++i) {
++                    wtpdf_value *item = wtpdf_array_get(
++                        box, i, WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++                    if (item == NULL) {
++                        okay = 0;
++                    } else if (wtpdf_value_type(item) == WTPDF_VALUE_INTEGER) {
++                        long long value = 0;
++                        okay = wtpdf_value_get_integer(item, &value) ==
++                               WTPDF_STATUS_OK;
++                        values[i] = (double) value;
++                    } else {
++                        okay = wtpdf_value_get_real(item, &values[i]) ==
++                               WTPDF_STATUS_OK;
++                    }
++                    wtpdf_value_destroy(item);
++                }
++                wtpdf_value_destroy(box);
++                if (!okay) {
++                    return 0;
++                }
+                 lua_createtable(L,4,0);
+-                lua_pushnumber(L,r->lx);
++                lua_pushnumber(L,values[0]);
+                 lua_rawseti(L,-2,1);
+-                lua_pushnumber(L,r->ly);
++                lua_pushnumber(L,values[1]);
+                 lua_rawseti(L,-2,2);
+-                lua_pushnumber(L,r->rx);
++                lua_pushnumber(L,values[2]);
+                 lua_rawseti(L,-2,3);
+-                lua_pushnumber(L,r->ry);
++                lua_pushnumber(L,values[3]);
+                 lua_rawseti(L,-2,4);
+                 return 1;
+             }
++            wtpdf_value_destroy(box);
+         }
+     }
+     return 0;
+@@ -1174,14 +1371,12 @@ static int pdfelib_getbox(lua_State * L)
+ static int pdfelib_getfromreference(lua_State * L)
+ {
+     pdfe_reference *r = check_isreference(L, 1);
+-    if (r != NULL && r->xref != NULL) {
+-        ppref *rr = ppxref_find(r->xref, (ppuint) r->onum);
+-        if (rr != NULL) {
+-            ppobj *o = ppref_obj(rr);
+-            if (o != NULL) {
+-                lua_pushinteger(L,o->type);
+-                return 1 + pushvalue(L,o);
+-            }
++    if (r != NULL && r->reference != NULL) {
++        wtpdf_status status;
++        wtpdf_value *object = wtpdf_value_resolve(r->reference, &status);
++        if (object != NULL) {
++            lua_pushinteger(L, (int) wtpdf_value_type(object));
++            return 1 + pushvalue(L, object);
+         }
+     }
+     return 0;
+@@ -1208,141 +1403,71 @@ static int pdfelib_getfromreference(lua_State * L)
+ 
+ */
+ 
+-# define pdfelib_get_value_check_1 do { \
+-    if (p == NULL) { \
+-        if (t == LUA_TSTRING) { \
+-            normal_warning("pdfe lib","lua <pdfe dictionary> expected"); \
+-        } else if (t == LUA_TNUMBER) { \
+-            normal_warning("pdfe lib","lua <pdfe array> expected"); \
+-        } else { \
+-          normal_warning("pdfe lib","invalid arguments"); \
+-        } \
+-        return 0; \
+-    } else if (! lua_getmetatable(L, 1)) { \
+-        normal_warning("pdfe lib","first argument should be a <pde array> or <pde dictionary>"); \
+-    } \
+-} while (0)
+-
+-# define pdfelib_get_value_check_2 \
+-    normal_warning("pdfe lib","second argument should be integer or string");
+-
+-/*tex
+-
+-    The direct fetcher returns the result or |NULL| when there is nothing
+-    found.
+-
+-*/
+-
+-# define pdfelib_get_indirect_o(p) \
+-    ppref *r = (((pdfe_reference *) p)->xref != NULL) ? ppxref_find(((pdfe_reference *) p)->xref, (ppuint) (((pdfe_reference *) p)->onum)) : NULL; \
+-    ppobj *o = (r != NULL) ? ppref_obj(r) : NULL; \
+-
+-# define pdfelib_get_value_direct(get_d,get_a) do {                     \
+-    int t = lua_type(L,2);                                              \
+-    void *p = lua_touserdata(L, 1);                                     \
+-    lua_settop(L,2);                                                    \
+-    pdfelib_get_value_check_1;                                          \
+-    if (t == LUA_TSTRING) {                                             \
+-        const char *key = lua_tostring(L,-2);                           \
+-        lua_get_metatablelua(luatex_pdfe_dictionary);                   \
+-        if (lua_rawequal(L, -1, -2)) {                                  \
+-            value = get_d(((pdfe_dictionary *) p)->dictionary, key);    \
+-        } else {                                                        \
+-            lua_pop(L,1);                                               \
+-            lua_get_metatablelua(luatex_pdfe_reference);                \
+-            if (lua_rawequal(L, -1, -2)) {                              \
+-                pdfelib_get_indirect_o(p);                              \
+-                if (o != NULL && o->type == PPDICT) {                   \
+-                    value = get_d((ppdict *)o->dict, key);              \
+-                }                                                       \
+-            }                                                           \
+-        }                                                               \
+-    } else if (t == LUA_TNUMBER) {                                      \
+-        size_t index = lua_tointeger(L,-2);                             \
+-        lua_get_metatablelua(luatex_pdfe_array);                        \
+-        if (lua_rawequal(L, -1, -2)) {                                  \
+-            value = get_a(((pdfe_array *) p)->array, index);            \
+-        } else {                                                        \
+-            lua_pop(L,1);                                               \
+-            lua_get_metatablelua(luatex_pdfe_reference);                \
+-            if (lua_rawequal(L, -1, -2)) {                              \
+-                pdfelib_get_indirect_o(p);                              \
+-                if (o != NULL && o->type == PPARRAY) {                  \
+-                    value = get_a((pparray *) o->array, index);         \
+-                }                                                       \
+-            }                                                           \
+-        }                                                               \
+-    } else {                                                            \
+-        pdfelib_get_value_check_2;                                      \
+-    }                                                                   \
+-} while (0)
+-
+-/*tex
+-
+-    The indirect fetcher passes a pointer to the target variable and returns
+-    success state.
+-
+-*/
+-
+-# define pdfelib_get_value_indirect(get_d,get_a) do {                       \
+-    int t = lua_type(L,2);                                                  \
+-    void *p = lua_touserdata(L, 1);                                         \
+-    lua_settop(L,2);                                                        \
+-    pdfelib_get_value_check_1;                                              \
+-    if (t == LUA_TSTRING) {                                                 \
+-        const char *key = lua_tostring(L,-2);                               \
+-        lua_get_metatablelua(luatex_pdfe_dictionary);                       \
+-        if (lua_rawequal(L, -1, -2)) {                                      \
+-            okay = get_d(((pdfe_dictionary *) p)->dictionary, key, &value); \
+-        } else {                                                            \
+-            lua_pop(L,1);                                                   \
+-            lua_get_metatablelua(luatex_pdfe_reference);                    \
+-            if (lua_rawequal(L, -1, -2)) {                                  \
+-                pdfelib_get_indirect_o(p);                                  \
+-                if (o != NULL && o->type == PPDICT)                         \
+-                    okay = get_d(o->dict, key, &value);                     \
+-            }                                                               \
+-        }                                                                   \
+-    } else if (t == LUA_TNUMBER) {                                          \
+-        size_t index = lua_tointeger(L,-2);                                 \
+-        lua_get_metatablelua(luatex_pdfe_array);                            \
+-        if (lua_rawequal(L, -1, -2)) {                                      \
+-            okay = get_a(((pdfe_array *) p)->array, index, &value);         \
+-        } else {                                                            \
+-            lua_pop(L,1);                                                   \
+-            lua_get_metatablelua(luatex_pdfe_reference);                    \
+-            if (lua_rawequal(L, -1, -2)) {                                  \
+-                pdfelib_get_indirect_o(p);                                  \
+-                if (o != NULL && o->type == PPARRAY)                        \
+-                    okay = get_a(o->array, index, &value);                  \
+-            }                                                               \
+-        }                                                                   \
+-    } else {                                                                \
+-        pdfelib_get_value_check_2;                                          \
+-    }                                                                       \
+-} while (0)
+-
+-/* pre 1.13 version:
++static int pdfelib_has_metatable(lua_State *L, int index, const char *name)
++{
++    int equal;
++    if (!lua_getmetatable(L, index)) {
++        return 0;
++    }
++    luaL_getmetatable(L, name);
++    equal = lua_rawequal(L, -1, -2);
++    lua_pop(L, 2);
++    return equal;
++}
+ 
+-static int pdfelib_getstring(lua_State * L)
++static wtpdf_value *pdfelib_get_value(lua_State *L)
+ {
+-    if (lua_gettop(L) > 1) {
+-        ppstring * value = NULL;
+-        pdfelib_get_value_direct(ppdict_rget_string,pparray_rget_string);
+-        if (value != NULL) {
+-            lua_pushlstring(L, ppstring_data(value), ppstring_size(value));
+-            return 2;
++    wtpdf_value *container = NULL;
++    wtpdf_value *value = NULL;
++    wtpdf_status status;
++    int temporary = 0;
++    if (lua_gettop(L) < 2) {
++        return NULL;
++    }
++    if (pdfelib_has_metatable(L, 1, PDFE_METATABLE_DICTIONARY)) {
++        container = ((pdfe_dictionary *) lua_touserdata(L, 1))->dictionary;
++    } else if (pdfelib_has_metatable(L, 1, PDFE_METATABLE_ARRAY)) {
++        container = ((pdfe_array *) lua_touserdata(L, 1))->array;
++    } else if (pdfelib_has_metatable(L, 1, PDFE_METATABLE_REFERENCE)) {
++        pdfe_reference *reference = (pdfe_reference *) lua_touserdata(L, 1);
++        container = wtpdf_value_resolve(reference->reference, &status);
++        temporary = 1;
++    } else {
++        normal_warning(
++            "pdfe lib", "first argument should be a <pdfe array>, "
++            "<pdfe dictionary>, or <pdfe reference>");
++        return NULL;
++    }
++    if (container != NULL && lua_type(L, 2) == LUA_TSTRING &&
++        wtpdf_value_type(container) == WTPDF_VALUE_DICTIONARY) {
++        size_t key_size = 0;
++        const char *key = lua_tolstring(L, 2, &key_size);
++        value = wtpdf_dictionary_get(
++            container, (const unsigned char *) key, key_size,
++            WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++    } else if (container != NULL && lua_type(L, 2) == LUA_TNUMBER &&
++               wtpdf_value_type(container) == WTPDF_VALUE_ARRAY) {
++        lua_Integer index = lua_tointeger(L, 2);
++        if (index >= 0) {
++            value = wtpdf_array_get(
++                container, (size_t) index,
++                WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
+         }
++    } else {
++        normal_warning(
++            "pdfe lib", "second argument should be an integer or string "
++            "matching the container type");
+     }
+-    return 0;
++    if (temporary) {
++        wtpdf_value_destroy(container);
++    }
++    return value;
+ }
+ 
+-*/
+-
+ static int pdfelib_getstring(lua_State *L)
+ {
+     if (lua_gettop(L) > 1) {
+-        ppstring *value = NULL;
++        wtpdf_value *value;
+         int how = 0;
+         if (lua_type(L, 3) == LUA_TBOOLEAN) {
+             if (lua_toboolean(L, 3)) {
+@@ -1351,19 +1476,25 @@ static int pdfelib_getstring(lua_State *L)
+                 how = 2;
+             }
+         }
+-        pdfelib_get_value_direct(ppdict_rget_string,pparray_rget_string);
+-        if (value != NULL) {
+-            if (how == 1) {
+-                value = ppstring_decoded(value);
+-            }
+-            lua_pushlstring(L,ppstring_data(value),ppstring_size(value));
++        value = pdfelib_get_value(L);
++        if (value != NULL &&
++            wtpdf_value_type(value) == WTPDF_VALUE_STRING) {
++            const unsigned char *bytes = NULL;
++            size_t size = 0;
++            wtpdf_string_syntax syntax = WTPDF_STRING_LITERAL;
++            wtpdf_value_get_string(value, &bytes, &size);
++            wtpdf_value_get_string_syntax(value, &syntax);
++            lua_pushlstring(L, (const char *) bytes, size);
+             if (how == 2) {
+-                lua_pushboolean(L,ppstring_hex(value));
++                lua_pushboolean(L, syntax == WTPDF_STRING_HEX);
++                wtpdf_value_destroy(value);
+                 return 2;
+             } else {
++                wtpdf_value_destroy(value);
+                 return 1;
+             }
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1371,13 +1502,15 @@ static int pdfelib_getstring(lua_State *L)
+ static int pdfelib_getinteger(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        ppint value = 0;
+-        int okay = 0;
+-        pdfelib_get_value_indirect(ppdict_rget_int,pparray_rget_int);
+-        if (okay) {
+-            lua_pushinteger(L,(int) value);
++        long long result = 0;
++        wtpdf_value *value = pdfelib_get_value(L);
++        if (value != NULL &&
++            wtpdf_value_get_integer(value, &result) == WTPDF_STATUS_OK) {
++            lua_pushinteger(L, (lua_Integer) result);
++            wtpdf_value_destroy(value);
+             return 1;
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1385,11 +1518,19 @@ static int pdfelib_getinteger(lua_State * L)
+ static int pdfelib_getnumber(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        ppnum value = 0;
+-        int okay = 0;
+-        pdfelib_get_value_indirect(ppdict_rget_num,pparray_rget_num);
++        double result = 0;
++        wtpdf_value *value = pdfelib_get_value(L);
++        int okay = value != NULL;
++        if (okay && wtpdf_value_type(value) == WTPDF_VALUE_INTEGER) {
++            long long integer = 0;
++            okay = wtpdf_value_get_integer(value, &integer) == WTPDF_STATUS_OK;
++            result = (double) integer;
++        } else if (okay) {
++            okay = wtpdf_value_get_real(value, &result) == WTPDF_STATUS_OK;
++        }
++        wtpdf_value_destroy(value);
+         if (okay) {
+-            lua_pushnumber(L,value);
++            lua_pushnumber(L, result);
+             return 1;
+         }
+     }
+@@ -1399,13 +1540,15 @@ static int pdfelib_getnumber(lua_State * L)
+ static int pdfelib_getboolean(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        int value = 0;
+-        int okay = 0;
+-        pdfelib_get_value_indirect(ppdict_rget_bool,pparray_rget_bool);
+-        if (okay) {
+-            lua_pushboolean(L,value);
++        int result = 0;
++        wtpdf_value *value = pdfelib_get_value(L);
++        if (value != NULL &&
++            wtpdf_value_get_boolean(value, &result) == WTPDF_STATUS_OK) {
++            lua_pushboolean(L, result);
++            wtpdf_value_destroy(value);
+             return 1;
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1413,13 +1556,16 @@ static int pdfelib_getboolean(lua_State * L)
+ static int pdfelib_getname(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        ppname * value = NULL;
+-        pdfelib_get_value_direct(ppdict_rget_name,pparray_rget_name);
+-        if (value != NULL) {
+-            value = ppname_decoded(value) ;
+-            lua_pushlstring(L, ppname_data(value), ppname_size(value));
++        wtpdf_value *value = pdfelib_get_value(L);
++        if (value != NULL && wtpdf_value_type(value) == WTPDF_VALUE_NAME) {
++            const unsigned char *bytes = NULL;
++            size_t size = 0;
++            wtpdf_value_get_name(value, &bytes, &size);
++            lua_pushlstring(L, (const char *) bytes, size);
++            wtpdf_value_destroy(value);
+             return 1;
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1427,11 +1573,12 @@ static int pdfelib_getname(lua_State * L)
+ static int pdfelib_getdictionary(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        ppdict * value = NULL;
+-        pdfelib_get_value_direct(ppdict_rget_dict,pparray_rget_dict);
+-        if (value != NULL) {
+-            return pushdictionaryonly(L,value);
++        wtpdf_value *value = pdfelib_get_value(L);
++        if (value != NULL &&
++            wtpdf_value_type(value) == WTPDF_VALUE_DICTIONARY) {
++            return pushdictionaryonly(L, value);
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1439,11 +1586,11 @@ static int pdfelib_getdictionary(lua_State * L)
+ static int pdfelib_getarray(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        pparray * value = NULL;
+-        pdfelib_get_value_direct(ppdict_rget_array,pparray_rget_array);
+-        if (value != NULL) {
+-            return pusharrayonly(L,value);
++        wtpdf_value *value = pdfelib_get_value(L);
++        if (value != NULL && wtpdf_value_type(value) == WTPDF_VALUE_ARRAY) {
++            return pusharrayonly(L, value);
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1451,11 +1598,11 @@ static int pdfelib_getarray(lua_State * L)
+ static int pdfelib_getstream(lua_State * L)
+ {
+     if (lua_gettop(L) > 1) {
+-        ppobj * value = NULL;
+-        pdfelib_get_value_direct(ppdict_rget_obj,pparray_rget_obj);
+-        if (value != NULL && value->type == PPSTREAM) {
+-            return pushstreamonly(L,(ppstream *) value->stream);
++        wtpdf_value *value = pdfelib_get_value(L);
++        if (value != NULL && wtpdf_value_type(value) == WTPDF_VALUE_STREAM) {
++            return pushstreamonly(L, value);
+         }
++        wtpdf_value_destroy(value);
+     }
+     return 0;
+ }
+@@ -1467,45 +1614,63 @@ static int pdfelib_getstream(lua_State * L)
+ 
+ */
+ 
+-static int pdfelib_pushvalue(lua_State * L, ppobj *object)
++static int pdfelib_pushvalue(lua_State *L, wtpdf_value *object)
+ {
+-    switch (object->type) {
+-        case PPNONE:
+-        case PPNULL:
++    wtpdf_value_kind kind = wtpdf_value_type(object);
++    switch (kind) {
++        case WTPDF_VALUE_NONE:
++        case WTPDF_VALUE_NULL:
+             lua_pushnil(L);
++            wtpdf_value_destroy(object);
+             break;
+-        case PPBOOL:
+-            lua_pushboolean(L, object->integer);
+-            break;
+-        case PPINT:
+-            lua_pushinteger(L, object->integer);
+-            break;
+-        case PPNUM:
+-            lua_pushnumber(L, object->number);
+-            break;
+-        case PPNAME:
+-            {
+-                ppname * n = ppname_decoded(object->name) ;
+-                lua_pushlstring(L, ppname_data(n), ppname_size(n));
+-            }
+-            break;
+-        case PPSTRING:
+-            lua_pushlstring(L, ppstring_data(object->string), ppstring_size(object->string));
++        case WTPDF_VALUE_BOOLEAN: {
++            int value = 0;
++            wtpdf_value_get_boolean(object, &value);
++            lua_pushboolean(L, value);
++            wtpdf_value_destroy(object);
+             break;
+-        case PPARRAY:
+-            return pusharrayonly(L, object->array);
++        }
++        case WTPDF_VALUE_INTEGER: {
++            long long value = 0;
++            wtpdf_value_get_integer(object, &value);
++            lua_pushinteger(L, (lua_Integer) value);
++            wtpdf_value_destroy(object);
+             break;
+-        case PPDICT:
+-            return pushdictionary(L, object->dict);
++        }
++        case WTPDF_VALUE_REAL: {
++            double value = 0;
++            wtpdf_value_get_real(object, &value);
++            lua_pushnumber(L, value);
++            wtpdf_value_destroy(object);
+             break;
+-        case PPSTREAM:
+-            return pushstream(L, object->stream);
++        }
++        case WTPDF_VALUE_NAME: {
++            const unsigned char *bytes = NULL;
++            size_t size = 0;
++            wtpdf_value_get_name(object, &bytes, &size);
++            lua_pushlstring(L, (const char *) bytes, size);
++            wtpdf_value_destroy(object);
+             break;
+-        case PPREF:
+-            pushreference(L, object->ref);
++        }
++        case WTPDF_VALUE_STRING: {
++            const unsigned char *bytes = NULL;
++            size_t size = 0;
++            wtpdf_value_get_string(object, &bytes, &size);
++            lua_pushlstring(L, (const char *) bytes, size);
++            wtpdf_value_destroy(object);
+             break;
++        }
++        case WTPDF_VALUE_ARRAY:
++            return pusharrayonly(L, object);
++        case WTPDF_VALUE_DICTIONARY:
++            return pushdictionary(L, object);
++        case WTPDF_VALUE_STREAM:
++            return pushstream(L, object);
++        case WTPDF_VALUE_REFERENCE:
++            return pushreference(L, object) > 0 ? 1 : 0;
+         default:
+             lua_pushnil(L);
++            wtpdf_value_destroy(object);
+             break;
+     }
+     return 1;
+@@ -1523,12 +1688,16 @@ static int pdfelib_access(lua_State * L)
+     if (lua_type(L,2) == LUA_TSTRING) {
+         pdfe_document *p = (pdfe_document *)lua_touserdata(L, 1);
+         const char *s = lua_tostring(L,2);
++        wtpdf_status status;
+         if (lua_key_eq(s,catalog) || lua_key_eq(s,Catalog)) {
+-            return pushdictionaryonly(L,ppdoc_catalog(p->document));
++            return pushdictionaryonly(
++                L, wtpdf_document_catalog(p->document, &status));
+         } else if (lua_key_eq(s,info) || lua_key_eq(s,Info)) {
+-            return pushdictionaryonly(L,ppdoc_info(p->document));
++            return pushdictionaryonly(
++                L, wtpdf_document_info(p->document, &status));
+         } else if (lua_key_eq(s,trailer) || lua_key_eq(s,Trailer)) {
+-            return pushdictionaryonly(L,ppdoc_trailer(p->document));
++            return pushdictionaryonly(
++                L, wtpdf_document_trailer(p->document, &status));
+         } else if (lua_key_eq(s,pages) || lua_key_eq(s,Pages)) {
+             return pushpages(L,p->document);
+         }
+@@ -1540,10 +1709,15 @@ static int pdfelib_array_access(lua_State * L)
+ {
+     if (lua_type(L,2) == LUA_TNUMBER) {
+         pdfe_array *p = (pdfe_array *)lua_touserdata(L, 1);
+-        ppint index = lua_tointeger(L,2) - 1;
+-        ppobj *o = pparray_rget_obj(p->array,index);
+-        if (o != NULL) {
+-            return pdfelib_pushvalue(L,o);
++        lua_Integer index = lua_tointeger(L,2) - 1;
++        if (index >= 0) {
++            wtpdf_status status;
++            wtpdf_value *object = wtpdf_array_get(
++                p->array, (size_t) index,
++                WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++            if (object != NULL) {
++                return pdfelib_pushvalue(L,object);
++            }
+         }
+     }
+     return 0;
+@@ -1554,15 +1728,28 @@ static int pdfelib_dictionary_access(lua_State * L)
+     pdfe_dictionary *p = (pdfe_dictionary *)lua_touserdata(L, 1);
+     if (lua_type(L,2) == LUA_TSTRING) {
+         const char *key = lua_tostring(L,2);
+-        ppobj *o = ppdict_rget_obj(p->dictionary,key);
+-        if (o != NULL) {
+-            return pdfelib_pushvalue(L,o);
++        wtpdf_status status;
++        wtpdf_value *object = wtpdf_dictionary_get(
++            p->dictionary, (const unsigned char *) key, strlen(key),
++            WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++        if (object != NULL) {
++            return pdfelib_pushvalue(L,object);
+         }
+     } else if (lua_type(L,2) == LUA_TNUMBER) {
+-        ppint index = lua_tointeger(L,2) - 1;
+-        ppobj *o = ppdict_at(p->dictionary,index);
+-        if (o != NULL) {
+-            return pdfelib_pushvalue(L,o);
++        lua_Integer index = lua_tointeger(L,2) - 1;
++        size_t count = 0;
++        if (index >= 0 &&
++            wtpdf_value_count(p->dictionary, &count) == WTPDF_STATUS_OK &&
++            (size_t) index < count) {
++            const unsigned char *key = NULL;
++            size_t key_size = 0;
++            wtpdf_status status;
++            wtpdf_value *object = wtpdf_dictionary_at(
++                p->dictionary, (size_t) index, &key, &key_size,
++                WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
++            if (object != NULL) {
++                return pdfelib_pushvalue(L,object);
++            }
+         }
+     }
+     return 0;
+@@ -1571,19 +1758,38 @@ static int pdfelib_dictionary_access(lua_State * L)
+ static int pdfelib_stream_access(lua_State * L)
+ {
+     pdfe_stream *p = (pdfe_stream *)lua_touserdata(L, 1);
++    wtpdf_status status;
++    wtpdf_value *dictionary = wtpdf_stream_dictionary(p->stream, &status);
++    if (dictionary == NULL) {
++        return 0;
++    }
+     if (lua_type(L,2) == LUA_TSTRING) {
+         const char *key = lua_tostring(L,2);
+-        ppobj *o = ppdict_rget_obj(p->stream->dict,key);
+-        if (o != NULL) {
+-            return pdfelib_pushvalue(L,o);
++        wtpdf_value *object = wtpdf_dictionary_get(
++            dictionary, (const unsigned char *) key, strlen(key),
++            WTPDF_LOOKUP_RESOLVE_REFERENCE, &status);
++        if (object != NULL) {
++            wtpdf_value_destroy(dictionary);
++            return pdfelib_pushvalue(L,object);
+         }
+     } else if (lua_type(L,2) == LUA_TNUMBER) {
+-        ppint index = lua_tointeger(L,2) - 1;
+-        ppobj *o = ppdict_at(p->stream->dict,index);
+-        if (o != NULL) {
+-            return pdfelib_pushvalue(L,o);
++        lua_Integer index = lua_tointeger(L,2) - 1;
++        size_t count = 0;
++        if (index >= 0 &&
++            wtpdf_value_count(dictionary, &count) == WTPDF_STATUS_OK &&
++            (size_t) index < count) {
++            const unsigned char *key = NULL;
++            size_t key_size = 0;
++            wtpdf_value *object = wtpdf_dictionary_at(
++                dictionary, (size_t) index, &key, &key_size,
++                WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
++            if (object != NULL) {
++                wtpdf_value_destroy(dictionary);
++                return pdfelib_pushvalue(L,object);
++            }
+         }
+     }
++    wtpdf_value_destroy(dictionary);
+     return 0;
+ }
+ 
+@@ -1596,24 +1802,78 @@ static int pdfelib_stream_access(lua_State * L)
+ static int pdfelib_array_size(lua_State * L)
+ {
+     pdfe_array *p = (pdfe_array *)lua_touserdata(L, 1);
+-    lua_pushinteger(L,p->array->size);
++    size_t count = 0;
++    wtpdf_value_count(p->array, &count);
++    lua_pushinteger(L, (lua_Integer) count);
+     return 1;
+ }
+ 
+ static int pdfelib_dictionary_size(lua_State * L)
+ {
+     pdfe_dictionary *p = (pdfe_dictionary *)lua_touserdata(L, 1);
+-    lua_pushinteger(L,p->dictionary->size);
++    size_t count = 0;
++    wtpdf_value_count(p->dictionary, &count);
++    lua_pushinteger(L, (lua_Integer) count);
+     return 1;
+ }
+ 
+ static int pdfelib_stream_size(lua_State * L)
+ {
+     pdfe_stream *p = (pdfe_stream *)lua_touserdata(L, 1);
+-    lua_pushinteger(L,p->stream->dict->size);
++    size_t count = 0;
++    wtpdf_status status;
++    wtpdf_value *dictionary = wtpdf_stream_dictionary(p->stream, &status);
++    if (dictionary != NULL) {
++        wtpdf_value_count(dictionary, &count);
++        wtpdf_value_destroy(dictionary);
++    }
++    lua_pushinteger(L, (lua_Integer) count);
+     return 1;
+ }
+ 
++static int pdfelib_free_dictionary(lua_State *L)
++{
++    pdfe_dictionary *p = (pdfe_dictionary *) lua_touserdata(L, 1);
++    if (p != NULL) {
++        wtpdf_value_destroy(p->dictionary);
++        p->dictionary = NULL;
++    }
++    return 0;
++}
++
++static int pdfelib_free_array(lua_State *L)
++{
++    pdfe_array *p = (pdfe_array *) lua_touserdata(L, 1);
++    if (p != NULL) {
++        wtpdf_value_destroy(p->array);
++        p->array = NULL;
++    }
++    return 0;
++}
++
++static int pdfelib_free_stream(lua_State *L)
++{
++    pdfe_stream *p = (pdfe_stream *) lua_touserdata(L, 1);
++    if (p != NULL) {
++        wtpdf_stream_reader_close(p->reader);
++        p->reader = NULL;
++        wtpdf_value_destroy(p->stream);
++        p->stream = NULL;
++        p->open = 0;
++    }
++    return 0;
++}
++
++static int pdfelib_free_reference(lua_State *L)
++{
++    pdfe_reference *p = (pdfe_reference *) lua_touserdata(L, 1);
++    if (p != NULL) {
++        wtpdf_value_destroy(p->reference);
++        p->reference = NULL;
++    }
++    return 0;
++}
++
+ /*tex
+ 
+     We now initialize the main interface. We might add few more informational
+@@ -1685,6 +1945,7 @@ static const struct luaL_Reg pdfelib_m[] = {
+ 
+ static const struct luaL_Reg pdfelib_m_dictionary[] = {
+     { "__tostring", pdfelib_tostring_dictionary },
++    { "__gc",       pdfelib_free_dictionary },
+     { "__index",    pdfelib_dictionary_access },
+     { "__len",      pdfelib_dictionary_size },
+     { NULL,         NULL}
+@@ -1692,6 +1953,7 @@ static const struct luaL_Reg pdfelib_m_dictionary[] = {
+ 
+ static const struct luaL_Reg pdfelib_m_array[] = {
+     { "__tostring", pdfelib_tostring_array },
++    { "__gc",       pdfelib_free_array },
+     { "__index",    pdfelib_array_access },
+     { "__len",      pdfelib_array_size },
+     { NULL,         NULL}
+@@ -1699,6 +1961,7 @@ static const struct luaL_Reg pdfelib_m_array[] = {
+ 
+ static const struct luaL_Reg pdfelib_m_stream[] = {
+     { "__tostring", pdfelib_tostring_stream },
++    { "__gc",       pdfelib_free_stream },
+     { "__index",    pdfelib_stream_access },
+     { "__len",      pdfelib_stream_size },
+     { "__call",     pdfelib_readwholestream },
+@@ -1707,6 +1970,7 @@ static const struct luaL_Reg pdfelib_m_stream[] = {
+ 
+ static const struct luaL_Reg pdfelib_m_reference[] = {
+     { "__tostring", pdfelib_tostring_reference },
++    { "__gc",       pdfelib_free_reference },
+     { NULL,         NULL}
+ };
+ 
+@@ -1723,11 +1987,6 @@ static const struct luaL_Reg pdfelib_m_reference[] = {
+ 
+ */
+ 
+-static void pdfelib_message(const char *message, void *alien)
+-{
+-    normal_warning("pdfe",message);
+-}
+-
+ int luaopen_pdfe(lua_State * L)
+ {
+     /*tex First the four userdata object get their metatables defined. */
+@@ -1753,7 +2012,5 @@ int luaopen_pdfe(lua_State * L)
+ 
+     luaL_openlib(L, "pdfe", pdfelib, 0);
+ 
+-    pplog_callback(pdfelib_message, stderr);
+-
+     return 1;
+ }
+diff --git a/texk/web2c/luatexdir/lua/lpdfscannerlib.c b/texk/web2c/luatexdir/lua/lpdfscannerlib.c
+index 90e7da58b..561729008 100644
+--- a/texk/web2c/luatexdir/lua/lpdfscannerlib.c
++++ b/texk/web2c/luatexdir/lua/lpdfscannerlib.c
+@@ -22,7 +22,7 @@
+ /*tex
+ 
+     The scanner can read from a string or stream. Streams can be given directly as
+-    |ppstream| object or as a |pparray| of streams. Here is an example of usage:
++    a pdfe stream object or as a pdfe array of streams. Here is an example of usage:
+ 
+     \starttyping
+     local operatortable = { }
+@@ -78,7 +78,7 @@
+ #include <lauxlib.h>
+ #include <lualib.h>
+ 
+-#include "pplib.h"
++#include "image/wtpdf.h"
+ 
+ #include <lua/luatex-api.h>
+ 
+@@ -107,16 +107,16 @@ typedef struct Token {
+ 
+ typedef struct ObjectList {
+     struct ObjectList *next;
+-    ppstream *stream;
++    wtpdf_value *stream;
+ } ObjectList;
+ 
+ typedef struct scannerdata {
+     int _ininlineimage;
+     int _nextoperand;
+     Token **_operandstack;
+-    ppstream *_stream;
++    wtpdf_value *_stream;
+     ObjectList *_streams;
+-    const char *buffer;
++    char *buffer;
+     size_t position;
+     size_t size;
+     int uses_stream;
+@@ -126,12 +126,8 @@ typedef struct scannerdata {
+ #define PDFE_METATABLE_STREAM "luatex.pdfe.stream"
+ 
+ typedef struct {
+-    void *d;
+-    /*tex reference to |PdfDocument|, or |NULL| */
+-    void *pd;
+-    /*tex counter to detect |PDFDoc| change */
+-    unsigned long pc;
+-} udstruct;
++    wtpdf_value *value;
++} pdfe_value_userdata;
+ 
+ static void clear_operand_stack(scannerdata * self, int from);
+ static Token *_parseToken(scannerdata * self, int c);
+@@ -231,21 +227,95 @@ static Token *new_operand(pdf_token_type c)
+     return token;
+ }
+ 
+-static void _nextStream(scannerdata * self)
++static char *read_decoded_stream(wtpdf_value *stream, size_t *result_size)
+ {
+-    ObjectList *rover = NULL;
+-    if (self->uses_stream && self->buffer != NULL) {
+-        if (self->uses_stream) {
+-            ppstream_done(self->_stream);
+-        } else {
+-            free(self->_stream);
++    unsigned char chunk[16384];
++    char *data = NULL;
++    size_t allocated = 0;
++    size_t size = 0;
++    int eof = 0;
++    wtpdf_status status;
++    wtpdf_stream_reader *reader = wtpdf_stream_reader_open(
++        stream, WTPDF_STREAM_DECODED, &status);
++    if (reader == NULL) {
++        return NULL;
++    }
++    while (!eof) {
++        size_t count = 0;
++        status = wtpdf_stream_reader_read(
++            reader, chunk, sizeof(chunk), &count, &eof);
++        if (status != WTPDF_STATUS_OK || count > (size_t) -1 - size - 1) {
++            wtpdf_stream_reader_close(reader);
++            free(data);
++            return NULL;
++        }
++        if (size + count + 1 > allocated) {
++            size_t next = allocated == 0 ? sizeof(chunk) : allocated;
++            while (next < size + count + 1) {
++                if (next > ((size_t) -1) / 2) {
++                    next = size + count + 1;
++                    break;
++                }
++                next *= 2;
++            }
++            data = data == NULL
++                ? (char *) priv_xmalloc(next)
++                : (char *) priv_xrealloc(data, next);
++            allocated = next;
+         }
++        memcpy(data + size, chunk, count);
++        size += count;
++    }
++    wtpdf_stream_reader_close(reader);
++    if (data == NULL) {
++        data = (char *) priv_xmalloc(1);
++    }
++    data[size] = '\0';
++    *result_size = size;
++    return data;
++}
++
++static void append_stream(ObjectList **list, wtpdf_value *stream)
++{
++    ObjectList *item;
++    ObjectList *tail;
++    if (stream == NULL || wtpdf_value_type(stream) != WTPDF_VALUE_STREAM) {
++        wtpdf_value_destroy(stream);
++        return;
++    }
++    item = (ObjectList *) priv_xmalloc(sizeof(ObjectList));
++    item->stream = stream;
++    item->next = NULL;
++    if (*list == NULL) {
++        *list = item;
++        return;
++    }
++    tail = *list;
++    while (tail->next != NULL) {
++        tail = tail->next;
++    }
++    tail->next = item;
++}
++
++static void _nextStream(scannerdata * self)
++{
++    ObjectList *rover;
++    if (self->buffer != NULL) {
++        free(self->buffer);
++        self->buffer = NULL;
++    }
++    if (self->_stream != NULL) {
++        wtpdf_value_destroy(self->_stream);
++        self->_stream = NULL;
+     }
+     rover = self->_streams;
+-    self->_stream = rover->stream;
+-    if (self->uses_stream) {
+-        self->buffer = (const char *) ppstream_all(self->_stream, &self->size, 1);
++    if (rover == NULL) {
++        self->size = 0;
++        self->position = 0;
++        return;
+     }
++    self->_stream = rover->stream;
++    self->buffer = read_decoded_stream(self->_stream, &self->size);
+     self->position = 0;
+     self->_streams = rover->next;
+     free(rover);
+@@ -255,7 +325,7 @@ static int streamGetChar(scannerdata * self)
+ {
+     int i = EOF;
+     if (self->position < self->size) {
+-        const char c = self->buffer[self->position];
++        const unsigned char c = (unsigned char) self->buffer[self->position];
+         ++self->position;
+         i = (int) c;
+     }
+@@ -270,7 +340,7 @@ static int streamLookChar(scannerdata * self)
+ {
+     int i = EOF;
+     if (self->position < self->size) {
+-        const char c = self->buffer[self->position];
++        const unsigned char c = (unsigned char) self->buffer[self->position];
+         /*not |++self->position;| */
+         i = (int) c;
+     }
+@@ -283,21 +353,27 @@ static int streamLookChar(scannerdata * self)
+ 
+ static void streamReset(scannerdata * self)
+ {
+-    if (self->uses_stream) {
+-        self->buffer = (const char *) ppstream_all(self->_stream, &self->size, 1);
++    if (self->uses_stream && self->buffer == NULL && self->_stream != NULL) {
++        self->buffer = read_decoded_stream(self->_stream, &self->size);
+     }
+     self->position = 0;
+ }
+ 
+ static void streamClose(scannerdata * self)
+ {
+-    if (self->uses_stream) {
+-        ppstream_done(self->_stream);
+-    } else {
+-        free(self->_stream);
+-    }
++    ObjectList *item;
++    free(self->buffer);
+     self->buffer = NULL;
++    wtpdf_value_destroy(self->_stream);
+     self->_stream = NULL;
++    while (self->_streams != NULL) {
++        item = self->_streams;
++        self->_streams = item->next;
++        wtpdf_value_destroy(item->stream);
++        free(item);
++    }
++    self->size = 0;
++    self->position = 0;
+ }
+ 
+ /*tex end of stream interface */
+@@ -709,81 +785,51 @@ static int scanner_scan(lua_State * L)
+       memcpy(buf,s,self->size);
+       self->buffer = buf;
+     } else if (lua_type(L, 1) == LUA_TTABLE) {
+-        udstruct *uin;
+-        void *ud;
+         int i = 1;
+         while (1) {
+             lua_rawgeti(L, 1, i);
+             if (lua_type(L, -1) == LUA_TUSERDATA) {
+-                ud = luaL_checkudata(L, -1, PDFE_METATABLE_STREAM);
++                pdfe_value_userdata *ud = (pdfe_value_userdata *)
++                    luaL_testudata(L, -1, PDFE_METATABLE_STREAM);
+                 if (ud != NULL) {
+-                    ObjectList *rover = NULL;
+-                    ObjectList *item = NULL;
+-                    uin = (udstruct *) ud;
+-                    rover = self->_streams;
+-                    item = (ObjectList *) priv_xmalloc(sizeof(ObjectList));
+-                    item->stream = ((ppstream *) uin->d);
+-                    item->next = NULL;
+-                    if (!rover) {
+-                        rover = item;
+-                        self->_streams = rover;
+-                    } else {
+-                        while (rover->next)
+-                            rover = rover->next;
+-                        rover->next = item;
+-                    }
++                    wtpdf_status status;
++                    append_stream(
++                        &self->_streams,
++                        wtpdf_value_resolve(ud->value, &status));
+                 }
+             } else {
+-                ObjectList *rover = self->_streams;
+-                self->_stream = rover->stream;
+-                self->_streams = rover->next;
+-                free(rover);
+                 lua_pop(L, 1);
+                 break;
+             }
+             lua_pop(L, 1);
+             i++;
+         }
++        _nextStream(self);
+     } else {
+-        udstruct *uin;
+-        void *ud;
++        pdfe_value_userdata *ud;
+         luaL_checktype(L, 1, LUA_TUSERDATA);
+-        ud = luaL_checkudata(L, 1, PDFE_METATABLE_STREAM);
++        ud = (pdfe_value_userdata *)
++            luaL_testudata(L, 1, PDFE_METATABLE_STREAM);
+         if (ud != NULL) {
+-            uin = (udstruct *) ud;
+-            self->_stream = ((ppstream *) uin->d);
++            wtpdf_status status;
++            self->_stream = wtpdf_value_resolve(ud->value, &status);
+         } else {
+-            ud = luaL_checkudata(L, 1, PDFE_METATABLE_ARRAY);
++            ud = (pdfe_value_userdata *)
++                luaL_testudata(L, 1, PDFE_METATABLE_ARRAY);
+             if (ud != NULL) {
+-            ObjectList *rover = NULL;
+-            pparray *array = NULL;
+-            int count;
+-            int i;
+-            uin = (udstruct *) ud;
+-            array = (pparray *) uin->d;
+-            count = array->size;
+-            for (i = 0; i < count; i++) {
+-                ppobj *obj = pparray_at(array, i);
+-                if (obj->type == PPSTREAM) {
+-                    ObjectList *rover = self->_streams;
+-                    ObjectList *item =
+-                        (ObjectList *)
+-                        priv_xmalloc(sizeof(ObjectList));
+-                    item->stream = obj->stream;
+-                    item->next = NULL;
+-                    if (!rover) {
+-                        rover = item;
+-                        self->_streams = rover;
+-                    } else {
+-                        while (rover->next)
+-                        rover = rover->next;
+-                        rover->next = item;
++                size_t count = 0;
++                size_t index;
++                if (wtpdf_value_count(ud->value, &count) == WTPDF_STATUS_OK) {
++                    for (index = 0; index < count; ++index) {
++                        wtpdf_status status;
++                        append_stream(
++                            &self->_streams,
++                            wtpdf_array_get(
++                                ud->value, index,
++                                WTPDF_LOOKUP_RESOLVE_REFERENCE, &status));
+                     }
+                 }
+-            }
+-            rover = self->_streams;
+-            self->_stream = rover->stream;
+-            self->_streams = rover->next;
++                _nextStream(self);
+             }
+         }
+     }
+@@ -819,7 +865,7 @@ static int scanner_scan(lua_State * L)
+         token = _parseToken(self, streamGetChar(self));
+     }
+     /*tex wrap up */
+-    if (self->_stream) {
++    if (self->_stream || self->_streams || self->buffer) {
+         streamClose(self);
+     }
+     clear_operand_stack(self, 0);
+diff --git a/texk/web2c/luatexdir/lua/luainit.c b/texk/web2c/luatexdir/lua/luainit.c
+index a05a0e54c..da22b77aa 100644
+--- a/texk/web2c/luatexdir/lua/luainit.c
++++ b/texk/web2c/luatexdir/lua/luainit.c
+@@ -509,7 +509,6 @@ static void parse_options(int ac, char **av)
+                  "kpathsea  : Karl Berry, Olaf Weber and others\n"
+                  "lua       : Roberto Ierusalimschy, Waldemar Celes and Luiz Henrique de Figueiredo\n"
+                  "metapost  : John Hobby, Taco Hoekwater, Luigi Scarso, Hans Hagen and friends\n"
+-                 "pplib     : Paweł Jackowski\n"
+                  "fontforge : George Williams (partial)\n"
+                  "luajit    : Mike Pall (used in LuajitTeX)\n");
+             /* *INDENT-ON* */

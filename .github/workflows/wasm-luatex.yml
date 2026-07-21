@@ -19,6 +19,10 @@ on:
       - 'wasm-build/luatex-entry.c'
       - 'wasm-build/build-luatex.sh'
       - 'wasm-build/Dockerfile.luatex'
+      - 'wasm-build/patches/texlive-wtpdf.patch'
+      - 'wasm-build/pdf-backend/wtpdf.h'
+      - 'wasm-build/pdf-backend/wtpdf-xpdf.cc'
+      - 'wasm-build/pdf-backend/wtpdf-smoke.cc'
       - 'wasm-build/kpse-hook.c'
       - '.github/workflows/wasm-luatex.yml'
 
@@ -40,7 +44,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-luatex
-          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex') }}
+          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex', 'wasm-build/patches/texlive-wtpdf.patch', 'wasm-build/pdf-backend/wtpdf*') }}
           restore-keys: luatex-docker-
 
       - name: Build image (Phase 1 native, cached)

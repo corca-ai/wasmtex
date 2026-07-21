@@ -13,7 +13,7 @@
 #           reuses BOTH because those tools can't run once compiled to wasm.
 #   Phase 2 (emcc, at `docker run`): build-luatex.sh cross-compiles the source graph
 #           and links it with the own glue. LuaHBTeX builds cleanly under emscripten
-#           (lua53/harfbuzz/graphite2/pplib/zziplib/kpathsea from TeX Live's bundled
+#           (lua53/harfbuzz/graphite2/Xpdf/zziplib/kpathsea from TeX Live's bundled
 #           sources); the heavy native helpers are reused from Phase 1.
 #
 # Usage:
@@ -48,6 +48,28 @@ RUN test -n "${TEXLIVE_REF}" || { echo "TEXLIVE_REF build-arg is required"; exit
     echo "=== Source checkout complete ($(git rev-parse HEAD)) ==="
 
 RUN mkdir -p /build/native /build/wasm /dist
+
+# Apply the audited WTPDF integration before either native or WebAssembly
+# configuration. The exact patch must apply without fuzz to the pinned source.
+COPY patches/texlive-wtpdf.patch /src/patches/texlive-wtpdf.patch
+COPY pdf-backend/wtpdf.h /src/pdf-backend/wtpdf.h
+COPY pdf-backend/wtpdf-xpdf.cc /src/pdf-backend/wtpdf-xpdf.cc
+COPY pdf-backend/wtpdf-smoke.cc /src/pdf-backend/wtpdf-smoke.cc
+COPY pdf-backend/wtpdf.h /src/texlive-source/texk/web2c/luatexdir/image/wtpdf.h
+COPY pdf-backend/wtpdf-xpdf.cc /src/texlive-source/texk/web2c/luatexdir/image/wtpdf-xpdf.cc
+RUN cd /src/texlive-source && \
+    git apply --check /src/patches/texlive-wtpdf.patch && \
+    git apply /src/patches/texlive-wtpdf.patch && \
+    ./reautoconf --force texk/web2c && \
+    ! grep -E 'pplib|pp(doc|dict|array|stream|ref|xref)_' \
+        texk/web2c/luatexdir/image/epdf.h \
+        texk/web2c/luatexdir/image/pdftoepdf.c \
+        texk/web2c/luatexdir/lua/lpdfelib.c \
+        texk/web2c/luatexdir/lua/lpdfscannerlib.c \
+        texk/web2c/luatexdir/lua/luainit.c \
+        texk/web2c/luatexdir/am/libluatex.am \
+        texk/web2c/luatexdir/am/luamisc.am \
+        texk/web2c/luatexdir/am/luatex.am
 
 # =============================================================================
 # Phase 1: Native build (INLINED — does not depend on COPY'd files)
