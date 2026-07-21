@@ -221,7 +221,7 @@ if (existsSync(xetexBuild)) {
   for (const forbiddenLink of [/find\s+"\$WB\/libs\/pplib"/, /"\$WB"\/libs\/pplib/]) {
     if (forbiddenLink.test(text)) fail('XeTeX build still links the forbidden pplib dependency')
   }
-  for (const required of ['wtpdf-xpdf.o', 'libxpdf.a', 'wasmtex-xetex.map']) {
+  for (const required of ['wtpdf-xpdf.cc', 'libxpdf.a', 'wasmtex-xetex.map']) {
     if (!text.includes(required)) fail(`XeTeX WTPDF build gate is missing marker: ${required}`)
   }
 }

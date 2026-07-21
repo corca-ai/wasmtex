@@ -206,12 +206,6 @@ emcc -O2 -sUSE_FREETYPE=1 -c "$GLUE/fontconfig-shim.c" -o fontconfig-shim.o
 # glue fetches icudt68l.dat (an engine asset) at init and registers it via
 # set_icu_common_data (udata_setCommonData). -sUSE_ICU supplies the headers.
 emcc -O2 -sUSE_ICU=1 -c "$GLUE/icu-data-loader.c" -o icu-data-loader.o
-em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
-  "${XPDF_INCLUDES[@]}" \
-  -c "$GLUE/pdf-backend/wtpdf-xpdf.cc" -o wtpdf-xpdf.o || {
-    echo "WTPDF adapter compile failed"
-    exit 1
-  }
 # Interposition contract (#50): kpse_find_file must be defined in libkpathsea, else
 # -Wl,--wrap=kpse_find_file below silently no-ops and the CDN file-lookup hook never
 # fires. Fail loud on upstream drift. (docs/texlive-upgrade.md interpose-don't-patch)
@@ -239,7 +233,7 @@ fi
 # shellcheck disable=SC2086
 em++ -O2 -g0 \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
-  kpse-hook.o xetex-entry.o fontconfig-shim.o icu-data-loader.o wtpdf-xpdf.o \
+  kpse-hook.o xetex-entry.o fontconfig-shim.o icu-data-loader.o \
   $XEOBJS \
   -Wl,--wrap=kpse_find_file -Wl,--wrap=FT_New_Face \
   -Wl,-Map="$OUT/wasmtex-xetex.map" \

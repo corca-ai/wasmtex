@@ -88,6 +88,17 @@ index 85914a491..cd1460c0d 100644
  xetex_dependencies += libmd5.a
  
  if XETEX_MACOSX
+@@ -172,6 +172,10 @@ libxetex_a_SOURCES = \
+ 	xetexdir/image/pngimage.c \
+ 	xetexdir/image/pngimage.h
+ 
++libxetex_a_SOURCES += \
++	xetexdir/wtpdf-xpdf.cc \
++	xetexdir/wtpdf.h
++
+ if XETEX_MACOSX
+ 
+ libxetex_a_SOURCES += \
 diff --git a/texk/web2c/xetexdir/pdfimage.cpp b/texk/web2c/xetexdir/pdfimage.cpp
 index 38d51d1ce..7925da25c 100644
 --- a/texk/web2c/xetexdir/pdfimage.cpp

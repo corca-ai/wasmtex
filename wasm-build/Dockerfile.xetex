@@ -58,6 +58,8 @@ RUN mkdir -p /build/native /build/wasm /dist
 # fuzz or silently restore the old PDF backend.
 COPY patches/texlive-wtpdf.patch /src/patches/texlive-wtpdf.patch
 COPY pdf-backend/wtpdf.h /src/pdf-backend/wtpdf.h
+COPY pdf-backend/wtpdf.h /src/texlive-source/texk/web2c/xetexdir/wtpdf.h
+COPY pdf-backend/wtpdf-xpdf.cc /src/texlive-source/texk/web2c/xetexdir/wtpdf-xpdf.cc
 RUN cd /src/texlive-source && \
     git apply --check /src/patches/texlive-wtpdf.patch && \
     git apply /src/patches/texlive-wtpdf.patch && \
@@ -83,11 +85,24 @@ RUN echo "=== Phase 1: native xetex (generate C + codegen tools + libkpathsea) =
         --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
         CPPFLAGS="-I/src/pdf-backend" \
         2>&1 | tail -25 && \
-    make MAKEINFO=true -j"$(nproc)" 2>&1 | tail -40 || true && \
-    echo "=== Verifying native xetex outputs ===" && \
-    ls -la /build/native/texk/web2c/xetex 2>/dev/null && echo "native xetex OK" || \
-        echo "(native xetex link may fail without all libs — C generation + tools are what matter)" && \
-    ls -la /build/native/texk/kpathsea/.libs/libkpathsea.a 2>/dev/null && echo "native libkpathsea OK"
+    make MAKEINFO=true -j"$(nproc)" >native-make.out 2>&1 || true && \
+    echo "=== Verifying required native outputs ===" && \
+    for output in \
+        /build/native/texk/web2c/xetex \
+        /build/native/texk/web2c/tie \
+        /build/native/texk/web2c/ctangle \
+        /build/native/texk/web2c/ctangleboot \
+        /build/native/texk/web2c/tangle \
+        /build/native/texk/web2c/tangleboot \
+        /build/native/texk/web2c/otangle \
+        /build/native/texk/web2c/web2c/web2c \
+        /build/native/texk/web2c/web2c/fixwrites \
+        /build/native/texk/web2c/web2c/splitup \
+        /build/native/texk/web2c/web2c/makecpool \
+        /build/native/texk/kpathsea/.libs/libkpathsea.a; do \
+      test -s "$output" || { echo "missing native build prerequisite: $output"; tail -80 native-make.out; exit 1; }; \
+    done && \
+    echo "native XeTeX and code-generation prerequisites OK"
 
 # =============================================================================
 # COPY build script + own glue + shim
