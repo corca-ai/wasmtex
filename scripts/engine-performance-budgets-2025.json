@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2025",
+  "artifactBytes": {
+    "wasmtex-pdftex.js": 150000,
+    "wasmtex-pdftex.wasm": 2100000,
+    "wasmtex-pdftex.worker.js": 80000,
+    "wasmtex-pdftex.fmt": 4200000,
+    "wasmtex-xetex.js": 160000,
+    "wasmtex-xetex.wasm": 4300000,
+    "wasmtex-xetex.worker.js": 50000,
+    "wasmtex-xetex.fmt.gz": 4600000,
+    "wasmtex-dvipdfm.js": 130000,
+    "wasmtex-dvipdfm.wasm": 1200000,
+    "wasmtex-dvipdfm.worker.js": 50000,
+    "wasmtex-luatex.js": 180000,
+    "wasmtex-luatex.wasm": 7200000,
+    "wasmtex-luatex.worker.js": 60000,
+    "wasmtex-luatex.fmt.gz": 4000000
+  },
+  "runtime": {
+    "pdflatex": {
+      "initMs": 15000,
+      "firstCompileMs": 120000,
+      "secondCompileMs": 60000,
+      "peakRssMiB": 1024
+    },
+    "xelatex": {
+      "initMs": 20000,
+      "firstCompileMs": 180000,
+      "secondCompileMs": 120000,
+      "peakRssMiB": 1536
+    },
+    "lualatex": {
+      "initMs": 20000,
+      "firstCompileMs": 240000,
+      "secondCompileMs": 180000,
+      "peakRssMiB": 2048
+    }
+  }
+}

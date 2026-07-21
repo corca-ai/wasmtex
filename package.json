@@ -65,6 +65,7 @@
     "check:licenses": "node scripts/check-license-compliance.mjs 2025",
     "check:engine-license-inventory": "node scripts/check-engine-license-inventory.mjs 2025",
     "check:release-notices": "node scripts/check-release-notices.mjs",
+    "check:engine-performance": "node scripts/check-engine-performance-budget.mjs 2025",
     "gen:engine-sbom": "node scripts/gen-engine-sbom.mjs 2025",
     "check:corresponding-source": "node scripts/check-corresponding-source.mjs",
     "check:texlive-provenance": "node scripts/check-texlive-provenance.mjs",
