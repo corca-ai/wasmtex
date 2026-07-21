@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
-import { BIBTEX_FILES, docFor, MAKEINDEX_FILES } from '../../e2e/golden-corpus'
+import { BIBTEX_FILES, docFor, MAKEINDEX_FILES, pdfImportFiles } from '../../e2e/golden-corpus'
 
 /**
  * Cross-host parity (S4 / #111, execution-model principle 5): the determinism contract.
@@ -30,7 +30,7 @@ const TEXLIVE = 'https://d1jectpaw0dlvl.cloudfront.net/2025/'
  *  committed browser golden `e2e/goldens/<goldenName>`. */
 async function assertParity(
   engine: 'pdflatex' | 'xelatex' | 'lualatex',
-  files: Record<string, string>,
+  files: Record<string, string | Uint8Array>,
   goldenName: string,
 ): Promise<void> {
   const { installNodeWorkerHost } = await import('./node-host')
@@ -92,4 +92,12 @@ describe.runIf(RUN)('cross-host parity (#111, #113, #114)', () => {
     'makeindex: Node output equals the browser-generated golden',
     () => assertParity('pdflatex', MAKEINDEX_FILES, 'makeindex.json'),
   )
+
+  for (const engine of ['xelatex', 'lualatex'] as const) {
+    it.runIf(existsSync(join(ROOT, 'e2e/goldens', `pdf-import-${engine}.json`)))(
+      `${engine}: graphicx/pdfpages/TikZ PDF import equals the browser golden`,
+      () => assertParity(engine, pdfImportFiles(engine), `pdf-import-${engine}.json`),
+      180_000,
+    )
+  }
 })

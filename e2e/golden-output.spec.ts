@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import { PDFDocument } from 'pdf-lib'
-import { BIBTEX_FILES, docFor, MAKEINDEX_FILES } from './golden-corpus'
+import { BIBTEX_FILES, docFor, MAKEINDEX_FILES, pdfImportFiles } from './golden-corpus'
 
 /**
  * Golden-output regression (#51). CI's WASM smoke tests prove the engines *link* and
@@ -113,6 +113,76 @@ for (const engine of ENGINES) {
 
     const golden = JSON.parse(readFileSync(file, 'utf8')) as Signature
     expect(sig).toEqual(golden)
+  })
+}
+
+for (const engine of ['xelatex', 'lualatex'] as const) {
+  test(`golden output — ${engine} PDF import packages`, async ({ page }) => {
+    const file = join(GOLDEN_DIR, `pdf-import-${engine}.json`)
+    test.skip(
+      !UPDATE && !existsSync(file),
+      `no PDF-import golden for ${engine} — run GOLDEN_UPDATE=1 playwright test golden-output`,
+    )
+
+    await page.goto(APP_URL)
+    const files = pdfImportFiles(engine)
+    const raw = await page.evaluate(
+      async ({ engine, source, figure }) => {
+        const { WasmTexCompiler } = await import('/src/headless.ts')
+        const c = new WasmTexCompiler({
+          texliveVersion: '2025',
+          engine,
+          files: { 'main.tex': source, 'figure.pdf': Uint8Array.from(figure) },
+        })
+        try {
+          await c.init()
+          const r = await c.compile()
+          const g = r.telemetry?.geometry
+          return {
+            success: r.success,
+            errorCount: r.errors.length,
+            diagnosticCodes: [
+              ...new Set((r.telemetry?.diagnostics ?? []).map((d) => d.code)),
+            ].sort(),
+            geometry: g
+              ? {
+                  pages: g.pages.length,
+                  reliable: g.reliable,
+                  textRuns: g.pages.reduce((n, p) => n + p.textRuns.length, 0),
+                  rules: g.pages.reduce((n, p) => n + p.rules.length, 0),
+                }
+              : null,
+            pdfBytes: r.pdf ? Array.from(r.pdf) : [],
+          }
+        } finally {
+          c.dispose()
+        }
+      },
+      {
+        engine,
+        source: files['main.tex'] as string,
+        figure: Array.from(files['figure.pdf'] as Uint8Array),
+      },
+    )
+    const pages = raw.pdfBytes.length
+      ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()
+      : 0
+    const signature: Signature = {
+      success: raw.success,
+      errorCount: raw.errorCount,
+      pages,
+      diagnosticCodes: raw.diagnosticCodes,
+      geometry: raw.geometry,
+    }
+    expect(signature.success, `${engine} PDF import compile failed`).toBe(true)
+    expect(signature.pages).toBe(2)
+
+    if (UPDATE) {
+      mkdirSync(GOLDEN_DIR, { recursive: true })
+      writeFileSync(file, `${JSON.stringify(signature, null, 2)}\n`)
+    } else {
+      expect(signature).toEqual(JSON.parse(readFileSync(file, 'utf8')) as Signature)
+    }
   })
 }
 

@@ -56,3 +56,42 @@ export const MAKEINDEX_FILES: Record<string, string> = {
     '',
   ].join('\n'),
 }
+
+const PDF_IMPORT_BASE64 = [
+  'JVBERi0xLjcKJeLjz9MKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgL1R5cGVzIFtudWxsIHRydWUgNyAyLjUgL0EjMjBOYW1lIChB',
+  'XDAwMEIpIDw0MTAwNDI+IDcgMCBSXSAvTGl0ZXJhbCAoQVwwMDBCXG5cKFwpXFwpIC9IZXggPDQxMDA0Mj4gL09yZGVyIDw8IC9aIDEgL0EgMiAvTSAzID4+',
+  'IC9Qcm9iZVN0cmVhbSA2IDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgWzMgMCBSXSAvQ291bnQgMSA+PgplbmRvYmoKMyAw',
+  'IG9iago8PCAvVHlwZSAvUGFnZSAvUGFyZW50IDIgMCBSIC9NZWRpYUJveCBbMCAwIDcyIDE0NF0gL1Jlc291cmNlcyA8PCA+PiAvQ29udGVudHMgNCAwIFIg',
+  'Pj4KZW5kb2JqCjQgMCBvYmoKPDwgIC9MZW5ndGggMzEgPj4Kc3RyZWFtCjAuMiAwLjYgMC45IHJnIDAgMCA3MiAxNDQgcmUgZgoKZW5kc3RyZWFtCmVuZG9i',
+  'ago1IDAgb2JqCjw8IC9Qcm9kdWNlciAoV2FzbVRleCBjb21wYXRpYmlsaXR5IGZpeHR1cmUpID4+CmVuZG9iago2IDAgb2JqCjw8IC9GaWx0ZXIgL0ZsYXRl',
+  'RGVjb2RlIC9MZW5ndGggNjQgPj4Kc3RyZWFtCnjaMzRQMNIzVSgpKk1V0PdTNjPMTVXQcIwxMDBw0lSINlQwilWwsVHQ91bQCNNUsLNTCCjKT0r1L+ACAHub',
+  'DaEKZW5kc3RyZWFtCmVuZG9iago3IDAgb2JqCjw8IC9JbmRpcmVjdCB0cnVlIC9WYWx1ZSA0MiA+PgplbmRvYmoKeHJlZgowIDgKMDAwMDAwMDAwMCA2NTUz',
+  'NSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAwMDAwMDAyMTAgMDAwMDAgbiAKMDAwMDAwMDI2NyAwMDAwMCBuIAowMDAwMDAwMzcwIDAwMDAwIG4gCjAwMDAw',
+  'MDA0NTIgMDAwMDAgbiAKMDAwMDAwMDUxNSAwMDAwMCBuIAowMDAwMDAwNjUwIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgOCAvUm9vdCAxIDAgUiAvSW5m',
+  'byA1IDAgUiA+PgpzdGFydHhyZWYKNjk2CiUlRU9GCg==',
+].join('')
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value)
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+}
+
+/** Real package-level PDF import corpus for the WTPDF-dependent Lua/Xe paths. */
+export const pdfImportFiles = (
+  engine: 'xelatex' | 'lualatex',
+): Record<string, string | Uint8Array> => ({
+  'main.tex': [
+    `% !TEX program = ${engine}`,
+    '\\documentclass{article}',
+    '\\usepackage{graphicx}',
+    '\\usepackage{pdfpages}',
+    '\\usepackage{tikz}',
+    '\\begin{document}',
+    '\\includegraphics[width=2cm]{figure.pdf}',
+    '\\begin{tikzpicture}\\draw[blue,thick] (0,0) rectangle (2,1);\\end{tikzpicture}',
+    '\\includepdf[pages=1,pagecommand={}]{figure.pdf}',
+    '\\end{document}',
+    '',
+  ].join('\n'),
+  'figure.pdf': decodeBase64(PDF_IMPORT_BASE64),
+})
