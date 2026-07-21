@@ -7,10 +7,10 @@ names, data structures, or ownership rules.
 ABI v2 retains the document and page operations used by XeTeX and implements the
 first LuaHBTeX-facing core: roots, pages, indirect lookup, scalar values, ordered
 arrays/dictionaries, reference resolution, and independent raw/decoded stream
-readers. LuaHBTeX has not migrated yet. String lexical-form tracking,
-authentication-after-open, decoded-output limits, and aggregate resource limits
-remain required before the v2 contract below is complete. This is a behavioral
-contract, not a set of aliases for another parser API.
+readers. LuaHBTeX has not migrated yet. Authentication-after-open,
+decoded-output limits, and aggregate resource limits remain required before the
+v2 contract below is complete. This is a behavioral contract, not a set of
+aliases for another parser API.
 
 | WTPDF operation | Current caller | Observable behavior to preserve |
 | --- | --- | --- |
@@ -83,11 +83,11 @@ length. Callers that serialize a name must escape those bytes for PDF output.
 String access returns the exact semantic byte sequence and its length, including
 embedded NUL bytes. It also returns whether the source token used literal or hex
 syntax, because `pdfe` exposes that bit. Xpdf 4.04 normally discards this lexical
-fact while parsing; the backend therefore needs a small, tracked Xpdf extension
-or an equivalent side table before ABI v2 can claim string parity. Guessing from
-the bytes or always reporting one form is not acceptable. Decoding a PDF string
-for the optional Lua helper produces a separate owned byte buffer and never
-mutates the original value.
+fact while parsing, so the tracked TeX Live patch records the bit on Xpdf
+`Object` values at the lexer boundary and WTPDF exposes it through an enum.
+Guessing from the bytes or always reporting one form is not acceptable. Decoding
+a PDF string for the optional Lua helper produces a separate owned byte buffer
+and never mutates the original value.
 
 ### Streams
 

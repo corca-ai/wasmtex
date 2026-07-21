@@ -69,6 +69,11 @@ typedef enum wtpdf_stream_mode {
   WTPDF_STREAM_DECODED = 1
 } wtpdf_stream_mode;
 
+typedef enum wtpdf_string_syntax {
+  WTPDF_STRING_LITERAL = 0,
+  WTPDF_STRING_HEX = 1
+} wtpdf_string_syntax;
+
 /*
  * Set struct_size to sizeof(wtpdf_open_options). A zero max_input_bytes means
  * that this adapter does not impose an input-size limit. Password pointers are
@@ -138,6 +143,8 @@ wtpdf_status wtpdf_value_get_real(const wtpdf_value *value, double *result);
 wtpdf_status wtpdf_value_get_string(const wtpdf_value *value,
                                     const unsigned char **bytes,
                                     size_t *size);
+wtpdf_status wtpdf_value_get_string_syntax(const wtpdf_value *value,
+                                           wtpdf_string_syntax *syntax);
 wtpdf_status wtpdf_value_get_name(const wtpdf_value *value,
                                   const unsigned char **bytes,
                                   size_t *size);

@@ -588,6 +588,20 @@ wtpdf_status wtpdf_value_get_string(const wtpdf_value *value,
   return WTPDF_STATUS_OK;
 }
 
+wtpdf_status wtpdf_value_get_string_syntax(const wtpdf_value *value,
+                                           wtpdf_string_syntax *syntax) {
+  Object *object = mutable_object(value);
+  if (!object || !syntax) {
+    return WTPDF_STATUS_INVALID_ARGUMENT;
+  }
+  if (!object->isString()) {
+    return WTPDF_STATUS_TYPE_MISMATCH;
+  }
+  *syntax = object->getStringIsHex() ? WTPDF_STRING_HEX
+                                    : WTPDF_STRING_LITERAL;
+  return WTPDF_STATUS_OK;
+}
+
 wtpdf_status wtpdf_value_get_name(const wtpdf_value *value,
                                   const unsigned char **bytes,
                                   size_t *size) {

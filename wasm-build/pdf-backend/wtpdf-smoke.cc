@@ -33,7 +33,7 @@ std::string make_fixture() {
       "<< /Type /Page /Parent 2 0 R /MediaBox [10 20 210 420] "
       "/CropBox [20 30 200 400] /BleedBox [25 35 195 395] "
       "/TrimBox [30 40 190 390] /ArtBox [35 45 185 385] /Rotate -90 "
-      "/TestArray [null true 42 3.5 (A\\000B) /N#61me 5 0 R] "
+      "/TestArray [null true 42 3.5 (A\\000B) <410042> /N#61me 5 0 R] "
       "/TestDict << /First 1 /Second 2 >> /Contents 5 0 R >>",
       "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 200] "
       "/CropBox [1 2 90 180] >>",
@@ -113,7 +113,7 @@ void check_object_model(wtpdf_document *document, size_t input_size) {
       WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
   size_t count = 0;
   require(array && wtpdf_value_count(array, &count) == WTPDF_STATUS_OK &&
-              count == 7,
+              count == 8,
           "array length changed");
 
   wtpdf_value *value = wtpdf_array_get(
@@ -152,16 +152,28 @@ void check_object_model(wtpdf_document *document, size_t input_size) {
   require(value && wtpdf_value_get_string(value, &bytes, &size) == WTPDF_STATUS_OK &&
               size == 3 && bytes[0] == 'A' && bytes[1] == 0 && bytes[2] == 'B',
           "binary string bytes changed");
+  wtpdf_string_syntax string_syntax = WTPDF_STRING_HEX;
+  require(wtpdf_value_get_string_syntax(value, &string_syntax) == WTPDF_STATUS_OK &&
+              string_syntax == WTPDF_STRING_LITERAL,
+          "literal string syntax changed");
   wtpdf_value_destroy(value);
 
   value = wtpdf_array_get(array, 5, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+  require(value && wtpdf_value_get_string(value, &bytes, &size) == WTPDF_STATUS_OK &&
+              size == 3 && bytes[0] == 'A' && bytes[1] == 0 && bytes[2] == 'B' &&
+              wtpdf_value_get_string_syntax(value, &string_syntax) == WTPDF_STATUS_OK &&
+              string_syntax == WTPDF_STRING_HEX,
+          "hex string syntax or bytes changed");
+  wtpdf_value_destroy(value);
+
+  value = wtpdf_array_get(array, 6, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
   require(value && wtpdf_value_get_name(value, &bytes, &size) == WTPDF_STATUS_OK &&
               size == 4 && std::string(reinterpret_cast<const char *>(bytes), size) ==
                                "Name",
           "escaped name decoding changed");
   wtpdf_value_destroy(value);
 
-  value = wtpdf_array_get(array, 6, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+  value = wtpdf_array_get(array, 7, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
   require(value && wtpdf_value_get_reference(value, &object_number,
                                              &generation_number) == WTPDF_STATUS_OK &&
               object_number == 5 && generation_number == 0,

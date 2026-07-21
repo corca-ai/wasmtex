@@ -256,3 +256,52 @@ index 38d51d1ce..7925da25c 100644
  
  	return pages;
  }
+diff --git a/libs/xpdf/xpdf-src/xpdf/Lexer.cc b/libs/xpdf/xpdf-src/xpdf/Lexer.cc
+--- a/libs/xpdf/xpdf-src/xpdf/Lexer.cc
++++ b/libs/xpdf/xpdf-src/xpdf/Lexer.cc
+@@ -474,6 +474,6 @@ Object *Lexer::getObj(Object *obj, int objNum) {
+       if (m == 1)
+ 	s->append((char)(c2 << 4));
+-      obj->initString(s);
++      obj->initString(s, gTrue);
+     }
+     break;
+ 
+diff --git a/libs/xpdf/xpdf-src/xpdf/Object.h b/libs/xpdf/xpdf-src/xpdf/Object.h
+--- a/libs/xpdf/xpdf-src/xpdf/Object.h
++++ b/libs/xpdf/xpdf-src/xpdf/Object.h
+@@ -87,7 +87,7 @@ public:
+ 
+   // Default constructor.
+   Object():
+-    type(objNone) {}
++    type(objNone), stringIsHex(gFalse) {}
+ 
+   // Initialize an object.
+   Object *initBool(GBool boolnA)
+@@ -97,8 +97,8 @@ public:
+     { initObj(objInt); intg = intgA; return this; }
+   Object *initReal(double realA)
+     { initObj(objReal); real = realA; return this; }
+-  Object *initString(GString *stringA)
+-    { initObj(objString); string = stringA; return this; }
++  Object *initString(GString *stringA, GBool stringIsHexA = gFalse)
++    { initObj(objString); string = stringA; stringIsHex = stringIsHexA; return this; }
+   Object *initName(const char *nameA)
+     { initObj(objName); name = copyString(nameA); return this; }
+   Object *initNull()
+@@ -158,6 +158,7 @@ public:
+   double getReal() { return real; }
+   double getNum() { return type == objInt ? (double)intg : real; }
+   GString *getString() { return string; }
++  GBool getStringIsHex() { return stringIsHex; }
+   char *getName() { return name; }
+   Array *getArray() { return array; }
+   Dict *getDict() { return dict; }
+@@ -203,5 +204,6 @@ private:
+ 
+   ObjType type;			// object type
++  GBool stringIsHex;		// original string token used hex syntax
+   union {			// value for each type:
+     GBool booln;		//   boolean
+     int intg;			//   integer
