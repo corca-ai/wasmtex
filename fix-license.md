@@ -535,6 +535,12 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [ ] SyncTeX port의 원 저작권·허가문을 소스와 notices에 보존한다.
 - [ ] makeindex의 특별 배포/source 문구를 반영한다.
 - [ ] TeX Live 패키지·폰트·Lua·포맷·ICU 파일별 provenance manifest를 생성한다.
+- [x] 2025 `texmf` archive와 같은 날짜의 `extra` archive/TLPDB를 각각 SHA-512/SHA-256으로 고정하는 설정을 추가했다.
+- [x] mirror key, byte hash, 원래 `texmf-dist` path, package/revision, catalogue license, notice path, basename collision 결정을 생성하는 도구와 fixture test를 추가했다.
+- [x] 내용이 다른 basename collision, 소유 package 누락, license metadata 누락, archive hash 불일치를 fail-closed 처리한다.
+- [x] 모든 사용 package가 reviewed override와 실제 notice evidence path를 갖기 전에는 provenance release 검사가 실패하도록 했다.
+- [ ] 전체 2025 mirror에 생성기를 실행하고 differing collision과 package별 license/notice override를 검토·확정한다.
+- [ ] 생성된 전체 provenance와 실제 CDN object를 대조하고 안정적인 URL/SHA-256으로 공개한다.
 - [ ] 라이선스 미확인 CDN 파일이 production allowlist에 들어오지 못하게 한다.
 - [ ] 엔진별 `LICENSE-MANIFEST.json`에 source URL, commit, hash, license, notice 경로를 기록한다.
 - [ ] 완전한 대응 소스 archive를 engine release와 같은 기간 동안 안정적으로 호스팅한다.

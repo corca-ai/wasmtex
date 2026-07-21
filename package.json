@@ -63,6 +63,8 @@
     "test:e2e": "playwright test",
     "test:golden": "playwright test golden-output",
     "check:licenses": "node scripts/check-license-compliance.mjs 2025",
+    "check:texlive-provenance": "node scripts/check-texlive-provenance.mjs",
+    "test:license-tools": "node --test scripts/*.test.mjs",
     "update:golden": "GOLDEN_UPDATE=1 playwright test golden-output",
     "compat": "node scripts/compat/run.mjs",
     "sync-engine-assets": "node scripts/sync-engine-assets.mjs",
@@ -70,6 +72,7 @@
     "extract-xetex-format": "node scripts/extract-xetex-format.mjs",
     "gen-luatex-manifest": "node scripts/gen-luatex-manifest.mjs",
     "gen-asset-manifest": "node scripts/gen-asset-manifest.mjs",
+    "gen-texlive-provenance": "node scripts/gen-texlive-provenance.mjs",
     "build:lib": "BUILD_MODE=lib vite build && node scripts/check-dts-exports.mjs",
     "prepare": "npm run build:lib"
   },

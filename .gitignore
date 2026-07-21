@@ -27,6 +27,9 @@ bloom-filter.bin
 /public/busytex
 /public/fonts
 /public/typst-packages
+# Development-only capture of TeX Live responses. Release mirrors are generated
+# outside Git and must carry texlive-provenance.json.
+/public/texlive/
 
 # Engine assets are generated in CI and deployed as versioned release
 # artifacts. Keep only the compliance manifest in Git; this prevents an

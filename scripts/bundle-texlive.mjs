@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// Bundle essential TeX files as static assets for gh-pages deployment.
-// Captures texlive responses during compilation and saves them.
+// Capture essential TeX files as a development-only static cache.
+// Every captured byte must match a pinned TeX Live provenance manifest. The
+// output is gitignored and is not a release mirror or a substitute for notices.
 //
 // Prerequisites: texlive server running (docker compose up texlive)
-// Usage: node scripts/bundle-texlive.mjs
+// Usage: TEXLIVE_PROVENANCE_MANIFEST=/path/to/texlive-provenance.json \
+//   node scripts/bundle-texlive.mjs
 
 import { chromium } from '@playwright/test'
 import { createServer } from 'vite'
-import { mkdirSync, writeFileSync } from 'fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -16,6 +19,23 @@ const root = join(__dirname, '..')
 const bundleDir = join(root, 'public/texlive')
 
 async function main() {
+  const provenancePath = process.env.TEXLIVE_PROVENANCE_MANIFEST
+  if (!provenancePath) {
+    throw new Error('TEXLIVE_PROVENANCE_MANIFEST is required; unprovenanced capture is disabled')
+  }
+  const provenanceBytes = readFileSync(provenancePath)
+  const provenance = JSON.parse(provenanceBytes.toString('utf8'))
+  const provenanceSha256 = createHash('sha256').update(provenanceBytes).digest('hex')
+  if (!Array.isArray(provenance.files) || provenance.files.length === 0) {
+    throw new Error('TeX Live provenance manifest has no files')
+  }
+  if (
+    provenance.source?.texmfArchive?.verified !== true ||
+    provenance.source?.metadataArchive?.verified !== true
+  ) {
+    throw new Error('TeX Live provenance archives are not verified')
+  }
+  const provenanceByKey = new Map(provenance.files.map((file) => [file.key, file]))
   const texliveUrl = process.env.VITE_TEXLIVE_URL || 'http://localhost:5001/'
   const isCloudFront = texliveUrl.includes('cloudfront.net')
 
@@ -48,12 +68,14 @@ async function main() {
   page.on('response', async (response) => {
     const reqUrl = response.url()
     // Pattern matches both local /texlive/ and CloudFront /2025/
-    if (!reqUrl.includes('/texlive/') && !reqUrl.includes('/2025/')) return
+    const pdftexMarker = '/pdftex/'
+    const markerIndex = reqUrl.indexOf(pdftexMarker)
+    if (markerIndex === -1) return
     if (response.status() !== 200) return
 
     try {
       const body = await response.body()
-      const path = reqUrl.replace(/.*\/pdftex\//, 'pdftex/')
+      const path = `pdftex/${reqUrl.slice(markerIndex + pdftexMarker.length).split(/[?#]/, 1)[0]}`
       if (!captured.has(path)) {
         captured.set(path, body)
       }
@@ -112,6 +134,7 @@ async function main() {
   let saved = 0
   let totalSize = 0
   let skippedHyph = 0
+  const subset = []
   for (const [path, data] of captured) {
     if (path.endsWith('.fmt')) continue
     const filename = path.split('/').pop()
@@ -119,12 +142,31 @@ async function main() {
       skippedHyph++
       continue
     }
+    const record = provenanceByKey.get(path)
+    if (!record) throw new Error(`captured file is absent from provenance: ${path}`)
+    const actualSha256 = createHash('sha256').update(data).digest('hex')
+    if (record.bytes !== data.length || record.sha256 !== actualSha256) {
+      throw new Error(`captured file does not match provenance: ${path}`)
+    }
     const outPath = join(bundleDir, path)
     mkdirSync(dirname(outPath), { recursive: true })
     writeFileSync(outPath, data)
     totalSize += data.length
     saved++
+    subset.push(record)
   }
+
+  subset.sort((a, b) => a.key.localeCompare(b.key))
+  writeFileSync(
+    join(bundleDir, 'texlive-provenance.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      developmentOnly: true,
+      derivedFromSha256: provenanceSha256,
+      source: provenance.source,
+      files: subset,
+    }, null, 2)}\n`,
+  )
 
   console.log(`Saved ${saved} files (${(totalSize / 1024).toFixed(0)} KB) to public/texlive/`)
   if (skippedHyph > 0) {
@@ -133,7 +175,7 @@ async function main() {
 
   await browser.close()
   await server.close()
-  console.log('Done! Run: git add public/texlive && git commit')
+  console.log('Done. public/texlive is a gitignored development cache; do not publish it.')
 }
 
 main().catch(e => {

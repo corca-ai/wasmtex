@@ -139,6 +139,20 @@ provenance manifest containing at least:
 Fonts and generated formats require the same provenance treatment. A generic TeX Live
 notice is not a replacement for package-specific terms.
 
+For the 2025 package mirror, `scripts/texlive-mirror-2025.json` pins the official
+dated `texmf` and `extra` archives plus the extracted `texlive.tlpdb` digest.
+`scripts/sync-texlive-s3.sh` delegates selection and manifest generation to
+`scripts/gen-texlive-provenance.mjs`; `scripts/check-texlive-provenance.mjs` verifies
+the emitted files. Identical-content basename collisions are recorded, while
+different-content collisions require an exact-path override and rationale.
+
+The TLPDB `catalogue-license` field is metadata, not a completed legal review.
+Production upload requires a reviewed per-package override with exact license and
+notice evidence. The generated manifest remains `review-required` while even one
+mirrored package lacks that review or a notice path; `provenance-reviewed` means only
+that this mirror-specific review is complete, not that the engine release is cleared.
+The repository-wide strict license gate is also run immediately before any S3 upload.
+
 ## Updating dependencies
 
 When bumping TeX Live, Emscripten, ICU, or a peer dependency:

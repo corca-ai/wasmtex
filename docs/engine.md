@@ -221,14 +221,23 @@ The release path therefore has no externally downloaded engine or worker artifac
 
 [i52]: https://github.com/corca-ai/wasmtex/issues/52
 
-The TeX Live mirror is already prepared: `scripts/sync-texlive-s3.sh` mirrors
-OpenType/TrueType/AFM fonts, the `tex/{xetex,xelatex,luatex,lualatex}` trees (so
-engine-specific packages like `xetexko`, `xeCJK`, `luatexja` are included), glyph
-lists, and `scripts/gen-xetexfontlist.mjs` builds the by-name font database.
+`scripts/sync-texlive-s3.sh` builds the TeX Live mirror from the pinned 2025 `texmf`
+archive and the same release's `texlive.tlpdb`. It verifies both archive hashes,
+records every flattened key's original path, package, hash, catalogue license, notice
+paths, and collision decision, then checks the emitted bytes against
+`texlive-provenance.json`. A differing basename collision, missing package owner, or
+missing license metadata fails before output is installed. Upload additionally
+requires reviewed per-package overrides, notice evidence, and the repository-wide
+strict release gate; the current `development-only` engine manifest therefore blocks
+upload as intended.
+
+The mirror includes OpenType/TrueType/AFM fonts, the
+`tex/{xetex,xelatex,luatex,lualatex}` trees (so engine-specific packages like
+`xetexko`, `xeCJK`, and `luatexja` are included), glyph lists, and Lua runtime files.
 `scripts/audit-mirror.mjs` reports coverage; `--check` gates a curated common-package
-set so per-tree gaps fail loudly. After adding files, regenerate the bloom filter
-(`gen-bloom-filter.mjs --upload`) and invalidate the CDN, or the engine will skip
-the new files.
+set so per-tree gaps fail loudly. After a cleared mirror changes, regenerate the bloom
+filter (`gen-bloom-filter.mjs --upload`) and invalidate the CDN, or the engine will
+skip the new files.
 
 ### Building LuaLaTeX (LuaHBTeX) from source
 

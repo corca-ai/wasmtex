@@ -55,6 +55,11 @@ for (const path of [
   'docs/licensing.md',
   'docs/proprietary-integration.md',
   'fix-license.md',
+  'scripts/check-texlive-provenance.mjs',
+  'scripts/gen-texlive-provenance.mjs',
+  'scripts/lib/texlive-provenance.mjs',
+  'scripts/texlive-mirror-2025.json',
+  'scripts/texlive-mirror-overrides-2025.json',
   'wasm-build/texlive-source.ref',
 ]) {
   requirePath(path)
@@ -63,7 +68,60 @@ for (const path of [
 const packageJson = readJson('package.json')
 const manifestRelativePath = `public/wasmtex/${version}/LICENSE-MANIFEST.json`
 const manifest = readJson(manifestRelativePath)
+const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
+const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
+
+if (mirrorConfig) {
+  if (mirrorConfig.schemaVersion !== 1) fail('TeX Live mirror config schemaVersion must be 1')
+  if (mirrorConfig.texliveYear !== version) {
+    fail(`TeX Live mirror config year must be ${version}`)
+  }
+  const archiveDates = new Set()
+  for (const key of ['texmfArchive', 'metadataArchive']) {
+    const archive = mirrorConfig[key]
+    if (!archive || typeof archive !== 'object') {
+      fail(`TeX Live mirror config ${key} is missing`)
+      continue
+    }
+    if (!/^[a-f0-9]{128}$/i.test(archive.sha512 ?? '')) {
+      fail(`TeX Live mirror config ${key}.sha512 must be a SHA-512 digest`)
+    }
+    if (
+      typeof archive.filename !== 'string' ||
+      typeof archive.url !== 'string' ||
+      !archive.url.startsWith('https://') ||
+      !archive.url.includes(`/texlive/${version}/`) ||
+      !archive.url.endsWith(`/${archive.filename}`)
+    ) {
+      fail(`TeX Live mirror config ${key} must pin an HTTPS historic archive URL`)
+    }
+    const date = archive.filename?.match(/^texlive-(\d{8})-/)?.[1]
+    if (!date) fail(`TeX Live mirror config ${key} filename must include its release date`)
+    else archiveDates.add(date)
+  }
+  if (archiveDates.size !== 1) {
+    fail('TeX Live texmf and metadata archives must come from the same release date')
+  }
+  if (typeof mirrorConfig.tlpdb?.archiveMember !== 'string') {
+    fail('TeX Live mirror config must pin the TLPDB archive member')
+  }
+  if (!isSha256(mirrorConfig.tlpdb?.sha256)) {
+    fail('TeX Live mirror config must pin the extracted TLPDB SHA-256')
+  }
+}
+
+if (mirrorOverrides) {
+  if (mirrorOverrides.schemaVersion !== 1) {
+    fail('TeX Live mirror overrides schemaVersion must be 1')
+  }
+  for (const key of ['fileOwners', 'packageLicenses', 'collisions']) {
+    const value = mirrorOverrides[key]
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      fail(`TeX Live mirror overrides ${key} must be an object`)
+    }
+  }
+}
 
 if (packageJson && manifest) {
   if (typeof packageJson.license !== 'string' || packageJson.license.length === 0) {
@@ -263,6 +321,31 @@ if (existsSync(luatexDockerfile)) {
     'sha(256|384|512)_digest',
   ]) {
     if (!text.includes(required)) fail(`LuaHBTeX source audit is missing marker: ${required}`)
+  }
+}
+
+const mirrorSync = resolve(root, 'scripts/sync-texlive-s3.sh')
+if (existsSync(mirrorSync)) {
+  const text = readFileSync(mirrorSync, 'utf8')
+  for (const required of [
+    'gen-texlive-provenance.mjs',
+    'check-texlive-provenance.mjs',
+    'TEXMF_ARCHIVE',
+    'TEXLIVE_METADATA_ARCHIVE',
+    'npm run check:licenses -- --release',
+  ]) {
+    if (!text.includes(required)) fail(`TeX Live mirror release gate is missing marker: ${required}`)
+  }
+  for (const forbidden of ['copy_flat', 'first-found wins', '--size-only']) {
+    if (text.includes(forbidden)) fail(`TeX Live mirror retains unsafe behavior: ${forbidden}`)
+  }
+}
+
+const texliveBundle = resolve(root, 'scripts/bundle-texlive.mjs')
+if (existsSync(texliveBundle)) {
+  const text = readFileSync(texliveBundle, 'utf8')
+  for (const required of ['TEXLIVE_PROVENANCE_MANIFEST', 'record.sha256', 'developmentOnly']) {
+    if (!text.includes(required)) fail(`TeX Live development capture gate is missing marker: ${required}`)
   }
 }
 

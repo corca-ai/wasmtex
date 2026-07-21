@@ -126,20 +126,35 @@ See also the from-source build mechanics in
 Upgrading requires updating the WASM engine, the S3 package repository, and the base format file.
 
 ### Step 1: Update S3 Packages
-Use `scripts/sync-texlive-s3.sh` to extract files from the latest TeX Live and upload them.
+
+Add a new versioned mirror config instead of editing archive constants in the shell
+script. Pin the `texmf` archive and the same dated `extra` archive, which contains the
+matching `tlpkg/texlive.tlpdb`; record both SHA-512 digests and the extracted TLPDB's
+SHA-256. Then update the script/config selection for the new year.
 
 ```bash
-# Edit scripts/sync-texlive-s3.sh to set TEXLIVE_YEAR=2025 and TEXMF_TARBALL to the
-# 2025 tarball name (TEXMF_URL is derived from both). Files upload to
-# s3://$S3_BUCKET/$TEXLIVE_YEAR/pdftex/.
+# Build and structurally verify a local mirror first. This does not upload.
+./scripts/sync-texlive-s3.sh
 
+# Upload is fail-closed: the package reviews, notices, engine corresponding source,
+# and every other strict release requirement must already be cleared.
 ./scripts/sync-texlive-s3.sh --upload
+
+# Replacing an existing version prefix is destructive and must be explicit.
+./scripts/sync-texlive-s3.sh --upload --replace-existing
 
 # Audit coverage afterward (read-only; writes compat/mirror-coverage.md). Flags
 # formats expected but absent — e.g. OpenType/TrueType fonts the XeLaTeX/LuaLaTeX
 # engines need.
 AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket corca-wasmtex-texlib --year 2025
 ```
+
+Review `release/texlive-provenance.json` before upload. TLPDB catalogue metadata is
+an inventory starting point, not legal approval: every package used by the mirror
+must have a reviewed entry in `scripts/texlive-mirror-overrides-<year>.json`, exact
+notice evidence, and a resolved decision for every non-identical flattened-name
+collision. Never carry an override forward to a new TeX Live year without rechecking
+the package bytes and notices.
 
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.
