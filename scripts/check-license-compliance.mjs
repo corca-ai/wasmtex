@@ -65,8 +65,10 @@ for (const path of [
   'scripts/check-texlive-provenance.mjs',
   'scripts/corresponding-source-2025.json',
   'scripts/gen-engine-build-receipt.mjs',
+  'scripts/gen-link-inventory.mjs',
   'scripts/gen-texlive-provenance.mjs',
   'scripts/lib/engine-build-receipt.mjs',
+  'scripts/lib/link-inventory.mjs',
   'scripts/lib/corresponding-source.mjs',
   'scripts/lib/release-assets.mjs',
   'scripts/lib/texlive-provenance.mjs',
@@ -253,6 +255,21 @@ if (packageJson && manifest) {
     if (family.releaseBlocker && !blockerIds.has(family.releaseBlocker)) {
       fail(`${family.name}: unknown release blocker ${family.releaseBlocker}`)
     }
+  }
+
+  const requiredBuildFamilies = Array.isArray(manifest.requiredBuildFamilies)
+    ? manifest.requiredBuildFamilies
+    : null
+  const expectedBuildFamilies = ['pdftex', 'bibtex', 'bibtex8', 'makeindex', 'xetex', 'luahbtex']
+  if (
+    !requiredBuildFamilies ||
+    JSON.stringify([...new Set(requiredBuildFamilies)].sort()) !==
+      JSON.stringify([...expectedBuildFamilies].sort())
+  ) {
+    fail(`license manifest requiredBuildFamilies must be ${expectedBuildFamilies.join(', ')}`)
+  }
+  for (const family of requiredBuildFamilies ?? []) {
+    if (!familyNames.has(family)) fail(`required build family is absent from artifactFamilies: ${family}`)
   }
 
   const xetex = (families ?? []).find((family) => family?.name === 'xetex')

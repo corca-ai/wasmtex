@@ -9,6 +9,14 @@
   "licenseDirectoryPath": "../../../LICENSES/",
   "requirementsPath": "../../../docs/licensing.md",
   "correspondingSource": null,
+  "requiredBuildFamilies": [
+    "pdftex",
+    "bibtex",
+    "bibtex8",
+    "makeindex",
+    "xetex",
+    "luahbtex"
+  ],
   "artifactFamilies": [
     {
       "name": "pdftex",

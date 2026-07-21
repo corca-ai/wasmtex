@@ -116,6 +116,7 @@ test('binds every release file to one receipt and one license family', () => {
   writeFileSync(join(artifacts, 'LICENSE-MANIFEST.json'), '{}\n')
   const legal = {
     texliveSourceCommit: COMMIT,
+    requiredBuildFamilies: ['pdftex'],
     artifactFamilies: [{ name: 'pdftex', patterns: ['engine.*'] }],
   }
   const inspected = inspectReleaseAssets({ directory: artifacts, legal, sourceConfig: config })
@@ -132,4 +133,42 @@ test('binds every release file to one receipt and one license family', () => {
     inspectReleaseAssets({ directory: artifacts, legal, sourceConfig: config }).errors.join('\n'),
     /expected exactly one build receipt/,
   )
+})
+
+test('rejects missing build families and mixed source revisions', () => {
+  const { artifacts, config } = fixture()
+  const pdftex = createBuildReceipt({
+    family: 'pdftex',
+    directory: artifacts,
+    filenames: ['engine.js'],
+    sourceRevision: COMMIT,
+    texliveSourceCommit: COMMIT,
+    config,
+  })
+  writeFileSync(join(artifacts, 'other.wasm'), Buffer.from([0, 97, 115, 109, 1]))
+  const bibtex = createBuildReceipt({
+    family: 'bibtex',
+    directory: artifacts,
+    filenames: ['other.wasm'],
+    sourceRevision: 'f'.repeat(40),
+    texliveSourceCommit: COMMIT,
+    config,
+  })
+  writeFileSync(join(artifacts, 'BUILD-RECEIPT.pdftex.json'), `${JSON.stringify(pdftex)}\n`)
+  writeFileSync(join(artifacts, 'BUILD-RECEIPT.bibtex.json'), `${JSON.stringify(bibtex)}\n`)
+  writeFileSync(join(artifacts, 'LICENSE-MANIFEST.json'), '{}\n')
+  const inspected = inspectReleaseAssets({
+    directory: artifacts,
+    legal: {
+      texliveSourceCommit: COMMIT,
+      requiredBuildFamilies: ['pdftex', 'bibtex', 'makeindex'],
+      artifactFamilies: [
+        { name: 'pdftex', patterns: ['engine.js'] },
+        { name: 'bibtex', patterns: ['other.wasm'] },
+      ],
+    },
+    sourceConfig: config,
+  })
+  assert.match(inspected.errors.join('\n'), /missing required build receipt: makeindex/)
+  assert.match(inspected.errors.join('\n'), /do not share one WasmTex source revision/)
 })

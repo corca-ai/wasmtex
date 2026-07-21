@@ -58,6 +58,22 @@ jobs:
           path: public/wasmtex/2025
           search_artifacts: true
           if_no_artifact_found: warn
+      - name: Download latest BibTeX8 WASM
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: wasm-bibtex8.yml
+          name: wasm-bibtex8
+          path: public/wasmtex/2025
+          search_artifacts: true
+          if_no_artifact_found: warn
+      - name: Download latest makeindex WASM
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: wasm-makeindex.yml
+          name: wasm-makeindex
+          path: public/wasmtex/2025
+          search_artifacts: true
+          if_no_artifact_found: warn
       - name: Download latest XeLaTeX WASM (xetex + dvipdfmx)
         # Optional engine: XeLaTeX degrades to an actionable "engine unavailable"
         # result when absent. continue-on-error also tolerates wasm-xetex.yml never

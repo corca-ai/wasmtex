@@ -99,6 +99,15 @@ export function inspectReleaseAssets({ directory, legal, sourceConfig }) {
       errors.push(`${name}: build receipt names an artifact absent from the release directory`)
     }
   }
+
+  const receiptFamilies = new Set(receipts.map((receipt) => receipt.value.family))
+  for (const family of legal.requiredBuildFamilies ?? []) {
+    if (!receiptFamilies.has(family)) errors.push(`missing required build receipt: ${family}`)
+  }
+  const sourceRevisions = new Set(receipts.map((receipt) => receipt.value.sourceRevision))
+  if (sourceRevisions.size > 1) {
+    errors.push('build receipts do not share one WasmTex source revision')
+  }
   return { files, receiptFiles, buildReceipts, receipts, errors }
 }
 
