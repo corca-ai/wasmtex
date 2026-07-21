@@ -84,11 +84,11 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 
 ### B. 과거 로컬 바이너리 격리
 
-- [ ] 추적 중인 `public/wasmtex/2025/LICENSE-MANIFEST.json`만 보존하고, 같은 디렉터리의 무시된 과거 `manifest.json`, JS, Worker, WASM과 format 파일을 제거한다.
-- [ ] `wasm-build/dist/`, `wasm-build/dist-bibtex8/`, `wasm-build/dist-luatex/`, `wasm-build/dist-makeindex/`, `wasm-build/dist-xetex/`의 과거 산출물을 제거한다.
-- [ ] 루트 `dist/`의 과거 데모·엔진 산출물을 제거한다.
-- [ ] 정리 후 개발 환경이 과거 바이너리로 조용히 fallback하지 않고, 새 릴리스가 없으면 명확히 실패하는지 확인한다.
-- [ ] `git status --ignored`와 `git ls-files`로 과거 바이너리가 추적되거나 공개 staging 대상에 들어가지 않음을 확인한다.
+- [x] 추적 중인 `public/wasmtex/2025/LICENSE-MANIFEST.json`만 보존하고, 같은 디렉터리의 무시된 과거 `manifest.json`, JS, Worker, WASM과 format 파일을 저장소 밖으로 격리했다.
+- [x] `wasm-build/dist/`, `wasm-build/dist-bibtex8/`, `wasm-build/dist-luatex/`, `wasm-build/dist-makeindex/`, `wasm-build/dist-xetex/`의 과거 산출물을 저장소 밖으로 격리했다.
+- [x] 루트 `dist/`의 과거 데모·엔진 산출물을 저장소 밖으로 격리했다.
+- [x] 정리 후 unavailable-engine 단위 테스트로 과거 바이너리 없이 명확한 오류 결과를 반환하는 경로를 확인했다.
+- [x] `git status --ignored`와 `git ls-files`로 과거 바이너리가 추적되거나 공개 staging 대상에 들어가지 않음을 확인했다.
 
 ### C. 새 엔진 릴리스 빌드
 
@@ -168,7 +168,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] 생성 엔진, format, ICU data와 `dist*`를 Git 추적 대상에서 제외했다.
 - [x] 내부 빌드 환경 식별자를 문서와 현재 Git object history에서 제거했다.
 - [x] 공개 가능한 compliance manifest만 `public/wasmtex/<version>/`에서 추적한다.
-- [ ] B 단계의 무시된 과거 로컬 바이너리를 정리한다.
+- [x] B 단계의 무시된 과거 로컬 바이너리를 저장소 밖으로 격리한다.
 - [ ] 현재 tree와 `git rev-list --objects --all` 전체 이력에 secret scanner를 실행하고 결과를 보존한다.
 - [ ] 전체 이력의 대용량 blob, binary/archive와 제3자 source provenance를 감사한다.
 - [ ] 제3자에서 복사·포팅한 모든 source header와 적용 notice를 확인한다.
