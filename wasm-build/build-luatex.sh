@@ -39,6 +39,19 @@ emconfigure "$SRC/configure" \
   --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
   >emconf.out 2>&1 || { echo "emconfigure failed"; tail -30 emconf.out; exit 1; }
 
+echo "=== Phase 2a.1: SHA-2 WebAssembly smoke test ==="
+emcc -O2 -std=c99 \
+  "$GLUE/sha2/wasmtex-sha2.c" \
+  "$GLUE/sha2/wasmtex-sha2-smoke.c" \
+  -sEXIT_RUNTIME=1 -o /tmp/wasmtex-sha2-smoke.js || {
+    echo "SHA-2 WebAssembly smoke-test build failed"
+    exit 1
+  }
+node /tmp/wasmtex-sha2-smoke.js || {
+  echo "SHA-2 WebAssembly smoke test failed"
+  exit 1
+}
+
 echo "=== Phase 2b: trim libs to what luahbtex links ==="
 # luahbtex links: zlib lua53 libpng zziplib graphite2 harfbuzz Xpdf. Drop the
 # MetaPost/ICU libs (their native codegen tools — gmp gen-fib, icupkg — can't run
@@ -161,8 +174,8 @@ em++ -O2 -g0 \
   --js-library "$GLUE/luatex-library.js" \
   -o "$OUT/wasmtex-luatex.js"
 [ -s "$OUT/wasmtex-luatex.map" ] || { echo "LuaHBTeX link map was not generated"; exit 1; }
-if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-luatex.map"; then
-  echo "ERROR: forbidden pplib archive or symbol remains in the LuaHBTeX link map" >&2
+if grep -E 'libpplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-luatex.map"; then
+  echo "ERROR: forbidden pplib archive or legacy pplib symbol remains in the LuaHBTeX link map" >&2
   exit 1
 fi
 grep -F 'libxpdf.a' "$OUT/wasmtex-luatex.map" >/dev/null || {
@@ -173,9 +186,9 @@ grep -F 'wtpdf_' "$OUT/wasmtex-luatex.map" >/dev/null || {
   echo "ERROR: LuaHBTeX link map does not contain the required WTPDF adapter" >&2
   exit 1
 }
-if grep -aE 'pplib|pp(doc|dict|array|stream|ref|xref)_' \
+if grep -aE 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' \
     "$OUT/wasmtex-luatex.js" "$OUT/wasmtex-luatex.wasm"; then
-  echo "ERROR: forbidden pplib marker remains in the LuaHBTeX release bytes" >&2
+  echo "ERROR: forbidden pplib or legacy pplib marker remains in the LuaHBTeX release bytes" >&2
   exit 1
 fi
 cp "$GLUE/luatex-worker.js" "$OUT/wasmtex-luatex.worker.js"

@@ -55,8 +55,17 @@ COPY patches/texlive-wtpdf.patch /src/patches/texlive-wtpdf.patch
 COPY pdf-backend/wtpdf.h /src/pdf-backend/wtpdf.h
 COPY pdf-backend/wtpdf-xpdf.cc /src/pdf-backend/wtpdf-xpdf.cc
 COPY pdf-backend/wtpdf-smoke.cc /src/pdf-backend/wtpdf-smoke.cc
+COPY sha2/wasmtex-sha2.h /src/sha2/wasmtex-sha2.h
+COPY sha2/wasmtex-sha2.c /src/sha2/wasmtex-sha2.c
+COPY sha2/wasmtex-sha2-smoke.c /src/sha2/wasmtex-sha2-smoke.c
 COPY pdf-backend/wtpdf.h /src/texlive-source/texk/web2c/luatexdir/image/wtpdf.h
 COPY pdf-backend/wtpdf-xpdf.cc /src/texlive-source/texk/web2c/luatexdir/image/wtpdf-xpdf.cc
+COPY sha2/wasmtex-sha2.h /src/texlive-source/texk/web2c/luatexdir/luamd5/wasmtex-sha2.h
+COPY sha2/wasmtex-sha2.c /src/texlive-source/texk/web2c/luatexdir/luamd5/wasmtex-sha2.c
+RUN cc -std=c99 -Wall -Wextra -Werror -pedantic \
+        /src/sha2/wasmtex-sha2.c /src/sha2/wasmtex-sha2-smoke.c \
+        -o /tmp/wasmtex-sha2-smoke-native && \
+    /tmp/wasmtex-sha2-smoke-native
 RUN cd /src/texlive-source && \
     git apply --check /src/patches/texlive-wtpdf.patch && \
     git apply /src/patches/texlive-wtpdf.patch && \
@@ -67,6 +76,7 @@ RUN cd /src/texlive-source && \
         texk/web2c/luatexdir/lua/lpdfelib.c \
         texk/web2c/luatexdir/lua/lpdfscannerlib.c \
         texk/web2c/luatexdir/lua/luainit.c \
+        texk/web2c/luatexdir/luamd5/md5lib.c \
         texk/web2c/luatexdir/am/libluatex.am \
         texk/web2c/luatexdir/am/luamisc.am \
         texk/web2c/luatexdir/am/luatex.am
@@ -77,21 +87,40 @@ RUN cd /src/texlive-source && \
 # Enabling only luahbtex (XeTeX disabled → no system fontconfig needed) generates
 # LuaTeX's C sources + the web2c codegen tools and builds the native libs. The same
 # --disable-* set is used in Phase 2 so the two trees match.
-RUN echo "=== Phase 1: native luahbtex (generate C + codegen tools) ===" && \
+RUN set -eu; \
+    echo "=== Phase 1: native luahbtex (generate C + codegen tools) ==="; \
     cd /build/native && \
-    /src/texlive-source/configure \
+    if ! /src/texlive-source/configure \
         --disable-all-pkgs --enable-web2c --enable-luahbtex \
         --disable-pdftex --disable-bibtex --disable-xetex \
         --disable-luajittex --disable-luajithbtex --disable-mfluajit \
         --disable-mf --disable-mp \
         --disable-ptex --disable-eptex --disable-uptex --disable-euptex \
         --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
-        2>&1 | tail -20 && \
-    make MAKEINFO=true -j"$(nproc)" 2>&1 | tail -40 || true && \
-    echo "=== Verifying native luahbtex outputs ===" && \
-    ls -la /build/native/texk/web2c/luahbtex 2>/dev/null && echo "native luahbtex OK" && \
-    ls -la /build/native/texk/web2c/ctangle /build/native/texk/web2c/web2c/web2c 2>/dev/null || \
-        echo "(codegen tools may be at other paths — build-luatex.sh discovers ELF tools)"
+        >configure-native.out 2>&1; then \
+        tail -60 configure-native.out; \
+        exit 1; \
+    fi; \
+    tail -20 configure-native.out; \
+    if ! make MAKEINFO=true -j"$(nproc)" >make-native.out 2>&1; then \
+        tail -100 make-native.out; \
+        exit 1; \
+    fi; \
+    tail -40 make-native.out; \
+    echo "=== Verifying native luahbtex outputs ==="; \
+    for output in \
+        texk/web2c/luahbtex \
+        texk/web2c/ctangle \
+        texk/web2c/ctangleboot \
+        texk/web2c/tangle \
+        texk/web2c/tangleboot \
+        texk/web2c/web2c/web2c; do \
+        test -x "/build/native/$output" || { \
+            echo "missing required native output: /build/native/$output" >&2; \
+            exit 1; \
+        }; \
+    done; \
+    echo "native luahbtex and codegen tools OK"
 
 # =============================================================================
 # COPY build script + own glue (AFTER native build — won't invalidate Phase 1)

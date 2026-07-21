@@ -1538,7 +1538,16 @@ index ec7a675c5..f02cd839e 100644
  libluajitmisc_a_CPPFLAGS += -DLuajitTeX -I$(srcdir)/luatexdir
  
  libluamisc_a_CFLAGS = # $(WARNING_CFLAGS)
-@@ -81,4 +81,3 @@ EXTRA_DIST += \
+@@ -36,6 +36,8 @@ libluamisc_sources = \
+ 	luatexdir/luamd5/md5.c \
+ 	luatexdir/luamd5/luamd5.h \
+ 	luatexdir/luamd5/md5lib.c \
++	luatexdir/luamd5/wasmtex-sha2.c \
++	luatexdir/luamd5/wasmtex-sha2.h \
+ 	luatexdir/luapeg/lpeg.c \
+ 	luatexdir/luapeg/lpeg.h \
+ 	luatexdir/luazip/src/luazip.c \
+@@ -81,4 +83,3 @@ EXTRA_DIST += \
  	luatexdir/luazlib/test_zlib.lua \
  	luatexdir/luazlib/zlib.lua \
  	luatexdir/slnunicode/unitest
@@ -3671,3 +3680,83 @@ index a05a0e54c..da22b77aa 100644
                   "fontforge : George Williams (partial)\n"
                   "luajit    : Mike Pall (used in LuajitTeX)\n");
              /* *INDENT-ON* */
+diff --git a/texk/web2c/luatexdir/luamd5/md5lib.c b/texk/web2c/luatexdir/luamd5/md5lib.c
+index db112659a..5510a499e 100644
+--- a/texk/web2c/luatexdir/luamd5/md5lib.c
++++ b/texk/web2c/luatexdir/luamd5/md5lib.c
+@@ -160,25 +160,6 @@ static int decrypt (lua_State *L) {
+     return 1;
+ }
+ 
+-/* not now .. doesn't compile anyway
+-
+-#include "../luapplib/src/util/utilmd5.h"
+-
+-static int pdfelib_md_5(lua_State * L)
+-{
+-    if (lua_type(L,1) == LUA_TSTRING) {
+-        uint8_t result[16];
+-        size_t size = 0;
+-        const char *data = lua_tolstring(L,1,&size);
+-        md5(data,size,result);
+-        lua_pushlstring(L,(const char *)result,16);
+-        return 1;
+-    }
+-    return 0;
+-}
+-
+-*/
+-
+ static struct luaL_Reg md5lib[] = {
+     { "sum",     lmd5},
+     { "exor",    ex_or},
+@@ -194,16 +175,16 @@ int luaopen_md5(lua_State *L) {
+ 
+ /* We could use a different file but this is as easy. */
+ 
+-#include "utilsha.h"
++#include "wasmtex-sha2.h"
+ 
+ static int sha2_256(lua_State * L)
+ {
+     if (lua_type(L,1) == LUA_TSTRING) {
+-        uint8_t result[SHA256_DIGEST_LENGTH];
++        uint8_t result[32];
+         size_t size = 0;
+         const char *data = lua_tolstring(L,1,&size);
+-        sha256_digest(data,size,result,SHA_BYTES);
+-        lua_pushlstring(L,(const char *)result,SHA256_DIGEST_LENGTH);
++        wasmtex_sha256(data,size,result);
++        lua_pushlstring(L,(const char *)result,sizeof(result));
+         return 1;
+     }
+     return 0;
+@@ -213,10 +194,10 @@ static int sha2_384(lua_State * L)
+ {
+     if (lua_type(L,1) == LUA_TSTRING) {
+         size_t size = 0;
+-        uint8_t result[SHA384_DIGEST_LENGTH];
++        uint8_t result[48];
+         const char *data = lua_tolstring(L,1,&size);
+-        sha384_digest(data,size,result,SHA_BYTES);
+-        lua_pushlstring(L,(const char *)result,SHA384_DIGEST_LENGTH);
++        wasmtex_sha384(data,size,result);
++        lua_pushlstring(L,(const char *)result,sizeof(result));
+         return 1;
+     }
+     return 0;
+@@ -225,11 +206,11 @@ static int sha2_384(lua_State * L)
+ static int sha2_512(lua_State * L)
+ {
+     if (lua_type(L,1) == LUA_TSTRING) {
+-        uint8_t result[SHA512_DIGEST_LENGTH];
++        uint8_t result[64];
+         size_t size = 0;
+         const char *data = lua_tolstring(L,1,&size);
+-        sha512_digest(data,size,result,SHA_BYTES);
+-        lua_pushlstring(L,(const char *)result,SHA512_DIGEST_LENGTH);
++        wasmtex_sha512(data,size,result);
++        lua_pushlstring(L,(const char *)result,sizeof(result));
+         return 1;
+     }
+     return 0;
