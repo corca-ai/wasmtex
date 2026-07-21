@@ -16,6 +16,8 @@ on:
     paths:
       - 'wasm-build/Dockerfile.xetex'
       - 'wasm-build/build-xetex2.sh'
+      - 'wasm-build/patches/texlive-wtpdf.patch'
+      - 'wasm-build/pdf-backend/**'
       - 'wasm-build/xetex-entry.c'
       - 'wasm-build/xetex-worker.js'
       - 'wasm-build/xetex-library.js'
@@ -122,6 +124,7 @@ jobs:
             wasm-build/dist-xetex/wasmtex-xetex.js
             wasm-build/dist-xetex/wasmtex-xetex.worker.js
             wasm-build/dist-xetex/wasmtex-xetex.wasm
+            wasm-build/dist-xetex/wasmtex-xetex.map
             wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
             wasm-build/dist-xetex/wasmtex-dvipdfm.js
             wasm-build/dist-xetex/wasmtex-dvipdfm.worker.js

@@ -52,8 +52,23 @@ RUN test -n "${TEXLIVE_REF}" || { echo "TEXLIVE_REF build-arg is required"; exit
 
 RUN mkdir -p /build/native /build/wasm /dist
 
+# Apply only the audited WasmTex integration patch to the exact pinned source.
+# Regenerate web2c's configure/Makefile.in because the patch changes its
+# autoconf and automake inputs. A TeX Live upgrade must fail here, not apply with
+# fuzz or silently restore the old PDF backend.
+COPY patches/texlive-wtpdf.patch /src/patches/texlive-wtpdf.patch
+COPY pdf-backend /src/pdf-backend
+RUN cd /src/texlive-source && \
+    git apply --check /src/patches/texlive-wtpdf.patch && \
+    git apply /src/patches/texlive-wtpdf.patch && \
+    ./reautoconf --force texk/web2c && \
+    ! grep -E 'ppapi|PPLIB_' \
+        texk/web2c/xetexdir/pdfimage.cpp \
+        texk/web2c/xetexdir/XeTeX_ext.c \
+        texk/web2c/xetexdir/am/xetex.am
+
 # =============================================================================
-# Phase 1: Native build (INLINED — does not depend on COPY'd files)
+# Phase 1: Native build
 # =============================================================================
 # --enable-xetex generates XeTeX's C + the web2c codegen tools and builds native
 # libkpathsea.a. The same --enable/--disable set is used in Phase 2 so the trees match.
@@ -66,6 +81,7 @@ RUN echo "=== Phase 1: native xetex (generate C + codegen tools + libkpathsea) =
         --disable-mf --disable-mp \
         --disable-ptex --disable-eptex --disable-uptex --disable-euptex \
         --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
+        CPPFLAGS="-I/src/pdf-backend" \
         2>&1 | tail -25 && \
     make MAKEINFO=true -j"$(nproc)" 2>&1 | tail -40 || true && \
     echo "=== Verifying native xetex outputs ===" && \
@@ -74,7 +90,7 @@ RUN echo "=== Phase 1: native xetex (generate C + codegen tools + libkpathsea) =
     ls -la /build/native/texk/kpathsea/.libs/libkpathsea.a 2>/dev/null && echo "native libkpathsea OK"
 
 # =============================================================================
-# COPY build script + own glue + shim (AFTER native build — won't invalidate Phase 1)
+# COPY build script + own glue + shim
 # =============================================================================
 COPY build-xetex2.sh /src/build-xetex2.sh
 COPY xetex-entry.c /src/xetex-entry.c

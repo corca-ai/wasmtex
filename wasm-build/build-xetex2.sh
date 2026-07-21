@@ -83,11 +83,13 @@ chmod +x /usr/local/bin/freetype-config
 echo "fake freetype-config installed (freetype 2.6 via emscripten port)"
 
 echo "=== Phase 2a: emconfigure (xetex) ==="
-rm -rf "$WB"; mkdir -p "$WB"; cd "$WB"
+rm -rf "$WB"; mkdir -p "$WB"; cd "$WB" || exit 1
+# DISABLES is an intentional list of configure arguments.
+# shellcheck disable=SC2086
 emconfigure "$SRC/configure" \
   --disable-all-pkgs --enable-web2c --enable-xetex --with-system-icu --with-system-freetype2 $DISABLES \
   --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
-  CPPFLAGS="-sUSE_FREETYPE=1 -sUSE_ICU=1 -sUSE_LIBPNG=1 -sUSE_ZLIB=1" \
+  CPPFLAGS="-I$GLUE/pdf-backend -sUSE_FREETYPE=1 -sUSE_ICU=1 -sUSE_LIBPNG=1 -sUSE_ZLIB=1" \
   >emconf.out 2>&1 || { echo "emconfigure failed"; tail -40 emconf.out; exit 1; }
 
 echo "=== Phase 2b: trim only the tool-heavy libs (freetype2/icu → emscripten ports) ==="
@@ -97,9 +99,33 @@ echo "=== Phase 2b: trim only the tool-heavy libs (freetype2/icu → emscripten 
 # bundled zlib at configure). Also drop the MetaPost math libs.
 sed -i -E '/^(MAKE_SUBDIRS|CONF_SUBDIRS)/ s/\<(mpfr|mpfi|cairo|pixman|potrace|gmp|freetype2|icu)\>//g' libs/Makefile
 
-echo "=== Phase 2c: build the needed libs (harfbuzz/graphite2/teckit; native codegen) ==="
+echo "=== Phase 2c: build the needed libs (Xpdf/harfbuzz/graphite2/teckit) ==="
 emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C libs -j"$(nproc)" \
   >emmake-libs.out 2>&1 || { echo "libs build failed"; tail -40 emmake-libs.out; exit 1; }
+XPDFLIB="$(find "$WB/libs/xpdf" -name libxpdf.a | head -1)"
+[ -n "$XPDFLIB" ] && [ -s "$XPDFLIB" ] || {
+  echo "Xpdf library missing after the XeTeX dependency build"
+  find "$WB/libs/xpdf" -maxdepth 3 -type f 2>/dev/null | tail -40
+  exit 1
+}
+echo "Xpdf library: $XPDFLIB"
+
+echo "=== Phase 2c.1: WTPDF WebAssembly smoke test ==="
+XPDF_INCLUDES=(
+  -I"$GLUE/pdf-backend"
+  -I"$SRC/libs/xpdf"
+  -I"$SRC/libs/xpdf/xpdf-src/goo"
+  -I"$SRC/libs/xpdf/xpdf-src/fofi"
+  -I"$SRC/libs/xpdf/xpdf-src/xpdf"
+  -I"$WB/libs/xpdf"
+)
+em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
+  "${XPDF_INCLUDES[@]}" \
+  "$GLUE/pdf-backend/wtpdf-xpdf.cc" \
+  "$GLUE/pdf-backend/wtpdf-smoke.cc" \
+  "$XPDFLIB" -sUSE_LIBPNG=1 -sUSE_ZLIB=1 \
+  -sEXIT_RUNTIME=1 -o /tmp/wtpdf-smoke.js
+node /tmp/wtpdf-smoke.js
 
 echo "=== Phase 2d: top-level make (codegen step fails as wasm — ok) ==="
 emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -j"$(nproc)" >emmake-top.out 2>&1 || true
@@ -144,12 +170,14 @@ tail -25 "$WB/emmake-xetex.out" 2>/dev/null
 echo "--- synctex/pool objects anywhere ---"
 find "$WB/texk/web2c" -name '*synctex*.o' -o -name '*pool*.o' 2>/dev/null | head
 
-echo "=== Phase 2f: final emcc link with WasmTex's own glue + fontconfig shim ==="
-cd "$WW"
+echo "=== Phase 2f: compile WTPDF and link XeTeX with Xpdf ==="
+cd "$WW" || exit 1
 # The xetex PROGRAM objects are xetex-*.o: xetex0/xetexini in $WW and xetexextra
 # (main + C globals) under xetexdir/. Capture them BEFORE compiling our own
 # xetex-entry.o (which would also match the glob). These are NOT in libxetex.a
 # (those are libxetex_a-*.o), so no duplication.
+# The filenames come from fixed TeX Live build directories and contain no spaces.
+# shellcheck disable=SC2012
 XEOBJS=$(ls xetex-*.o xetexdir/xetex-*.o synctexdir/xetex-*.o 2>/dev/null | tr '\n' ' ')
 echo "program objects: $XEOBJS"
 [ -n "$XEOBJS" ] || { echo "no xetex program objects found"; exit 1; }
@@ -162,6 +190,9 @@ emcc -O2 -sUSE_FREETYPE=1 -c "$GLUE/fontconfig-shim.c" -o fontconfig-shim.o
 # glue fetches icudt68l.dat (an engine asset) at init and registers it via
 # set_icu_common_data (udata_setCommonData). -sUSE_ICU supplies the headers.
 emcc -O2 -sUSE_ICU=1 -c "$GLUE/icu-data-loader.c" -o icu-data-loader.o
+em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
+  "${XPDF_INCLUDES[@]}" \
+  -c "$GLUE/pdf-backend/wtpdf-xpdf.cc" -o wtpdf-xpdf.o
 # Interposition contract (#50): kpse_find_file must be defined in libkpathsea, else
 # -Wl,--wrap=kpse_find_file below silently no-ops and the CDN file-lookup hook never
 # fires. Fail loud on upstream drift. (docs/texlive-upgrade.md interpose-don't-patch)
@@ -185,17 +216,20 @@ if [ -n "$NM" ]; then
     echo "ERROR: kpse_find_file not defined in '$KPLIB' — -Wl,--wrap=kpse_find_file would no-op (interposition drift)" >&2; exit 1
   fi
 fi
-emcc -O2 -g0 \
+# XEOBJS must expand to separate linker arguments.
+# shellcheck disable=SC2086
+em++ -O2 -g0 \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
-  kpse-hook.o xetex-entry.o fontconfig-shim.o icu-data-loader.o \
+  kpse-hook.o xetex-entry.o fontconfig-shim.o icu-data-loader.o wtpdf-xpdf.o \
   $XEOBJS \
   -Wl,--wrap=kpse_find_file -Wl,--wrap=FT_New_Face \
+  -Wl,-Map="$OUT/wasmtex-xetex.map" \
   libxetex.a \
   "$(find "$WB/libs/harfbuzz" -name libharfbuzz.a | head -1)" \
   "$(find "$WB/libs/graphite2" -name libgraphite2.a | head -1)" \
   "$(find "$WB/libs/teckit" -name 'libTECkit.a' | head -1)" \
   "$(find "$WB/libs/teckit" -name 'libTECkit_Compiler.a' | head -1)" \
-  "$(find "$WB/libs/pplib" -name 'libpplib.a' | head -1)" \
+  "$XPDFLIB" \
   lib/lib.a "$(find "$WB/texk/kpathsea" -name libkpathsea.a | head -1)" libmd5.a \
   -sUSE_FREETYPE=1 -sUSE_ICU=1 -sUSE_LIBPNG=1 -sUSE_ZLIB=1 \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
@@ -204,6 +238,16 @@ emcc -O2 -g0 \
   -sINITIAL_MEMORY=805306368 \
   --js-library "$GLUE/xetex-library.js" \
   -o "$OUT/wasmtex-xetex.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
+
+[ -s "$OUT/wasmtex-xetex.map" ] || { echo "XeTeX link map was not generated"; exit 1; }
+if grep -E 'libpplib|pp(doc|dict|array|stream|ref)_' "$OUT/wasmtex-xetex.map"; then
+  echo "ERROR: forbidden pplib archive or symbol remains in the XeTeX link map" >&2
+  exit 1
+fi
+grep -F 'libxpdf.a' "$OUT/wasmtex-xetex.map" >/dev/null || {
+  echo "ERROR: XeTeX link map does not contain the required Xpdf backend" >&2
+  exit 1
+}
 cp "$GLUE/xetex-worker.js" "$OUT/wasmtex-xetex.worker.js"
 
 echo ""
