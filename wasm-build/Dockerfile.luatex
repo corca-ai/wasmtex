@@ -103,6 +103,11 @@ RUN set -eu; \
     fi; \
     tail -20 configure-native.out; \
     if ! make MAKEINFO=true -j"$(nproc)" >make-native.out 2>&1; then \
+        echo "=== Native build error excerpts ==="; \
+        grep -n -C 8 -E \
+            'fatal error:|[[:space:]]error:|undefined reference|collect2: error|No rule to make target' \
+            make-native.out | tail -400 || true; \
+        echo "=== Native build log tail ==="; \
         tail -100 make-native.out; \
         exit 1; \
     fi; \
