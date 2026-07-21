@@ -73,9 +73,9 @@ valid private or historical grant.
 
 The current WTPDF/Xpdf XeTeX and LuaHBTeX candidates no longer contain this
 dependency. Their build evidence is recorded in
-[`docs/license-evidence/xetex-wtpdf-2c53a86.md`](docs/license-evidence/xetex-wtpdf-2c53a86.md)
+[`docs/license-evidence/xetex-wtpdf-23f2ce1.md`](docs/license-evidence/xetex-wtpdf-23f2ce1.md)
 and
-[`docs/license-evidence/luahbtex-wtpdf-b1888f4.md`](docs/license-evidence/luahbtex-wtpdf-b1888f4.md).
+[`docs/license-evidence/luahbtex-wtpdf-666663b.md`](docs/license-evidence/luahbtex-wtpdf-666663b.md).
 Those results remove the `pplib` evidence blocker for new builds only; the remaining
 corresponding-source, notices, provenance, security, and compatibility gates still
 apply.

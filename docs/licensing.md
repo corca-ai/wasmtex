@@ -56,9 +56,9 @@ The practical engine classification is:
 
 The WTPDF/Xpdf XeTeX and LuaHBTeX candidates no longer link `pplib`. The exact
 remote build and link-map evidence is recorded in
-[`license-evidence/xetex-wtpdf-2c53a86.md`](license-evidence/xetex-wtpdf-2c53a86.md)
+[`license-evidence/xetex-wtpdf-23f2ce1.md`](license-evidence/xetex-wtpdf-23f2ce1.md)
 and
-[`license-evidence/luahbtex-wtpdf-b1888f4.md`](license-evidence/luahbtex-wtpdf-b1888f4.md).
+[`license-evidence/luahbtex-wtpdf-666663b.md`](license-evidence/luahbtex-wtpdf-666663b.md).
 Any older LuaHBTeX or XeTeX artifact that was linked with `pplib` remains uncleared
 and must not be substituted into a release. The new candidates are still
 development-only until their compatibility and other release gates pass.
@@ -178,7 +178,7 @@ expected result until all entries are reviewed. This inventory does not replace 
 full-byte audit: notice files must be checked in the extracted tree, and collision
 candidates must be resolved from actual hashes before mirror generation.
 The first 2025 inventory and its unresolved counts are recorded in
-[`license-evidence/texlive-2025-metadata-audit-9906443.md`](license-evidence/texlive-2025-metadata-audit-9906443.md).
+[`license-evidence/texlive-2025-metadata-audit-124bfca.md`](license-evidence/texlive-2025-metadata-audit-124bfca.md).
 
 ## Updating dependencies
 

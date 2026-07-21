@@ -1,18 +1,18 @@
-# XeTeX WTPDF build evidence (`e57a2d6`)
+# XeTeX WTPDF build evidence (`6402c96`)
 
 This record covers the first full XeTeX WebAssembly build after replacing its
 `pplib` dependency with the WasmTex WTPDF adapter over Xpdf. It is build evidence,
 not a release-clearance statement or a full compatibility approval.
 
 The XeTeX portion is superseded by the fail-loud build evidence in
-[`xetex-wtpdf-2c53a86.md`](xetex-wtpdf-2c53a86.md). This older record remains useful
+[`xetex-wtpdf-23f2ce1.md`](xetex-wtpdf-23f2ce1.md). This older record remains useful
 for its same-run dvipdfmx build and hashes.
 
 ## Fixed inputs
 
 | Input | Value |
 | --- | --- |
-| WasmTex commit | `e57a2d67edb462f684c831ec83fe475cc26e3d41` |
+| WasmTex commit | `6402c96ff5da8523eb06d898054a005647acf6d4` |
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live's Xpdf 4.04 source at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |
@@ -68,9 +68,9 @@ This build does not clear the overall 2025 engine release. In particular:
 
 - at the time of this build, the old-parser versus WTPDF differential corpus
   had not run; the later geometry and self-generated visual subsets are recorded in
-  [`xetex-geometry-differential-dba9069.md`](xetex-geometry-differential-dba9069.md),
+  [`xetex-geometry-differential-aa23fbb.md`](xetex-geometry-differential-aa23fbb.md),
   and
-  [`xetex-visual-differential-6daf095.md`](xetex-visual-differential-6daf095.md),
+  [`xetex-visual-differential-77fef0c.md`](xetex-visual-differential-77fef0c.md),
   while extended PDF coverage remains open;
 - LuaHBTeX still uses `pplib`;
 - complete corresponding source, relink compliance, component notices, and

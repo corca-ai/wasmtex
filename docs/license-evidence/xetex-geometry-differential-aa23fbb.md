@@ -1,4 +1,4 @@
-# XeTeX PDF geometry differential evidence (`dba9069`)
+# XeTeX PDF geometry differential evidence (`aa23fbb`)
 
 This record compares the internal, pre-WTPDF `pplib` baseline with the Xpdf/WTPDF
 candidate. It covers XeTeX's PDF page selection and inclusion geometry only. It
@@ -8,7 +8,7 @@ does not approve visual rendering compatibility or clear an engine release.
 
 | Input | Baseline | Candidate |
 | --- | --- | --- |
-| WasmTex commit | `c879d8b06e3fea496539955dca8b6c3169cdefe8` | `2c53a8683f1c01c9c13dade3fa8f07de5b81d5f1` |
+| WasmTex commit | `b8843dc0d14c2f194c8c22492ef1b49f35cd46fb` | `23f2ce1bc42cb8c5dc710258ea87b3cf729243a0` |
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` | `143f1723353b20202645f241db429b080a8adcdf` |
 | PDF parser | `pplib` | WTPDF over Xpdf 4.04 |
 | Initialization | native XeTeX, `-ini -etex -no-pdf` | native XeTeX, `-ini -etex -no-pdf` |
@@ -16,7 +16,7 @@ does not approve visual rendering compatibility or clear an engine release.
 | Date | 2026-07-21 UTC | same |
 
 The comparison used `scripts/test-xetex-pdf-geometry.mjs` at commit
-`dba9069e998d7703ab9feab2b2c7f0989a3841b5`. Its SHA-256 on the build host was
+`aa23fbb2f7adf1ec507bc038c2c7510143391358`. Its SHA-256 in the build environment was
 `0c6db5db5fea57b36b2ac49ca0c3d870651a8dbb42a0e096b59e31080630b2f1`.
 The script creates its classic-xref PDF inputs itself and does not contain or
 redistribute `pplib` code or headers.

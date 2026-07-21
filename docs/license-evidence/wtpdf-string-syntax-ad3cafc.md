@@ -1,4 +1,4 @@
-# WTPDF string-syntax evidence (`c9b49a4`)
+# WTPDF string-syntax evidence (`ad3cafc`)
 
 This record verifies the tracked Xpdf extension that preserves whether a parsed
 PDF string used literal or hex syntax. LuaHBTeX's public `pdfe` API exposes that
@@ -9,7 +9,7 @@ evidence, not LuaHBTeX release clearance.
 
 | Input | Value |
 | --- | --- |
-| WasmTex commit | `c9b49a48547d0943a14e8bee1482eee3fea8d887` |
+| WasmTex commit | `ad3cafcacca7eafa69cdd4442bce5bed48cd8c59` |
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live Xpdf 4.04 at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |

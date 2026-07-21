@@ -1,4 +1,4 @@
-# XeTeX PDF visual differential evidence (`6daf095`)
+# XeTeX PDF visual differential evidence (`77fef0c`)
 
 This record compares the internal, pre-WTPDF `pplib` baseline with the Xpdf/WTPDF
 candidate through XeTeX, XDV, a fixed xdvipdfmx container, and a fixed raster
@@ -9,10 +9,10 @@ overall engine release clearance.
 
 | Input | Value |
 | --- | --- |
-| Baseline WasmTex commit | `c879d8b06e3fea496539955dca8b6c3169cdefe8` |
-| Candidate WasmTex commit | `2c53a8683f1c01c9c13dade3fa8f07de5b81d5f1` |
+| Baseline WasmTex commit | `b8843dc0d14c2f194c8c22492ef1b49f35cd46fb` |
+| Candidate WasmTex commit | `23f2ce1bc42cb8c5dc710258ea87b3cf729243a0` |
 | TeX Live source commit in both engines | `143f1723353b20202645f241db429b080a8adcdf` |
-| Differential scripts commit | `6daf095f7f266d5de9dbc417b45ccf34e1ec1e3e` |
+| Differential scripts commit | `77fef0cf209d0fe6208a7850bf4a2f4774387c72` |
 | Fixture script SHA-256 | `cc6552621f754ea1239681d8c1caf7d4b6bd8fc850e45c1d843375b62b428e84` |
 | Driver script SHA-256 | `598bb5204d86aaccf14b3da28c2cdabeeb1279ddd0aa4964ba85bc51b75a274b` |
 | xdvipdfmx image | `texlive/texlive@sha256:a78cd7792625e4245dc73cd5db390f0b9e6c2c7c14ac8b6ca59f023ef25ea282` |

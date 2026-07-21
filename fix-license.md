@@ -461,15 +461,15 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] `pdfimage.cpp`를 WTPDF API로 전환한다.
 - [x] `XeTeX_ext.c`의 `pplib` version 의존성을 제거한다.
 - [x] XeTeX build metadata에서 `pplib` dependency를 제거한다.
-- [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `2c53a86`의 원격 link map과 artifact 감사를 통과했다.
-- [x] 자체 생성 XeTeX PDF corpus의 page selection/box fallback/rotation/inclusion geometry differential test를 통과한다. `docs/license-evidence/xetex-geometry-differential-dba9069.md`에 같은 TeX Live revision의 결과와 hash를 기록했다.
-- [x] 자체 생성 vector PDF corpus를 고정 xdvipdfmx와 144 DPI renderer로 변환한 XeTeX visual differential test를 통과한다. `docs/license-evidence/xetex-visual-differential-6daf095.md`에 11페이지 결과를 기록했다.
+- [x] XeTeX link line에서 `libpplib.a`를 제거하고 WTPDF/Xpdf를 링크한다. `23f2ce1`의 link map과 artifact 감사를 통과했다.
+- [x] 자체 생성 XeTeX PDF corpus의 page selection/box fallback/rotation/inclusion geometry differential test를 통과한다. `docs/license-evidence/xetex-geometry-differential-aa23fbb.md`에 같은 TeX Live revision의 결과와 hash를 기록했다.
+- [x] 자체 생성 vector PDF corpus를 고정 xdvipdfmx와 144 DPI renderer로 변환한 XeTeX visual differential test를 통과한다. `docs/license-evidence/xetex-visual-differential-77fef0c.md`에 11페이지 결과를 기록했다.
 - [ ] xref stream, object stream, 암호화·손상 PDF와 실제 문서 corpus를 포함한 확장 XeTeX visual differential test를 통과한다.
 - [x] dvipdfmx embedding 경로가 변경되지 않았음을 확인한다. TeX Live patch는 dvipdfmx 소스를 수정하지 않으며 같은 원격 빌드에서 dvipdfmx WASM 재빌드와 validation을 통과했다.
 
 ### D. LuaHBTeX 교체
 
-- [x] WTPDF v2에 기본 PDF object type과 document/catalog/trailer/info/page 접근을 구현하고 native/WASM smoke를 통과한다. `docs/license-evidence/wtpdf-v2-89f37e1.md`에 입력 hash와 결과를 기록했으며 LuaHBTeX caller 전환은 아래 별도 항목으로 남아 있다.
+- [x] WTPDF v2에 기본 PDF object type과 document/catalog/trailer/info/page 접근을 구현하고 native/WASM smoke를 통과한다. `docs/license-evidence/wtpdf-v2-63c9303.md`에 입력 hash와 결과를 기록했으며 LuaHBTeX caller 전환은 아래 별도 항목으로 남아 있다.
 - [x] WTPDF v2에 array/dictionary lookup 및 source-order 순회를 구현한다.
 - [x] WTPDF v2에 direct object, indirect reference, object number/generation 보존과 명시적 resolve를 구현한다.
 - [ ] classic xref, xref stream, object stream을 지원한다.
@@ -484,7 +484,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [ ] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다.
 - [ ] malformed PDF의 복구/실패 동작과 resource limit을 구현한다.
 - [ ] 모든 성공·실패 경로에서 document/object/stream memory가 해제되는지 검증한다.
-- [x] LuaHBTeX build metadata와 link line에서 `pplib`를 제거하고 Xpdf/WTPDF를 연결한다. `docs/license-evidence/luahbtex-wtpdf-b1888f4.md`의 원격 build audit로 확인했다.
+- [x] LuaHBTeX build metadata와 link line에서 `pplib`를 제거하고 Xpdf/WTPDF를 연결한다. `docs/license-evidence/luahbtex-wtpdf-666663b.md`의 build audit로 확인했다.
 - [ ] `graphicx`, `pdfpages`, TikZ PDF import differential test를 통과한다.
 - [ ] `pdfe`와 `pdfscanner` fixture parity test를 통과한다.
 
@@ -494,11 +494,11 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] 빌드가 patch 전 `git apply --check` 실패 시 즉시 중단되게 한다.
 - [x] configure/automake 입력 변경 후 `reautoconf` 재생성 절차를 고정한다.
 - [x] Dockerfile과 Makefile이 고정 Xpdf를 재현 가능하게 빌드하도록 한다. XeTeX 원격 build에서 TeX Live Xpdf 4.04 archive 생성을 확인했다.
-- [x] Phase 1 native build가 `pplib` 없이 native XeTeX/LuaHBTeX와 필요한 code-generation tool을 만들도록 한다. XeTeX `2c53a86`과 LuaHBTeX `b1888f4` 원격 빌드에서 각 필수 출력을 fail-loud 검사했다.
+- [x] Phase 1 native build가 `pplib` 없이 native XeTeX/LuaHBTeX와 필요한 code-generation tool을 만들도록 한다. XeTeX `23f2ce1`과 LuaHBTeX `666663b` 빌드에서 각 필수 출력을 fail-loud 검사했다.
 - [x] XeTeX build script에서 `libpplib.a`를 제거한다.
 - [x] LuaHBTeX build script에서 `libpplib.a`를 제거하고 `libxpdf.a`를 `em++`로 링크한다.
 - [x] XeTeX final link map과 JS/WASM에 `pplib` archive 또는 symbol이 없음을 자동 검사한다.
-- [x] LuaHBTeX final link map과 JS/WASM에 `pplib`, old parser symbol, legacy SHA helper가 없음을 자동 검사하고 `b1888f4` artifact에서 통과한다.
+- [x] LuaHBTeX final link map과 JS/WASM에 `pplib`, old parser symbol, legacy SHA helper가 없음을 자동 검사하고 `666663b` artifact에서 통과한다.
 - [x] XeTeX build가 자체 생성 PDF의 deterministic XDV golden hash를 artifact 추출 전에 검사한다.
 - [x] 대응 소스 archive에서 사용하지 않는 `libs/pplib`를 제외하고 checker가 재검출하면 실패하도록 구현·fixture 검증했다.
 - [ ] 네트워크가 제한된 깨끗한 builder에서 source archive만으로 동일 release를 재빌드한다.
@@ -540,7 +540,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 - [x] 내용이 다른 basename collision, 소유 package 누락, license metadata 누락, archive hash 불일치를 fail-closed 처리한다.
 - [x] 모든 사용 package가 reviewed override와 실제 notice evidence path를 갖기 전에는 provenance release 검사가 실패하도록 했다.
 - [x] 고정 TLPDB만으로 package review queue와 content-check collision 목록을 만드는 metadata-only 감사 도구를 추가했다. 이 결과는 승인 결과가 아니며 실제 파일 byte/notice 검사가 뒤따라야 한다.
-- [x] 2025 고정 TLPDB metadata audit를 실행하고 `docs/license-evidence/texlive-2025-metadata-audit-9906443.md`에 재현 입력과 결과를 기록했다. 현재 범위는 155,983개 key, 4,110개 package review, license metadata 없는 73개 package, notice 후보 없는 374개 package, byte 확인이 필요한 collision 60개다.
+- [x] 2025 고정 TLPDB metadata audit를 실행하고 `docs/license-evidence/texlive-2025-metadata-audit-124bfca.md`에 재현 입력과 결과를 기록했다. 현재 범위는 155,983개 key, 4,110개 package review, license metadata 없는 73개 package, notice 후보 없는 374개 package, byte 확인이 필요한 collision 60개다.
 - [ ] 전체 2025 mirror에 생성기를 실행하고 differing collision과 package별 license/notice override를 검토·확정한다.
 - [ ] 생성된 전체 provenance와 실제 CDN object를 대조하고 안정적인 URL/SHA-256으로 공개한다.
 - [ ] 라이선스 미확인 CDN 파일이 production allowlist에 들어오지 못하게 한다.

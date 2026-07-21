@@ -1,4 +1,4 @@
-# TeX Live 2025 metadata audit (`9906443`)
+# TeX Live 2025 metadata audit (`124bfca`)
 
 This record inventories the package-license and flattened-name review work for the
 current TeX Live 2025 mirror rules. It is not release clearance. It uses only the
@@ -9,7 +9,7 @@ the full archive audit.
 
 | Input | Value |
 | --- | --- |
-| WasmTex audit tool commit | `99064431a689609d80e0a5ca7a6837247356a6c6` |
+| WasmTex audit tool commit | `124bfca4b9ce66d8cb8e2c8aa1f258a6c8656e04` |
 | TeX Live metadata archive | `texlive-20250308-extra.tar.xz` |
 | Metadata archive SHA-512 | `a1320469be140c4c0b00a0e307a203114061087a51f6fbcff9c255a0a3ba9cb3abfccc6edb6ad1388e32072f532837ca055eeead131eccce56f785705a0c9035` |
 | TLPDB archive member | `texlive-20250308-extra/tlpkg/texlive.tlpdb` |

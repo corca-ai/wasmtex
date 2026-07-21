@@ -1,7 +1,7 @@
-# XeTeX WTPDF build evidence (`2c53a86`)
+# XeTeX WTPDF build evidence (`23f2ce1`)
 
 This record supersedes the XeTeX portion of
-[`xetex-wtpdf-e57a2d6.md`](xetex-wtpdf-e57a2d6.md). It verifies the fail-loud
+[`xetex-wtpdf-6402c96.md`](xetex-wtpdf-6402c96.md). It verifies the fail-loud
 native build and the corrected Xpdf version banner. It is not a release-clearance
 statement or a full compatibility approval.
 
@@ -9,7 +9,7 @@ statement or a full compatibility approval.
 
 | Input | Value |
 | --- | --- |
-| WasmTex commit | `2c53a8683f1c01c9c13dade3fa8f07de5b81d5f1` |
+| WasmTex commit | `23f2ce1bc42cb8c5dc710258ea87b3cf729243a0` |
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live's Xpdf 4.04 source at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |
@@ -47,13 +47,13 @@ evidence and this XeTeX-only rebuild. A release must nevertheless rebuild and ha
 the whole engine set from its final exact commit.
 
 The old-parser comparisons that followed this build are recorded in
-[`xetex-geometry-differential-dba9069.md`](xetex-geometry-differential-dba9069.md)
+[`xetex-geometry-differential-aa23fbb.md`](xetex-geometry-differential-aa23fbb.md)
 and
-[`xetex-visual-differential-6daf095.md`](xetex-visual-differential-6daf095.md).
+[`xetex-visual-differential-77fef0c.md`](xetex-visual-differential-77fef0c.md).
 
 ## Remaining scope
 
 - extended real-world, malformed, and encrypted PDF corpus testing;
 - LuaHBTeX removal of `pplib` (later completed at the build-audit level in
-  [`luahbtex-wtpdf-b1888f4.md`](luahbtex-wtpdf-b1888f4.md));
+  [`luahbtex-wtpdf-666663b.md`](luahbtex-wtpdf-666663b.md));
 - complete corresponding source, relink compliance, notices, and provenance.

@@ -1,4 +1,4 @@
-# LuaHBTeX WTPDF build evidence (`b1888f4`)
+# LuaHBTeX WTPDF build evidence (`666663b`)
 
 This record verifies that the LuaHBTeX WebAssembly build uses the independently
 named WTPDF adapter and TeX Live's Xpdf 4.04 instead of `pplib`. It also verifies
@@ -10,7 +10,7 @@ clearance or full Lua PDF API compatibility approval.
 
 | Input | Value |
 | --- | --- |
-| WasmTex commit | `b1888f45cc990222516c2a13047a6be126097e81` |
+| WasmTex commit | `666663b9ecd65f008802aa049f1dc4af1ff368f9` |
 | TeX Live commit | `143f1723353b20202645f241db429b080a8adcdf` |
 | Xpdf | TeX Live's Xpdf 4.04 source at that commit |
 | Emscripten | `emscripten/emsdk:3.1.46` |
