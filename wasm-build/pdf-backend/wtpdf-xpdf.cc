@@ -8,15 +8,16 @@
 #include <new>
 #include <sys/stat.h>
 
+#include "aconf.h"
+#include "GString.h"
+#include "Object.h"
+#include "Stream.h"
+#include "XRef.h"
 #include "Catalog.h"
 #include "ErrorCodes.h"
 #include "GlobalParams.h"
-#include "GString.h"
-#include "Object.h"
 #include "PDFDoc.h"
 #include "Page.h"
-#include "Stream.h"
-#include "aconf.h"
 
 struct wtpdf_document {
   unsigned char *input;

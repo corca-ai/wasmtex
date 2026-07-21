@@ -134,8 +134,14 @@ em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
   "$GLUE/pdf-backend/wtpdf-xpdf.cc" \
   "$GLUE/pdf-backend/wtpdf-smoke.cc" \
   "$XPDFLIB" -sUSE_LIBPNG=1 -sUSE_ZLIB=1 \
-  -sEXIT_RUNTIME=1 -o /tmp/wtpdf-smoke.js
-node /tmp/wtpdf-smoke.js
+  -sEXIT_RUNTIME=1 -o /tmp/wtpdf-smoke.js || {
+    echo "WTPDF WebAssembly smoke-test build failed"
+    exit 1
+  }
+node /tmp/wtpdf-smoke.js || {
+  echo "WTPDF WebAssembly smoke test failed"
+  exit 1
+}
 
 echo "=== Phase 2d: top-level make (codegen step fails as wasm — ok) ==="
 emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -j"$(nproc)" >emmake-top.out 2>&1 || true
@@ -202,7 +208,10 @@ emcc -O2 -sUSE_FREETYPE=1 -c "$GLUE/fontconfig-shim.c" -o fontconfig-shim.o
 emcc -O2 -sUSE_ICU=1 -c "$GLUE/icu-data-loader.c" -o icu-data-loader.o
 em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
   "${XPDF_INCLUDES[@]}" \
-  -c "$GLUE/pdf-backend/wtpdf-xpdf.cc" -o wtpdf-xpdf.o
+  -c "$GLUE/pdf-backend/wtpdf-xpdf.cc" -o wtpdf-xpdf.o || {
+    echo "WTPDF adapter compile failed"
+    exit 1
+  }
 # Interposition contract (#50): kpse_find_file must be defined in libkpathsea, else
 # -Wl,--wrap=kpse_find_file below silently no-ops and the CDN file-lookup hook never
 # fires. Fail loud on upstream drift. (docs/texlive-upgrade.md interpose-don't-patch)
