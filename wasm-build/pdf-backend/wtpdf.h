@@ -8,7 +8,12 @@
 extern "C" {
 #endif
 
-#define WTPDF_ABI_VERSION 2u
+#define WTPDF_ABI_VERSION 3u
+
+#define WTPDF_DEFAULT_MAX_INPUT_BYTES (256u * 1024u * 1024u)
+#define WTPDF_DEFAULT_MAX_OBJECT_DEPTH 256u
+#define WTPDF_DEFAULT_MAX_DECODED_STREAM_BYTES (256u * 1024u * 1024u)
+#define WTPDF_DEFAULT_MAX_ADAPTER_BYTES (512u * 1024u * 1024u)
 
 typedef struct wtpdf_document wtpdf_document;
 typedef struct wtpdf_value wtpdf_value;
@@ -27,7 +32,11 @@ typedef enum wtpdf_status {
   WTPDF_STATUS_INTERNAL_ERROR = 9,
   WTPDF_STATUS_NOT_FOUND = 10,
   WTPDF_STATUS_TYPE_MISMATCH = 11,
-  WTPDF_STATUS_OUTPUT_TOO_LARGE = 12
+  WTPDF_STATUS_OUTPUT_TOO_LARGE = 12,
+  WTPDF_STATUS_LOCKED = 13,
+  WTPDF_STATUS_BUSY = 14,
+  WTPDF_STATUS_DEPTH_LIMIT = 15,
+  WTPDF_STATUS_ALLOCATION_LIMIT = 16
 } wtpdf_status;
 
 typedef enum wtpdf_page_box {
@@ -51,8 +60,9 @@ typedef enum wtpdf_value_kind {
   WTPDF_VALUE_BOOLEAN = 2,
   WTPDF_VALUE_INTEGER = 3,
   WTPDF_VALUE_REAL = 4,
-  WTPDF_VALUE_STRING = 5,
-  WTPDF_VALUE_NAME = 6,
+  /* Numeric values intentionally preserve LuaHBTeX pdfe's public type codes. */
+  WTPDF_VALUE_NAME = 5,
+  WTPDF_VALUE_STRING = 6,
   WTPDF_VALUE_ARRAY = 7,
   WTPDF_VALUE_DICTIONARY = 8,
   WTPDF_VALUE_STREAM = 9,
@@ -75,15 +85,18 @@ typedef enum wtpdf_string_syntax {
 } wtpdf_string_syntax;
 
 /*
- * Set struct_size to sizeof(wtpdf_open_options). A zero max_input_bytes means
- * that this adapter does not impose an input-size limit. Password pointers are
- * borrowed only for the duration of the open call.
+ * Initialize with wtpdf_open_options_init(), then override individual limits as
+ * needed. A zero limit explicitly disables that limit. Password pointers are
+ * borrowed only for the duration of the open/authenticate call.
  */
 typedef struct wtpdf_open_options {
   size_t struct_size;
   const char *owner_password;
   const char *user_password;
   size_t max_input_bytes;
+  size_t max_object_depth;
+  size_t max_decoded_stream_bytes;
+  size_t max_adapter_bytes;
 } wtpdf_open_options;
 
 unsigned int wtpdf_abi_version(void);
@@ -94,8 +107,10 @@ const char *wtpdf_status_message(wtpdf_status status);
 void wtpdf_open_options_init(wtpdf_open_options *options);
 
 /*
- * File paths are borrowed for the duration of the call. Memory input is copied
- * before parsing and remains owned by the returned document until close.
+ * File paths and memory input are copied so an encrypted document can be
+ * authenticated after open. An encrypted document is returned as a live,
+ * locked handle with WTPDF_STATUS_ENCRYPTED. Queries that need parsed objects
+ * remain unavailable until authentication succeeds.
  */
 wtpdf_document *wtpdf_document_open_file(const char *path,
                                          const wtpdf_open_options *options,
@@ -106,11 +121,19 @@ wtpdf_document *wtpdf_document_open_memory(const unsigned char *bytes,
                                            wtpdf_status *status);
 void wtpdf_document_close(wtpdf_document *document);
 
+/* Authentication is rejected while values or readers from the document live. */
+wtpdf_status wtpdf_document_authenticate(wtpdf_document *document,
+                                         const char *owner_password,
+                                         const char *user_password);
+
 int wtpdf_document_page_count(const wtpdf_document *document);
 double wtpdf_document_pdf_version(const wtpdf_document *document);
 int wtpdf_document_is_encrypted(const wtpdf_document *document);
+int wtpdf_document_is_locked(const wtpdf_document *document);
 size_t wtpdf_document_input_size(const wtpdf_document *document);
 int wtpdf_document_object_count(const wtpdf_document *document);
+size_t wtpdf_document_adapter_bytes(const wtpdf_document *document);
+size_t wtpdf_document_child_handle_count(const wtpdf_document *document);
 
 /*
  * Every returned value is independently owned and must be destroyed. The

@@ -373,7 +373,7 @@ index 7f2ccaf9a..c1583ed2e 100644
          pdf_doc->inObjList = NULL;
          pdf_doc->ObjMapTree = NULL;
          pdf_doc->occurences = 0; /* 0 = unreferenced */
-@@ -158,19 +158,24 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
+@@ -158,19 +158,32 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
          free(checksum);
          free(path_copy);
      }
@@ -386,6 +386,14 @@ index 7f2ccaf9a..c1583ed2e 100644
 +        options.user_password = userpassword;
 +        options.owner_password = ownerpassword;
 +        pdf_input = wtpdf_document_open_file(file_path, &options, &status);
++        if (pdf_input != NULL && status != WTPDF_STATUS_OK) {
++            wtpdf_document_close(pdf_input);
++            pdf_input = NULL;
++            if (status == WTPDF_STATUS_ENCRYPTED) {
++                formatted_error("pdf inclusion",
++                    "the pdf file '%s' is encrypted, provide proper passwords", file_path);
++            }
++        }
          pdf_doc->pc++;
          /* todo: check if we might print the document */
 -        if (pdfe == NULL) {
@@ -445,7 +453,7 @@ index 7f2ccaf9a..c1583ed2e 100644
          pdf_doc->inObjList = NULL;
          pdf_doc->ObjMapTree = NULL;
          pdf_doc->occurences = 0; /* 0 = unreferenced */
-@@ -252,13 +243,15 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
+@@ -252,13 +243,22 @@ PdfDocument *refMemStreamPdfDocument(char *docstream, unsigned long long streams
          free(file_path);
          free(checksum);
      }
@@ -455,6 +463,13 @@ index 7f2ccaf9a..c1583ed2e 100644
 +        wtpdf_status status;
 +        pdf_input = wtpdf_document_open_memory(
 +            (const unsigned char *) docstream, (size_t) streamsize, NULL, &status);
++        if (pdf_input != NULL && status != WTPDF_STATUS_OK) {
++            wtpdf_document_close(pdf_input);
++            pdf_input = NULL;
++            if (status == WTPDF_STATUS_ENCRYPTED) {
++                normal_error("pdf inclusion", "encrypted pdf Stream");
++            }
++        }
          pdf_doc->pc++;
 -        if (pdfe == NULL) {
 +        if (pdf_input == NULL) {
@@ -1817,10 +1832,75 @@ index 030e3db7e..b080e542e 100644
      return 0;
  }
  
-@@ -401,51 +434,69 @@ static int pushreference(lua_State * L, ppref * reference)
+@@ -401,51 +434,134 @@ static int pushreference(lua_State * L, ppref * reference)
  
  */
  
++static int pdfelib_push_string(lua_State *L, wtpdf_value *object, int decoded)
++{
++    static const char hex[] = "0123456789ABCDEF";
++    const unsigned char *bytes = NULL;
++    unsigned char *encoded;
++    size_t size = 0;
++    size_t capacity;
++    size_t i;
++    size_t n = 0;
++    wtpdf_string_syntax syntax = WTPDF_STRING_LITERAL;
++    if (wtpdf_value_get_string(object, &bytes, &size) != WTPDF_STATUS_OK ||
++        wtpdf_value_get_string_syntax(object, &syntax) != WTPDF_STATUS_OK) {
++        return 0;
++    }
++    if (decoded) {
++        lua_pushlstring(L, (const char *) bytes, size);
++        return 1;
++    }
++    if (syntax == WTPDF_STRING_HEX) {
++        if (size > ((size_t) -1) / 2) {
++            return 0;
++        }
++        capacity = size * 2;
++        encoded = (unsigned char *) xmalloc(capacity == 0 ? 1 : capacity);
++        for (i = 0; i < size; ++i) {
++            encoded[n++] = (unsigned char) hex[bytes[i] >> 4];
++            encoded[n++] = (unsigned char) hex[bytes[i] & 15];
++        }
++    } else {
++        if (size > ((size_t) -1) / 4) {
++            return 0;
++        }
++        capacity = size * 4;
++        encoded = (unsigned char *) xmalloc(capacity == 0 ? 1 : capacity);
++        for (i = 0; i < size; ++i) {
++            unsigned char value = bytes[i];
++            const char *escape = NULL;
++            switch (value) {
++                case '\n': escape = "n"; break;
++                case '\r': escape = "r"; break;
++                case '\t': escape = "t"; break;
++                case '\b': escape = "b"; break;
++                case '\f': escape = "f"; break;
++                case '(' : escape = "("; break;
++                case ')' : escape = ")"; break;
++                case '\\': escape = "\\"; break;
++            }
++            if (escape != NULL) {
++                encoded[n++] = '\\';
++                encoded[n++] = (unsigned char) escape[0];
++            } else if (value < 32) {
++                encoded[n++] = '\\';
++                encoded[n++] = (unsigned char) ('0' + ((value >> 6) & 7));
++                encoded[n++] = (unsigned char) ('0' + ((value >> 3) & 7));
++                encoded[n++] = (unsigned char) ('0' + (value & 7));
++            } else {
++                encoded[n++] = value;
++            }
++        }
++    }
++    lua_pushlstring(L, (const char *) encoded, n);
++    xfree(encoded);
++    return 1;
++}
++
 -static int pushvalue(lua_State * L, ppobj *object)
 +static int pushvalue(lua_State * L, wtpdf_value *object)
  {
@@ -1888,12 +1968,12 @@ index 030e3db7e..b080e542e 100644
 +            return 1;
 +        }
 +        case WTPDF_VALUE_STRING: {
-+            const unsigned char *value = NULL;
-+            size_t size = 0;
 +            wtpdf_string_syntax syntax = WTPDF_STRING_LITERAL;
-+            wtpdf_value_get_string(object, &value, &size);
 +            wtpdf_value_get_string_syntax(object, &syntax);
-+            lua_pushlstring(L, (const char *) value, size);
++            if (!pdfelib_push_string(L, object, 0)) {
++                wtpdf_value_destroy(object);
++                return 0;
++            }
 +            lua_pushboolean(L, syntax == WTPDF_STRING_HEX);
 +            wtpdf_value_destroy(object);
              return 2;
@@ -2380,7 +2460,7 @@ index 030e3db7e..b080e542e 100644
          }
          p->open = false;
      }
-@@ -963,30 +1131,12 @@ static int pdfelib_close(lua_State * L)
+@@ -963,30 +1131,29 @@ static int pdfelib_close(lua_State * L)
  static int pdfelib_unencrypt(lua_State * L)
  {
      pdfe_document *p = check_isdocument(L, 1);
@@ -2406,13 +2486,31 @@ index 030e3db7e..b080e542e 100644
 -            lua_pushinteger(L, (int) ppdoc_crypt_pass(p->document,user,u,owner,o));
 -            return 1;
 -        }
-+    if (p != NULL && p->document != NULL) {
-+        lua_pushinteger(
-+            L, wtpdf_document_is_encrypted(p->document) ? 1 : 0);
-+        return 1;
-     }
+-    }
 -    lua_pushinteger(L, (int) PPCRYPT_FAIL);
-+    lua_pushinteger(L, -1);
++    if (p != NULL && p->document != NULL) {
++        const char *user = NULL;
++        const char *owner = NULL;
++        wtpdf_status status;
++        int result;
++        if (!wtpdf_document_is_encrypted(p->document)) {
++            lua_pushinteger(L, 0); /* PPCRYPT_NONE */
++            return 1;
++        }
++        if (lua_gettop(L) > 1 && lua_type(L, 2) == LUA_TSTRING) {
++            user = lua_tostring(L, 2);
++        }
++        if (lua_gettop(L) > 2 && lua_type(L, 3) == LUA_TSTRING) {
++            owner = lua_tostring(L, 3);
++        }
++        status = wtpdf_document_authenticate(p->document, owner, user);
++        result = status == WTPDF_STATUS_OK ? 1 /* PPCRYPT_DONE */
++                 : status == WTPDF_STATUS_ENCRYPTED ? -2 /* PPCRYPT_PASS */
++                 : -1; /* PPCRYPT_FAIL */
++        lua_pushinteger(L, result);
++        return 1;
++    }
++    lua_pushinteger(L, -1); /* PPCRYPT_FAIL */
      return 1;
  }
  
@@ -2437,13 +2535,14 @@ index 030e3db7e..b080e542e 100644
          lua_pushinteger(L,(int) major);
          lua_pushinteger(L,(int) minor);
          return 2;
-@@ -1033,7 +1184,8 @@ static int pdfelib_getstatus(lua_State * L)
+@@ -1033,7 +1184,9 @@ static int pdfelib_getstatus(lua_State * L)
      pdfe_document *p = check_isdocument(L, 1);
      if (p == NULL)
          return 0;
 -    lua_pushinteger(L,(int) ppdoc_crypt_status(p->document));
-+    lua_pushinteger(
-+        L, wtpdf_document_is_encrypted(p->document) ? 1 : 0);
++    lua_pushinteger(L,
++        wtpdf_document_is_locked(p->document) ? -2 :
++        wtpdf_document_is_encrypted(p->document) ? 1 : 0);
      return 1;
  }
  
@@ -2474,7 +2573,7 @@ index 030e3db7e..b080e542e 100644
 -        lua_pushinteger(L,(int) m);
 -        lua_pushinteger(L,(int) w);
 +        lua_pushinteger(
-+            L, (lua_Integer) wtpdf_document_input_size(p->document));
++            L, (lua_Integer) wtpdf_document_adapter_bytes(p->document));
 +        lua_pushinteger(L, 0);
          return 2;
      }
@@ -2830,12 +2929,12 @@ index 030e3db7e..b080e542e 100644
 +        value = pdfelib_get_value(L);
 +        if (value != NULL &&
 +            wtpdf_value_type(value) == WTPDF_VALUE_STRING) {
-+            const unsigned char *bytes = NULL;
-+            size_t size = 0;
 +            wtpdf_string_syntax syntax = WTPDF_STRING_LITERAL;
-+            wtpdf_value_get_string(value, &bytes, &size);
 +            wtpdf_value_get_string_syntax(value, &syntax);
-+            lua_pushlstring(L, (const char *) bytes, size);
++            if (!pdfelib_push_string(L, value, how == 1)) {
++                wtpdf_value_destroy(value);
++                return 0;
++            }
              if (how == 2) {
 -                lua_pushboolean(L,ppstring_hex(value));
 +                lua_pushboolean(L, syntax == WTPDF_STRING_HEX);

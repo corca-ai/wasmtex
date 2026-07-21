@@ -4,14 +4,12 @@ WTPDF is WasmTex's small, independently designed C ABI between TeX engines and
 a read-only PDF parser. It does not implement or emulate `pplib`'s public API,
 names, data structures, or ownership rules.
 
-ABI v2 retains the document and page operations used by XeTeX and implements the
+ABI v3 retains the document and page operations used by XeTeX and implements the
 LuaHBTeX-facing core: roots, pages, indirect lookup, scalar values, ordered
-arrays/dictionaries, reference resolution, and independent raw/decoded stream
-readers. LuaHBTeX's image inclusion, `pdfe`, and `pdfscanner` callers now compile
-against this API. Authentication-after-open, exact memory-accounting parity,
-decoded-output limits, aggregate resource limits, and full differential fixtures
-remain required before the v2 contract below is release-complete. This is a
-behavioral contract, not a set of aliases for another parser API.
+arrays/dictionaries, reference resolution, independent raw/decoded stream
+readers, post-open authentication, and finite production limits. LuaHBTeX's
+image inclusion, `pdfe`, and `pdfscanner` callers compile against this API. This
+is a behavioral contract, not a set of aliases for another parser API.
 
 | WTPDF operation | Current caller | Observable behavior to preserve |
 | --- | --- | --- |
@@ -25,11 +23,14 @@ behavioral contract, not a set of aliases for another parser API.
 LuaHBTeX operations must preserve direct objects versus references,
 object and generation numbers, integer versus real values, binary string bytes
 and hex spelling, dictionary iteration order where exposed, and raw versus
-decoded streams. The current v2 smoke test claims the implemented subset only.
+decoded streams. The v3 smoke test covers classic xrefs, xref/object streams,
+literal and hex strings, authentication, traversal/output/allocation limits,
+malformed input, and handle cleanup. Product-level differential and
+host-isolation tests remain separate release gates.
 
-## ABI v2 object model
+## ABI v3 object model
 
-ABI v2 adds three opaque handle kinds with explicit ownership:
+ABI v3 exposes three opaque handle kinds with explicit ownership:
 
 - `wtpdf_value`: an owned view of one PDF value. It has a stable WTPDF kind and
   keeps scalar bytes or a backend object reference alive until destroyed.
@@ -39,10 +40,10 @@ ABI v2 adds three opaque handle kinds with explicit ownership:
   authentication state, object lookup, roots, and page references.
 
 A value never exposes a backend pointer or layout. Every function returning a
-value returns a new owned handle; callers destroy it exactly once. A document
-must outlive all values and readers derived from it. Lua userdata must retain a
-strong Lua reference to its document userdata so user code cannot close the
-document while a child value remains reachable.
+value returns a new owned handle; callers destroy it exactly once. A close
+request is deferred until all values and readers derived from the document are
+released. Lua userdata also retains a strong Lua reference to its document
+userdata so the public lifetime is explicit.
 
 The stable value kinds are null, boolean, integer, real, string, name, array,
 dictionary, stream, indirect reference, and none/error. Integer and real remain
@@ -86,9 +87,10 @@ embedded NUL bytes. It also returns whether the source token used literal or hex
 syntax, because `pdfe` exposes that bit. Xpdf 4.04 normally discards this lexical
 fact while parsing, so the tracked TeX Live patch records the bit on Xpdf
 `Object` values at the lexer boundary and WTPDF exposes it through an enum.
-Guessing from the bytes or always reporting one form is not acceptable. Decoding
-a PDF string for the optional Lua helper produces a separate owned byte buffer
-and never mutates the original value.
+Guessing from the bytes or always reporting one form is not acceptable. The Lua
+adapter returns semantic bytes for decoded access and a canonical lexical
+spelling for raw access; unusual but equivalent escape spelling can therefore
+normalize without changing the string value.
 
 ### Streams
 
@@ -100,9 +102,9 @@ created in one of two modes:
 
 Reader reset/close is explicit. Chunk reads report EOF separately from errors.
 The convenience read-all operation requires a maximum output size; exceeding it
-returns `WTPDF_STATUS_OUTPUT_TOO_LARGE`. The document open options also gain
+returns `WTPDF_STATUS_OUTPUT_TOO_LARGE`. Document open options also enforce
 maximum object depth, maximum decoded stream bytes, and maximum aggregate adapter
-allocation. Defaults used by a production Worker must be finite.
+allocation with finite defaults.
 
 ### Authentication and document metadata
 
@@ -120,7 +122,7 @@ metric.
 
 ## LuaHBTeX caller map
 
-| Caller | WTPDF v2 surface | Compatibility gate |
+| Caller | WTPDF v3 surface | Compatibility gate |
 | --- | --- | --- |
 | `image/pdftoepdf.c` | page dictionary, inherited resources, object/ref copy, stream raw/decode, authentication | `graphicx`, multipage import, xref/object stream, filters, encrypted input |
 | `lua/lpdfelib.c` | document roots/metadata, all value kinds, ordered containers, references, strings, stream readers | normalized JSON for every `pdfe` method and userdata lifetime/error cases |
@@ -141,11 +143,13 @@ source and notices.
 
 ## Ownership and lifetime
 
-- File paths and passwords are borrowed only during an open call.
-- Memory input is copied. The copy remains stable until the document is closed.
+- File paths and memory input are copied so the same source can be reopened for
+  post-open authentication. Passwords are borrowed only during a call.
 - A returned document owns the Xpdf `PDFDoc` and its stream. Call
-  `wtpdf_document_close` exactly once; passing `NULL` is harmless.
-- Returned strings are static and must not be freed.
+  `wtpdf_document_close` exactly once; passing `NULL` is harmless. Destruction is
+  deferred while child handles remain live.
+- Name and string byte pointers are borrowed from their value handle and remain
+  valid only until that value is destroyed.
 - Xpdf's `GlobalParams` object is initialized lazily and intentionally retained
   for the lifetime of the engine Worker. The adapter is intended to be called on
   that Worker's engine thread, not concurrently from multiple threads.
@@ -156,11 +160,18 @@ Open calls return `NULL` and write a stable `wtpdf_status` when a status pointer
 is supplied. Query functions return a status for invalid pages or outputs. Xpdf's
 diagnostic output is not yet captured as structured warnings.
 
-`max_input_bytes` provides a caller-selected input-size ceiling. A zero value
-means no adapter-level ceiling for ABI v1. File sizes are checked with `stat` when
-available; the host must still impose Worker memory and execution-time limits.
-ABI v2 must add finite production defaults for recursion, decoded-stream, and
-aggregate allocation before the Lua object API is production-ready.
+`wtpdf_open_options_init()` installs finite defaults: 256 MiB input, 256 levels
+of public object traversal, 256 MiB of decoded bytes per stream reader, and
+512 MiB of adapter-owned allocations. A caller can lower a limit or explicitly
+set it to zero to disable that adapter-level check. File sizes are checked with
+`stat` when available. `max_adapter_bytes` counts the WTPDF document, retained
+input/path, and WTPDF value/reader handles; it deliberately does not claim to
+measure opaque Xpdf allocations or caller-owned Lua buffers.
+
+The traversal limit applies to values returned through WTPDF. It is not an Xpdf
+parser-recursion sandbox. The engine Worker or process must therefore also have
+an independent wall-clock timeout and memory ceiling, and the host must be able
+to terminate it after malformed or adversarial input.
 
 ## Page semantics
 

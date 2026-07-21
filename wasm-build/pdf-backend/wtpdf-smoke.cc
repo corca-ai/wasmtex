@@ -22,13 +22,53 @@ bool equal(double left, double right) {
   return std::fabs(left - right) < 0.000001;
 }
 
+/* Self-generated with pypdf 6.14.2: one blank RC4-128 encrypted page. */
+const char kEncryptedFixtureBase64[] =
+    "JVBERi0xLjMKJeLjz9MKMSAwIG9iago8PAovUHJvZHVjZXIgPDc2Y2IyMmMyMmZjZWMy"
+    "NWFlM2VkNWQwMjRkNzc3MjhmODNkNTEyNDdhY2Q5Mzc2Y2I5NTZlZmQ3MmY5Mj4KPj4K"
+    "ZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9Db3VudCAxCi9LaWRzIFsgNCAw"
+    "IFIgXQo+PgplbmRvYmoKMyAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAw"
+    "IFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1Jlc291cmNlcyA8PAo+"
+    "PgovTWVkaWFCb3ggWyAwLjAgMC4wIDcyIDE0NCBdCi9QYXJlbnQgMiAwIFIKPj4KZW5k"
+    "b2JqCjUgMCBvYmoKPDwKL1YgMgovUiAzCi9MZW5ndGggMTI4Ci9QIDQyOTQ5NjcyOTIK"
+    "L0ZpbHRlciAvU3RhbmRhcmQKL08gPDBiYTM4MzVmODhmOTAzODhlNzRlNTQ1ODQxMjVj"
+    "ZTE0MmJlMGRlMjRjNmIwZDM3NzQ2ZTA3NWI4OTE3NTY2NzE+Ci9VIDw4N2M4ZjNiNWQ5"
+    "OWNjMjEwNWVmMjA5ZDYwNWI2ZmYzZDI4YmY0ZTVlNGU3NThhNDE2NDAwNGU1NmZmZmEw"
+    "MTA4Pgo+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAw"
+    "MDE1IDAwMDAwIG4gCjAwMDAwMDAxMDkgMDAwMDAgbiAKMDAwMDAwMDE2OCAwMDAwMCBu"
+    "IAowMDAwMDAwMjE3IDAwMDAwIG4gCjAwMDAwMDAzMTAgMDAwMDAgbiAKdHJhaWxlcgo8"
+    "PAovU2l6ZSA2Ci9Sb290IDMgMCBSCi9JbmZvIDEgMCBSCi9JRCBbIDw2NjMxMzAzMTM3"
+    "MzUzNDMwMzk2NDM1MzMzOTM4MzEzMjY1MzYzNzYxMzUzMzM0NjM2MzMxMzUzNTMwMzU2"
+    "NTM1PiA8NjYzMTMwMzEzNzM1MzQzMDM5NjQzNTMzMzkzODMxMzI2NTM2Mzc2MTM1MzMz"
+    "NDYzNjMzMTM1MzUzMDM1NjUzNT4gXQovRW5jcnlwdCA1IDAgUgo+PgpzdGFydHhyZWYK"
+    "NTI1CiUlRU9GCg==";
+
+std::string decode_base64(const char *encoded) {
+  const std::string alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string result;
+  unsigned int accumulator = 0;
+  int bits = 0;
+  for (const char *cursor = encoded; *cursor && *cursor != '='; ++cursor) {
+    const size_t value = alphabet.find(*cursor);
+    require(value != std::string::npos, "invalid embedded base64 fixture");
+    accumulator = (accumulator << 6) | static_cast<unsigned int>(value);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      result.push_back(static_cast<char>((accumulator >> bits) & 0xff));
+    }
+  }
+  return result;
+}
+
 std::string make_fixture() {
   std::string pdf = "%PDF-1.7\n%\xe2\xe3\xcf\xd3\n";
   std::vector<size_t> offsets(7, 0);
 
   const char *objects[] = {
       NULL,
-      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Catalog /Pages 2 0 R /Deep [[[[[1]]]]] >>",
       "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
       "<< /Type /Page /Parent 2 0 R /MediaBox [10 20 210 420] "
       "/CropBox [20 30 200 400] /BleedBox [25 35 195 395] "
@@ -71,11 +111,79 @@ std::string make_fixture() {
   return pdf;
 }
 
+void append_xref_field(std::string *target, unsigned long value, int width) {
+  for (int shift = width - 1; shift >= 0; --shift) {
+    target->push_back(static_cast<char>((value >> (shift * 8)) & 0xff));
+  }
+}
+
+void append_xref_entry(std::string *target,
+                       int type,
+                       unsigned long field2,
+                       unsigned long field3) {
+  append_xref_field(target, static_cast<unsigned long>(type), 1);
+  append_xref_field(target, field2, 4);
+  append_xref_field(target, field3, 2);
+}
+
+std::string make_xref_stream_fixture() {
+  std::string pdf = "%PDF-1.5\n%\xe2\xe3\xcf\xd3\n";
+  size_t offsets[7] = {0};
+  const std::string pages =
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+  const std::string page =
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] "
+      "/Contents 4 0 R >>";
+  char header[64];
+  std::snprintf(header, sizeof(header), "2 0 3 %zu ", pages.size() + 1);
+  const std::string object_stream =
+      std::string(header) + pages + " " + page;
+
+  offsets[1] = pdf.size();
+  pdf += "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+  offsets[4] = pdf.size();
+  pdf += "4 0 obj\n<< /Length 5 >>\nstream\nhello\nendstream\nendobj\n";
+  offsets[5] = pdf.size();
+  char object_stream_header[128];
+  std::snprintf(object_stream_header, sizeof(object_stream_header),
+                "5 0 obj\n<< /Type /ObjStm /N 2 /First %zu /Length %zu >>\n"
+                "stream\n",
+                std::strlen(header), object_stream.size());
+  pdf += object_stream_header;
+  pdf += object_stream;
+  pdf += "\nendstream\nendobj\n";
+  offsets[6] = pdf.size();
+
+  std::string xref;
+  append_xref_entry(&xref, 0, 0, 65535);
+  append_xref_entry(&xref, 1, offsets[1], 0);
+  append_xref_entry(&xref, 2, 5, 0);
+  append_xref_entry(&xref, 2, 5, 1);
+  append_xref_entry(&xref, 1, offsets[4], 0);
+  append_xref_entry(&xref, 1, offsets[5], 0);
+  append_xref_entry(&xref, 1, offsets[6], 0);
+  char xref_header[160];
+  std::snprintf(xref_header, sizeof(xref_header),
+                "6 0 obj\n<< /Type /XRef /Size 7 /Root 1 0 R "
+                "/W [1 4 2] /Length %zu >>\nstream\n",
+                xref.size());
+  pdf += xref_header;
+  pdf += xref;
+  char trailer[96];
+  std::snprintf(trailer, sizeof(trailer),
+                "\nendstream\nendobj\nstartxref\n%zu\n%%%%EOF\n", offsets[6]);
+  pdf += trailer;
+  return pdf;
+}
+
 void check_object_model(wtpdf_document *document, size_t input_size) {
   wtpdf_status status = WTPDF_STATUS_INTERNAL_ERROR;
+  const size_t baseline_bytes = wtpdf_document_adapter_bytes(document);
+  require(wtpdf_document_child_handle_count(document) == 0,
+          "document began with live child handles");
   require(wtpdf_document_input_size(document) == input_size,
           "input size mismatch");
-  require(wtpdf_document_object_count(document) == 7,
+  require(wtpdf_document_object_count(document) == 6,
           "object count mismatch");
 
   wtpdf_value *catalog = wtpdf_document_catalog(document, &status);
@@ -272,6 +380,10 @@ void check_object_model(wtpdf_document *document, size_t input_size) {
   require(!wtpdf_document_object(document, 99, 0, &status) &&
               status == WTPDF_STATUS_NOT_FOUND,
           "missing indirect object did not report not-found");
+  require(wtpdf_document_child_handle_count(document) == 0,
+          "value or reader handle leaked");
+  require(wtpdf_document_adapter_bytes(document) == baseline_bytes,
+          "adapter-owned handle bytes leaked");
 }
 
 void check_document(wtpdf_document *document, size_t input_size) {
@@ -314,6 +426,161 @@ void check_document(wtpdf_document *document, size_t input_size) {
           "out-of-range page did not fail");
 
   check_object_model(document, input_size);
+}
+
+void check_xref_and_object_streams() {
+  const std::string fixture = make_xref_stream_fixture();
+  wtpdf_status status = WTPDF_STATUS_INTERNAL_ERROR;
+  wtpdf_document *document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(fixture.data()), fixture.size(),
+      NULL, &status);
+  require(document && status == WTPDF_STATUS_OK,
+          "xref-stream fixture did not open");
+  require(wtpdf_document_page_count(document) == 1,
+          "compressed page tree was not read");
+  wtpdf_value *pages = wtpdf_document_object(document, 2, 0, &status);
+  require(pages && wtpdf_value_type(pages) == WTPDF_VALUE_DICTIONARY,
+          "object-stream member lookup failed");
+  wtpdf_value_destroy(pages);
+  wtpdf_value *stream = wtpdf_document_object(document, 4, 0, &status);
+  require(stream && wtpdf_value_type(stream) == WTPDF_VALUE_STREAM,
+          "xref-stream content lookup failed");
+  wtpdf_stream_reader *reader = wtpdf_stream_reader_open(
+      stream, WTPDF_STREAM_DECODED, &status);
+  unsigned char bytes[8] = {0};
+  size_t count = 0;
+  int eof = 0;
+  require(reader &&
+              wtpdf_stream_reader_read(reader, bytes, sizeof(bytes), &count,
+                                       &eof) == WTPDF_STATUS_OK &&
+              count == 5 && eof && std::memcmp(bytes, "hello", 5) == 0,
+          "xref-stream decoded content changed");
+  wtpdf_stream_reader_close(reader);
+  wtpdf_value_destroy(stream);
+  require(wtpdf_document_child_handle_count(document) == 0,
+          "xref-stream handles leaked");
+  wtpdf_document_close(document);
+}
+
+void check_resource_limits(const std::string &classic_fixture) {
+  wtpdf_open_options options;
+  wtpdf_open_options_init(&options);
+  require(options.max_input_bytes == WTPDF_DEFAULT_MAX_INPUT_BYTES &&
+              options.max_object_depth == WTPDF_DEFAULT_MAX_OBJECT_DEPTH &&
+              options.max_decoded_stream_bytes ==
+                  WTPDF_DEFAULT_MAX_DECODED_STREAM_BYTES &&
+              options.max_adapter_bytes == WTPDF_DEFAULT_MAX_ADAPTER_BYTES,
+          "production resource defaults are not finite and stable");
+
+  wtpdf_status status = WTPDF_STATUS_INTERNAL_ERROR;
+  options.max_adapter_bytes = 1;
+  wtpdf_document *document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(classic_fixture.data()),
+      classic_fixture.size(), &options, &status);
+  require(!document && status == WTPDF_STATUS_ALLOCATION_LIMIT,
+          "aggregate adapter allocation limit was not enforced");
+
+  wtpdf_open_options_init(&options);
+  options.max_object_depth = 4;
+  document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(classic_fixture.data()),
+      classic_fixture.size(), &options, &status);
+  require(document && status == WTPDF_STATUS_OK,
+          "depth-limit fixture did not open");
+  wtpdf_value *value = wtpdf_document_catalog(document, &status);
+  require(value, "depth-limit catalog lookup failed");
+  wtpdf_value *next = wtpdf_dictionary_get(
+      value, reinterpret_cast<const unsigned char *>("Deep"), 4,
+      WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+  wtpdf_value_destroy(value);
+  value = next;
+  for (int depth = 0; depth < 2; ++depth) {
+    next = wtpdf_array_get(value, 0, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+    require(next && status == WTPDF_STATUS_OK,
+            "object traversal reached the depth limit too early");
+    wtpdf_value_destroy(value);
+    value = next;
+  }
+  next = wtpdf_array_get(value, 0, WTPDF_LOOKUP_PRESERVE_REFERENCE, &status);
+  require(!next && status == WTPDF_STATUS_DEPTH_LIMIT,
+          "object traversal depth limit was not enforced");
+  wtpdf_value_destroy(value);
+  wtpdf_document_close(document);
+
+  const std::string stream_fixture = make_xref_stream_fixture();
+  wtpdf_open_options_init(&options);
+  options.max_decoded_stream_bytes = 4;
+  document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(stream_fixture.data()),
+      stream_fixture.size(), &options, &status);
+  require(document && status == WTPDF_STATUS_OK,
+          "stream-limit fixture did not open");
+  value = wtpdf_document_object(document, 4, 0, &status);
+  wtpdf_stream_reader *reader =
+      wtpdf_stream_reader_open(value, WTPDF_STREAM_DECODED, &status);
+  unsigned char bytes[8] = {0};
+  size_t count = 0;
+  int eof = 0;
+  require(reader &&
+              wtpdf_stream_reader_read(reader, bytes, sizeof(bytes), &count,
+                                       &eof) == WTPDF_STATUS_OK &&
+              count == 4 && !eof,
+          "decoded stream limit did not permit its exact budget");
+  require(wtpdf_stream_reader_read(reader, bytes, sizeof(bytes), &count,
+                                   &eof) == WTPDF_STATUS_OUTPUT_TOO_LARGE,
+          "decoded stream limit did not reject excess output");
+  wtpdf_stream_reader_close(reader);
+  wtpdf_value_destroy(value);
+  wtpdf_document_close(document);
+
+  const std::string malformed = "%PDF-1.7\nthis is not a PDF\n%%EOF\n";
+  document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(malformed.data()),
+      malformed.size(), NULL, &status);
+  require(!document && status != WTPDF_STATUS_OK,
+          "malformed input unexpectedly opened");
+}
+
+void check_encryption() {
+  const std::string fixture = decode_base64(kEncryptedFixtureBase64);
+  wtpdf_status status = WTPDF_STATUS_INTERNAL_ERROR;
+  wtpdf_document *document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(fixture.data()), fixture.size(),
+      NULL, &status);
+  require(document && status == WTPDF_STATUS_ENCRYPTED &&
+              wtpdf_document_is_encrypted(document) &&
+              wtpdf_document_is_locked(document) &&
+              wtpdf_document_page_count(document) == 0,
+          "encrypted input was not returned as a locked document");
+  require(!wtpdf_document_catalog(document, &status) &&
+              status == WTPDF_STATUS_LOCKED,
+          "locked document query did not fail explicitly");
+  require(wtpdf_document_authenticate(document, NULL, "wrong") ==
+              WTPDF_STATUS_ENCRYPTED &&
+              wtpdf_document_is_locked(document),
+          "wrong password did not leave the document locked");
+  require(wtpdf_document_authenticate(document, NULL, "user") ==
+              WTPDF_STATUS_OK &&
+              !wtpdf_document_is_locked(document) &&
+              wtpdf_document_page_count(document) == 1,
+          "user password did not unlock the document");
+  wtpdf_value *catalog = wtpdf_document_catalog(document, &status);
+  require(catalog &&
+              wtpdf_document_authenticate(document, NULL, "user") ==
+                  WTPDF_STATUS_BUSY,
+          "authentication with a live child handle was not rejected");
+  wtpdf_value_destroy(catalog);
+  wtpdf_document_close(document);
+
+  document = wtpdf_document_open_memory(
+      reinterpret_cast<const unsigned char *>(fixture.data()), fixture.size(),
+      NULL, &status);
+  require(document && status == WTPDF_STATUS_ENCRYPTED &&
+              wtpdf_document_authenticate(document, "owner", NULL) ==
+                  WTPDF_STATUS_OK &&
+              wtpdf_document_page_count(document) == 1,
+          "owner password did not unlock the document");
+  wtpdf_document_close(document);
 }
 
 }  // namespace
@@ -364,6 +631,10 @@ int main() {
   require(!document && status == WTPDF_STATUS_INPUT_TOO_LARGE,
           "file input limit was not enforced");
   std::remove(path);
+
+  check_xref_and_object_streams();
+  check_resource_limits(original);
+  check_encryption();
 
   std::puts("WTPDF smoke test passed");
   return 0;
