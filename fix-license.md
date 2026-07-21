@@ -448,7 +448,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 - [x] `wasm-build/pdf-backend/wtpdf.h`에 `pplib` 표현을 복사하지 않은 독립 opaque-handle ABI를 설계한다.
 - [x] API별로 XeTeX 또는 LuaHBTeX의 실제 caller와 필요한 observable semantics를 표로 만든다. ABI v1의 XeTeX 범위와 향후 LuaHBTeX 보존 조건을 `wasm-build/pdf-backend/README.md`에 기록했다.
-- [ ] object/ref, integer/real, string bytes, stream raw/decode, dict order, page box, rotation 보존 규칙을 specification으로 작성한다.
+- [x] object/ref, integer/real, string bytes와 lexical form, stream raw/decode, dict order, page box, rotation 보존 규칙을 specification으로 작성한다. `wasm-build/pdf-backend/README.md`의 ABI v2 object model과 LuaHBTeX caller map에 기록했다.
 - [x] Xpdf 4.04의 정확한 source와 GPL v2/v3 라이선스 원문을 고정한다. TeX Live commit `143f1723353b20202645f241db429b080a8adcdf`와 `LICENSES/Xpdf-4.04-*`, `LICENSES/GPL-3.0.txt`에 기록했다.
 - [x] adapter의 error ownership, buffer ownership, lifetime, memory limit을 정의한다. 메모리 입력은 복사하며, `max_input_bytes`와 Worker 수명/스레드 제약을 명시했다.
 - [x] 암호화 PDF의 password callback과 오류 모델을 정의한다. ABI v1은 open-time owner/user password와 `WTPDF_STATUS_ENCRYPTED`를 사용한다.
