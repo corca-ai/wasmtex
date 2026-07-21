@@ -472,7 +472,7 @@ Emscripten 3.1.46 자체와 ports가 가져오는 원본의 license file을 sour
 
 ### D. LuaHBTeX 교체
 
-- [x] WTPDF v2에 기본 PDF object type과 document/catalog/trailer/info/page 접근을 구현하고 native/WASM smoke를 통과한다. LuaHBTeX caller 전환은 아래 별도 항목으로 남아 있다.
+- [x] WTPDF v2에 기본 PDF object type과 document/catalog/trailer/info/page 접근을 구현하고 native/WASM smoke를 통과한다. `docs/license-evidence/wtpdf-v2-89f37e1.md`에 입력 hash와 결과를 기록했으며 LuaHBTeX caller 전환은 아래 별도 항목으로 남아 있다.
 - [x] WTPDF v2에 array/dictionary lookup 및 source-order 순회를 구현한다.
 - [x] WTPDF v2에 direct object, indirect reference, object number/generation 보존과 명시적 resolve를 구현한다.
 - [ ] classic xref, xref stream, object stream을 지원한다.
