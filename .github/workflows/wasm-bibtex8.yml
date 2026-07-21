@@ -100,6 +100,13 @@ jobs:
             wasm-build/dist-bibtex8/BUILD-RECEIPT.bibtex8.json
           retention-days: 90
 
+      - name: Upload non-release BibTeX8 link-map evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-bibtex8-link-map
+          path: wasm-build/dist-bibtex8/wasmtex-bibtex8.map
+          retention-days: 90
+
       - name: List build outputs
         if: always()
         run: ls -lh wasm-build/dist-bibtex8/ 2>/dev/null || echo "No dist files"

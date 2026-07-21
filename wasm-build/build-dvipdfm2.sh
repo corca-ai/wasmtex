@@ -103,6 +103,7 @@ emcc -O2 -g0 \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   kpse-hook.o dvipdfm-entry.o dvipdfm-stubs.o $DPXOBJS \
   -Wl,--wrap=kpse_find_file \
+  -Wl,-Map="$OUT/wasmtex-dvipdfm.map" \
   "$KPSE" \
   -sUSE_FREETYPE=1 -sUSE_LIBPNG=1 -sUSE_ZLIB=1 \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
@@ -111,6 +112,11 @@ emcc -O2 -g0 \
   -sINITIAL_MEMORY=268435456 \
   --js-library "$GLUE/xetex-dvipdfm-library.js" \
   -o "$OUT/wasmtex-dvipdfm.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
+[ -s "$OUT/wasmtex-dvipdfm.map" ] || { echo "dvipdfmx link map was not generated"; exit 1; }
+if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-dvipdfm.map"; then
+  echo "ERROR: forbidden pplib archive or symbol remains in the dvipdfmx link map" >&2
+  exit 1
+fi
 cp "$GLUE/dvipdfm-worker.js" "$OUT/wasmtex-dvipdfm.worker.js"
 
 echo "=== Output ==="

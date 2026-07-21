@@ -137,6 +137,15 @@ jobs:
             wasm-build/dist/BUILD-RECEIPT.bibtex.json
           retention-days: 90
 
+      - name: Upload non-release pdfTeX/BibTeX link-map evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pdftex-bibtex-link-maps
+          path: |
+            wasm-build/dist/wasmtex-pdftex.map
+            wasm-build/dist/wasmtex-bibtex.map
+          retention-days: 90
+
       - name: List build outputs
         if: always()
         run: ls -lh wasm-build/dist/ 2>/dev/null || echo "No dist files"

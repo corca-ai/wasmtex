@@ -71,6 +71,7 @@ emcc -O2 -g0 \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   kpse-hook.o bibtex8-entry.o $B8OBJS \
   -Wl,--wrap=kpse_find_file \
+  -Wl,-Map="$OUT/wasmtex-bibtex8.map" \
   "$KPSE" \
   -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXIT_RUNTIME=0 -sINVOKE_RUN=0 -sMODULARIZE=0 \
   -sEXPORTED_FUNCTIONS='["_compileBibtex8","_setMainEntry","_main","_malloc","_free"]' \
@@ -78,6 +79,11 @@ emcc -O2 -g0 \
   -sINITIAL_MEMORY=134217728 \
   --js-library "$GLUE/library.js" \
   -o "$OUT/wasmtex-bibtex8.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
+[ -s "$OUT/wasmtex-bibtex8.map" ] || { echo "BibTeX8 link map was not generated"; exit 1; }
+if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-bibtex8.map"; then
+  echo "ERROR: forbidden pplib archive or symbol remains in the BibTeX8 link map" >&2
+  exit 1
+fi
 cp "$GLUE/bibtex8-worker.js" "$OUT/wasmtex-bibtex8.worker.js"
 
 echo "=== Output ==="

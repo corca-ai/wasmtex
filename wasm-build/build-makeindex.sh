@@ -93,6 +93,7 @@ emcc -O2 -g0 \
   -I"$WB/texk/kpathsea" -I"$SRC/texk/kpathsea" -I"$SRC/texk" -I"$WB/texk" \
   kpse-hook.o makeindex-entry.o $MISRC \
   -Wl,--wrap=kpse_find_file \
+  -Wl,-Map="$OUT/wasmtex-makeindex.map" \
   "$KPSE" \
   -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXIT_RUNTIME=0 -sINVOKE_RUN=0 -sMODULARIZE=0 \
   -sEXPORTED_FUNCTIONS='["_compileMakeindex","_setMainEntry","_main","_malloc","_free"]' \
@@ -100,6 +101,11 @@ emcc -O2 -g0 \
   -sINITIAL_MEMORY=67108864 \
   --js-library "$GLUE/library.js" \
   -o "$OUT/wasmtex-makeindex.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
+[ -s "$OUT/wasmtex-makeindex.map" ] || { echo "makeindex link map was not generated"; exit 1; }
+if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-makeindex.map"; then
+  echo "ERROR: forbidden pplib archive or symbol remains in the makeindex link map" >&2
+  exit 1
+fi
 cp "$GLUE/makeindex-worker.js" "$OUT/wasmtex-makeindex.worker.js"
 
 echo "=== Output ==="

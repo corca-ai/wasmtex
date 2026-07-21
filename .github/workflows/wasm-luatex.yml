@@ -149,6 +149,13 @@ jobs:
             wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json
           retention-days: 90
 
+      - name: Upload non-release LuaHBTeX link-map evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-luatex-link-map
+          path: wasm-build/dist-luatex/wasmtex-luatex.map
+          retention-days: 90
+
       - name: List build outputs
         if: always()
         run: ls -lh wasm-build/dist-luatex/ 2>/dev/null || echo "No dist-luatex files"

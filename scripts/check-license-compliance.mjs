@@ -339,6 +339,20 @@ if (existsSync(xetexBuild)) {
   }
 }
 
+for (const [relativePath, requiredMaps] of [
+  ['wasm-build/Makefile', ['wasmtex-pdftex.map', 'wasmtex-bibtex.map']],
+  ['wasm-build/build-bibtex8.sh', ['wasmtex-bibtex8.map']],
+  ['wasm-build/build-makeindex.sh', ['wasmtex-makeindex.map']],
+  ['wasm-build/build-dvipdfm2.sh', ['wasmtex-dvipdfm.map']],
+]) {
+  const text = readFileSync(resolve(root, relativePath), 'utf8')
+  for (const requiredMap of requiredMaps) {
+    if (!text.includes(requiredMap) || !text.includes('-Wl,-Map')) {
+      fail(`${relativePath} does not generate required link-map evidence: ${requiredMap}`)
+    }
+  }
+}
+
 const luatexBuild = resolve(root, 'wasm-build/build-luatex.sh')
 if (existsSync(luatexBuild)) {
   const text = readFileSync(luatexBuild, 'utf8')

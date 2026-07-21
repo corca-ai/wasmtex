@@ -201,7 +201,8 @@ EMCC_FLAGS = \
 	-sINITIAL_MEMORY=536870912 \
 	-sWASM=1 \
 	--js-library $(JSLIB) \
-	-Wl,--wrap=kpse_find_file
+	-Wl,--wrap=kpse_find_file \
+	-Wl,-Map=$(DIST)/wasmtex-pdftex.map
 
 # =============================================================================
 # Phase 1: Native Build
@@ -459,6 +460,10 @@ wasm-compile:
 		$$(find $(BUILD_WASM) -name 'libpng.a' | head -1) \
 		$$(find $(BUILD_WASM) -name 'libxpdf.a' | head -1) \
 		-o $(DIST)/wasmtex-pdftex.js
+	@test -s $(DIST)/wasmtex-pdftex.map || { echo "pdfTeX link map was not generated" >&2; exit 1; }
+	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-pdftex.map; then \
+		echo "ERROR: forbidden pplib archive or symbol remains in the pdfTeX link map" >&2; exit 1; \
+	fi
 	cp $(PDFTEX_WORKER) $(DIST)/wasmtex-pdftex.worker.js
 	cp $(KPSE_RESOLVE) $(DIST)/wasmtex-kpse-resolve.js
 	@echo ""
@@ -520,7 +525,8 @@ BIBTEX_EMCC_FLAGS = \
 	-sINITIAL_MEMORY=67108864 \
 	-sWASM=1 \
 	--js-library $(JSLIB) \
-	-Wl,--wrap=kpse_find_file
+	-Wl,--wrap=kpse_find_file \
+	-Wl,-Map=$(DIST)/wasmtex-bibtex.map
 
 bibtex-wasm-prep:
 	@echo "========================================"
@@ -559,6 +565,10 @@ bibtex-wasm-compile: bibtex-wasm-prep
 		$(KPSE_HOOK) \
 		$$(find $(BUILD_WASM) -name 'libkpathsea.a' | head -1) \
 		-o $(DIST)/wasmtex-bibtex.js
+	@test -s $(DIST)/wasmtex-bibtex.map || { echo "BibTeX link map was not generated" >&2; exit 1; }
+	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-bibtex.map; then \
+		echo "ERROR: forbidden pplib archive or symbol remains in the BibTeX link map" >&2; exit 1; \
+	fi
 	cp $(BIBTEX_WORKER) $(DIST)/wasmtex-bibtex.worker.js
 	@echo "BibTeX WASM compilation complete."
 

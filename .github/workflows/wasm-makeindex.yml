@@ -101,6 +101,13 @@ jobs:
             wasm-build/dist-makeindex/BUILD-RECEIPT.makeindex.json
           retention-days: 90
 
+      - name: Upload non-release makeindex link-map evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-makeindex-link-map
+          path: wasm-build/dist-makeindex/wasmtex-makeindex.map
+          retention-days: 90
+
       - name: List build outputs
         if: always()
         run: ls -lh wasm-build/dist-makeindex/ 2>/dev/null || echo "No dist files"
