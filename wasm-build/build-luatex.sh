@@ -34,6 +34,10 @@ mkdir -p "$OUT"
 
 echo "=== Phase 2a: emconfigure (luahbtex) ==="
 rm -rf "$WB"; mkdir -p "$WB"; cd "$WB"
+# TeX Live's bundled zziplib is configured with these large-file feature
+# switches, so every consumer of its generated public headers needs the same
+# view of off64_t. The bundled build does not propagate them to LuaZip itself.
+CPPFLAGS="-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64" \
 emconfigure "$SRC/configure" \
   --disable-all-pkgs --enable-web2c --enable-luahbtex $DISABLES \
   --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
