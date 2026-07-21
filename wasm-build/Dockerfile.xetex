@@ -57,7 +57,7 @@ RUN mkdir -p /build/native /build/wasm /dist
 # autoconf and automake inputs. A TeX Live upgrade must fail here, not apply with
 # fuzz or silently restore the old PDF backend.
 COPY patches/texlive-wtpdf.patch /src/patches/texlive-wtpdf.patch
-COPY pdf-backend /src/pdf-backend
+COPY pdf-backend/wtpdf.h /src/pdf-backend/wtpdf.h
 RUN cd /src/texlive-source && \
     git apply --check /src/patches/texlive-wtpdf.patch && \
     git apply /src/patches/texlive-wtpdf.patch && \
@@ -92,6 +92,7 @@ RUN echo "=== Phase 1: native xetex (generate C + codegen tools + libkpathsea) =
 # =============================================================================
 # COPY build script + own glue + shim
 # =============================================================================
+COPY pdf-backend /src/pdf-backend
 COPY build-xetex2.sh /src/build-xetex2.sh
 COPY xetex-entry.c /src/xetex-entry.c
 COPY xetex-worker.js /src/xetex-worker.js
