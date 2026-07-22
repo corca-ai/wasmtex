@@ -167,7 +167,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [ ] 모든 차단 사유가 해소된 뒤에만 `releaseStatus`를 `release-cleared`로 변경한다.
 - [ ] `node scripts/gen-asset-manifest.mjs 2025 --release`가 최종 asset directory에서 통과하는지 확인한다.
 - [ ] `npm run check:licenses -- --release`가 통과하는지 확인한다.
-- [ ] 생성한 `manifest.json`, `LICENSE-MANIFEST.json`, receipt, notices와 source archive가 모두 같은 release ID와 hash를 가리키는지 확인한다.
+- [x] 생성한 `manifest.json`, `LICENSE-MANIFEST.json`, receipt, notices와 source archive가 모두 같은 release ID와 hash를 가리키는지 확인한다. corresponding-source checker가 release `2025-3a630ec64526620d` 정합을 검증했다.
 - [ ] standalone demo에 현재 로드된 엔진의 license, notices와 source archive로 가는 링크를 제공한다.
 
 ### H. GitHub 공개 준비
@@ -183,7 +183,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] license scanner와 SBOM 생성을 CI에 추가하고 미확인 항목을 fail-closed 처리한다. `check:licenses`(SBOM 신선도 검사 포함)가 ci.yml과 모든 엔진 workflow에서 실행되고 엔진 workflow는 release strict mode도 실행한다.
 - [x] branch, tag, stash와 Git LFS object를 포함해 공개하면 안 되는 파일이 없는지 확인한다. main 단일 branch에 tag·stash·LFS object가 없다.
 - [x] 공개 전까지 원격 저장소를 만들지 않거나 private으로 유지한다. 현재 원격이 구성되어 있지 않다.
-- [ ] 공개 직전에 `npm run check`, `npm run test:license-tools`와 source-mode license gate를 다시 실행한다.
+- [x] 공개 직전에 `npm run check`, `npm run test:license-tools`와 source-mode license gate를 다시 실행한다. 2026-07-22에 typecheck·lint·vitest 937건·license gate·도구 테스트 23건이 모두 통과했다. 공개 commit 직전에 한 번 더 재실행한다.
 - [ ] 모든 공개 준비 변경을 commit하고 worktree가 깨끗한지 확인한다.
 
 ## 5. 두 개의 공개 승인선
