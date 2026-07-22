@@ -103,7 +103,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.3",
     "@playwright/test": "^1.58.2",
-    "@types/node": "^24.13.2",
+    "@types/node": "^26.1.1",
     "@typescript/native-preview": "^7.0.0-dev.20260219.1",
     "@vitest/coverage-v8": "^4.1.10",
     "jscpd": "^4.0.8",
