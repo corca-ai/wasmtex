@@ -11,6 +11,10 @@ export interface WasmTexWorkerMsg {
   pdf?: ArrayBuffer
   data?: string
   file?: string
+  errorName?: string
+  errorMessage?: string
+  errorStack?: string
+  errorLog?: string
   /** dumpcache response: fetched files + known-missing entries. */
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
@@ -23,6 +27,19 @@ export interface WasmTexWorkerMsg {
  * dumpcache, …) that `WasmTexPdftexEngine` relies on. Subclasses add their own
  * compile entry point.
  */
+/** Rehydrate the structured error a worker posts before dying — the ErrorEvent
+ * that follows a WASM trap often carries no message, engine log, or stack. */
+function workerErrorFromMsg(data: WasmTexWorkerMsg): Error {
+  const log = data.errorLog ? `\nEngine log:\n${data.errorLog}` : ''
+  const error = new Error(`${data.errorMessage || 'Worker error'}${log}`)
+  if (data.errorName) error.name = data.errorName
+  if (data.errorStack) {
+    const frames = data.errorStack.split('\n').slice(1).join('\n')
+    error.stack = `${error.name}: ${error.message}${frames ? `\n${frames}` : ''}`
+  }
+  return error
+}
+
 export abstract class WasmTexWorker<
   TMsg extends WasmTexWorkerMsg = WasmTexWorkerMsg,
 > extends BaseWorkerEngine<TMsg> {
@@ -54,10 +71,14 @@ export abstract class WasmTexWorker<
           this.onFileDownload?.(data.file)
           return
         }
+        if (data.cmd === 'workererror') {
+          this.failInit(reject, workerErrorFromMsg(data))
+          return
+        }
         this.deliverResponse(`cmd:${data.cmd}`, data)
       }
       this.worker.onerror = (err) => {
-        this.failInit(reject, err instanceof Error ? err : new Error('Worker error'))
+        this.failInit(reject, err)
       }
     })
     this.worker!.postMessage({
@@ -70,7 +91,7 @@ export abstract class WasmTexWorker<
    *  worker reference MUST be cleared (only terminate() did this before): otherwise the
    *  `if (this.worker) return` re-entry guard would let a later init() resolve silently
    *  against a dead, errored worker instead of recreating one. */
-  private failInit(reject: (err: Error) => void, err: Error): void {
+  private failInit(reject: (err: Error) => void, err: unknown): void {
     this.worker?.terminate()
     this.worker = null
     reject(this.handleWorkerError(err))

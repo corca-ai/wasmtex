@@ -9,6 +9,57 @@ function abortError(message: string): Error {
   return err
 }
 
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null
+}
+
+/** Rebuild an `Error` from an error-shaped object of another realm (e.g. a
+ * structured-cloned worker exception that fails `instanceof Error` here). */
+function errorFromForeign(value: unknown): Error | null {
+  if (typeof value !== 'object' || value === null) return null
+  const foreign = value as { message?: unknown; name?: unknown; stack?: unknown }
+  const message = nonEmptyString(foreign.message)
+  if (!message) return null
+  const error = new Error(message)
+  const name = nonEmptyString(foreign.name)
+  if (name) error.name = name
+  const stack = nonEmptyString(foreign.stack)
+  if (stack) error.stack = stack
+  return error
+}
+
+function eventLocation(event: { filename?: unknown; lineno?: unknown; colno?: unknown }): string {
+  const source = nonEmptyString(event.filename)
+  if (!source) return ''
+  const parts = [source]
+  if (typeof event.lineno === 'number') {
+    parts.push(String(event.lineno))
+    if (typeof event.colno === 'number') parts.push(String(event.colno))
+  }
+  return ` (${parts.join(':')})`
+}
+
+/** Preserve the useful fields carried by a browser Worker `ErrorEvent`.
+ * `ErrorEvent` is not itself an `Error`, so treating every non-Error as a generic
+ * failure hides the only actionable clue (message/source location). */
+function normalizeWorkerError(value: unknown): Error {
+  if (value instanceof Error) return value
+  if (typeof value !== 'object' || value === null) return new Error('Worker error')
+
+  const event = value as {
+    error?: unknown
+    message?: unknown
+    filename?: unknown
+    lineno?: unknown
+    colno?: unknown
+  }
+  if (event.error instanceof Error) return event.error
+  const foreign = errorFromForeign(event.error)
+  if (foreign) return foreign
+  const message = nonEmptyString(event.message) ?? 'Worker error'
+  return new Error(`${message}${eventLocation(event)}`)
+}
+
 /** Shared base for WASM worker engines (pdfTeX, BibTeX). */
 export abstract class BaseWorkerEngine<TMsg = unknown> {
   protected worker: EngineWorker | null = null
@@ -101,7 +152,7 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
    *  `compile()` — with a real error so it rejects instead of hanging forever (which would
    *  wedge the scheduler with `compiling` stuck true). Returns the surfaced Error. */
   protected handleWorkerError(err: unknown): Error {
-    const e = err instanceof Error ? err : new Error('Worker error')
+    const e = normalizeWorkerError(err)
     this.status = 'error'
     this.rejectAllPending(e)
     return e

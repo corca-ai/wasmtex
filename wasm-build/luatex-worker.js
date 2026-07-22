@@ -65,6 +65,13 @@ function runEngine(fn) {
     return fn()
   } catch (e) {
     if (e && (e.name === 'ExitStatus' || typeof e.status === 'number')) return e.status
+    self.postMessage({
+      cmd: 'workererror',
+      errorName: e && e.name,
+      errorMessage: e && e.message ? e.message : String(e),
+      errorStack: e && e.stack,
+      errorLog: self.memlog.slice(-8192),
+    })
     throw e
   }
 }

@@ -48,4 +48,71 @@ describe('WasmTexWorker init failure recovery', () => {
     expect(created).toBe(2)
     expect(driver.getStatus()).toBe('ready')
   })
+
+  it('preserves a browser ErrorEvent message and source location', async () => {
+    setWorkerFactory(() => {
+      let onerror: ((err: unknown) => void) | null = null
+      return {
+        postMessage() {},
+        terminate() {},
+        onmessage: null,
+        get onerror() {
+          return onerror
+        },
+        set onerror(fn: ((err: unknown) => void) | null) {
+          onerror = fn
+          if (fn) {
+            queueMicrotask(() =>
+              fn({
+                message: 'Uncaught RangeError: allocation failed',
+                filename: 'engine.js',
+                lineno: 42,
+                colno: 7,
+              }),
+            )
+          }
+        },
+      } as unknown as EngineWorker
+    })
+
+    const driver = new CompileWorkerDriver('/engine.js', '/tl/', '2025')
+    await expect(driver.init()).rejects.toThrow(
+      'Uncaught RangeError: allocation failed (engine.js:42:7)',
+    )
+  })
+
+  it('preserves an Error from a foreign worker realm', async () => {
+    setWorkerFactory(() => {
+      let onerror: ((err: unknown) => void) | null = null
+      return {
+        postMessage() {},
+        terminate() {},
+        onmessage: null,
+        get onerror() {
+          return onerror
+        },
+        set onerror(fn: ((err: unknown) => void) | null) {
+          onerror = fn
+          if (fn) {
+            queueMicrotask(() =>
+              fn({
+                error: {
+                  name: 'RuntimeError',
+                  message: 'memory access out of bounds',
+                  stack:
+                    'RuntimeError: memory access out of bounds\n    at wasm-function[123]:0xabc',
+                },
+              }),
+            )
+          }
+        },
+      } as unknown as EngineWorker
+    })
+
+    const driver = new CompileWorkerDriver('/engine.js', '/tl/', '2025')
+    await expect(driver.init()).rejects.toMatchObject({
+      name: 'RuntimeError',
+      stack: expect.stringContaining('wasm-function[123]'),
+    })
+  })
 })
