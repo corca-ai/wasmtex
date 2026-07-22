@@ -302,7 +302,9 @@ self.onmessage = (ev) => {
     try {
       const savepath = `${TEXCACHEROOT}/${data.filename}`
       FS.writeFile(savepath, new Uint8Array(data.data))
-      texlive200[`${data.format}/${data.filename}`] = savepath
+      const cacheKey = `${data.format}/${data.filename}`
+      texlive200[cacheKey] = savepath
+      delete texlive404[cacheKey]
     } catch {}
     self.postMessage({ result: 'ok', cmd: 'preloadtexlive', msgId: data.msgId })
   } else if (cmd === 'preload404') {
@@ -310,7 +312,8 @@ self.onmessage = (ev) => {
     // (the window before the bloom filter is consulted, and a belt-and-braces).
     const entries = data.entries || []
     for (let i = 0; i < entries.length; i++) {
-      texlive404[`${entries[i].format}/${entries[i].filename}`] = 1
+      const cacheKey = `${entries[i].format}/${entries[i].filename}`
+      if (!(cacheKey in texlive200)) texlive404[cacheKey] = 1
     }
     self.postMessage({ result: 'ok', cmd: 'preload404', msgId: data.msgId })
   } else if (cmd === 'dumpcache') {

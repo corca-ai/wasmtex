@@ -18,6 +18,8 @@
  * follow up with a full compile to reconcile (LaTeX's usual two-pass model).
  */
 
+import { mergeTailSynctex } from '../synctex/synctex-merge'
+import { type SynctexData, SynctexParser } from '../synctex/synctex-parser'
 import type { CompileResult } from '../types'
 import {
   chooseBoundary,
@@ -44,16 +46,12 @@ export interface IncrementalResult {
   final: boolean
   /** Why the full path was taken, when `incremental` is false. */
   reason?: string
-  /** SyncTeX for the isolated tail compile (`incremental` only) — tail-relative pages/lines.
-   *  Mergeable onto the last full compile's head SyncTeX via `mergeTailSynctex` (#99 P2). */
-  tailSynctex?: Uint8Array | null
-  /** Pages the head occupies (1..headPageCount) — the tail splices after them. */
-  headPageCount?: number
-  /** Add to the tail's tail-relative source lines to get document lines (= head line count). */
-  tailLineOffset?: number
-  /** True when the head is byte-for-byte unchanged since the last full compile, so its head
-   *  SyncTeX (pages 1..headPageCount) is still valid to merge the tail onto. */
-  headUnchangedSinceFull?: boolean
+  /** The tail SyncTeX spliced onto the last full compile's head — exact for the spliced PDF
+   *  (#99 P2). Null when the splice couldn't run safely (head changed since the last full, or no
+   *  last-full SyncTeX was recorded via {@link noteFull}); the caller then reuses the last full
+   *  compile's SyncTeX and/or reconciles. Multi-file `\include` tails ARE spliced. Set only on the
+   *  `incremental` path. */
+  synctexData?: SynctexData | null
 }
 
 interface Checkpoint {
@@ -76,6 +74,13 @@ export interface IncrementalOptions {
  *  so a full reconcile pass is advisable. */
 const LABEL_SENSITIVE_RE =
   /\\(?:label|ref|pageref|eqref|autoref|cref|Cref|nameref|cite|bibitem|caption|footnote|appendix|(?:set|step|add(?:to)?)counter|newtheorem|(?:sub)*section|chapter|part|item|index|makeindex|printindex)(?![A-Za-z@])|\\begin\{(?:enumerate|equation|figure|table|align)/
+
+/** Commands that typeset content from a helper file the checkpoint compile does NOT have — the
+ *  head/tail run in isolation with only `main.aux` copied, so `.toc`/`.lof`/`.lot`/`.bbl`/`.ind`
+ *  are absent and these render blank. A document using any of them must take the full path, not a
+ *  checkpoint fast path that would show an empty table of contents / bibliography / index. */
+const CHECKPOINT_UNREPRODUCIBLE_RE =
+  /\\(?:tableofcontents|listof[a-z]+|bibliography(?![A-Za-z])|printbibliography|printindex|printglossary|printglossaries|printnomenclature)/i
 
 /** A project file map: path → text content (includes the main file). */
 export type FileSet = Map<string, string>
@@ -140,6 +145,15 @@ export class IncrementalCompiler {
   /** Main source at the last FULL compile (distinct from `last`, which advances on fast paints
    *  too). The head-unchanged test for the SyncTeX merge diffs against this. (#99 P2) */
   private lastFullSource: string | null = null
+  /** Project files at the last FULL compile — the head-unchanged test also compares the chapters
+   *  the head `\include`s against these (a chapter changed since the last full but not since the
+   *  last paint would leave the merge base stale). (#99 P2 multi-file) */
+  private lastFullFiles: FileSet | null = null
+  /** Last full compile's SyncTeX — the head merge-base. Kept as raw bytes and parsed lazily
+   *  (once per full compile, reused across the fast paints that follow) into `lastFullSynctex`. */
+  private lastFullSynctexBytes: Uint8Array | null = null
+  private lastFullSynctex: SynctexData | null = null
+  private readonly synctexParser = new SynctexParser()
   private readonly checkpoints = new Map<string, Checkpoint>()
   private readonly lru: string[] = []
 
@@ -154,6 +168,9 @@ export class IncrementalCompiler {
   reset(): void {
     this.last = null
     this.lastFullSource = null
+    this.lastFullFiles = null
+    this.lastFullSynctexBytes = null
+    this.lastFullSynctex = null
     this.checkpoints.clear()
     this.lru.length = 0
   }
@@ -187,10 +204,12 @@ export class IncrementalCompiler {
   }
 
   /**
-   * Record that the host performed a full compile (updating `main.aux`), so the next
-   * edit diffs against it. Drops cached checkpoints when the preamble changed.
+   * Record that the host performed a full compile (updating `main.aux`), so the next edit diffs
+   * against it. Drops cached checkpoints when the preamble changed. Pass the full compile's raw
+   * SyncTeX (`CompileResult.synctex`) so the next fast paint can splice its tail onto this head
+   * and return exact {@link IncrementalResult.synctexData} (#99 P2) — omit it to skip splicing.
    */
-  noteFull(source: string, files: FileSet = new Map()): void {
+  noteFull(source: string, files: FileSet = new Map(), synctex: Uint8Array | null = null): void {
     const prevMain = this.last?.get(this.mainFile)
     if (
       prevMain != null &&
@@ -201,6 +220,17 @@ export class IncrementalCompiler {
     }
     this.last = this.snapshot(source, files)
     this.lastFullSource = source
+    this.lastFullFiles = this.snapshot(source, files)
+    this.lastFullSynctexBytes = synctex
+    this.lastFullSynctex = null // parsed lazily on the first fast paint that needs it
+  }
+
+  /** The last full compile's parsed SyncTeX (the head merge-base), parsed once and cached. */
+  private async ensureLastFullSynctex(): Promise<SynctexData | null> {
+    if (this.lastFullSynctex) return this.lastFullSynctex
+    if (!this.lastFullSynctexBytes) return null
+    this.lastFullSynctex = await this.synctexParser.parse(this.lastFullSynctexBytes)
+    return this.lastFullSynctex
   }
 
   /** Cheap pre-flight for a servable tail edit: the head/tail split at the boundary before
@@ -216,6 +246,9 @@ export class IncrementalCompiler {
     const prevMain = this.last?.get(this.mainFile)
     if (prevMain == null) return null // first compile must be full (seeds main.aux)
     if (extractPreamble(prevMain)?.preamble !== extractPreamble(source)?.preamble) return null
+    // The checkpoint compiles head/tail in isolation without `.toc`/`.bbl`/`.lof`/`.ind`, so a
+    // ToC / bibliography / list-of / index would render blank — take the full path instead.
+    if (CHECKPOINT_UNREPRODUCIBLE_RE.test(source)) return null
     const boundary = chooseBoundary(
       findPageBreaks(source),
       this.editOffset(prevMain, source, files),
@@ -239,14 +272,12 @@ export class IncrementalCompiler {
       if (!tail.pdf || (tail.status !== 0 && tail.status !== 1)) return null
       const pdf = await splicePdfs([checkpoint.headPdf, tail.pdf])
       const final = !this.changeTouchesLabels(plan.prevMain, source, files)
-      // Merge inputs for the SyncTeX splice (#99 P2): the tail's own SyncTeX, the head page
-      // count it splices after, the doc-line offset (= head line count), and whether the head
-      // is byte-for-byte unchanged since the last full compile (so its head SyncTeX is valid).
-      const headPageCount = await pdfPageCount(checkpoint.headPdf)
-      const tailLineOffset = countNewlines(plan.headText)
-      const headUnchangedSinceFull =
-        this.lastFullSource != null &&
-        this.lastFullSource.slice(0, plan.headText.length) === plan.headText
+      const synctexData = await this.spliceTailSynctex(
+        checkpoint,
+        plan.headText,
+        tail.synctex,
+        files,
+      )
       this.last = this.snapshot(source, files)
       return {
         pdf,
@@ -255,14 +286,43 @@ export class IncrementalCompiler {
         incremental: true,
         checkpointBuilt: built,
         final,
-        tailSynctex: tail.synctex,
-        headPageCount,
-        tailLineOffset,
-        headUnchangedSinceFull,
+        synctexData,
       }
     } catch {
       return null // pdf-lib missing, build/splice error → full compile
     }
+  }
+
+  /** Splice the tail's SyncTeX onto the last full compile's head → exact SyncTeX for the spliced
+   *  PDF (#99 P2), or null when it can't run safely. Safe only when the ENTIRE head is unchanged
+   *  since the last full compile — the main-source prefix AND every file it `\include`s — because
+   *  a head file changed since the last full but not since the last paint renders fresh in the head
+   *  PDF while the merge base still describes the old one. (`this.last` advances on fast paints, so
+   *  the diff can't catch that; we compare against the last FULL snapshot.) */
+  private async spliceTailSynctex(
+    checkpoint: Checkpoint,
+    headText: string,
+    tailSynctex: Uint8Array | null,
+    files: FileSet,
+  ): Promise<SynctexData | null> {
+    if (!tailSynctex || this.lastFullSource == null) return null
+    if (this.lastFullSource.slice(0, headText.length) !== headText) return null
+    // Every chapter the head bakes in must be byte-identical to the last full compile.
+    const prevFiles = this.lastFullFiles ?? new Map<string, string>()
+    for (const name of includePositions(headText).keys()) {
+      if (this.includedContent(name, files) !== this.includedContent(name, prevFiles)) return null
+    }
+    const head = await this.ensureLastFullSynctex()
+    if (!head) return null
+    const tail = await this.synctexParser.parse(tailSynctex)
+    return mergeTailSynctex({
+      head,
+      tail,
+      headPageCount: await pdfPageCount(checkpoint.headPdf),
+      tailLineOffset: countNewlines(headText),
+      mainFile: this.mainFile,
+      tailFile: 'tail.tex',
+    })
   }
 
   /** True iff a fast, `final` incremental paint is servable for this edit — the cheap
@@ -297,12 +357,14 @@ export class IncrementalCompiler {
     const prevMain = this.last?.get(this.mainFile)
     if (prevMain == null) return false // no baseline yet → first compile must be full
     if (extractPreamble(prevMain)?.preamble !== extractPreamble(source)?.preamble) return false
+    if (CHECKPOINT_UNREPRODUCIBLE_RE.test(source)) return false // full-path doc → no fast path to warm
     const boundary = chooseBoundary(findPageBreaks(source), editOffset)
     if (boundary === null) return false
     const { headText } = splitAtBoundary(source, boundary)
     if (this.headSize(headText, files) < this.minHeadBytes) return false
-    if (this.checkpoints.has(this.checkpointKey(headText, files))) {
-      this.touch(this.checkpointKey(headText, files))
+    const key = this.checkpointKey(headText, files)
+    if (this.checkpoints.has(key)) {
+      this.touch(key)
       return false // already warm
     }
     try {
@@ -440,6 +502,10 @@ export class IncrementalCompiler {
     // Files are already on the engine FS (compile() called syncProjectFiles first).
     const r: CompileResult = await this.engine.compile()
     this.last = this.snapshot(source, files)
+    this.lastFullSource = source
+    this.lastFullFiles = this.snapshot(source, files)
+    this.lastFullSynctexBytes = r.synctex // head merge-base for the next fast paint
+    this.lastFullSynctex = null
     return {
       pdf: r.pdf,
       log: r.log,

@@ -7,6 +7,11 @@ export interface CompileResult {
     compileTime: number;
     /** Raw synctex data (uncompressed or gzipped) from pdfTeX -synctex=1 */
     synctex: Uint8Array | null;
+    /** Parsed SyncTeX, when the engine can provide it directly (#99): an incremental fast-path
+     *  compile carries `synctex: null` (the tail is compiled in isolation) but sets `synctexData`
+     *  to the tail SyncTeX **spliced** onto the last full compile's head — exact for the spliced
+     *  PDF. Consume this in preference to parsing `synctex` yourself: `synctexData ?? parse(synctex)`. */
+    synctexData?: import('./synctex/synctex-parser').SynctexData | null;
     /** Raw .fmt format file data (if built during this session) */
     format?: Uint8Array | undefined;
     /** Whether a cached preamble format was used for this compilation */

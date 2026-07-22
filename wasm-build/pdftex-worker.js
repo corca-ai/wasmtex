@@ -1200,6 +1200,7 @@ self["onmessage"] = function(ev) {
         var savepath = TEXCACHEROOT + "/" + filename;
         FS.writeFile(savepath, fileData);
         texlive200_cache[cacheKey] = savepath;
+        delete texlive404_cache[cacheKey];
         if (format === 10) {
             FS.writeFile(WORKROOT + "/" + filename, fileData);
         }
@@ -1227,7 +1228,10 @@ self["onmessage"] = function(ev) {
         var entries = data["entries"];
         var msgId = data["msgId"];
         for (var i = 0; i < entries.length; i++) {
-            texlive404_cache[entries[i].format + "/" + entries[i].filename] = 1;
+            var cacheKey = entries[i].format + "/" + entries[i].filename;
+            if (!(cacheKey in texlive200_cache)) {
+                texlive404_cache[cacheKey] = 1;
+            }
         }
         self.postMessage({ "result": "ok", "cmd": "preload404", "msgId": msgId });
     } else if (cmd === "grace") {

@@ -21,6 +21,16 @@ const editor = new WasmTex('#editor', '#preview', {
 await editor.init()
 ```
 
+### Dependency-light entry (`wasmtex/warmup`)
+
+`warmup` is also exposed from a dedicated **`wasmtex/warmup`** entry point that pulls in only the preload logic — no editor, no Monaco. Import from there when a warmup-only context (a headless compile pipeline, a server, or a preview surface with its own PDF viewer) should not drag in the full editor bundle:
+
+```ts
+import { warmup } from 'wasmtex/warmup'
+```
+
+The root `import { warmup } from 'wasmtex'` above remains for the all-in-one editor case; both resolve to the same implementation.
+
 ## How It Works
 
 1. `warmup()` injects a `<link rel="preconnect">` hint for the CDN

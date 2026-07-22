@@ -10,6 +10,23 @@ import { fileURLToPath } from 'node:url'
  */
 export const SMOKE_TEXLIVE = 'https://d1jectpaw0dlvl.cloudfront.net/2025/'
 
+/** A pdfLaTeX document of `n` `\clearpage`-separated sections, each with a replaceable plain-text
+ *  marker; the last section's marker is `lastMarker`. Editing only the last marker is a servable
+ *  final tail edit — the shared corpus for the incremental / SyncTeX-splice smokes. */
+export function buildSectionedDoc(lastMarker: string, n = 6): string {
+  const filler = 'The quick brown fox jumps over the lazy dog across measurable pages. '.repeat(3)
+  const sections = Array.from({ length: n }, (_, i) => {
+    const s = i + 1
+    const marker = s === n ? lastMarker : `S${s}`
+    return `\\section{Section ${s}}\n${filler}\n\nMarker-${s}: ${marker} sits in plain text.\n\n${filler}\n`
+  })
+  return (
+    '\\documentclass{article}\n\\begin{document}\n' +
+    sections.map((sec, i) => sec + (i < sections.length - 1 ? '\n\\clearpage\n' : '')).join('\n') +
+    '\n\\end{document}\n'
+  )
+}
+
 export interface SmokeCompileResult {
   success: boolean
   pdfBytes: number

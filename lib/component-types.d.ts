@@ -22,12 +22,14 @@ export interface WasmTexOptions {
      *  precompilation. Defaults to false (snapshots enabled). */
     disablePreambleSnapshot?: boolean;
     /** Enable incremental compilation in the interactive loop (#99, pdfLaTeX only).
-     *  A body edit after a page break re-typesets only the tail and splices it onto a
-     *  cached head PDF for an immediate "fast paint", then a debounced full compile
-     *  reconciles SyncTeX + cross-references in the background. Speculatively pre-builds
-     *  the checkpoint near the cursor so the first edit is fast too. Opt-in; defaults to
-     *  false. Falls back to a full compile for XeLaTeX/LuaLaTeX, preamble edits, edits
-     *  before the first page break, and label/citation edits. */
+     *  A body edit after a page break re-typesets only the tail and splices it (PDF **and**
+     *  SyncTeX) onto the cached head for an immediate, exact "fast paint" — for a `final` edit
+     *  that's the final result, no background reconcile needed. Multi-file `\include` documents
+     *  are handled: each chapter splices at its own file-relative lines. Speculatively
+     *  pre-builds the checkpoint near the cursor so the first edit is fast too. Opt-in; defaults
+     *  to false. Falls back to a full compile for XeLaTeX/LuaLaTeX, preamble edits, edits before
+     *  the first page break, label/citation edits, and documents with a table of contents /
+     *  bibliography / list-of / index (which the isolated checkpoint compile can't reproduce). */
     incremental?: boolean;
     /** Enable the built-in persistent (IndexedDB) cache of fetched TeX Live assets.
      *  Return visits become near-instant and work offline. Silently no-ops where
@@ -68,8 +70,8 @@ export interface WasmTexStatusEvent {
     /** True when the engine reused a cached `.fmt` preamble this cycle. */
     preambleSnapshot?: boolean;
     /** True when this `ready` reflects an incremental *fast paint* (#99) — a checkpoint-spliced
-     *  preview whose SyncTeX/cross-references are refreshed by a background full reconcile that
-     *  follows. A host can surface it as "updating…". Absent/false on a full (reconciled) compile. */
+     *  preview. For a `final` edit (single- or multi-file) its SyncTeX is spliced exact and it IS
+     *  the final result; otherwise a background full reconcile follows. Absent/false on a full compile. */
     incremental?: boolean;
 }
 export interface WasmTexEventMap {

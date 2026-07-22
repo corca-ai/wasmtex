@@ -118,6 +118,70 @@ describe('PersistentCache', () => {
     expect(loaded!.notFound).toHaveLength(2)
   })
 
+  it('removes a persisted 404 when real bytes are saved later', async () => {
+    const store = new MemoryBinaryStore()
+    const cache = new PersistentCache({ store })
+
+    await cache.save(warmup({ notFound: [{ format: 26, filename: 'recovered.sty' }] }))
+    await cache.save(
+      warmup({
+        files: [{ format: 26, filename: 'recovered.sty', data: buf([1, 2, 3]) }],
+      }),
+    )
+
+    const loaded = await cache.load()
+    expect(loaded!.files.map((file) => file.filename)).toEqual(['recovered.sty'])
+    expect(loaded!.notFound).toEqual([])
+  })
+
+  it('does not let a later 404 shadow already cached real bytes', async () => {
+    const store = new MemoryBinaryStore()
+    const cache = new PersistentCache({ store })
+
+    await cache.save(
+      warmup({
+        files: [{ format: 26, filename: 'available.sty', data: buf([4, 5, 6]) }],
+      }),
+    )
+    await cache.save(warmup({ notFound: [{ format: 26, filename: 'available.sty' }] }))
+
+    const loaded = await cache.load()
+    expect(loaded!.files.map((file) => file.filename)).toEqual(['available.sty'])
+    expect(loaded!.notFound).toEqual([])
+  })
+
+  it('repairs legacy metadata that contains the same key as a file and a 404', async () => {
+    const store = new MemoryBinaryStore()
+    await store.set('tl:2025:f:26/recovered.sty', buf([7, 8, 9]))
+    await store.set(
+      'tl:2025:meta',
+      new TextEncoder().encode(
+        JSON.stringify({
+          schema: 1,
+          version: '2025',
+          entries: {
+            '26/recovered.sty': {
+              format: 26,
+              filename: 'recovered.sty',
+              size: 3,
+              lastAccess: 1,
+            },
+          },
+          notFound: [{ format: 26, filename: 'recovered.sty' }],
+          hasBloom: false,
+        }),
+      ).buffer as ArrayBuffer,
+    )
+
+    const cache = new PersistentCache({ store })
+    const loaded = await cache.load()
+    expect(loaded!.files.map((file) => file.filename)).toEqual(['recovered.sty'])
+    expect(loaded!.notFound).toEqual([])
+
+    const repaired = JSON.parse(new TextDecoder().decode((await store.get('tl:2025:meta'))!))
+    expect(repaired.notFound).toEqual([])
+  })
+
   it('evicts least-recently-used files past the byte budget', async () => {
     const store = new MemoryBinaryStore()
     let clock = 1000
@@ -191,6 +255,26 @@ describe('PersistentCache', () => {
     expect(await cache.load()).toBeNull()
   })
 
+  it('load() tolerates a stored meta record missing entries', async () => {
+    const store = new MemoryBinaryStore()
+    await store.set(
+      'tl:2025:meta',
+      new TextEncoder().encode(
+        JSON.stringify({
+          schema: 1,
+          version: '2025',
+          notFound: [{ format: 26, filename: 'missing.sty' }],
+          hasBloom: false,
+        }),
+      ).buffer as ArrayBuffer,
+    )
+
+    const cache = new PersistentCache({ store, version: '2025' })
+    await expect(cache.load()).resolves.toEqual(
+      warmup({ notFound: [{ format: 26, filename: 'missing.sty' }] }),
+    )
+  })
+
   it('save() tolerates a stored meta record missing notFound (defensive, like load())', async () => {
     const store = new MemoryBinaryStore()
     // A schema/version-valid meta with no `notFound` field (partial write / older writer).
@@ -227,6 +311,21 @@ describe('PersistentCache', () => {
 
     const loaded = await cache.load()
     expect(loaded!.files.map((f) => f.filename)).toEqual(['b.sty'])
+  })
+
+  it('lets a new 404 replace a positive entry whose backing data was lost', async () => {
+    const store = new MemoryBinaryStore()
+    const cache = new PersistentCache({ store })
+    await cache.save(
+      warmup({ files: [{ format: 26, filename: 'lost.sty', data: buf([1, 2, 3]) }] }),
+    )
+    await store.delete('tl:2025:f:26/lost.sty')
+
+    await cache.save(warmup({ notFound: [{ format: 26, filename: 'lost.sty' }] }))
+
+    expect(await cache.load()).toEqual(warmup({ notFound: [{ format: 26, filename: 'lost.sty' }] }))
+    const meta = JSON.parse(new TextDecoder().decode((await store.get('tl:2025:meta'))!))
+    expect(meta.entries).not.toHaveProperty('26/lost.sty')
   })
 
   it('prunes meta entries whose data was lost so their size stops counting', async () => {

@@ -57,9 +57,9 @@ export declare class PersistentCache {
     private writeMeta;
     /** Rehydrate the cached WarmupCache, or null if nothing is stored for this version. */
     load(): Promise<WarmupCache | null>;
-    /** Drop meta entries whose backing blob is missing, serialized behind the writeChain and
-     *  re-reading the current meta so it never overwrites a file a concurrent save() recorded. */
-    private prunePhantomEntries;
+    /** Reconcile metadata with backing blobs, serialized behind the writeChain and
+     *  re-reading current state so it never overwrites a concurrent save(). */
+    private reconcileMeta;
     /**
      * Persist a WarmupCache (merging into any existing entries), then evict past
      * the budget. Saves are serialized so concurrent fire-and-forget persists

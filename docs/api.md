@@ -233,7 +233,7 @@ With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\new
 - **pdfLaTeX only** — XeLaTeX/LuaLaTeX always do a full compile.
 - **Optional peer dependency**: splicing uses [`pdf-lib`](https://www.npmjs.com/package/pdf-lib). If it isn't installed, incremental silently falls back to a full compile.
 - **Automatic fallback** to a full compile when the preamble changed, there's no page break before the edit, or the edit touches labels/sectioning (so cross-references stay correct — LaTeX's usual two-pass reconcile still applies).
-- Transparent: `compile()` returns the same `CompileResult`; no API change beyond the option.
+- Transparent: `compile()` returns the same `CompileResult` shape; no API change beyond the option. A fast-path result carries `synctex: null` (the tail compiles in isolation) but sets **`synctexData`** to the tail SyncTeX spliced onto the last full compile's head — exact for the spliced PDF. Consume it as `result.synctexData ?? parse(result.synctex)` for correct inverse/forward search on incremental compiles. Multi-file `\include` documents are supported — each chapter is spliced at its own file-relative lines; `synctexData` is null (reuse the last full SyncTeX) only when the head changed since the last full compile or none was recorded.
 
 The **editor** `WasmTex({ incremental: true })` wires this into the interactive loop: a
 servable edit renders its checkpoint splice immediately as a **fast paint**. The tail's SyncTeX is
@@ -243,9 +243,9 @@ paint carries **exact** SyncTeX — click-to-source works immediately and, becau
 throughput win, not just latency hiding). The `status` event carries `incremental: true` on such a
 fast paint. It also **speculatively pre-builds** the checkpoint near the cursor while the loop is idle,
 so the first edit is fast too. Same fallbacks as above; label/citation edits skip the fast paint and go
-straight to a full compile (no stale-reference flash). The SyncTeX splice covers single-file documents;
-a multi-file tail (`\include`/`\input` of chapters), or a head that changed since the last full compile,
-falls back to a background full reconcile that refreshes SyncTeX + cross-references.
+straight to a full compile (no stale-reference flash). The SyncTeX splice covers both single-file and
+multi-file documents — `\include`/`\input` chapters splice at their own file-relative lines; only a head
+that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
 
 ### `WasmTexCompiler` Methods
 

@@ -70,6 +70,7 @@ export default defineConfig(({ mode }) => {
               headless: 'src/headless.ts',
               node: 'src/node.ts',
               synctex: 'src/synctex.ts',
+              warmup: 'src/warmup.ts',
               lsp: 'src/lsp-service.ts',
               'lsp-monaco': 'src/lsp-monaco.ts',
               'lsp-server': 'src/lsp-server.ts',

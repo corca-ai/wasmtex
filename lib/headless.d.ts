@@ -82,10 +82,11 @@ export declare class WasmTexCompiler {
     private ensureEngine;
     init(): Promise<void>;
     compile(): Promise<CompileResult>;
-    /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries
-     *  this pass's diagnostics; head errors can't recur (the head is unchanged), and
-     *  metadata/cross-refs are unchanged for a `final` result, so the last full
-     *  compile's project index still holds. */
+    /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
+     *  diagnostics; head errors can't recur (the head is unchanged), and metadata/cross-refs are
+     *  unchanged for a `final` result, so the last full compile's project index still holds. The raw
+     *  `synctex` is null (the tail compiled in isolation), but `synctexData` carries the tail SyncTeX
+     *  spliced onto the last full compile's head — exact for the spliced PDF (#99 P2). */
     private toCompileResult;
     setFile(path: string, content: FileContent): void;
     loadProject(files: Record<string, FileContent>): Promise<void>;

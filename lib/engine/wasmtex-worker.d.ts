@@ -9,17 +9,14 @@ export interface WasmTexWorkerMsg {
     pdf?: ArrayBuffer;
     data?: string;
     file?: string;
+    errorName?: string;
+    errorMessage?: string;
+    errorStack?: string;
+    errorLog?: string;
     /** dumpcache response: fetched files + known-missing entries. */
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];
 }
-/**
- * Shared driver for WasmTex workers (BibTeX, XeTeX, dvipdfmx) that
- * speak the simple `settexliveurl` / `writefile` / `readfile` / `<compile>`
- * protocol — i.e. without the corca-specific commands (bloom, preloadtexlive,
- * dumpcache, …) that `WasmTexPdftexEngine` relies on. Subclasses add their own
- * compile entry point.
- */
 export declare abstract class WasmTexWorker<TMsg extends WasmTexWorkerMsg = WasmTexWorkerMsg> extends BaseWorkerEngine<TMsg> {
     onFileDownload?: (filename: string) => void;
     protected version: TexliveVersion;

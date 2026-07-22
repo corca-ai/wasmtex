@@ -25,7 +25,6 @@ import { ProjectIndex } from './lsp/project-index'
 import { registerLatexProviders } from './lsp/register-providers'
 import { parseTraceFile } from './lsp/trace-parser'
 import { initPerfOverlay, perf } from './perf/metrics'
-import { mergeTailSynctex } from './synctex/synctex-merge'
 import type { SynctexData } from './synctex/synctex-parser'
 import { SynctexParser } from './synctex/synctex-parser'
 import './editor-runtime.css'
@@ -220,16 +219,16 @@ export class WasmTex {
   // by the next edit. `prebuildInFlight` serialises the worker — a compile awaits it.
   private prebuildTimer: ReturnType<typeof setTimeout> | null = null
   private prebuildInFlight: Promise<void> | null = null
-  // SyncTeX splice (#99 P2): the last FULL compile's parsed SyncTeX (its head pages are the
-  // merge target), and the merge inputs captured from the fast paint's incremental result. When
-  // the merge succeeds the fast paint carries exact SyncTeX and the reconcile is SKIPPED.
-  private lastFullSynctexData: SynctexData | null = null
-  private pendingFastMerge: {
-    tailSynctex: Uint8Array | null
-    headPageCount: number
-    tailLineOffset: number
-    headUnchangedSinceFull: boolean
-  } | null = null
+  // True while compileActiveEngine drives the worker (fast path or full). buildCheckpoint/
+  // compileFromCheckpoint don't flip the engine's ready status, so runPrebuild consults this to
+  // avoid starting a speculative build on top of an in-flight fast-path compile.
+  private compileInFlight = false
+  // Bumped on every edit; compileActiveEngine uses it to detect a fast paint superseded mid-flight.
+  private editEpoch = 0
+  // SyncTeX splice (#99 P2): the exact spliced SyncTeX for the current fast paint (produced by
+  // IncrementalCompiler.tryIncremental). When present, applyFastSynctex sets it on the viewer and
+  // SKIPS the reconcile — the fast paint is the final result; null → reuse + reconcile.
+  private pendingFastMerge: SynctexData | null = null
 
   private externalEditor = false
 
@@ -403,35 +402,47 @@ export class WasmTex {
 
     // A speculative prebuild drives the same worker; never start a compile on top of it.
     if (this.prebuildInFlight) await this.prebuildInFlight
+    this.compileInFlight = true // so a prebuild armed mid-compile waits (runPrebuild checks this)
+    try {
+      const fast = await this.tryFastPaint()
+      if (fast) return fast
 
-    const inc = this.incremental
-    if (inc && !this.reconcileArmed) {
-      const source = this.mainSource()
-      const files = this.projectStringFiles()
-      // canFastServe is a cheap pre-flight: skip the tail compile entirely for edits that
-      // must go full (preamble / pre-first-page-break / label edits) so they never regress.
-      if (inc.canFastServe(source, files)) {
-        const fast = await inc.tryIncremental(source, files)
-        if (fast?.pdf && fast.final) {
-          this.reconcileArmed = true // handlePostCompile schedules the full reconcile…
-          // …unless the SyncTeX merge succeeds (handlePostCompile → applyFastSynctex), in which
-          // case the fast paint is exact and the reconcile is skipped (#99 P2, the throughput win).
-          this.pendingFastMerge = {
-            tailSynctex: fast.tailSynctex ?? null,
-            headPageCount: fast.headPageCount ?? 0,
-            tailLineOffset: fast.tailLineOffset ?? 0,
-            headUnchangedSinceFull: !!fast.headUnchangedSinceFull,
-          }
-          return this.fastCompileResult(fast)
-        }
-      }
+      // Full compile: a normal edit, an unservable fast path, or the reconcile after a fast paint.
+      this.reconcileArmed = false
+      const result = await this.engine.compile()
+      // Record the full SyncTeX as the head merge-base for the next fast paint's splice (#99 P2).
+      this.incremental?.noteFull(this.mainSource(), this.projectStringFiles(), result.synctex)
+      return result
+    } finally {
+      this.compileInFlight = false
     }
+  }
 
-    // Full compile: a normal edit, an unservable fast path, or the reconcile after a fast paint.
-    this.reconcileArmed = false
-    const result = await this.engine.compile()
-    this.incremental?.noteFull(this.mainSource(), this.projectStringFiles())
-    return result
+  /** Attempt an incremental fast paint (#99); returns the spliced result, or null to signal the
+   *  caller to run a full compile. On success arms the reconcile/merge (unless a newer edit
+   *  superseded this one mid-flight, in which case the scheduler drops the result and the flags
+   *  must NOT be set, or they'd force the next edit to a full compile). */
+  private async tryFastPaint(): Promise<CompileResult | null> {
+    const inc = this.incremental
+    // Skip the fast path during an armed cross-reference rerun (`pendingRecompile`): that pass must
+    // re-run pdfLaTeX over the whole document to converge \ref/\cite/ToC — a checkpoint fast paint
+    // would reuse the stale cached head and abandon the rerun loop.
+    if (!inc || this.reconcileArmed || this.pendingRecompile) return null
+    const epoch = this.editEpoch
+    const source = this.mainSource()
+    const files = this.projectStringFiles()
+    // canFastServe is a cheap pre-flight: skip the tail compile entirely for edits that must go
+    // full (preamble / pre-first-page-break / label edits) so they never regress.
+    if (!inc.canFastServe(source, files)) return null
+    const fast = await inc.tryIncremental(source, files)
+    if (!fast?.pdf || !fast.final) return null
+    if (this.editEpoch === epoch) {
+      this.reconcileArmed = true // handlePostCompile schedules the full reconcile…
+      // …unless the SyncTeX merge produced exact data (applyFastSynctex sets it and skips the
+      // reconcile — #99 P2, the throughput win). The merge now happens inside tryIncremental.
+      this.pendingFastMerge = fast.synctexData ?? null
+    }
+    return this.fastCompileResult(fast)
   }
 
   /** All project files with string content (path → content), for the incremental compiler's
@@ -460,8 +471,9 @@ export class WasmTex {
     }
   }
 
-  /** Arm a speculative checkpoint prebuild once the loop is idle (#99, option A). The next
-   *  edit (onModelChange) or any new compile supersedes it. No-op without `incremental`. */
+  /** Arm a speculative checkpoint prebuild once the loop is idle (#99, option A). The next edit
+   *  (onModelChange) cancels it; a concurrent compile waits for any in-flight one, and runPrebuild
+   *  won't start one while a compile is in flight. No-op without `incremental`. */
   private armPrebuild(): void {
     if (!this.incremental) return
     this.cancelPrebuild()
@@ -477,8 +489,9 @@ export class WasmTex {
    *  {@link prebuildInFlight} so compileActiveEngine serialises against it (one worker). */
   private async runPrebuild(): Promise<void> {
     const inc = this.incremental
-    if (!inc || this.prebuildInFlight) return
-    // Re-check idle at fire time — an edit or compile may have started during the delay.
+    if (!inc || this.prebuildInFlight || this.compileInFlight) return
+    // Re-check idle at fire time — an edit or compile may have started during the delay. A
+    // fast-path compile keeps the engine status 'ready', so compileInFlight (above) covers it.
     if (this.pendingBibtex || this.pendingRecompile || this.reconcileArmed) return
     if (this.engine.getStatus() !== 'ready') return
     const source = this.mainSource()
@@ -761,7 +774,6 @@ export class WasmTex {
     this.pendingRecompile = false
     this.reconcileArmed = false
     this.pendingFastMerge = null
-    this.lastFullSynctexData = null
     this.cancelPendingRerun() // a queued rerun targets the old project — drop it
     this.cancelPrebuild()
     this.incremental?.reset() // fresh project — drop checkpoints + diff baseline
@@ -925,8 +937,12 @@ export class WasmTex {
 
     if (deleted) {
       // A deletion changes the project structure the incremental checkpoints/diff baseline
-      // were built against — drop them so the next compile is a clean full one.
+      // were built against — drop them so the next compile is a clean full one, and clear the
+      // fast-path state (mirrors loadProject) so no stale merge base / armed reconcile survives.
       this.incremental?.reset()
+      this.reconcileArmed = false
+      this.pendingFastMerge = null
+      this.cancelPrebuild()
 
       // projectIndex.removeFile only purges .tex-derived symbols; bibliography entries live in
       // a separate index rebuilt from the .bib files in the VFS. Without this, a deleted .bib's
@@ -1270,6 +1286,7 @@ export class WasmTex {
     this.bibtexRunId++
     this.pendingBibtex = false
     this.pendingRecompile = false
+    this.editEpoch++ // supersede any in-flight fast paint (compileActiveEngine checks this)
     this.reconcileArmed = false // a fresh edit isn't a reconcile; the next compile decides anew
     this.pendingFastMerge = null
     this.cancelPendingRerun() // a queued rerun targets the pre-edit document — drop it
@@ -1488,7 +1505,7 @@ export class WasmTex {
       this.setStatus(result.errors.length > 0 ? 'error' : 'ready', undefined, statusFlags)
     }
 
-    this.handlePostCompile(result, isFastPaint, seq)
+    this.handlePostCompile(result, isFastPaint)
   }
 
   private handleSuccessfulCompile(
@@ -1551,22 +1568,24 @@ export class WasmTex {
     }
   }
 
-  private handlePostCompile(result: CompileResult, isFastPaint = false, seq = 0): void {
-    setErrorMarkers(result.errors, this.models.values())
-
+  private handlePostCompile(result: CompileResult, isFastPaint = false): void {
     if (isFastPaint) {
-      // A fast paint is a preview: its tail log gives error markers. Try to splice exact SyncTeX
-      // for it (#99 P2); applyFastSynctex either sets the merged data and SKIPS the reconcile
-      // (the fast paint is then the final result — a real throughput win, aux is unchanged for a
-      // `final` edit), or, when the tail can't be merged, arms the full reconcile (Phase 1).
-      const merge = this.pendingFastMerge
+      // A fast paint is a preview. Its `errors` come from the isolated `tail` compile — tail-
+      // relative lines attributed to `tail.tex`, no model — so DON'T `setErrorMarkers` (it would
+      // just clear the last full compile's markers on the real files); keep those, which are still
+      // valid for the unchanged head. Try to splice exact SyncTeX (#99 P2); applyFastSynctex either
+      // sets the merged data and SKIPS the reconcile (the fast paint is the final result), or, when
+      // the tail can't be merged, arms the full reconcile (Phase 1) which refreshes markers.
+      const merged = this.pendingFastMerge
       this.pendingFastMerge = null
       this.emitOutline()
       this.runDiagnostics()
       this.emit('compile', { result })
-      void this.applyFastSynctex(merge, seq)
+      this.applyFastSynctex(merged)
       return
     }
+
+    setErrorMarkers(result.errors, this.models.values())
 
     this.updateAuxIndex()
 
@@ -1591,42 +1610,17 @@ export class WasmTex {
     this.armPrebuild()
   }
 
-  /** Splice exact SyncTeX for a fast paint (#99 P2): merge the tail's SyncTeX onto the last full
-   *  compile's head. On success the fast paint IS the final result (skip the reconcile) — the
-   *  head is unchanged, cross-references are stable (a `final` edit), and SyncTeX is now exact.
-   *  When it can't be merged (no last-full data, head changed since it, or a multi-file tail),
-   *  fall back to Phase 1: keep the last full SyncTeX and arm the debounced full reconcile. */
-  private async applyFastSynctex(merge: WasmTex['pendingFastMerge'], seq: number): Promise<void> {
-    let exact = false
-    if (merge?.headUnchangedSinceFull && merge.tailSynctex && this.lastFullSynctexData) {
-      try {
-        const tail = await this.synctexParser.parse(merge.tailSynctex)
-        if (seq !== this.renderSeq) return // a newer edit superseded this fast paint
-        const merged = mergeTailSynctex({
-          head: this.lastFullSynctexData,
-          tail,
-          headPageCount: merge.headPageCount,
-          tailLineOffset: merge.tailLineOffset,
-          mainFile: this.mainFile,
-          tailFile: 'tail.tex',
-        })
-        if (merged) {
-          this.pdfViewer?.setSynctexData(merged)
-          exact = true
-        }
-      } catch {
-        // parse/merge failure → fall through to the reconcile
-      }
-    }
-    if (seq !== this.renderSeq) return
-    if (exact) {
-      // The fast paint is exact and final — no reconcile owed. Clear the armed flag so a later
-      // compile isn't wrongly forced to full. The last-full SyncTeX/source stay put (the head is
-      // unchanged, so they remain the valid merge base for the next tail edit).
-      this.reconcileArmed = false
+  /** Apply a fast paint's SyncTeX (#99 P2). `merged` is the tail spliced onto the last full
+   *  compile's head (produced inside IncrementalCompiler.tryIncremental) — exact for the spliced
+   *  PDF. When present, set it and SKIP the reconcile: the fast paint IS the final result (head
+   *  unchanged, cross-references stable for a `final` edit). When null (head changed since the last
+   *  full compile / no last-full SyncTeX), keep the last full compile's data and arm the reconcile. */
+  private applyFastSynctex(merged: SynctexData | null): void {
+    if (merged) {
+      this.pdfViewer?.setSynctexData(merged)
+      this.reconcileArmed = false // exact + final → no reconcile owed
     } else {
-      // Couldn't splice exact SyncTeX — keep the last full compile's data and reconcile.
-      this.scheduler.schedule()
+      this.scheduler.schedule() // couldn't splice → reconcile refreshes SyncTeX
     }
   }
 
@@ -1641,10 +1635,6 @@ export class WasmTex {
         .then((synctexData) => {
           perf.end('synctex-parse')
 
-          // Retain the full compile's parsed SyncTeX as the head merge-base for incremental fast
-          // paints (#99 P2), even if this render was superseded — the head is still the head.
-          this.lastFullSynctexData = synctexData
-
           if (seq !== this.renderSeq) return
 
           this.pdfViewer?.setSynctexData(synctexData)
@@ -1655,14 +1645,11 @@ export class WasmTex {
 
           console.warn('SyncTeX parse failed, using text-mapper fallback:', err)
 
-          this.lastFullSynctexData = null
-
           if (seq !== this.renderSeq) return
 
           this.pdfViewer?.setSynctexData(null)
         })
     } else {
-      this.lastFullSynctexData = null
       this.pdfViewer?.setSynctexData(null)
     }
   }

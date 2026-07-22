@@ -194,8 +194,10 @@ export class PersistentCache {
     const meta = await this.readMeta()
     if (!meta) return null
 
+    meta.entries ??= {}
     const files: CachedTexliveFile[] = []
-    let pruned = false
+    const positiveKeys = new Set<string>()
+    let needsReconcile = false
     for (const key of Object.keys(meta.entries)) {
       const entry = meta.entries[key]!
       const data = await this.store.get(this.fileKey(entry.format, entry.filename))
@@ -203,16 +205,22 @@ export class PersistentCache {
         // Backing blob is gone — prune the meta entry so its phantom size
         // doesn't inflate the byte total and drive wrong eviction.
         delete meta.entries[key]
-        pruned = true
+        needsReconcile = true
         continue
       }
       files.push({ format: entry.format, filename: entry.filename, data })
+      positiveKeys.add(key)
       // Do NOT bump entry.lastAccess here: a bulk reload is not a per-file access,
       // and stamping every entry with the same `now` flattens the recency order
       // saved across reloads, so eviction would discard the wrong (newer) file.
     }
 
-    const result: WarmupCache = { files, notFound: meta.notFound ?? [] }
+    const storedNotFound = meta.notFound ?? []
+    const notFound = storedNotFound.filter(
+      (entry) => !positiveKeys.has(`${entry.format}/${entry.filename}`),
+    )
+    if (notFound.length !== storedNotFound.length) needsReconcile = true
+    const result: WarmupCache = { files, notFound }
     if (meta.hasBloom) {
       const bloom = await this.store.get(this.bloomKey())
       if (bloom) result.bloomFilter = bloom
@@ -220,23 +228,35 @@ export class PersistentCache {
     // Persist only when we actually pruned phantom entries — otherwise load() is read-only.
     // Route the prune through the same writeChain as save() and re-read the latest meta, so a
     // concurrent save()'s freshly-recorded file isn't clobbered by load()'s stale write.
-    if (pruned) await this.prunePhantomEntries()
+    if (needsReconcile) await this.reconcileMeta()
     return result
   }
 
-  /** Drop meta entries whose backing blob is missing, serialized behind the writeChain and
-   *  re-reading the current meta so it never overwrites a file a concurrent save() recorded. */
-  private prunePhantomEntries(): Promise<void> {
+  /** Reconcile metadata with backing blobs, serialized behind the writeChain and
+   *  re-reading current state so it never overwrites a concurrent save(). */
+  private reconcileMeta(): Promise<void> {
     const run = this.writeChain.then(async () => {
       const meta = await this.readMeta()
-      if (!meta?.entries) return
+      if (!meta) return
+      meta.entries ??= {}
+      meta.notFound ??= []
       let changed = false
+      const positiveKeys = new Set<string>()
       for (const key of Object.keys(meta.entries)) {
         const entry = meta.entries[key]!
         if (!(await this.store.get(this.fileKey(entry.format, entry.filename)))) {
           delete meta.entries[key]
           changed = true
+        } else {
+          positiveKeys.add(key)
         }
+      }
+      const notFound = meta.notFound.filter(
+        (entry) => !positiveKeys.has(`${entry.format}/${entry.filename}`),
+      )
+      if (notFound.length !== meta.notFound.length) {
+        meta.notFound = notFound
+        changed = true
       }
       if (changed) await this.writeMeta(meta)
     })
@@ -268,6 +288,7 @@ export class PersistentCache {
     meta.entries ??= {}
     meta.notFound ??= []
     const now = this.now()
+    const savedFileKeys = new Set(cache.files.map((file) => `${file.format}/${file.filename}`))
 
     for (const file of cache.files) {
       const key = `${file.format}/${file.filename}`
@@ -280,9 +301,22 @@ export class PersistentCache {
       }
     }
 
+    // Real bytes always win. Remove older misses before merging new negative
+    // entries, and never let a later transient miss shadow cached bytes.
+    meta.notFound = meta.notFound.filter(
+      (entry) => !savedFileKeys.has(`${entry.format}/${entry.filename}`),
+    )
     const seen = new Set(meta.notFound.map((e) => `${e.format}/${e.filename}`))
     for (const entry of cache.notFound) {
       const key = `${entry.format}/${entry.filename}`
+      const positive = meta.entries[key]
+      if (positive) {
+        const data = await this.store.get(this.fileKey(positive.format, positive.filename))
+        if (data) continue
+        // The metadata survived but the backing blob did not. Drop the phantom
+        // positive so this observed miss can be persisted and retried coherently.
+        delete meta.entries[key]
+      }
       if (!seen.has(key)) {
         seen.add(key)
         meta.notFound.push(entry)
@@ -294,8 +328,7 @@ export class PersistentCache {
       meta.hasBloom = true
     }
 
-    const justSaved = new Set(cache.files.map((f) => `${f.format}/${f.filename}`))
-    await this.evict(meta, justSaved)
+    await this.evict(meta, savedFileKeys)
     await this.writeMeta(meta)
   }
 

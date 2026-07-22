@@ -1,3 +1,4 @@
+import { SynctexData } from '../synctex/synctex-parser';
 import { WasmTexPdftexEngine } from './wasmtex-engine';
 export interface IncrementalResult {
     pdf: Uint8Array | null;
@@ -12,16 +13,12 @@ export interface IncrementalResult {
     final: boolean;
     /** Why the full path was taken, when `incremental` is false. */
     reason?: string;
-    /** SyncTeX for the isolated tail compile (`incremental` only) — tail-relative pages/lines.
-     *  Mergeable onto the last full compile's head SyncTeX via `mergeTailSynctex` (#99 P2). */
-    tailSynctex?: Uint8Array | null;
-    /** Pages the head occupies (1..headPageCount) — the tail splices after them. */
-    headPageCount?: number;
-    /** Add to the tail's tail-relative source lines to get document lines (= head line count). */
-    tailLineOffset?: number;
-    /** True when the head is byte-for-byte unchanged since the last full compile, so its head
-     *  SyncTeX (pages 1..headPageCount) is still valid to merge the tail onto. */
-    headUnchangedSinceFull?: boolean;
+    /** The tail SyncTeX spliced onto the last full compile's head — exact for the spliced PDF
+     *  (#99 P2). Null when the splice couldn't run safely (head changed since the last full, or no
+     *  last-full SyncTeX was recorded via {@link noteFull}); the caller then reuses the last full
+     *  compile's SyncTeX and/or reconciles. Multi-file `\include` tails ARE spliced. Set only on the
+     *  `incremental` path. */
+    synctexData?: SynctexData | null;
 }
 export interface IncrementalOptions {
     /** Max checkpoints kept (LRU). Default 4. */
@@ -50,6 +47,15 @@ export declare class IncrementalCompiler {
     /** Main source at the last FULL compile (distinct from `last`, which advances on fast paints
      *  too). The head-unchanged test for the SyncTeX merge diffs against this. (#99 P2) */
     private lastFullSource;
+    /** Project files at the last FULL compile — the head-unchanged test also compares the chapters
+     *  the head `\include`s against these (a chapter changed since the last full but not since the
+     *  last paint would leave the merge base stale). (#99 P2 multi-file) */
+    private lastFullFiles;
+    /** Last full compile's SyncTeX — the head merge-base. Kept as raw bytes and parsed lazily
+     *  (once per full compile, reused across the fast paints that follow) into `lastFullSynctex`. */
+    private lastFullSynctexBytes;
+    private lastFullSynctex;
+    private readonly synctexParser;
     private readonly checkpoints;
     private readonly lru;
     constructor(engine: WasmTexPdftexEngine, opts?: IncrementalOptions);
@@ -65,10 +71,14 @@ export declare class IncrementalCompiler {
     compile(source: string, files?: FileSet): Promise<IncrementalResult>;
     private syncProjectFiles;
     /**
-     * Record that the host performed a full compile (updating `main.aux`), so the next
-     * edit diffs against it. Drops cached checkpoints when the preamble changed.
+     * Record that the host performed a full compile (updating `main.aux`), so the next edit diffs
+     * against it. Drops cached checkpoints when the preamble changed. Pass the full compile's raw
+     * SyncTeX (`CompileResult.synctex`) so the next fast paint can splice its tail onto this head
+     * and return exact {@link IncrementalResult.synctexData} (#99 P2) — omit it to skip splicing.
      */
-    noteFull(source: string, files?: FileSet): void;
+    noteFull(source: string, files?: FileSet, synctex?: Uint8Array | null): void;
+    /** The last full compile's parsed SyncTeX (the head merge-base), parsed once and cached. */
+    private ensureLastFullSynctex;
     /** Cheap pre-flight for a servable tail edit: the head/tail split at the boundary before
      *  the edit, or null when a full compile is required (no baseline, preamble changed, no
      *  page break before the edit, or too-small head). No compile — pure string work. Shared
@@ -78,6 +88,13 @@ export declare class IncrementalCompiler {
     private planFast;
     /** Attempt the checkpoint fast path; return null to signal "fall back to full". */
     tryIncremental(source: string, files?: FileSet): Promise<IncrementalResult | null>;
+    /** Splice the tail's SyncTeX onto the last full compile's head → exact SyncTeX for the spliced
+     *  PDF (#99 P2), or null when it can't run safely. Safe only when the ENTIRE head is unchanged
+     *  since the last full compile — the main-source prefix AND every file it `\include`s — because
+     *  a head file changed since the last full but not since the last paint renders fresh in the head
+     *  PDF while the merge base still describes the old one. (`this.last` advances on fast paints, so
+     *  the diff can't catch that; we compare against the last FULL snapshot.) */
+    private spliceTailSynctex;
     /** True iff a fast, `final` incremental paint is servable for this edit — the cheap
      *  pre-flight ({@link planFast}) succeeds AND the change touches no labels/numbering. Lets
      *  an interactive host skip the tail compile entirely for edits that must go full (preamble,

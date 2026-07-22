@@ -116,22 +116,67 @@ describe('mergeTailSynctex (#99 Phase 2)', () => {
     expect(merged.magnification).toBe(1000)
   })
 
-  it('returns null (→ reconcile) for a multi-file tail (an \\input chapter)', () => {
-    const head = data({ 3: 'main.tex' }, { 1: [node({ input: 3, line: 1, page: 1 })] })
+  it('merges a multi-file tail: tail.tex → main (offset), chapter → fresh tag, file-relative line', () => {
+    // head: main.tex (tag 3) occupies page 1, and already \includes chapter1.tex (tag 4).
+    const head = data(
+      { 3: 'main.tex', 4: 'chapter1.tex' },
+      { 1: [node({ input: 3, line: 2, page: 1 }), node({ input: 4, line: 8, page: 1 })] },
+    )
+    // tail: an \include{chapter5} — tail.tex (the include line, tag 1) + chapter5.tex content (tag 2).
     const tail = data(
       { 1: 'tail.tex', 2: 'chapter5.tex' },
-      { 1: [node({ input: 1, line: 1, page: 1 }), node({ input: 2, line: 4, page: 1 })] },
+      {
+        1: [
+          node({ input: 1, line: 3, page: 1 }),
+          node({ input: 2, line: 4, page: 1, h: 120, v: 250 }),
+        ],
+      },
     )
-    expect(
-      mergeTailSynctex({
-        head,
-        tail,
-        headPageCount: 1,
-        tailLineOffset: 5,
-        mainFile: 'main.tex',
-        tailFile: 'tail.tex',
-      }),
-    ).toBeNull()
+    const merged = mergeTailSynctex({
+      head,
+      tail,
+      headPageCount: 1,
+      tailLineOffset: 10,
+      mainFile: 'main.tex',
+      tailFile: 'tail.tex',
+    })!
+    expect(merged).not.toBeNull()
+    const tailPage = merged.pages.get(2)!
+    // tail.tex node → main.tex tag (3), line offset (3 + 10 = 13).
+    const includeNode = tailPage.find((n) => n.input === 3)!
+    expect(includeNode.line).toBe(13)
+    // chapter5 node → a FRESH tag (> max head tag 4), real name kept, line UNCHANGED (file-relative).
+    const chNode = tailPage.find((n) => n.input !== 3)!
+    expect(chNode.input).toBeGreaterThan(4)
+    expect(chNode.line).toBe(4)
+    expect(merged.inputs.get(chNode.input)).toBe('chapter5.tex')
+    expect(merged.inputs.get(4)).toBe('chapter1.tex') // head chapter preserved
+    // Forward search resolves both the main doc line and the chapter (by name).
+    expect(parser.forwardLookup(merged, 'main.tex', 13)!.page).toBe(2)
+    expect(parser.forwardLookup(merged, 'chapter5.tex', 4)!.page).toBe(2)
+    // Inverse click on the chapter node resolves to chapter5.tex line 4 (file-relative).
+    const inv = parser.inverseLookup(merged, 2, 121, 250)!
+    expect(inv.file).toBe('chapter5.tex')
+    expect(inv.line).toBe(4)
+  })
+
+  it('drops tail .aux nodes (no merged input tag) rather than mis-resolving them', () => {
+    const head = data({ 3: 'main.tex' }, { 1: [node({ input: 3, line: 1, page: 1 })] })
+    const tail = data(
+      { 1: 'tail.tex', 2: 'tail.aux' },
+      { 1: [node({ input: 1, line: 2, page: 1 }), node({ input: 2, line: 9, page: 1 })] },
+    )
+    const merged = mergeTailSynctex({
+      head,
+      tail,
+      headPageCount: 1,
+      tailLineOffset: 5,
+      mainFile: 'main.tex',
+      tailFile: 'tail.tex',
+    })!
+    const tailPage = merged.pages.get(2)!
+    expect(tailPage).toHaveLength(1) // the .aux node was dropped
+    expect(tailPage[0]!.input).toBe(3) // only the remapped tail.tex node survives
   })
 
   it('returns null when the main or tail tag cannot be found', () => {

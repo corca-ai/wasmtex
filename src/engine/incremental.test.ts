@@ -147,6 +147,15 @@ describe('IncrementalCompiler (#55)', () => {
     expect(pages).toBe(3)
   })
 
+  it('produces no synctexData when the last full compile had none (graceful, #99 P2)', async () => {
+    // The mock returns null SyncTeX, so the splice can't run — the result must degrade cleanly to
+    // synctexData:null (the host then reuses the last full SyncTeX / reconciles) rather than throw.
+    await inc.compile(doc('Tail body.')) // full seeds the baseline (mock synctex = null)
+    const r = await inc.compile(doc('Tail body edited.'))
+    expect(r.incremental).toBe(true)
+    expect(r.synctexData ?? null).toBeNull()
+  })
+
   it('reuses a cached checkpoint when the head is unchanged', async () => {
     await inc.compile(doc('Tail body.'))
     await inc.compile(doc('Tail body v2.'))
@@ -275,6 +284,31 @@ describe('IncrementalCompiler — speculative prebuild (#99)', () => {
   })
 })
 
+describe('IncrementalCompiler — checkpoint-unreproducible documents take the full path (#99)', () => {
+  // The isolated checkpoint compile copies only main.aux (no .toc/.bbl/.lof/.ind), so these
+  // constructs would render blank on a fast paint — such docs must always compile fully.
+  for (const cmd of [
+    '\\tableofcontents',
+    '\\listoffigures',
+    '\\bibliography{refs}',
+    '\\printindex',
+  ]) {
+    it(`falls back to full for a document with ${cmd}`, async () => {
+      await inc.compile(doc(`${cmd}\nTail body.`))
+      const r = await inc.compile(doc(`${cmd}\nTail body edited.`))
+      expect(r.incremental).toBe(false)
+      expect(mock.buildCalls).toBe(0) // no checkpoint built or served
+      expect(inc.canFastServe(doc(`${cmd}\nTail body edited.`))).toBe(false)
+    })
+  }
+
+  it('still serves a document that only uses \\bibliographystyle (not \\bibliography)', async () => {
+    await inc.compile(doc('Tail body. \\bibliographystyle{plain}'))
+    const r = await inc.compile(doc('Tail body edited. \\bibliographystyle{plain}'))
+    expect(r.incremental).toBe(true) // \bibliographystyle typesets nothing → safe
+  })
+})
+
 describe('IncrementalCompiler.canFastServe (#99)', () => {
   it('is false before any full compile (no baseline)', () => {
     expect(inc.canFastServe(doc('Tail.'))).toBe(false)
@@ -365,10 +399,10 @@ describe('IncrementalCompiler — multi-file (#55 / #54 dep-aware)', () => {
   })
 
   it('marks the result non-final when the edit adds an \\index entry (re-runs makeindex)', async () => {
-    await inc.compile(doc('Tail body. \\printindex'))
-    const r = await inc.compile(doc('Tail body. \\index{newterm}\\printindex'))
+    await inc.compile(doc('Tail body.'))
+    const r = await inc.compile(doc('Tail body. \\index{newterm}'))
     expect(r.incremental).toBe(true)
-    expect(r.final).toBe(false) // forces a full compile so makeindex re-runs
+    expect(r.final).toBe(false) // \index touches the index → forces a full reconcile
   })
 
   it('invalidates the checkpoint head when a non-.tex asset in the head changes', async () => {

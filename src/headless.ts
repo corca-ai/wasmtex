@@ -290,16 +290,18 @@ export class WasmTexCompiler {
     // rerun passes only feed the rerun decision (log signature), not the project index,
     // so reading/parsing the .aux each pass was redundant worker round-trips.
     await this.updateMetadata(result)
-    // Record the fully stabilized state (after any cross-reference reruns) as the
-    // baseline the next incremental compile diffs against and seeds checkpoints from.
-    this.incremental?.noteFull(this.mainSource(), this.projectTexFiles())
+    // Record the fully stabilized state (after any cross-reference reruns) as the baseline the
+    // next incremental compile diffs against + seeds checkpoints from. The SyncTeX is the head
+    // merge-base so the next fast paint can return exact `synctexData` (#99 P2).
+    this.incremental?.noteFull(this.mainSource(), this.projectTexFiles(), result.synctex)
     return result
   }
 
-  /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries
-   *  this pass's diagnostics; head errors can't recur (the head is unchanged), and
-   *  metadata/cross-refs are unchanged for a `final` result, so the last full
-   *  compile's project index still holds. */
+  /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
+   *  diagnostics; head errors can't recur (the head is unchanged), and metadata/cross-refs are
+   *  unchanged for a `final` result, so the last full compile's project index still holds. The raw
+   *  `synctex` is null (the tail compiled in isolation), but `synctexData` carries the tail SyncTeX
+   *  spliced onto the last full compile's head — exact for the spliced PDF (#99 P2). */
   private toCompileResult(r: IncrementalResult, compileTime: number): CompileResult {
     return {
       success: r.success,
@@ -308,6 +310,7 @@ export class WasmTexCompiler {
       errors: parseTexErrors(r.log),
       compileTime: Math.round(compileTime),
       synctex: null,
+      synctexData: r.synctexData ?? null,
       telemetry: { diagnostics: buildDiagnostics(r.log) },
     }
   }

@@ -35,6 +35,10 @@
       "types": "./lib/synctex.d.ts",
       "import": "./lib/synctex.js"
     },
+    "./warmup": {
+      "types": "./lib/warmup.d.ts",
+      "import": "./lib/warmup.js"
+    },
     "./lsp": {
       "types": "./lib/lsp-service.d.ts",
       "import": "./lib/lsp.js"

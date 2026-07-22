@@ -45,7 +45,8 @@ export declare class WasmTex {
     private reconcileArmed;
     private prebuildTimer;
     private prebuildInFlight;
-    private lastFullSynctexData;
+    private compileInFlight;
+    private editEpoch;
     private pendingFastMerge;
     private externalEditor;
     private disposed;
@@ -74,6 +75,11 @@ export declare class WasmTex {
      * a full compile. Serialised against a speculative prebuild (they share the one worker).
      */
     private compileActiveEngine;
+    /** Attempt an incremental fast paint (#99); returns the spliced result, or null to signal the
+     *  caller to run a full compile. On success arms the reconcile/merge (unless a newer edit
+     *  superseded this one mid-flight, in which case the scheduler drops the result and the flags
+     *  must NOT be set, or they'd force the next edit to a full compile). */
+    private tryFastPaint;
     /** All project files with string content (path → content), for the incremental compiler's
      *  diff/checkpoint bookkeeping. Mirrors the headless compiler's file set. */
     private projectStringFiles;
@@ -81,8 +87,9 @@ export declare class WasmTex {
      *  null here — the viewer keeps the last full compile's parsed SyncTeX until the reconcile
      *  refreshes it (handleSuccessfulCompile skips handleSynctex for a fast paint). */
     private fastCompileResult;
-    /** Arm a speculative checkpoint prebuild once the loop is idle (#99, option A). The next
-     *  edit (onModelChange) or any new compile supersedes it. No-op without `incremental`. */
+    /** Arm a speculative checkpoint prebuild once the loop is idle (#99, option A). The next edit
+     *  (onModelChange) cancels it; a concurrent compile waits for any in-flight one, and runPrebuild
+     *  won't start one while a compile is in flight. No-op without `incremental`. */
     private armPrebuild;
     /** Build the checkpoint for the boundary before the cursor, off the critical path. Sets
      *  {@link prebuildInFlight} so compileActiveEngine serialises against it (one worker). */
@@ -155,11 +162,11 @@ export declare class WasmTex {
     private onCompileResult;
     private handleSuccessfulCompile;
     private handlePostCompile;
-    /** Splice exact SyncTeX for a fast paint (#99 P2): merge the tail's SyncTeX onto the last full
-     *  compile's head. On success the fast paint IS the final result (skip the reconcile) — the
-     *  head is unchanged, cross-references are stable (a `final` edit), and SyncTeX is now exact.
-     *  When it can't be merged (no last-full data, head changed since it, or a multi-file tail),
-     *  fall back to Phase 1: keep the last full SyncTeX and arm the debounced full reconcile. */
+    /** Apply a fast paint's SyncTeX (#99 P2). `merged` is the tail spliced onto the last full
+     *  compile's head (produced inside IncrementalCompiler.tryIncremental) — exact for the spliced
+     *  PDF. When present, set it and SKIP the reconcile: the fast paint IS the final result (head
+     *  unchanged, cross-references stable for a `final` edit). When null (head changed since the last
+     *  full compile / no last-full SyncTeX), keep the last full compile's data and arm the reconcile. */
     private applyFastSynctex;
     private handleSynctex;
     /** Cancel a queued cross-reference rerun (armed by {@link maybeRecompile}). A state
