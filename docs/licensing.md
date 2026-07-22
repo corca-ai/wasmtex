@@ -124,75 +124,68 @@ rejects an archive it cannot classify.
 Each claim below is bound to evidence under
 [`license-evidence/`](license-evidence/).
 
-### Replacing `pplib` with an independent adapter
+### PDF parsing without `pplib`
 
-Early local builds linked `pplib`, whose terms were not cleared for this use.
-All release candidates instead use **WTPDF**, a WasmTex-authored MIT C ABI over
-the GPL Xpdf 4.04 parser already present in TeX Live
+XeTeX and LuaHBTeX parse PDFs through **WTPDF**, a WasmTex-authored MIT C ABI
+over the GPL Xpdf 4.04 parser already present in TeX Live
 ([`../wasm-build/pdf-backend/README.md`](../wasm-build/pdf-backend/README.md)).
-The clean-implementation discipline was explicit policy: copying `ppapi.h`,
-pplib names, struct layouts, or implementation was prohibited from the start,
-and WTPDF's API deliberately differs in names, handle model, and ownership
-rules. The repository history bears this out — no pplib implementation source
-ever entered version control; the only pplib-related strings in history are
-deletion lines of TeX Live's own GPL caller code being rewritten, scanner
-deny-lists, and the prohibition itself. Behavioral equivalence was established
-by black-box differentials against non-distributed pplib baseline builds, not
-by reading pplib source:
+`pplib` is excluded from every release unit: link maps and release bytes are
+scanned for `libpplib`, the `pp*_` symbol families, and legacy SHA helpers,
+and any match fails the build.
 
-- XeTeX geometry, visual (11-page fixed-renderer corpus), and extended
-  differentials (xref streams, object streams, encrypted, damaged, deep, and a
-  real object-stream document): byte-identical clean output
-  ([`license-evidence/xetex-pdf-extended-differential-2d87107.md`](license-evidence/xetex-pdf-extended-differential-2d87107.md));
-- LuaHBTeX `pdfe`/`pdfscanner` public API (types, string bytes and lexical
-  form, dictionary order, raw/decoded streams, authentication, limits):
-  byte-identical clean JSON, locked as a build-gate fixture
-  ([`license-evidence/luahbtex-pdfe-differential-923b196.md`](license-evidence/luahbtex-pdfe-differential-923b196.md));
-- package-level `graphicx`/`pdfpages`/TikZ import: text- and pixel-identical
-  output between a pplib-era WASM build and the candidate
-  ([`license-evidence/luahbtex-pdf-import-differential-2b58db3.md`](license-evidence/luahbtex-pdf-import-differential-2b58db3.md)).
+The implementation's independence is both enforced and evidenced:
 
-Two behavioral differences were found, classified, and approved (approver
-recorded in the evidence): Xpdf repairs damaged PDFs that pplib rejected — a
-strict superset, no regression — and the XeTeX final link permutes symbol
-order across identical-input runs of the pinned Emscripten toolchain, a
-functionally equivalent, golden-verified difference
-([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md)).
-Release-byte scans reject any `libpplib`, `pp*_` symbol family, or legacy SHA
-helper; an older `pplib`-linked artifact must never be substituted into a
-release. The security posture of the new path was verified alongside
-compatibility: parser resource limits (input size, object depth, decoded
-bytes, adapter allocation), malformed-input failure, post-open authentication,
-and valgrind-verified memory release on success and failure paths.
+- copying `ppapi.h`, pplib names, struct layouts, or implementation is
+  prohibited; WTPDF's API deliberately differs in names, handle model, and
+  ownership rules; and version control contains no pplib implementation
+  source;
+- compatibility is verified by black-box differentials against
+  non-distributed pplib baseline builds, not by reference to pplib source:
+  the XeTeX geometry, visual, and extended corpora
+  ([`license-evidence/xetex-pdf-extended-differential-2d87107.md`](license-evidence/xetex-pdf-extended-differential-2d87107.md)),
+  the LuaHBTeX `pdfe`/`pdfscanner` API surface — types, string bytes and
+  lexical form, dictionary order, raw/decoded streams, authentication,
+  limits — locked as a build-gate fixture
+  ([`license-evidence/luahbtex-pdfe-differential-923b196.md`](license-evidence/luahbtex-pdfe-differential-923b196.md)),
+  and package-level `graphicx`/`pdfpages`/TikZ import
+  ([`license-evidence/luahbtex-pdf-import-differential-2b58db3.md`](license-evidence/luahbtex-pdf-import-differential-2b58db3.md))
+  all match the baseline byte- or pixel-exactly on clean inputs;
+- the two behavioral differences are classified and approved with a recorded
+  approver: Xpdf repairs damaged PDFs the baseline rejects, and the XeTeX
+  final link permutes symbol order across identical-input runs of the pinned
+  toolchain — functionally equivalent and golden-verified
+  ([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md));
+- parser resource limits (input size, object depth, decoded bytes, adapter
+  allocation), malformed-input failure, post-open authentication, and
+  valgrind-verified memory release are tested on success and failure paths.
 
-### Binding every byte to its source
+### Artifact traceability
 
-Historical locally built binaries were quarantined out of the repository (the
-history contains zero binary blobs). Every release artifact is bound to a
-`BUILD-RECEIPT.<family>.json` recording the WasmTex commit, TeX Live commit,
-Emscripten commit, digest-pinned build image, and per-file SHA-256; all six
-family receipts must share one source revision. The current candidate is bound
-to a single revision with a per-archive link inventory and an SPDX SBOM
+Every release artifact is bound to a `BUILD-RECEIPT.<family>.json` recording
+the WasmTex commit, TeX Live commit, Emscripten commit, digest-pinned build
+image, and per-file SHA-256, and all family receipts must share one source
+revision. A per-archive link inventory and an SPDX SBOM classify everything
+the linker actually selected
 ([`license-evidence/engine-release-2025-2b58db3.md`](license-evidence/engine-release-2025-2b58db3.md)).
-Rebuilding the four families untouched by the WTPDF fixes reproduced their
-bytes exactly, and format dumps record their observed inputs and known
-non-determinism.
+Independent rebuilds reproduce the engine bytes, format dumps record their
+observed inputs and known non-determinism, and version control carries no
+engine binaries or formats at all.
 
 ### Complete corresponding source
 
 A deterministic builder assembles the corresponding-source archive from the
 release receipts: the WasmTex snapshot for every receipt revision, the pinned
-TeX Live source with the unused `libs/pplib` tree removed, Emscripten source at
-its pinned commit, hash-verified Emscripten port archives, Dockerfiles, build
-scripts, glue, manifests, and `REBUILD.md`/`RELINK.md`. The archive for the
-current candidate was verified by the checker, its TeX Live tree diffs empty
-against an independent clone of the pinned commit, and a clean
-`--no-cache --pull` rebuild from the archive snapshot reproduced 20 of 22
-release engine files bit-exactly (the XeTeX pair differs only by the approved
-link-order permutation). The archive SHA-256 and its designated public HTTPS
-URL are recorded in `LICENSE-MANIFEST.json#correspondingSource`
+TeX Live source with the unused `libs/pplib` tree removed, Emscripten source
+at its pinned commit, hash-verified Emscripten port archives, Dockerfiles,
+build scripts, glue, manifests, and `REBUILD.md`/`RELINK.md`. A checker
+verifies the archive, the bundled TeX Live tree is diffed against an
+independent clone of the pinned commit, and a clean `--no-cache --pull`
+rebuild from the archive snapshot reproduces the release engine bytes, with
+the approved XeTeX link-order permutation as the sole exception
 ([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md),
-[corresponding-source.md](corresponding-source.md)).
+[corresponding-source.md](corresponding-source.md)). The archive SHA-256 and
+its public HTTPS URL are recorded in
+`LICENSE-MANIFEST.json#correspondingSource`.
 
 ### Notices and relink material
 
@@ -206,10 +199,10 @@ retained permission and non-endorsement notice.
 
 ### Repository publication audit
 
-Before creating a public remote: a secret scan over the full history and the
-ignored-file-inclusive working tree found no leaks; the history carries no
-binary or archive blobs and no stray branches, tags, stashes, or LFS objects;
-third-party-ported source headers were audited
+The publication audit covers a secret scan over the full history and the
+ignored-file-inclusive working tree (no leaks), a history audit (no binary or
+archive blobs, no stray branches, tags, stashes, or LFS objects), and a review
+of third-party-ported source headers
 ([`license-evidence/repository-audit-3ec3290.md`](license-evidence/repository-audit-3ec3290.md)).
 The scans are re-run on the final pre-publication commit.
 
