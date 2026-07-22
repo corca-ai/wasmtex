@@ -53,6 +53,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [`docs/license-evidence/xetex-pdf-extended-differential-2d87107.md`](docs/license-evidence/xetex-pdf-extended-differential-2d87107.md)
 - [`docs/license-evidence/luahbtex-wtpdf-666663b.md`](docs/license-evidence/luahbtex-wtpdf-666663b.md)
 - [`docs/license-evidence/luahbtex-pdfe-differential-923b196.md`](docs/license-evidence/luahbtex-pdfe-differential-923b196.md)
+- [`docs/license-evidence/luahbtex-pdf-import-differential-2b58db3.md`](docs/license-evidence/luahbtex-pdf-import-differential-2b58db3.md)
 - [`docs/license-evidence/wtpdf-v2-63c9303.md`](docs/license-evidence/wtpdf-v2-63c9303.md)
 - [`docs/license-evidence/engine-release-2025-2b58db3.md`](docs/license-evidence/engine-release-2025-2b58db3.md)
 
@@ -114,12 +115,12 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] LuaHBTeX caller를 WTPDF API로 전환하고 native/Emscripten compile 및 기본 smoke를 통과했다.
 - [x] xref stream, object stream, 암호화·손상 PDF와 실제 문서를 포함한 XeTeX 확장 corpus를 통과한다. pplib 기준선과 clean JSON, XDV, xdvipdfmx PDF, 144dpi 래스터와 실제 문서 XDV가 byte 단위로 일치한다.
 - [x] LuaHBTeX의 classic xref, xref stream과 object stream 동작을 fixture로 검증한다. pdfe 차등 비교와 repeat-image 빌드 게이트가 두 xref 배치 모두를 검증한다.
-- [ ] `graphicx`, `pdfpages`와 TikZ PDF import를 기준 빌드와 비교한다.
+- [x] `graphicx`, `pdfpages`와 TikZ PDF import를 기준 빌드와 비교한다. pplib 시대 WASM 빌드(f4eed86)와 후보 빌드의 출력이 text·144dpi 픽셀 단위로 동일하다.
 - [x] `pdfe`와 `pdfscanner`의 반환 type, string byte, dictionary 순서, raw/decoded stream과 오류를 JSON fixture로 비교한다. pplib 기준선과 클린 입력 동작이 byte 단위로 일치했고, 손상 PDF 복구 차이는 승인해 expected fixture로 잠갔다.
 - [x] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다. 잠긴 상태, 잘못된 password 거부, user password 해제가 기준선과 일치한다.
 - [x] malformed, deeply nested와 oversized PDF의 timeout, allocation limit과 실패 동작을 검증한다. WTPDF smoke가 입력·깊이·디코딩·할당 한도와 malformed 실패를 검증하고, 300단계 중첩·손상 fixture는 차등 비교에 포함된다. wall-clock timeout은 설계상 host 종료 책임으로 문서화되어 있다.
 - [x] 성공·실패 경로의 document/object/stream memory 해제를 검증한다. pdfe 프로브는 valgrind 무손실이고, 이미지 포함 경로의 잔여 누수는 pplib 기준선과 총량이 동일한 업스트림 kpathsea/종료 경로다.
-- [ ] PDF 출력의 text와 위치를 자동 비교하고 두 개 이상의 PDF 구조 검사기로 결과를 검사한다.
+- [x] PDF 출력의 text와 위치를 자동 비교하고 두 개 이상의 PDF 구조 검사기로 결과를 검사한다. `pdftotext -layout`과 144dpi 래스터 비교가 자동화되었고 poppler·mupdf·pdf-lib 세 검사기가 결과를 검사한다.
 - [x] 브라우저와 Node host에서 pdfLaTeX, XeLaTeX, LuaLaTeX와 BibTeX 결과 parity를 검증한다. `CROSS_HOST_PARITY=1` smoke 7건(양쪽 PDF-import corpus 포함)이 재빌드 엔진으로 통과한다.
 - [x] WASM/JS 크기, cold start, compile time과 peak memory budget을 정하고 통과한다. 실측(`engine-performance-2b58db3.json`)으로 RSS budget을 보정했고 크기·런타임 검사가 통과한다.
 - [ ] 발견한 차이를 `expected`, `approved`, `regression`으로 분류하고 승인자를 기록한다.
