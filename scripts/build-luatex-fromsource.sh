@@ -32,7 +32,39 @@ docker build --platform linux/amd64 \
   --build-arg TEXLIVE_REF="$(cat "$REPO_ROOT/wasm-build/texlive-source.ref")" \
   -f "$REPO_ROOT/wasm-build/Dockerfile.luatex" \
   -t "$IMAGE" \
-  "$REPO_ROOT/wasm-build"
+  "$REPO_ROOT/wasm-build" || { echo "LuaHBTeX image build failed"; exit 1; }
+
+echo "Checking repeated PDF image inclusion (WTPDF lifetime gate) ..."
+# Runs the native Phase-1 luahbtex against the repeat-image fixture: the same
+# classic-xref and xref/object-stream inputs are each opened twice and shipped
+# out, exercising open -> geometry -> embed -> close across document reuse.
+# Several iterations because lifetime bugs here are address-layout dependent
+# (an uninitialized memstream pointer crashed only on some ASLR layouts).
+docker run --rm --platform linux/amd64 --tmpfs /work \
+  -v "$REPO_ROOT/scripts/generate-pdf-compat-fixtures.mjs:/gen-fixtures.mjs:ro" \
+  -v "$REPO_ROOT/wasm-build/pdf-backend/fixtures/luahbtex-repeat-image.tex:/luahbtex-repeat-image.tex:ro" \
+  --entrypoint sh "$IMAGE" -c '
+    set -eu
+    node /gen-fixtures.mjs /work
+    cd /work
+    cp /luahbtex-repeat-image.tex .
+    for attempt in 1 2 3 4 5; do
+      rm -f luahbtex-repeat-image.pdf
+      TEXINPUTS=. TEXMFOUTPUT=/work /build/native/texk/web2c/luahbtex \
+        --ini --interaction=nonstopmode luahbtex-repeat-image.tex \
+        >repeat-image.out 2>&1 || {
+          tail -30 repeat-image.out
+          echo "repeat-image gate failed (attempt $attempt)"; exit 1
+        }
+      grep -q WASMTEX_REPEAT_IMAGE_OK repeat-image.out || {
+        tail -30 repeat-image.out
+        echo "repeat-image gate: missing OK marker (attempt $attempt)"; exit 1
+      }
+      head -c 5 luahbtex-repeat-image.pdf | grep -q "%PDF-" || {
+        echo "repeat-image gate: no output PDF (attempt $attempt)"; exit 1
+      }
+    done
+  ' || { echo "LuaHBTeX repeat-image gate failed"; exit 1; }
 
 echo "Running Phase 2 (emcc cross-compile + glue relink) ..."
 docker run --rm --platform linux/amd64 \

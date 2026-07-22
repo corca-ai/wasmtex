@@ -1,0 +1,29 @@
+% SPDX-License-Identifier: MIT
+% Repeatedly reopening the same inputs exercises the PdfDocument/WTPDF lifetime
+% boundary on both the classic-xref and xref/object-stream parser paths, and the
+% shipout embeds every import so the copy/write path runs too.
+% iniTeX: establish grouping catcodes first. The primitives must be enabled from
+% \directlua at TeX time — the --lua startup script runs before the string pool
+% exists, where tex.enableprimitives crashes stock LuaHBTeX as well.
+\catcode`\{=1
+\catcode`\}=2
+\directlua{tex.enableprimitives('',
+  {'outputmode', 'saveimageresource', 'useimageresource',
+   'lastsavedimageresourceindex'})}
+\outputmode=1
+\saveimageresource{classic.pdf}
+\edef\imgclassicfirst{\the\lastsavedimageresourceindex}
+\saveimageresource{classic.pdf}
+\edef\imgclassicsecond{\the\lastsavedimageresourceindex}
+\saveimageresource{xref-object-stream.pdf}
+\edef\imgstreamfirst{\the\lastsavedimageresourceindex}
+\saveimageresource{xref-object-stream.pdf}
+\edef\imgstreamsecond{\the\lastsavedimageresourceindex}
+\shipout\hbox{%
+  \useimageresource\imgclassicfirst
+  \useimageresource\imgclassicsecond
+  \useimageresource\imgstreamfirst
+  \useimageresource\imgstreamsecond
+}
+\immediate\write16{WASMTEX_REPEAT_IMAGE_OK}
+\end
