@@ -1,9 +1,8 @@
 # XeTeX WTPDF build evidence (`23f2ce1`)
 
-This record supersedes the XeTeX portion of
-[`xetex-wtpdf-6402c96.md`](xetex-wtpdf-6402c96.md). It verifies the fail-loud
-native build and the corrected Xpdf version banner. It is not a release-clearance
-statement or a full compatibility approval.
+This record verifies the fail-loud native build and the corrected Xpdf version
+banner. It is not a release-clearance statement or a full compatibility
+approval.
 
 ## Fixed inputs
 

@@ -79,7 +79,7 @@ The same from-source WASM engine runs under Node via `installNodeWorkerHost`
 **env-gated** so they stay out of the default `npm run test`; they read the engine assets
 from `public/`, so run `npm run sync-engine-assets -- --from <baseUrl>` first.
 ```bash
-# Off-browser pdfTeX smoke (#121)
+# Off-browser pdfTeX smoke
 NODE_COMPILE_SMOKE=1 npx vitest run src/engine/node-compile.smoke.test.ts
 
 # Client/server parity vs the browser golden — pdflatex + lualatex + xelatex + bibtex

@@ -78,7 +78,7 @@ That's a localized one-shim fix, not a re-patch of the engine.
   → `--wrap`/glue/entry-shim → (last resort) a tracked `wasm-build/patches/*.patch`
   applied at build time so it **fails loudly** when upstream drifts. Never a forked
   source tree.
-- **Pin upstream to an immutable ref, in one place.** ✅ Done:
+- **Pin upstream to an immutable ref, in one place.**
   `wasm-build/texlive-source.ref` holds an immutable `texlive-source` commit (not a
   moving branch), passed as `--build-arg TEXLIVE_REF` to every engine build
   (pdfTeX `Dockerfile`, LuaTeX `Dockerfile.luatex`, via `wasm-build.yml` /
@@ -89,7 +89,7 @@ That's a localized one-shim fix, not a re-patch of the engine.
   `TEXLIVE_REF` (with this project's own controller and glue — see
   `wasm-build/Dockerfile.xetex` and `scripts/build-xetex-fromsource.sh`); only ICU
   data is built separately (`scripts/build-icu-data.sh`).
-- **Make drift fail loudly, not silently.** ✅ Done — interposition assumptions are
+- **Make drift fail loudly, not silently.** Interposition assumptions are
   guarded at build + smoke time, so a moved interface is an obvious, located error:
   - `wasm-build/Makefile` (`wasm-prep`) fails if the native `c-auto.h` is absent, if the
     `#define SIZEOF_LONG 8` pattern the wasm32 fixup `sed` targets is gone (it would
@@ -102,13 +102,11 @@ That's a localized one-shim fix, not a re-patch of the engine.
     entry exports (`_compileLaTeX`/`_compileFormat`/`_setMainEntry`, plus `_compilePDF` for
    dvipdfm) in each generated module, and the `kpse_find_file_impl` JS hook in each
    separately published worker controller.
-- **Catch "builds but output changed" early** ✅ Done — `e2e/golden-output.spec.ts`
+- **Catch "builds but output changed" early.** `e2e/golden-output.spec.ts`
   locks a small pdfLaTeX/XeLaTeX/LuaLaTeX corpus to a deterministic structural signature
   (page count, telemetry diagnostic codes, XDV box/run geometry — never the
   timestamp-bearing PDF bytes), run weekly by `.github/workflows/golden-canary.yml`.
-  Regenerate after an intentional change with `npm run update:golden`. A heavier
-  rebuild-from-latest-upstream canary (bump the pinned ref → rebuild → re-extract format →
-  run the corpus) is the natural next layer on top of the `wasm-*.yml` builds.
+  Regenerate after an intentional change with `npm run update:golden`.
 - **Bump deliberately, not reflexively.** TeX Live is annual and assets are
   versioned side-by-side (`2025` plus future releases), so upgrade on need
   (security, a package users want, a fix) — not on every release.
@@ -204,7 +202,7 @@ AWS_PROFILE=cc node scripts/gen-xetexfontlist.mjs --upload
 # LuaLaTeX: luaotfload names DB. Set EXPECTED_LUAOTFLOAD / EXPECTED_DB_VERSION to the new
 # TeX Live year's luaotfload (env vars, or edit the defaults '3.29' / '6' in the script);
 # the upload step rejects a DB whose schema version mismatches, so the engine never rescans.
-# Use --fonts-dir for the exact-mirror DB (#73); bare --generate is the quick, non-exact mode.
+# Use --fonts-dir for the exact-mirror DB; bare --generate is the quick, non-exact mode.
 node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>   # in a Docker environment
 AWS_PROFILE=cc node scripts/gen-luaotfload-names.mjs --db ./luaotfload-names.lua --upload
 ```
@@ -253,5 +251,8 @@ const editor2026 = new WasmTex(editorContainer, previewContainer, {
 
 This preserves the current 2025 environment throughout the upgrade and keeps the
 same mechanism reusable for later releases.
+
+## Related Documents
+
 - [docs/engine.md](engine.md): High-level engine setup.
 - [docs/architecture.md](architecture.md): System architecture overview.

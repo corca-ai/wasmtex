@@ -228,14 +228,14 @@ content-addressed cache.
 
 #### Incremental compilation
 
-With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\newpage`) re-typesets only the *tail* of the document — booting the engine from a cached checkpoint at the latest page break before the change and splicing the new tail pages onto a cached head PDF (#55). On long documents this turns a multi-second recompile into a ~200 ms one (≈3–5× and climbing with length).
+With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\newpage`) re-typesets only the *tail* of the document — booting the engine from a cached checkpoint at the latest page break before the change and splicing the new tail pages onto a cached head PDF. On long documents this turns a multi-second recompile into a ~200 ms one (≈3–5× and climbing with length).
 
 - **pdfLaTeX only** — XeLaTeX/LuaLaTeX always do a full compile.
 - **Optional peer dependency**: splicing uses [`pdf-lib`](https://www.npmjs.com/package/pdf-lib). If it isn't installed, incremental silently falls back to a full compile.
 - **Automatic fallback** to a full compile when the preamble changed, there's no page break before the edit, or the edit touches labels/sectioning (so cross-references stay correct — LaTeX's usual two-pass reconcile still applies).
 - Transparent: `compile()` returns the same `CompileResult`; no API change beyond the option.
 
-The **editor** `WasmTex({ incremental: true })` wires this into the interactive loop (#99): a
+The **editor** `WasmTex({ incremental: true })` wires this into the interactive loop: a
 servable edit renders its checkpoint splice immediately as a **fast paint**. The tail's SyncTeX is
 **spliced** onto the last full compile's head (page + source-line + input-tag offsets), so the fast
 paint carries **exact** SyncTeX — click-to-source works immediately and, because the edit is `final`

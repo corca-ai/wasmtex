@@ -11,7 +11,7 @@ To provide a high-performance, **embeddable LaTeX component** for academic platf
 ## Documentation Index
 
 - **[System Architecture](docs/architecture.md)**: Overview of the SDK structure, core components (VFS, LSP, Engines), and tech stack. Read this to understand how different modules interact.
-- **[Execution Model (Client/Server Hybrid)](docs/execution-model.md)**: The strategic architecture — one host-agnostic deterministic engine running identically on client and server, with an integrator-chosen boundary (client-first default). Read this before any work touching the client/server split, headless/UI separation, pluggable backends, or cross-host verification. Tracked in epic #107.
+- **[Execution Model (Client/Server Hybrid)](docs/execution-model.md)**: The strategic architecture — one host-agnostic deterministic engine running identically on client and server, with an integrator-chosen boundary (client-first default). Read this before any work touching the client/server split, headless/UI separation, pluggable backends, or cross-host verification.
 - **[Integration Guide](docs/howto.md)**: Step-by-step instructions on embedding the editor, supporting BibTeX, using Headless mode, and the server-side paths — Node compilation (`installNodeWorkerHost` via `wasmtex/node`) and server backends (BibTeX/Biber/xindy offload via the `backends` option). Essential for usage-related tasks.
 - **[API Reference](docs/api.md)**: Comprehensive documentation of the `WasmTex` class methods, constructor options, and event system. Refer to this for any API changes or additions.
 - **[Bibliography Backends](docs/bibliography.md)**: BibTeX vs biblatex/Biber detection and the pluggable backend interface.

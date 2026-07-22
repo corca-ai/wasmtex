@@ -43,7 +43,7 @@ src/
 ├── ui/               # Editor-marker helpers (error markers, range clamping)
 ├── perf/             # Performance tracking & debug overlay
 ├── index.ts          # SDK entry point — `wasmtex` (barrel export)
-├── wasmtex.ts      # SDK main class (orchestrator)
+├── wasmtex.ts        # SDK main class (orchestrator)
 ├── component-types.ts# `WasmTexOptions` / `WasmTexEventMap` (UI component types)
 ├── headless.ts       # Headless compiler entry — `wasmtex/headless`
 ├── node.ts           # Node (server) entry — `wasmtex/node` (`installNodeWorkerHost`)

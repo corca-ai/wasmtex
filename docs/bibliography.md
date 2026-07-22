@@ -18,28 +18,24 @@ For biblatex, `detectBiblatexBackend(source)` reads the `backend=` option
 
 All of these are exported from both `wasmtex` and `wasmtex/headless`.
 
-## Decision spike
+## Design
 
-biblatex's default engine is **Biber** (a Perl program); the existing BibTeX
-engine can't produce biblatex's `.bbl`. Three options were considered:
+biblatex's default engine is **Biber** (a Perl program); the classic BibTeX
+engine can't produce biblatex's `.bbl`, and Biber itself — Perl + Text::BibTeX
+(the C `btparse`) + a large CPAN tree — is intractable to ship as WASM. The
+architecture therefore combines a pluggable backend interface with two concrete
+backends:
 
-1. **Biber → WASM** — highest fidelity (full biber: sorting, filters, Unicode,
-   `crossref`/`xdata`). But Biber is Perl + Text::BibTeX (the C `btparse`) + a
-   large CPAN tree — intractable to ship to WASM.
-2. **biblatex-lite (JS/TS)** — implement the common path natively (cite
-   collection, sorting, the core fields, `.bbl` generation). **No Perl, tiny**,
-   reuses the project's robust `.bib` parser. Lower fidelity: covers the
-   numeric/author-year subset, not the full biber feature set.
-3. **Pluggable backend interface** — define backends so either of the above (or
-   a host-provided backend) can be slotted in.
+- **biblatex-lite (JS/TS)**, the bundled, zero-download client default. It
+  implements the common path natively (cite collection, sorting, the core
+  fields, `.bbl` generation) on top of the project's `.bib` parser, covering
+  the numeric/author-year subset rather than the full biber feature set.
+- **Server Biber** (`createBiberBackend`) for full fidelity. Biber is
+  deterministic and not in the hot interactive loop, so it is an ideal offload:
+  an integrator points the backend at an endpoint running real Biber.
 
-**Decision.** Ship **option 3 (pluggable interface)** with **option 2
-(biblatex-lite)** as the bundled, zero-download client default that covers the
-common case. Because Biber is deterministic and not in the hot interactive loop,
-**option 1 ships as a *server* backend** (`createBiberBackend`), not a deferred
-WASM artifact — an integrator points it at an endpoint running real Biber for
-full fidelity. The classic BibTeX path is untouched, so legacy documents are
-unaffected.
+The classic BibTeX path is independent of both, so `\bibliography` documents
+are unaffected.
 
 The headless `WasmTexCompiler` **drives this automatically**: when it detects
 a biblatex document it reads the `.bcf` the first LaTeX pass emitted, runs a
