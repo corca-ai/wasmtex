@@ -78,7 +78,6 @@ for (const path of [
   'docs/license-evidence/luahbtex-pdfe-differential-923b196.md',
   'docs/license-evidence/xetex-pdf-extended-differential-2d87107.md',
   'docs/proprietary-integration.md',
-  'fix-license.md',
   'scripts/audit-texlive-provenance.mjs',
   'scripts/build-corresponding-source.mjs',
   'scripts/check-corresponding-source.mjs',

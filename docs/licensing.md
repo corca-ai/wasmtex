@@ -1,41 +1,51 @@
 # Licensing and Release Compliance
 
+This document records the licensing policy WasmTex adopted, why that policy is
+compatible with every component the engines link, and what was done to comply —
+with pointers to the machine-checkable evidence.
+
+## The policy
+
 WasmTex uses a split licensing model:
 
 - original SDK, UI, LSP, build glue, and documentation: MIT;
-- third-party source ports and bundled engine artifacts: their upstream terms;
-- TeX Live packages, fonts, Lua files, ICU data, and compiled formats: the terms of
-  their individual inputs.
+- each engine release unit (worker + Emscripten JavaScript + WASM + formats):
+  the terms of the complete linked combination, per family below;
+- TeX Live packages, fonts, Lua files, ICU data, and compiled formats: the
+  terms of their individual inputs.
 
 The root [`LICENSE`](../LICENSE) does not relicense anything identified in
 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
 
-## Project goal and license decision
+### Why MIT for the SDK
 
-The governing product goal is not to preserve MIT for its own sake. It is to publish
-WasmTex, keep an integrating application such as Cortex closed-source, and comply
-with every license on both sides of the boundary.
+The governing product goal is not to preserve MIT for its own sake. It is to
+publish WasmTex, keep an integrating application such as Cortex closed-source,
+and comply with every license on both sides of the boundary.
 
 The current Cortex integration imports the SDK's headless compiler, LSP, Monaco
-adapter, warmup runtime, SyncTeX types, and other public TypeScript APIs into its
-client build. It does not consume the SDK solely through an out-of-process engine
-protocol. Based on that concrete coupling, the WasmTex-authored host SDK remains
-under MIT: a permissive SDK license lets Cortex keep its original application code
-private while the separately delivered engine workers satisfy their own copyleft
-terms. MIT is the selected implementation for this boundary, not an immutable
-project requirement.
+adapter, warmup runtime, SyncTeX types, and other public TypeScript APIs into
+its client build. It does not consume the SDK solely through an out-of-process
+engine protocol. Based on that concrete coupling, the WasmTex-authored host SDK
+remains under MIT: a permissive SDK license lets Cortex keep its original
+application code private while the separately delivered engine workers satisfy
+their own copyleft terms. MIT is the selected implementation for this boundary,
+not an immutable project requirement.
 
-Do not relicense the whole repository under GPL merely because it builds or launches
-GPL TeX engines. Doing so while Cortex directly bundles the SDK would work against
-the closed-source Cortex goal. A future switch to GPL for host-facing code requires
-first changing Cortex to consume only an independent engine protocol, or providing a
-separate permissive/commercial license for the host SDK.
+Do not relicense the whole repository under GPL merely because it builds or
+launches GPL TeX engines. Doing so while Cortex directly bundles the SDK would
+work against the closed-source Cortex goal. A future switch to GPL for
+host-facing code requires first changing Cortex to consume only an independent
+engine protocol, or providing a separate permissive/commercial license for the
+host SDK.
 
-This means `package.json` correctly says `MIT` for the installable SDK because its
-`files` list excludes `public/` and the engine binaries. A product must not use that
-metadata to describe a separately hosted engine directory or TeX Live mirror.
+This means `package.json` correctly says `MIT` for the installable SDK because
+its `files` list excludes `public/` and the engine binaries. A product must not
+use that metadata to describe a separately hosted engine directory or TeX Live
+mirror. For the boundary that lets a closed-source application use WasmTex, see
+[Proprietary integration](proprietary-integration.md).
 
-The repository is deliberately multi-license:
+### Per-unit terms
 
 | Path or release unit | License treatment |
 | --- | --- |
@@ -46,30 +56,217 @@ The repository is deliberately multi-license:
 | TeX Live packages, fonts and Lua files | Their upstream terms as part of the separately operated full TeX Live distribution. Generated engine formats and ICU data remain part of the exact engine-release audit. |
 | `LICENSES/` and third-party notices | Preserved license evidence; inclusion does not relicense the covered component. |
 
-The practical engine classification is:
+The engine family classification, enforced by
+[`scripts/engine-components-2025.json`](../scripts/engine-components-2025.json):
 
-| Runtime | Distribution treatment |
+| Family | Combined distribution terms |
 | --- | --- |
-| pdfLaTeX | Distribute this exact pdfTeX JavaScript/WASM unit as GPL-2.0-only. pdfTeX permits later versions, but linked Xpdf 4.04 is selected under GPLv2 only. Retain all linked-component notices. |
-| XeLaTeX | Distribute this exact XeTeX JavaScript/WASM unit as GPL-2.0-only plus the XeTeX notice. Xpdf 4.04 and FreeType are both selected under GPLv2; the alternative FreeType License is not used for this combined unit. dvipdfmx remains GPL-2.0-or-later. |
-| LuaLaTeX | Distribute this exact LuaHBTeX JavaScript/WASM unit as GPL-2.0-only because linked Xpdf 4.04 is selected under GPLv2. Retain the MIT WTPDF/SHA-2 and all embedded-library notices. |
+| pdfTeX | `GPL-2.0-only` plus linked-component notices |
+| XeTeX | `GPL-2.0-only AND LicenseRef-XeTeX` plus linked-component notices |
+| dvipdfmx | `GPL-2.0-or-later` plus linked-component notices |
+| LuaHBTeX | `GPL-2.0-only` plus MIT (WTPDF/SHA-2) and embedded-library notices |
+| BibTeX | `LicenseRef-BibTeX-Web2C-Notices AND LGPL-2.1-or-later` |
+| BibTeX8 | `GPL-2.0-or-later` plus linked-component notices |
+| makeindex | `LicenseRef-MakeIndex-Distribution-Notice AND LGPL-2.1-or-later` |
+| `.fmt`/`.fmt.gz`, ICU data | Terms of their recorded generation inputs; ICU 68.2 license for the data file |
 
-The selections above are release-specific and are enforced by
-[`scripts/engine-components-2025.json`](../scripts/engine-components-2025.json).
-Changing Xpdf or FreeType to a different alternative requires a new link audit and
-new receipts; changing only the prose is not sufficient.
+## Why the combination is compatible
 
-The WTPDF/Xpdf XeTeX and LuaHBTeX candidates no longer link `pplib`. The exact
-remote build and link-map evidence is recorded in
-[`license-evidence/xetex-wtpdf-23f2ce1.md`](license-evidence/xetex-wtpdf-23f2ce1.md)
-and
-[`license-evidence/luahbtex-wtpdf-666663b.md`](license-evidence/luahbtex-wtpdf-666663b.md).
-Any older LuaHBTeX or XeTeX artifact that was linked with `pplib` remains uncleared
-and must not be substituted into a release. The new candidates are still
-development-only until their compatibility and other release gates pass.
+Each engine binary is one linked program, so its distribution terms must be
+satisfiable by every statically linked component simultaneously. The actual
+linked set is not assumed: it is read from the linker maps
+([`license-evidence/link-inventory-2b58db3.json`](license-evidence/link-inventory-2b58db3.json),
+81 static archives across 7 executables) and every archive is classified in the
+component inventory, which CI re-checks fail-closed.
 
-For the boundary that lets a commercial or otherwise closed-source application use
-WasmTex, see [Proprietary integration](proprietary-integration.md).
+The reasoning, component class by component class:
+
+- **Xpdf 4.04 (PDF parsing in pdfTeX, XeTeX, LuaHBTeX)** is offered under
+  "GPL v2 or v3". Its GPLv2 alternative is **elected**, which forces the three
+  combinations that contain it to `GPL-2.0-only` — GPLv2-only and GPLv3 code
+  cannot be combined, so one coherent version must be chosen, and the TeX
+  engines themselves (`GPL-2.0-or-later`) are satisfied by v2.
+- **FreeType (XeTeX)** is offered under the FreeType License or GPLv2. The FTL
+  carries a credit requirement the FSF regards as GPL-incompatible, so for the
+  XeTeX combined unit **GPLv2 is elected** and the FTL is not used.
+- **XeTeX's own license** is a permissive X11-style grant with a
+  non-endorsement/naming clause (`LicenseRef-XeTeX`); it is GPL-compatible and
+  its notice is carried alongside the GPL terms.
+- **LGPL components** — kpathsea, Graphite2, TECkit (LGPL-2.1-or-later) and
+  zziplib (LGPL-2.0-or-later) — may be combined into GPL-distributed programs.
+  WasmTex does not rely on silently converting them to GPL: each keeps its
+  selected LGPL terms, and the static-linking obligations are honored the
+  strict way, by shipping the complete library source, local changes, build
+  scripts, and a `RELINK.md` recipe so a recipient can substitute a modified
+  library and relink (LGPL §6 "provide source" route). WasmTex does not claim
+  that static linking erases the LGPL terms.
+- **Permissive components** — Lua 5.3 (MIT), HarfBuzz (Old-MIT), zlib, libpng,
+  ICU, the Emscripten runtime (MIT/NCSA/LLVM-exception/musl notices), and the
+  WasmTex-authored WTPDF adapter and SHA-2 implementation (MIT) — are all
+  GPL-compatible; their notices are preserved in the combined unit rather than
+  being absorbed.
+- **Notice-bearing TeX-lineage components** — BibTeX/web2c and makeindex carry
+  their original permission notices; makeindex additionally requires a
+  conspicuous statement of where source can be obtained and a disclosure that
+  the port is modified, which the release carries.
+- **Generated formats** are not engine code but compiled dumps of LPPL- and
+  otherwise-licensed TeX inputs; their exact observed inputs are recorded per
+  release (`license-evidence/format-inputs-*.json`) and they are distributed
+  under those inputs' terms.
+
+Two things the policy deliberately avoids: a per-file MIT label on anything in
+an engine unit (npm metadata never describes engine directories), and any
+component whose redistribution basis is unrecorded — the inventory check
+rejects an archive it cannot classify.
+
+## What was done to comply
+
+Each claim below is bound to evidence under
+[`license-evidence/`](license-evidence/).
+
+### Replacing `pplib` with an independent adapter
+
+Early local builds linked `pplib`, whose terms were not cleared for this use.
+All release candidates instead use **WTPDF**, a WasmTex-authored MIT C ABI over
+the GPL Xpdf 4.04 parser already present in TeX Live
+([`../wasm-build/pdf-backend/README.md`](../wasm-build/pdf-backend/README.md)).
+The clean-implementation discipline was explicit policy: copying `ppapi.h`,
+pplib names, struct layouts, or implementation was prohibited from the start,
+and WTPDF's API deliberately differs in names, handle model, and ownership
+rules. The repository history bears this out — no pplib implementation source
+ever entered version control; the only pplib-related strings in history are
+deletion lines of TeX Live's own GPL caller code being rewritten, scanner
+deny-lists, and the prohibition itself. Behavioral equivalence was established
+by black-box differentials against non-distributed pplib baseline builds, not
+by reading pplib source:
+
+- XeTeX geometry, visual (11-page fixed-renderer corpus), and extended
+  differentials (xref streams, object streams, encrypted, damaged, deep, and a
+  real object-stream document): byte-identical clean output
+  ([`license-evidence/xetex-pdf-extended-differential-2d87107.md`](license-evidence/xetex-pdf-extended-differential-2d87107.md));
+- LuaHBTeX `pdfe`/`pdfscanner` public API (types, string bytes and lexical
+  form, dictionary order, raw/decoded streams, authentication, limits):
+  byte-identical clean JSON, locked as a build-gate fixture
+  ([`license-evidence/luahbtex-pdfe-differential-923b196.md`](license-evidence/luahbtex-pdfe-differential-923b196.md));
+- package-level `graphicx`/`pdfpages`/TikZ import: text- and pixel-identical
+  output between a pplib-era WASM build and the candidate
+  ([`license-evidence/luahbtex-pdf-import-differential-2b58db3.md`](license-evidence/luahbtex-pdf-import-differential-2b58db3.md)).
+
+Two behavioral differences were found, classified, and approved (approver
+recorded in the evidence): Xpdf repairs damaged PDFs that pplib rejected — a
+strict superset, no regression — and the XeTeX final link permutes symbol
+order across identical-input runs of the pinned Emscripten toolchain, a
+functionally equivalent, golden-verified difference
+([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md)).
+Release-byte scans reject any `libpplib`, `pp*_` symbol family, or legacy SHA
+helper; an older `pplib`-linked artifact must never be substituted into a
+release. The security posture of the new path was verified alongside
+compatibility: parser resource limits (input size, object depth, decoded
+bytes, adapter allocation), malformed-input failure, post-open authentication,
+and valgrind-verified memory release on success and failure paths.
+
+### Binding every byte to its source
+
+Historical locally built binaries were quarantined out of the repository (the
+history contains zero binary blobs). Every release artifact is bound to a
+`BUILD-RECEIPT.<family>.json` recording the WasmTex commit, TeX Live commit,
+Emscripten commit, digest-pinned build image, and per-file SHA-256; all six
+family receipts must share one source revision. The current candidate is bound
+to a single revision with a per-archive link inventory and an SPDX SBOM
+([`license-evidence/engine-release-2025-2b58db3.md`](license-evidence/engine-release-2025-2b58db3.md)).
+Rebuilding the four families untouched by the WTPDF fixes reproduced their
+bytes exactly, and format dumps record their observed inputs and known
+non-determinism.
+
+### Complete corresponding source
+
+A deterministic builder assembles the corresponding-source archive from the
+release receipts: the WasmTex snapshot for every receipt revision, the pinned
+TeX Live source with the unused `libs/pplib` tree removed, Emscripten source at
+its pinned commit, hash-verified Emscripten port archives, Dockerfiles, build
+scripts, glue, manifests, and `REBUILD.md`/`RELINK.md`. The archive for the
+current candidate was verified by the checker, its TeX Live tree diffs empty
+against an independent clone of the pinned commit, and a clean
+`--no-cache --pull` rebuild from the archive snapshot reproduced 20 of 22
+release engine files bit-exactly (the XeTeX pair differs only by the approved
+link-order permutation). The archive SHA-256 and its designated public HTTPS
+URL are recorded in `LICENSE-MANIFEST.json#correspondingSource`
+([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md),
+[corresponding-source.md](corresponding-source.md)).
+
+### Notices and relink material
+
+`LICENSES/` carries the current texts and notices for every recorded component
+(GPL-2.0, GPL-3.0, LGPL variants, Xpdf, XeTeX, SyncTeX, makeindex, ICU,
+Emscripten and its ports, Lua, musl, and the rest);
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) maps them to release
+units. Generated Emscripten JavaScript retains its license output after the
+build. The SyncTeX TypeScript port names its upstream author and points to the
+retained permission and non-endorsement notice.
+
+### Repository publication audit
+
+Before creating a public remote: a secret scan over the full history and the
+ignored-file-inclusive working tree found no leaks; the history carries no
+binary or archive blobs and no stray branches, tags, stashes, or LFS objects;
+third-party-ported source headers were audited
+([`license-evidence/repository-audit-3ec3290.md`](license-evidence/repository-audit-3ec3290.md)).
+The scans are re-run on the final pre-publication commit.
+
+### Fail-closed automation
+
+`npm run check:licenses` is the source-repository gate: it verifies the
+SDK/package license boundary, pinned TeX Live commit, manifest links and
+blocker consistency, required notices and evidence files, component-inventory
+and link-inventory coherence, SPDX SBOM freshness, and the absence of tracked
+engine binaries, formats, or a vendored `pplib`. Every engine workflow runs it;
+public workflows additionally run the strict `--release` mode before uploading
+artifacts or deploying Pages, and `scripts/sync-engine-assets.mjs` refuses an
+asset set that is not `release-cleared`. Changing the label without resolving
+every recorded blocker would make the metadata false — the tooling exists to
+prevent exactly that.
+
+## Engine release gate
+
+Do not publish a versioned engine directory until all of the following are true:
+
+1. Its manifest identifies the TeX Live commit, Emscripten version, component
+   name, license expression or reference, notice path, corresponding-source
+   location, and hashes for both binary and source artifacts. Every engine
+   artifact set also carries a `BUILD-RECEIPT.<family>.json` that binds its
+   exact bytes to the WasmTex Git commit, TeX Live commit, Emscripten commit,
+   and digest-pinned build image. The final asset manifest rejects missing,
+   overlapping, stale, or unclassified receipt coverage in release mode.
+2. The corresponding-source archive contains the pinned TeX Live source,
+   WasmTex worker/glue source, Dockerfiles, build scripts, and all local
+   modifications used to produce the binary.
+3. GPL-covered binaries are distributed with source in the same place or
+   through another GPL-2.0-compliant method. Do not rely solely on a
+   third-party upstream URL.
+4. Statically linked kpathsea, Graphite2, TECkit, and zziplib keep their
+   selected LGPL terms, with complete source and `RELINK.md` as described
+   above.
+5. The makeindex executable is accompanied by `LICENSES/MakeIndex.txt` and a
+   conspicuous, working source-obtainment statement.
+6. Generated Emscripten JavaScript retains its license output, and the complete
+   third-party notice set accompanies the release.
+7. Every linked component has an affirmative, recorded redistribution basis. A
+   release containing XeTeX or LuaHBTeX must use the audited WTPDF/Xpdf build
+   and reject any legacy `pplib`-linked artifact.
+8. `node scripts/check-engine-license-inventory.mjs 2025` covers every archive
+   in the release link maps exactly once and rejects missing notice files or an
+   LGPL entry without its relink method.
+
+The committed or locally downloaded files under `public/wasmtex/<version>/` are
+development inputs, not evidence that the release gate has passed. A public
+product must publish a release-specific manifest and source bundle for the
+exact bytes it serves.
+
+The Emscripten base is pinned by registry digest, not only by the mutable
+`3.1.46` tag. `scripts/corresponding-source-2025.json` also pins the Emscripten
+Git commit and the exact FreeType, ICU, libpng, and zlib port source archives
+and hashes. Changing any Dockerfile to a different base makes
+`npm run check:licenses` fail.
 
 ## Distribution surfaces
 
@@ -82,85 +279,30 @@ WasmTex, see [Proprietary integration](proprietary-integration.md).
 | Full TeX Live mirror | Retain the official distribution's copying and package license material. It is operated separately from the engine release gate described here. |
 | ICU data | Retain the ICU 68.2 license bundle and exact source/version evidence. |
 
-Serving JavaScript, WebAssembly, formats, packages, fonts, or data to a browser is a
-distribution of those files. Running the same engine only on infrastructure operated
-by the service provider is not a browser distribution; distributing an on-premises
-image or appliance is distribution again.
-
-## Engine release gate
-
-Do not publish a versioned engine directory until all of the following are true:
-
-1. Its manifest identifies the TeX Live commit, Emscripten version, component name,
-   license expression or reference, notice path, corresponding-source location, and
-   hashes for both binary and source artifacts.
-   Every engine artifact set also carries a `BUILD-RECEIPT.<family>.json` that binds
-   its exact bytes to the WasmTex Git commit, TeX Live commit, Emscripten commit, and
-   digest-pinned build image. The final asset manifest rejects missing, overlapping,
-   stale, or unclassified receipt coverage in release mode.
-2. The corresponding-source archive contains the pinned TeX Live source, WasmTex
-   worker/glue source, Dockerfiles, build scripts, and all local modifications used to
-   produce the binary.
-3. GPL-covered binaries are distributed with source in the same place or through
-   another GPL-2.0-compliant method. Do not rely solely on a third-party upstream URL.
-4. Statically linked kpathsea, Graphite2, TECkit, and zziplib keep their selected LGPL
-   terms. The complete-source archive contains the exact engine and library source,
-   local changes, build scripts, and `RELINK.md`, so a recipient can replace a library
-   with a modified version and rebuild/relink the executable. WasmTex does not claim
-   that static linking erases the LGPL terms.
-5. The makeindex executable is accompanied by `LICENSES/MakeIndex.txt` and a
-   conspicuous, working source-obtainment statement.
-6. Generated Emscripten JavaScript retains its license output, and the complete
-   third-party notice set accompanies the release.
-7. Every linked component has an affirmative, recorded redistribution basis. A
-   release containing XeTeX or LuaHBTeX must use the audited WTPDF/Xpdf build and
-   reject any legacy `pplib`-linked artifact.
-8. `node scripts/check-engine-license-inventory.mjs 2025` covers every archive in the
-   release link maps exactly once and rejects missing notice files or an LGPL entry
-   without its relink method.
-
-The committed or locally downloaded files under `public/wasmtex/<version>/` are
-development inputs, not evidence that the release gate has passed. A public product
-must publish a release-specific manifest and source bundle for the exact bytes it
-serves.
-
-The Emscripten base is pinned by registry digest, not only by the mutable `3.1.46`
-tag. `scripts/corresponding-source-2025.json` also pins the Emscripten Git commit and
-the exact FreeType, ICU, libpng, and zlib port source archives and hashes. Changing
-any Dockerfile to a different base makes `npm run check:licenses` fail.
-
-`scripts/gen-asset-manifest.mjs <version> --release` enforces the recorded status,
-and the Pages workflow uses that mode. `scripts/sync-engine-assets.mjs` also refuses
-an asset set whose `LICENSE-MANIFEST.json` is not `release-cleared`. These checks are
-intentional: changing a label to `release-cleared` without resolving and removing
-every recorded blocker would make the metadata false.
-
-`npm run check:licenses` is the source-repository gate. It verifies the SDK/package
-license boundary, pinned TeX Live commit, manifest links and blocker consistency,
-required notices, and the absence of tracked engine binaries, formats, local
-environment files, or a vendored `pplib`. Every engine workflow runs it. When the
-GitHub repository is public, those workflows additionally run the strict `--release`
-mode before building or uploading an Actions artifact, so a `development-only`
-manifest fails closed rather than making uncleared binaries downloadable.
+Serving JavaScript, WebAssembly, formats, packages, fonts, or data to a browser
+is a distribution of those files. Running the same engine only on
+infrastructure operated by the service provider is not a browser distribution;
+distributing an on-premises image or appliance is distribution again.
 
 ## TeX Live CDN scope
 
-The production TeX Live 2025 CDN is treated as a separately operated mirror of the
-full official distribution. Its package-by-package manual review, per-file provenance
-overrides, and CDN object comparison are not prerequisites for clearing a WasmTex
-engine release. Keep the official TeX Live copying information and the license/source
-material shipped with that distribution.
+The production TeX Live 2025 CDN is treated as a separately operated mirror of
+the full official distribution. Its package-by-package manual review, per-file
+provenance overrides, and CDN object comparison are not prerequisites for
+clearing a WasmTex engine release. Keep the official TeX Live copying
+information and the license/source material shipped with that distribution.
 
-The provenance scripts in this repository remain useful integrity and collision-audit
-tools for a transformed or flattened mirror, but their `provenance-reviewed` state is
-not part of `LICENSE-MANIFEST.json` and does not determine whether engine artifacts
-are `release-cleared`. If a future deployment selects, modifies, or repackages TeX
-Live files instead of mirroring the full distribution, review that distribution as a
-separate project before publishing it.
+The provenance scripts in this repository remain useful integrity and
+collision-audit tools for a transformed or flattened mirror, but their
+`provenance-reviewed` state is not part of `LICENSE-MANIFEST.json` and does not
+determine whether engine artifacts are `release-cleared`. If a future
+deployment selects, modifies, or repackages TeX Live files instead of mirroring
+the full distribution, review that distribution as a separate project before
+publishing it.
 
-This scope decision does not remove TeX Live source used to compile the engines from
-the complete corresponding source. It also does not remove generated `.fmt` inputs or
-ICU 68.2 data from the exact engine-release inventory.
+This scope decision does not remove TeX Live source used to compile the engines
+from the complete corresponding source. It also does not remove generated
+`.fmt` inputs or ICU 68.2 data from the exact engine-release inventory.
 
 ## Updating dependencies
 
@@ -168,7 +310,8 @@ When bumping TeX Live, Emscripten, ICU, or a peer dependency:
 
 1. compare the exact upstream license and notice files;
 2. update `THIRD_PARTY_NOTICES.md` and `LICENSES/`;
-3. regenerate engine build receipts, formats, and corresponding-source metadata;
+3. regenerate engine build receipts, formats, and corresponding-source
+   metadata;
 4. verify that packaged and deployed outputs contain the legal files; and
 5. record any newly linked library rather than assuming it inherits another
    component's license.
