@@ -2,8 +2,9 @@
 
 An application may use the currently MIT-licensed WasmTex host SDK while keeping its
 own source repository, server code, product UI, collaboration logic, and business
-logic private. MIT is the current license decision because Cortex directly bundles
-host SDK APIs; it is not a requirement that WasmTex must always use MIT. This model
+logic private. MIT is the current license decision because integrating
+applications directly bundle host SDK APIs; it is not a requirement that WasmTex
+must always use MIT. This model
 depends on preserving a real boundary between the application and the separately
 licensed TeX engine distribution.
 

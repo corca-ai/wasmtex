@@ -91,7 +91,7 @@ function readJson(path) {
 }
 
 function sourceReadme(releaseId) {
-  return `# WasmTex complete corresponding source\n\nThis archive contains the source inputs and build control files for engine release\n\`${releaseId}\`. It intentionally contains no engine binaries. See \`release/manifest.json\`\nand the build receipts for their exact hashes.\n\nThe WasmTex host application or Cortex proprietary source is not part of this engine\ndistribution and is not needed to build the engine artifacts.\n`
+  return `# WasmTex complete corresponding source\n\nThis archive contains the source inputs and build control files for engine release\n\`${releaseId}\`. It intentionally contains no engine binaries. See \`release/manifest.json\`\nand the build receipts for their exact hashes.\n\nProprietary integrating-application source is not part of this engine\ndistribution and is not needed to build the engine artifacts.\n`
 }
 
 function rebuildReadme(manifest) {

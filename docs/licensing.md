@@ -20,24 +20,24 @@ The root [`LICENSE`](../LICENSE) does not relicense anything identified in
 ### Why MIT for the SDK
 
 The governing product goal is not to preserve MIT for its own sake. It is to
-publish WasmTex, keep an integrating application such as Cortex closed-source,
-and comply with every license on both sides of the boundary.
+publish WasmTex, let integrating applications stay closed-source, and comply
+with every license on both sides of the boundary.
 
-The current Cortex integration imports the SDK's headless compiler, LSP, Monaco
+The reference integration imports the SDK's headless compiler, LSP, Monaco
 adapter, warmup runtime, SyncTeX types, and other public TypeScript APIs into
 its client build. It does not consume the SDK solely through an out-of-process
 engine protocol. Based on that concrete coupling, the WasmTex-authored host SDK
-remains under MIT: a permissive SDK license lets Cortex keep its original
-application code private while the separately delivered engine workers satisfy
-their own copyleft terms. MIT is the selected implementation for this boundary,
-not an immutable project requirement.
+remains under MIT: a permissive SDK license lets an integrating application
+keep its original code private while the separately delivered engine workers
+satisfy their own copyleft terms. MIT is the selected implementation for this
+boundary, not an immutable project requirement.
 
 Do not relicense the whole repository under GPL merely because it builds or
-launches GPL TeX engines. Doing so while Cortex directly bundles the SDK would
-work against the closed-source Cortex goal. A future switch to GPL for
-host-facing code requires first changing Cortex to consume only an independent
-engine protocol, or providing a separate permissive/commercial license for the
-host SDK.
+launches GPL TeX engines. Doing so while integrators directly bundle the SDK
+would work against the closed-source-integration goal. A future switch to GPL
+for host-facing code requires first moving integrators to an independent
+engine protocol only, or providing a separate permissive/commercial license
+for the host SDK.
 
 This means `package.json` correctly says `MIT` for the installable SDK because
 its `files` list excludes `public/` and the engine binaries. A product must not
