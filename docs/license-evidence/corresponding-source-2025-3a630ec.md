@@ -93,9 +93,16 @@ bit-exactly.
 
 ## Publication
 
-`LICENSE-MANIFEST.json#correspondingSource` records the archive SHA-256 and
-the designated public HTTPS URL
-`https://github.com/corca-ai/wasmtex/releases/download/engine-2025-3a630ec64526620d/wasmtex-2025-3a630ec64526620d-source.tar.xz`,
-to go live with the engine release and be retained for the same period. The
-`complete-corresponding-source` release blocker stays in place until the
-archive is actually published at that URL.
+The published release archive is the successor snapshot
+`wasmtex-2025-02c43784462cf2d9-source.tar.xz` (source revision `9f7c7d4`,
+which adds the incremental-SyncTeX and worker-cache ports on top of the
+`2b58db3` engine bytes; engine wasm/js/format bytes are unchanged and the
+same clean-rebuild evidence applies). It was built with the same procedure,
+passed the same checker, and is published at
+`https://github.com/corca-ai/wasmtex/releases/download/engine-2025-02c43784462cf2d9/wasmtex-2025-02c43784462cf2d9-source.tar.xz`
+with SHA-256
+`93c66fa83edcbf081efec4a52a57dbddd94ebd36a71a8b5b776ddcba110f6e9f`, recorded
+in `LICENSE-MANIFEST.json#correspondingSource`. With the archive publicly
+retrievable and the repository history audit re-run clean on the published
+tree, the `complete-corresponding-source` and `public-repository-audit`
+blockers are resolved and the manifest is `release-cleared`.

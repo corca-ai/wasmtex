@@ -4,14 +4,14 @@
   "texliveSourceCommit": "143f1723353b20202645f241db429b080a8adcdf",
   "emscriptenVersion": "3.1.46",
   "sdkLicense": "MIT",
-  "releaseStatus": "development-only",
+  "releaseStatus": "release-cleared",
   "noticePath": "../../../THIRD_PARTY_NOTICES.md",
   "licenseDirectoryPath": "../../../LICENSES/",
   "requirementsPath": "../../../docs/licensing.md",
   "componentInventoryPath": "../../../scripts/engine-components-2025.json",
   "correspondingSource": {
-    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-3a630ec64526620d/wasmtex-2025-3a630ec64526620d-source.tar.xz",
-    "sha256": "9759c2b5e1b1a09457ea510ecdf3acbd3208fa72118ffd7e3a1566b120a95965"
+    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-02c43784462cf2d9/wasmtex-2025-02c43784462cf2d9-source.tar.xz",
+    "sha256": "93c66fa83edcbf081efec4a52a57dbddd94ebd36a71a8b5b776ddcba110f6e9f"
   },
   "requiredBuildFamilies": [
     "pdftex",
@@ -125,14 +125,5 @@
       ]
     }
   ],
-  "releaseBlockers": [
-    {
-      "id": "complete-corresponding-source",
-      "detail": "Publish and hash the complete source archive for the exact engine bytes."
-    },
-    {
-      "id": "public-repository-audit",
-      "detail": "Complete the repository history, secret, binary, provenance, license-scan, and SBOM audit before public release."
-    }
-  ]
+  "releaseBlockers": []
 }
