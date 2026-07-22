@@ -625,6 +625,12 @@ wtpdf_value *wtpdf_document_catalog(const wtpdf_document *document,
   }
   Object object;
   document->pdf->getXRef()->getCatalog(&object);
+  if (!object.isDict()) {
+    /* pplib parity: ppdoc_catalog returned no dictionary, not a null value. */
+    object.free();
+    set_status(status, WTPDF_STATUS_NOT_FOUND);
+    return NULL;
+  }
   return copy_temporary(document, &object, 1, status);
 }
 
@@ -648,6 +654,13 @@ wtpdf_value *wtpdf_document_info(const wtpdf_document *document,
   }
   Object object;
   document->pdf->getDocInfo(&object);
+  if (!object.isDict()) {
+    /* An absent /Info comes back from Xpdf as a null object; pplib parity
+       (and the pdftoepdf caller) require "no dictionary" instead. */
+    object.free();
+    set_status(status, WTPDF_STATUS_NOT_FOUND);
+    return NULL;
+  }
   return copy_temporary(document, &object, 1, status);
 }
 

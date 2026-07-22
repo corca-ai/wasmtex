@@ -115,7 +115,11 @@ it is allowed only before child values/readers exist. Success invalidates no
 public handle. Failure leaves the document locked.
 
 Document queries expose PDF major/minor version, input byte size, xref object
-count, page count, catalog, trailer, info dictionary, and page references. The
+count, page count, catalog, trailer, info dictionary, and page references.
+Catalog and info are dictionary queries: when the document carries no such
+dictionary (an absent `/Info`, a corrupt root) they report
+`WTPDF_STATUS_NOT_FOUND` with no value handle — matching the former parser's
+NULL result — instead of returning a null-kind value. The
 adapter's memory query reports adapter-owned bytes with a documented definition;
 it must not present an approximation as the former parser's exact allocator
 metric.

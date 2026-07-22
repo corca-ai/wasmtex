@@ -364,12 +364,13 @@ index 7f2ccaf9a..c1583ed2e 100644
      int new_flag = 0;
      if ((checksum = get_file_checksum(file_path, fe)) == NULL) {
          return (PdfDocument *) NULL;
-@@ -145,7 +145,7 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
+@@ -145,7 +145,8 @@ PdfDocument *refPdfDocument(const char *file_path, file_error_mode fe, const cha
          pdf_doc = (PdfDocument*) xmalloc(sizeof( PdfDocument));
          pdf_doc->file_path = path_copy;
          pdf_doc->checksum = checksum;
 -        pdf_doc->pdfe = NULL;
 +        pdf_doc->pdf_input = NULL;
++        pdf_doc->memstream = NULL; /* file-backed: delete would xfree garbage */
          pdf_doc->inObjList = NULL;
          pdf_doc->ObjMapTree = NULL;
          pdf_doc->occurences = 0; /* 0 = unreferenced */

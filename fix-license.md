@@ -39,7 +39,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | `pplib` | 새 소스에서 제거됨 | XeTeX/LuaHBTeX가 WTPDF/Xpdf를 사용하고 독립 SHA-2 구현을 사용한다. |
 | WTPDF 증거 빌드 | 통과 | native/WASM smoke, link map과 byte scan 증거가 저장되어 있다. |
 | 대응 소스 도구 | 구현됨 | build receipt 기반 source archive builder/checker가 있다. |
-| 새 릴리스 후보 바이너리 | 완료 | source `23ee539`, TeX Live `143f172…`로 모든 엔진·포맷을 새로 만들고 receipt와 link inventory에 묶었다. |
+| 새 릴리스 후보 바이너리 | LuaHBTeX 재빌드 필요 | source `23ee539` 후보를 만들었으나, D 단계 repeat-image fixture가 WTPDF 결함 두 건(파일 문서의 미초기화 `memstream` 해제, `/Info` 부재 시 null-kind 값 반환)을 찾아 수정했다. LuaHBTeX 엔진 바이트가 바뀌므로 수정 commit으로 재빌드하고 receipt를 다시 묶어야 한다. |
 | 최종 대응 소스 archive | 없음 | 새 release receipt로 실제 archive를 만들고 재빌드해야 한다. |
 | 최종 notices/relink 자료 | 완료 | archive 81개를 구성요소 inventory로 분류하고 GPL 선택, 고지, SPDX SBOM과 complete-source relink 절차를 검사한다. 실제 source archive 생성은 F 단계다. |
 | 호환성·보안 승인 | 미완료 | 특히 LuaHBTeX PDF API와 비정상 PDF 검증이 남아 있다. |

@@ -138,6 +138,9 @@ size_t wtpdf_document_child_handle_count(const wtpdf_document *document);
 /*
  * Every returned value is independently owned and must be destroyed. The
  * document must outlive values and readers created from it.
+ * Catalog and info promise a dictionary: when the document has no such
+ * dictionary (an absent /Info, a corrupt root) they return NULL with
+ * WTPDF_STATUS_NOT_FOUND rather than a null-kind value.
  */
 wtpdf_value *wtpdf_document_catalog(const wtpdf_document *document,
                                     wtpdf_status *status);

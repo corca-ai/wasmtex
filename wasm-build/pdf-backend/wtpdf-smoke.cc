@@ -457,6 +457,9 @@ void check_xref_and_object_streams() {
           "xref-stream decoded content changed");
   wtpdf_stream_reader_close(reader);
   wtpdf_value_destroy(stream);
+  wtpdf_value *info = wtpdf_document_info(document, &status);
+  require(info == NULL && status == WTPDF_STATUS_NOT_FOUND,
+          "absent Info dictionary must report NOT_FOUND, not a null value");
   require(wtpdf_document_child_handle_count(document) == 0,
           "xref-stream handles leaked");
   wtpdf_document_close(document);
