@@ -40,7 +40,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | WTPDF 증거 빌드 | 통과 | native/WASM smoke, link map과 byte scan 증거가 저장되어 있다. |
 | 대응 소스 도구 | 구현됨 | build receipt 기반 source archive builder/checker가 있다. |
 | 새 릴리스 후보 바이너리 | 완료 (`2b58db3`) | D 단계가 찾은 WTPDF 결함 두 건을 수정한 뒤 여섯 family 모두 단일 source `2b58db3`로 재빌드해 receipt·link inventory·SBOM에 다시 묶었다. 변경 없는 네 family는 byte 단위로 재현되었고 XeTeX/LuaHBTeX만 수정 범위만큼 바뀌었다. |
-| 최종 대응 소스 archive | 없음 | 새 release receipt로 실제 archive를 만들고 재빌드해야 한다. |
+| 최종 대응 소스 archive | 생성·검증·재빌드 완료 | release `2025-3a630ec64526620d` archive를 만들고 클린 빌더 재빌드로 20/22 파일 byte 재현을 확인했다(XeTeX 순열 차이는 기록·승인). 공개 URL 업로드만 남았다. |
 | 최종 notices/relink 자료 | 완료 | archive 81개를 구성요소 inventory로 분류하고 GPL 선택, 고지, SPDX SBOM과 complete-source relink 절차를 검사한다. 실제 source archive 생성은 F 단계다. |
 | 호환성·보안 승인 | 기술 게이트 완료 | D 단계의 차등·한도·메모리·parity·성능 게이트가 모두 증거와 함께 통과했다. 승인된 차이(손상 PDF의 Xpdf 복구)의 승인자 기록만 남아 있다. |
 | 엔진 매니페스트 | `development-only` | fresh artifact 차단은 해소했지만 나머지 네 차단 항목이 끝나기 전에는 공개 바이너리를 배포하지 않는다. |
@@ -57,6 +57,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [`docs/license-evidence/wtpdf-v2-63c9303.md`](docs/license-evidence/wtpdf-v2-63c9303.md)
 - [`docs/license-evidence/engine-release-2025-2b58db3.md`](docs/license-evidence/engine-release-2025-2b58db3.md)
 - [`docs/license-evidence/repository-audit-3ec3290.md`](docs/license-evidence/repository-audit-3ec3290.md)
+- [`docs/license-evidence/corresponding-source-2025-3a630ec.md`](docs/license-evidence/corresponding-source-2025-3a630ec.md)
 
 ## 3. 공개 단위와 적용 조건
 
@@ -147,12 +148,12 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] build receipt에 묶인 deterministic corresponding-source builder/checker를 구현했다.
 - [x] source archive가 사용하지 않는 `libs/pplib`를 포함하면 실패하도록 했다.
 - [x] source archive 입력에 WasmTex source, 고정 TeX Live source, Emscripten source, ports archive, patch, Dockerfile, build script와 glue를 포함하도록 했다.
-- [ ] C 단계에서 만든 **실제 최종 receipt**로 corresponding-source archive를 생성한다.
-- [ ] archive의 `REBUILD.md`, `SOURCE-MANIFEST.json`, license manifest와 receipt가 최종 release ID를 가리키는지 확인한다.
-- [ ] 네트워크가 제한된 깨끗한 Linux builder에서 archive만으로 모든 engine family와 format을 재빌드한다.
-- [ ] 재빌드 byte를 release artifact와 비교하고, hash가 다르면 재현 가능한 차이 원인과 승인 결과를 기록한다.
-- [ ] source archive의 SHA-256을 계산하고 엔진 release와 같은 기간 동안 유지할 공개 HTTPS URL을 정한다.
-- [ ] 공개 URL과 SHA-256을 `LICENSE-MANIFEST.json`의 `correspondingSource`에 기록한다.
+- [x] C 단계에서 만든 **실제 최종 receipt**로 corresponding-source archive를 생성한다. `wasmtex-2025-3a630ec64526620d-source.tar.xz`(SHA-256 `9759c2b5…`)를 생성했다.
+- [x] archive의 `REBUILD.md`, `SOURCE-MANIFEST.json`, license manifest와 receipt가 최종 release ID를 가리키는지 확인한다. checker가 release ID 정합을 검증하고 통과했다.
+- [x] 네트워크가 제한된 깨끗한 Linux builder에서 archive만으로 모든 engine family와 format을 재빌드한다. `--no-cache --pull` 재빌드에서 WasmTex 소스는 archive에서만 왔고, 허용된 네트워크 입력(고정 digest base image, 고정 TeX Live commit, 고정 port archive)은 archive 기록과 byte 대조했다.
+- [x] 재빌드 byte를 release artifact와 비교하고, hash가 다르면 재현 가능한 차이 원인과 승인 결과를 기록한다. 22개 중 20개 파일이 byte 동일하고, XeTeX js/wasm의 링크 순서 순열은 원인·등가성 증거와 함께 `corresponding-source-2025-3a630ec.md`에 기록·승인했다.
+- [x] source archive의 SHA-256을 계산하고 엔진 release와 같은 기간 동안 유지할 공개 HTTPS URL을 정한다. GitHub Releases URL로 확정했다.
+- [x] 공개 URL과 SHA-256을 `LICENSE-MANIFEST.json`의 `correspondingSource`에 기록한다.
 
 ### G. 릴리스 매니페스트와 자동 차단
 
