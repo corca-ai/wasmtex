@@ -93,6 +93,38 @@ test('accepts a source tree bound to the release receipts', () => {
   )
 })
 
+test('accepts a differing release ID when the source revisions still match', () => {
+  const value = fixture()
+  // The build is reproducible but not bit-identical, so a redeployed engine set
+  // can carry a different release ID than the archive was cut against. As long as
+  // the archive bundles the same source revision the receipts name, it is valid
+  // corresponding source.
+  assert.deepEqual(
+    checkCorrespondingSourceDirectory({
+      directory: value.root,
+      config: value.config,
+      assetManifest: { ...value.assetManifest, releaseId: '2025-ffffffffffffffff' },
+    }),
+    [],
+  )
+})
+
+test('rejects an archive whose source revision differs from the receipts', () => {
+  const value = fixture()
+  const otherRevision = 'a'.repeat(40)
+  assert.match(
+    checkCorrespondingSourceDirectory({
+      directory: value.root,
+      config: value.config,
+      assetManifest: {
+        ...value.assetManifest,
+        buildReceipts: [{ ...value.assetManifest.buildReceipts[0], sourceRevision: otherRevision }],
+      },
+    }).join('\n'),
+    /source snapshots do not match build receipt revisions/,
+  )
+})
+
 test('rejects the unused legacy pplib source from a release bundle', () => {
   const value = fixture()
   put(value.root, 'source/texlive/libs/pplib/pplib.c')

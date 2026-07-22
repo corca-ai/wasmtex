@@ -74,9 +74,14 @@ export function checkCorrespondingSourceDirectory({ directory, config, assetMani
   }
   if (manifest.schemaVersion !== 1) failures.push('SOURCE-MANIFEST schemaVersion must be 1')
   if (!RELEASE_ID.test(manifest.releaseId ?? '')) failures.push('invalid source releaseId')
-  if (assetManifest && manifest.releaseId !== assetManifest.releaseId) {
-    failures.push('source releaseId does not match the engine asset manifest')
-  }
+  // The archive is NOT required to share the engine asset manifest's exact
+  // release ID. A release ID is a content hash of the engine bytes, and the
+  // build is reproducible but not bit-identical (the Emscripten final link
+  // permutes XeTeX symbol order), so two builds of the same source yield
+  // different IDs. What GPL actually requires — that the published source builds
+  // the distributed binaries — is enforced by the source-revision coherence
+  // check below: the archive must bundle exactly the WasmTex source revisions
+  // the distributed receipts were built from.
   if (!SHA256.test(manifest.engineAssetManifest?.sha256 ?? '')) {
     failures.push('invalid engine asset manifest SHA-256')
   }

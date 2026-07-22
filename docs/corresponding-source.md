@@ -71,3 +71,21 @@ Creating an archive does not by itself clear the release. Before changing
 
 The archive must not contain unrelated integrating-application source. Such source is
 not needed to build the separately distributed engine.
+
+## Coherence with the deployed engines
+
+The corresponding source is bound to the distributed binaries by **source
+revision**, not by an exact release ID. A release ID is a content hash of the
+engine bytes, and the build is reproducible but not bit-identical — the
+Emscripten final link permutes XeTeX symbol order between runs of the same
+source. So a redeployed engine set can carry a different release ID than the
+archive was cut against while still being the same program. `check-corresponding-source.mjs`
+therefore requires the archive to bundle exactly the WasmTex source revisions
+the distributed build receipts name, and does not require the release IDs to be
+equal.
+
+The practical obligation this leaves: **re-cut and republish the archive
+whenever the engines are rebuilt from a new source revision.** Engine assets
+change only when the `wasm-*` build workflows re-run (an engine glue or pinned
+source change), not on every commit, so this is a per-engine-release step, not a
+per-push one.
