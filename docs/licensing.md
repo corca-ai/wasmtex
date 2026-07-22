@@ -183,9 +183,13 @@ independent clone of the pinned commit, and a clean `--no-cache --pull`
 rebuild from the archive snapshot reproduces the release engine bytes, with
 the approved XeTeX link-order permutation as the sole exception
 ([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md),
-[corresponding-source.md](corresponding-source.md)). The archive SHA-256 and
-its public HTTPS URL are recorded in
-`LICENSE-MANIFEST.json#correspondingSource`.
+[corresponding-source.md](corresponding-source.md)). Because that link is
+reproducible but not bit-identical, the corresponding source is bound to the
+distributed binaries by **source revision**, not by an exact content-hash
+release ID: the checker requires the archive to bundle exactly the source
+revision the deployed receipts name, and the archive is re-cut when the engines
+are rebuilt from a new revision. The archive SHA-256 and its public HTTPS URL
+are recorded in `LICENSE-MANIFEST.json#correspondingSource`.
 
 ### Notices and relink material
 

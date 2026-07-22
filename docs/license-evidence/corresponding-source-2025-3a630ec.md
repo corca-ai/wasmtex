@@ -93,16 +93,25 @@ bit-exactly.
 
 ## Publication
 
-The published release archive is the successor snapshot
-`wasmtex-2025-02c43784462cf2d9-source.tar.xz` (source revision `9f7c7d4`,
-which adds the incremental-SyncTeX and worker-cache ports on top of the
-`2b58db3` engine bytes; engine wasm/js/format bytes are unchanged and the
-same clean-rebuild evidence applies). It was built with the same procedure,
-passed the same checker, and is published at
-`https://github.com/corca-ai/wasmtex/releases/download/engine-2025-02c43784462cf2d9/wasmtex-2025-02c43784462cf2d9-source.tar.xz`
-with SHA-256
-`93c66fa83edcbf081efec4a52a57dbddd94ebd36a71a8b5b776ddcba110f6e9f`, recorded
-in `LICENSE-MANIFEST.json#correspondingSource`. With the archive publicly
-retrievable and the repository history audit re-run clean on the published
-tree, the `complete-corresponding-source` and `public-repository-audit`
-blockers are resolved and the manifest is `release-cleared`.
+This record documents the clean-rebuild methodology and its reproducibility
+finding, which hold for the shipped release. The archive actually published
+alongside the deployed engines is
+`wasmtex-2025-ad7a0f10b692455b-source.tar.xz`, SHA-256
+`aee5f4d4bffc318432fcf49c17ba7cae880f39313f74eca6b92eba2d1db65669`, bundling
+WasmTex source revision `ae9903b` — the revision the **deployed** engine build
+receipts name. It is published at
+`https://github.com/corca-ai/wasmtex/releases/download/engine-2025-ad7a0f10b692455b/wasmtex-2025-ad7a0f10b692455b-source.tar.xz`
+and recorded in `LICENSE-MANIFEST.json#correspondingSource`.
+
+The corresponding source is bound to the distributed binaries by **source
+revision**, not by an exact release ID: because the Emscripten final link is
+reproducible but not bit-identical (the XeTeX link-order permutation above), a
+redeployed engine set carries a different content-hash ID than any single
+build. `check-corresponding-source.mjs` therefore verifies the archive bundles
+exactly the source revision the deployed receipts name, and passed for this
+archive against the deployed engine manifest. With the archive publicly
+retrievable and the repository history audit re-run clean, the
+`complete-corresponding-source` and `public-repository-audit` blockers are
+resolved and the manifest is `release-cleared`. Earlier snapshots
+(`3a630ec…`, `02c43784…`) were superseded as the engine source advanced and are
+no longer the published corresponding source.
