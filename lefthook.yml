@@ -13,3 +13,12 @@ pre-commit:
       # between src/ and e2e/ (the corpus moved to e2e/golden-corpus.ts). Tighten by
       # refactoring those clones, not by blocking unrelated changes.
       run: npx jscpd src/ --threshold 0.6 --mode weak
+
+# Coverage is the heavier gate (it instruments the whole unit suite), so it runs on
+# push rather than on every commit. Same script, same 85% thresholds as CI — the
+# thresholds live only in vitest.config.ts, and both this hook and the CI `coverage`
+# job invoke `npm run test:coverage`, so the bar is defined in exactly one place.
+pre-push:
+  commands:
+    coverage:
+      run: npm run test:coverage
