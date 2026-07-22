@@ -33,9 +33,8 @@ engine versions or licenses.
 
 To rebuild the engine from source (requires Docker), the pipeline lives in
 `wasm-build/` (`Dockerfile`, `Makefile`, `build.sh`) and emits into
-`wasm-build/dist/`; copy the outputs into the versioned public directory. See
-[Step 2 of the upgrade guide](texlive-upgrade.md#step-2-build-new-wasm-engine)
-for the full flow.
+`wasm-build/dist/`; copy the outputs into the versioned public directory. The
+[upgrade guide's Step 2](texlive-upgrade.md#step-2-build-new-wasm-engine) documents the full flow.
 
 ### Third-party boundary
 
@@ -163,8 +162,8 @@ compiles the document for real, no code change.
 
 > **Keeping this maintainable across upstream releases** — we interpose around
 > `texlive-source` (own glue + a linker `--wrap`) rather than fork/patch it, so a
-> version bump is a rebuild, not a re-patch. See
-> [Upstream maintenance: interpose, don't patch](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch).
+> version bump is a rebuild, not a re-patch. The
+> [upstream maintenance guide](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch) explains this convention.
 
 `scripts/build-xetex-fromsource.sh` compiles `wasmtex-xetex.{js,wasm}` from
 source (emscripten + the vendored XeTeX engine sources — emscripten's built-in
@@ -387,8 +386,8 @@ const { pdf } = await c.compile()
 
 Cross-host parity is verified in CI: `src/engine/cross-host-parity.smoke.test.ts`
 asserts the Node output matches the browser-generated golden for pdfLaTeX, LuaLaTeX,
-XeLaTeX, and BibTeX. For the full client/server-split rationale, see
-[docs/execution-model.md](execution-model.md).
+XeLaTeX, and BibTeX. The [execution model](execution-model.md) documents the full
+client/server-split rationale.
 
 ### Self-hosting the engine assets (manifest + sync)
 

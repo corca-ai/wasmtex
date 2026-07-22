@@ -93,11 +93,11 @@ standalone WASM runtime with no rewrite.
 
 The fluid boundary only works if client and server output is reproducible:
 
-- **From-source + pinned upstream ref** — same engine bytes everywhere
-  ([texlive-upgrade.md](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch)).
-- **Fail-loud interposition** — drift in the build is a located error, not a silent
-  divergence (see the build guards in
-  [texlive-upgrade.md](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch)).
+- **From-source + pinned upstream ref** — same engine bytes everywhere; the
+  [upstream maintenance guide](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch) describes this pinning.
+- **Fail-loud interposition** — drift in the build is a located error, not a
+  silent divergence; the
+  [upstream maintenance guide](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch) documents the build guards.
 - **Golden-output + cross-host parity tests** — assert client ≡ server output, per
   engine and tool. The parity smoke test
   (`src/engine/cross-host-parity.smoke.test.ts`, opt-in via `CROSS_HOST_PARITY=1`)

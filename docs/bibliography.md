@@ -124,11 +124,11 @@ carries an `x-wasmtex-cache-key` header for a shared cache. `createBiberBackend`
 takes an optional `cacheKey(request)` for a custom key; the same registry seam
 also serves the index stage. The compiler auto-routes `index` too — `\printindex`
 runs client-side via the bundled makeindex WASM by default, and a registered
-`createMakeindexBackend` / `createXindyBackend` offloads it (see
-[execution model](execution-model.md#how-a-consumer-chooses-the-boundary)).
+`createMakeindexBackend` / `createXindyBackend` offloads it; the
+[execution model](execution-model.md#how-a-consumer-chooses-the-boundary) explains how consumers choose that boundary.
 
 ## Related
 
 - [docs/engine.md](engine.md) — WASM engine + the BibTeX worker.
-- The `.bib` parser these backends share: see *BibTeX / `.bib` parsing* in
-  [docs/architecture.md](architecture.md).
+- See the [architecture guide](architecture.md) for the *BibTeX / `.bib` parsing*
+  implementation shared by these backends.

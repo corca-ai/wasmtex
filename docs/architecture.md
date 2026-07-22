@@ -100,8 +100,8 @@ exposed but not yet invoked). Wrap any backend with `withCache`
 - **Frontend**: Vanilla TypeScript + Vite (No framework).
 - **Editor**: Monaco Editor with custom LSP implementation.
 - **Engine**: pdfTeX 1.40.28 and BibTeX (WASM), from TeX Live 2025. The engine is
-  auto-selected per document (pdfLaTeX / XeLaTeX / LuaLaTeX) — see
-  [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex).
+  auto-selected per document (pdfLaTeX / XeLaTeX / LuaLaTeX); see the
+  [multi-engine support guide](engine.md#multi-engine-support-xelatex--lualatex) for routing details.
 - **Viewer**: PDF.js.
 - **Build/Lint**: Vite, Biome.
 - **Testing**: Vitest, Playwright.
