@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # npm dependencies. Minor/patch bumps are grouped into a single weekly PR to
+  # cut noise; majors open individually so breaking changes get their own review.
+  # Note: a bump that changes the bundled output will fail the `lib-fresh` CI gate
+  # until `npm run build:lib` is re-run and `lib/` re-committed (see CONTRIBUTING.md).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions used by the workflows in .github/workflows/.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"
