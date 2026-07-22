@@ -131,7 +131,10 @@ export function checkCorrespondingSourceDirectory({ directory, config, assetMani
     failures.push('invalid TeX Live source commit or tree')
   }
   const texliveRoot = requireDirectory(directory, 'source/texlive', failures)
-  for (const required of ['Build', 'libs/xpdf', 'texk/web2c', 'texk/dvipdfm-x']) {
+  /* Upstream texlive-source ships `Build` as the top-level build SCRIPT, not a
+     directory. */
+  requireFile(directory, 'source/texlive/Build', failures)
+  for (const required of ['libs/xpdf', 'texk/web2c', 'texk/dvipdfm-x']) {
     requireDirectory(directory, `source/texlive/${required}`, failures)
   }
   if (existsSync(join(texliveRoot, 'libs/pplib'))) {

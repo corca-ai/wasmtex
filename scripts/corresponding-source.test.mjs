@@ -54,7 +54,8 @@ function fixture() {
   ]) {
     put(root, `source/wasmtex/${COMMIT}/${path}`)
   }
-  for (const path of ['Build/.keep', 'libs/xpdf/.keep', 'texk/web2c/.keep', 'texk/dvipdfm-x/.keep']) {
+  put(root, 'source/texlive/Build')
+  for (const path of ['libs/xpdf/.keep', 'texk/web2c/.keep', 'texk/dvipdfm-x/.keep']) {
     put(root, `source/texlive/${path}`)
   }
   put(root, 'source/emscripten/emcc.py')
