@@ -128,6 +128,22 @@ test('binds every release file to one receipt and one license family', () => {
     buildReceipts: inspected.buildReceipts,
   }
   assert.deepEqual(validateWrittenAssetManifest(manifest, inspected), [])
+
+  // The release ID must not depend on LICENSE-MANIFEST.json: recording
+  // correspondingSource (which names this release's archive) must not shift the
+  // ID the archive is bound to.
+  const idBefore = manifest.releaseId
+  writeFileSync(
+    join(artifacts, 'LICENSE-MANIFEST.json'),
+    `${JSON.stringify({ correspondingSource: { url: 'https://x/y', sha256: 'a'.repeat(64) } })}\n`,
+  )
+  const reinspected = inspectReleaseAssets({ directory: artifacts, legal, sourceConfig: config })
+  assert.equal(
+    releaseIdFor('2025', reinspected.files, reinspected.buildReceipts),
+    idBefore,
+    'editing LICENSE-MANIFEST.json must not change the release ID',
+  )
+
   writeFileSync(join(artifacts, 'unclassified.map'), 'map\n')
   assert.match(
     inspectReleaseAssets({ directory: artifacts, legal, sourceConfig: config }).errors.join('\n'),

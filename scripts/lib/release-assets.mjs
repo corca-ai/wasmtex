@@ -111,8 +111,16 @@ export function inspectReleaseAssets({ directory, legal, sourceConfig }) {
   return { files, receiptFiles, buildReceipts, receipts, errors }
 }
 
+/** The release identity is the built engine artifacts plus their receipts.
+ * `LICENSE-MANIFEST.json` is deliberately excluded (as `manifest.json` already
+ * is upstream in `readReleaseFiles`): it carries mutable legal metadata, and its
+ * `correspondingSource` names this very release's source archive by release ID —
+ * so including it would make the ID self-referential and shift it the moment the
+ * release is cleared. The engine bytes and receipts, which the corresponding
+ * source must reproduce, fully determine the identity. */
 export function releaseIdFor(version, files, buildReceipts) {
-  const digest = sha256(JSON.stringify({ version, files, buildReceipts }))
+  const identityFiles = files.filter((file) => file.name !== 'LICENSE-MANIFEST.json')
+  const digest = sha256(JSON.stringify({ version, files: identityFiles, buildReceipts }))
   return `${version}-${digest.slice(0, 16)}`
 }
 
