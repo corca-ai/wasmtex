@@ -86,10 +86,10 @@ Equivalence evidence:
   geometry down to text-run and rule counts — identical to the committed
   XeLaTeX browser golden under the Node host.
 
-Classification: **reproducible-cause, functionally equivalent, approved**
-(recorded under the F-stage rebuild directive of 2026-07-22; the shipped
-bytes remain the receipt-bound ones). All other 20 release engine files
-reproduce bit-exactly.
+Classification: **reproducible-cause, functionally equivalent, approved**.
+Approved by: ak (akcorca, ak@corca.ai), 2026-07-22; the shipped bytes remain
+the receipt-bound ones. All other 20 release engine files reproduce
+bit-exactly.
 
 ## Publication
 
