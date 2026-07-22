@@ -32,7 +32,11 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          language: ${{ matrix.language }}
+          # `languages` (plural) is the correct input. The repo also contains C
+          # sources under wasm-build/, so without an explicit language CodeQL would
+          # auto-detect c-cpp and fail to build it — scope the scan to JS/TS only.
+          languages: ${{ matrix.language }}
+          build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
       # JavaScript/TypeScript is interpreted — CodeQL extracts it without a build,
       # so no autobuild step is needed.
