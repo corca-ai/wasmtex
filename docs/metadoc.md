@@ -18,7 +18,20 @@ Keep docs easy to scan and easy to trust for both humans and agents.
 
 - Keep `README.md` as the user-facing entry point: a short intro, install/quick-start, an entry-point overview, and links into `docs/`.
 - Keep `AGENTS.md` (the contributor/agent guide) minimal and link to detailed docs; link it from `README.md` for contributors.
+- Keep living project documents directly under `docs/` so the documentation graph stays flat and easy to navigate.
+- Use a subdirectory only for a cohesive collection with lifecycle or naming
+  rules that differ from the living docs. Give each exception a `README.md`
+  that explains those rules. `license-evidence/` is the current exception: its
+  commit-bound audit records are immutable and are indexed by its README; see
+  the [licensing guide](licensing.md) for their role.
 - Keep skill-specific docs inside each skill and link shared rules.
+
+## Linting
+
+Run `awiki lint -root docs` from the repository root. The non-recursive scan is
+intentional: it checks the flat graph of living project documents, while
+exceptional collections retain their own governance. The command must exit
+successfully before a documentation change is submitted.
 
 ## Writing Rules
 

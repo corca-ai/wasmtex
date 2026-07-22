@@ -111,8 +111,8 @@ That's a localized one-shim fix, not a re-patch of the engine.
   versioned side-by-side (`2025` plus future releases), so upgrade on need
   (security, a package users want, a fix) — not on every release.
 
-See also the from-source build mechanics in
-[docs/engine.md](engine.md#building-the-unicode-engine-from-source).
+The [engine guide](engine.md#building-the-unicode-engine-from-source) also covers
+the from-source build mechanics.
 
 ---
 

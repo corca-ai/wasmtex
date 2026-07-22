@@ -25,8 +25,8 @@ bun add github:corca-ai/wasmtex#main
   instead of `#main` for reproducible builds.
 - **Engine binaries are not part of the install** (the WASM engines + prebuilt
   formats ship via CI, not the package). If you self-host assets, pull a verified,
-  matching set with `npm run sync-engine-assets -- --from <baseUrl>` — see
-  [Self-hosting the engine assets](engine.md#self-hosting-the-engine-assets-manifest--sync).
+  matching set with `npm run sync-engine-assets -- --from <baseUrl>`; the
+  [asset self-hosting guide](engine.md#self-hosting-the-engine-assets-manifest--sync) covers the complete process.
   The sync command accepts only a release whose license manifest is marked
   `release-cleared`; it will not turn development binaries into a redistributable set.
 
@@ -164,8 +164,8 @@ See [Bibliography backends](bibliography.md).
 > The compiler auto-routes the `bibliography` **and `index`** stages. `\printindex` works
 > out of the box, fully client-side, via the bundled makeindex WASM — no server needed. A
 > backend registered for `index` (`createMakeindexBackend`, or `createXindyBackend` for
-> multilingual / complex indexing) offloads that stage to your endpoint instead. See the
-> [execution model](execution-model.md#how-a-consumer-chooses-the-boundary).
+> multilingual / complex indexing) offloads that stage to your endpoint instead. The
+> [execution model](execution-model.md#how-a-consumer-chooses-the-boundary) explains how to choose the boundary.
 
 ### Server-side compilation (Node)
 
@@ -313,8 +313,8 @@ LuaLaTeX with \directlua{tex.print("inline Lua")}.
 > absent, a document that needs it compiles to an actionable error** ("this document
 > requires XeLaTeX/LuaLaTeX …") instead of failing cryptically — so pdfLaTeX-only
 > deployments degrade gracefully. Both XeLaTeX and LuaLaTeX (LuaHBTeX) are built from
-> source and ship via CI (see
-> [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex)).
+> source and ship via CI; the
+> [multi-engine support guide](engine.md#multi-engine-support-xelatex--lualatex) covers their build and routing details.
 
 ### Split-container mode (Editor + PDF only)
 Build a minimal layout by giving both editor and preview nodes.

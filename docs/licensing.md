@@ -14,8 +14,8 @@ WasmTex uses a split licensing model:
 - TeX Live packages, fonts, Lua files, ICU data, and compiled formats: the
   terms of their individual inputs.
 
-The root [`LICENSE`](../LICENSE) does not relicense anything identified in
-[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+The [`THIRD_PARTY_NOTICES.md` inventory](../THIRD_PARTY_NOTICES.md) identifies
+materials that the root [`LICENSE`](../LICENSE) does not relicense.
 
 ### Why MIT for the SDK
 
@@ -43,7 +43,7 @@ This means `package.json` correctly says `MIT` for the installable SDK because
 its `files` list excludes `public/` and the engine binaries. A product must not
 use that metadata to describe a separately hosted engine directory or TeX Live
 mirror. For the boundary that lets a closed-source application use WasmTex, see
-[Proprietary integration](proprietary-integration.md).
+the [proprietary integration guide](proprietary-integration.md).
 
 ### Per-unit terms
 
@@ -56,8 +56,8 @@ mirror. For the boundary that lets a closed-source application use WasmTex, see
 | TeX Live packages, fonts and Lua files | Their upstream terms as part of the separately operated full TeX Live distribution. Generated engine formats and ICU data remain part of the exact engine-release audit. |
 | `LICENSES/` and third-party notices | Preserved license evidence; inclusion does not relicense the covered component. |
 
-The engine family classification, enforced by
-[`scripts/engine-components-2025.json`](../scripts/engine-components-2025.json):
+The [engine component inventory](../scripts/engine-components-2025.json) enforces
+this engine family classification:
 
 | Family | Combined distribution terms |
 | --- | --- |
@@ -74,10 +74,10 @@ The engine family classification, enforced by
 
 Each engine binary is one linked program, so its distribution terms must be
 satisfiable by every statically linked component simultaneously. The actual
-linked set is not assumed: it is read from the linker maps
-([`license-evidence/link-inventory-9f7c7d4.json`](license-evidence/link-inventory-9f7c7d4.json),
-81 static archives across 7 executables) and every archive is classified in the
-component inventory, which CI re-checks fail-closed.
+linked set is not assumed: the
+[release link inventory](license-evidence/link-inventory-9f7c7d4.json) captures
+81 static archives across 7 executables, and every archive is classified in
+the component inventory, which CI re-checks fail-closed.
 
 The reasoning, component class by component class:
 
@@ -121,14 +121,14 @@ rejects an archive it cannot classify.
 
 ## What was done to comply
 
-Each claim below is bound to evidence under
-[`license-evidence/`](license-evidence/).
+The [license evidence index](license-evidence/README.md) lists the records that
+bind each claim below.
 
 ### PDF parsing without `pplib`
 
 XeTeX and LuaHBTeX parse PDFs through **WTPDF**, a WasmTex-authored MIT C ABI
-over the GPL Xpdf 4.04 parser already present in TeX Live
-([`../wasm-build/pdf-backend/README.md`](../wasm-build/pdf-backend/README.md)).
+over the GPL Xpdf 4.04 parser already present in TeX Live; the
+[PDF backend implementation notes](../wasm-build/pdf-backend/README.md) describe the boundary.
 `pplib` is excluded from every release unit: link maps and release bytes are
 scanned for `libpplib`, the `pp*_` symbol families, and legacy SHA helpers,
 and any match fails the build.
@@ -141,20 +141,20 @@ The implementation's independence is both enforced and evidenced:
   source;
 - compatibility is verified by black-box differentials against
   non-distributed pplib baseline builds, not by reference to pplib source:
-  the XeTeX geometry, visual, and extended corpora
-  ([`license-evidence/xetex-pdf-extended-differential-2d87107.md`](license-evidence/xetex-pdf-extended-differential-2d87107.md)),
+  the [XeTeX extended differential](license-evidence/xetex-pdf-extended-differential-2d87107.md) records the
+  geometry, visual, and extended corpora,
   the LuaHBTeX `pdfe`/`pdfscanner` API surface — types, string bytes and
   lexical form, dictionary order, raw/decoded streams, authentication,
-  limits — locked as a build-gate fixture
-  ([`license-evidence/luahbtex-pdfe-differential-923b196.md`](license-evidence/luahbtex-pdfe-differential-923b196.md)),
-  and package-level `graphicx`/`pdfpages`/TikZ import
-  ([`license-evidence/luahbtex-pdf-import-differential-2b58db3.md`](license-evidence/luahbtex-pdf-import-differential-2b58db3.md))
-  all match the baseline byte- or pixel-exactly on clean inputs;
+  limits — is locked by the
+  [LuaHBTeX API differential](license-evidence/luahbtex-pdfe-differential-923b196.md) as a build-gate fixture,
+  and the [LuaHBTeX import differential](license-evidence/luahbtex-pdf-import-differential-2b58db3.md) covers
+  package-level `graphicx`/`pdfpages`/TikZ import; all three match the baseline
+  byte- or pixel-exactly on clean inputs;
 - the two behavioral differences are classified and approved with a recorded
   approver: Xpdf repairs damaged PDFs the baseline rejects, and the XeTeX
   final link permutes symbol order across identical-input runs of the pinned
-  toolchain — functionally equivalent and golden-verified
-  ([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md));
+  toolchain — functionally equivalent and golden-verified. The
+  [source archive evidence](license-evidence/corresponding-source-2025-3a630ec.md) verifies both differences;
 - parser resource limits (input size, object depth, decoded bytes, adapter
   allocation), malformed-input failure, post-open authentication, and
   valgrind-verified memory release are tested on success and failure paths.
@@ -165,8 +165,8 @@ Every release artifact is bound to a `BUILD-RECEIPT.<family>.json` recording
 the WasmTex commit, TeX Live commit, Emscripten commit, digest-pinned build
 image, and per-file SHA-256, and all family receipts must share one source
 revision. A per-archive link inventory and an SPDX SBOM classify everything
-the linker actually selected
-([`license-evidence/engine-release-2025-2b58db3.md`](license-evidence/engine-release-2025-2b58db3.md)).
+the linker actually selected, as recorded in the
+[engine release evidence](license-evidence/engine-release-2025-2b58db3.md) for that build.
 Independent rebuilds reproduce the engine bytes, format dumps record their
 observed inputs and known non-determinism, and version control carries no
 engine binaries or formats at all.
@@ -181,9 +181,9 @@ build scripts, glue, manifests, and `REBUILD.md`/`RELINK.md`. A checker
 verifies the archive, the bundled TeX Live tree is diffed against an
 independent clone of the pinned commit, and a clean `--no-cache --pull`
 rebuild from the archive snapshot reproduces the release engine bytes, with
-the approved XeTeX link-order permutation as the sole exception
-([`license-evidence/corresponding-source-2025-3a630ec.md`](license-evidence/corresponding-source-2025-3a630ec.md),
-[corresponding-source.md](corresponding-source.md)). Because that link is
+the approved XeTeX link-order permutation as the sole exception documented in
+the [corresponding-source evidence](license-evidence/corresponding-source-2025-3a630ec.md)
+and [corresponding-source guide](corresponding-source.md). Because that link is
 reproducible but not bit-identical, the corresponding source is bound to the
 distributed binaries by **source revision**, not by an exact content-hash
 release ID: the checker requires the archive to bundle exactly the source
@@ -206,8 +206,8 @@ retained permission and non-endorsement notice.
 The publication audit covers a secret scan over the full history and the
 ignored-file-inclusive working tree (no leaks), a history audit (no binary or
 archive blobs, no stray branches, tags, stashes, or LFS objects), and a review
-of third-party-ported source headers
-([`license-evidence/repository-audit-3ec3290.md`](license-evidence/repository-audit-3ec3290.md)).
+of third-party-ported source headers, as recorded in the
+[repository publication audit](license-evidence/repository-audit-3ec3290.md) for that revision.
 The scans are re-run on the final pre-publication commit.
 
 ### Fail-closed automation

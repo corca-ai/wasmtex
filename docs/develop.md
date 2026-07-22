@@ -57,6 +57,7 @@ commit `lib/` in the same change.** The `lib-fresh` CI job rebuilds and fails th
 
 - See **[docs/architecture.md](architecture.md)** for a deep dive into the SDK structure and LSP implementation.
 - See **[docs/engine.md](engine.md)** for details on the WASM compilation engine and TeX Live CDN.
+- Follow the **[documentation guide](metadoc.md)** when changing project docs.
 
 ## Testing
 
