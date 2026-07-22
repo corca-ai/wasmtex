@@ -6,13 +6,14 @@ revision in its name; they are records, not living documents — supersede them
 with a new snapshot instead of editing history. `npm run check:licenses`
 requires the load-bearing set to stay tracked.
 
-## Current release candidate (`2b58db3`, release `2025-3a630ec64526620d`)
+## Current release candidate (`9f7c7d4`)
 
 | File | What it evidences |
 | --- | --- |
 | `engine-release-2025-2b58db3.md` | The candidate build: single-revision receipts, reproducibility, gates |
-| `link-inventory-2b58db3.json` | The 81 static archives actually selected by the seven linker maps |
-| `engine-sbom-2025-2b58db3.spdx.json` | SPDX SBOM generated from the component inventory (freshness-checked in CI) |
+| `link-inventory-9f7c7d4.json` | The 81 static archives actually selected by the seven linker maps |
+| `link-inventory-2b58db3.json` | The prior binding of the same maps (engine bytes unchanged) |
+| `engine-sbom-2025-9f7c7d4.spdx.json` | SPDX SBOM generated from the component inventory (freshness-checked in CI) |
 | `format-inputs-xetex-2b58db3.json`, `format-inputs-luahbtex-2b58db3.json` | Observed inputs of the format dumps |
 | `format-inputs-pdftex-23ee539.json` | Observed inputs of the pdfTeX format (bytes unchanged since that build) |
 | `corresponding-source-2025-3a630ec.md` | Source archive creation, verification, and the clean-builder rebuild |

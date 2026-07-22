@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "texliveSourceCommit": "143f1723353b20202645f241db429b080a8adcdf",
-  "linkInventory": "docs/license-evidence/link-inventory-2b58db3.json",
-  "linkInventorySourceRevision": "2b58db337f9917925988dc51fbebd9e457f76128",
-  "sbomCreated": "2026-07-22T03:31:34Z",
+  "linkInventory": "docs/license-evidence/link-inventory-9f7c7d4.json",
+  "linkInventorySourceRevision": "9f7c7d4a9ff0ebb3a0f94ad6d2f4631d85a6e4fb",
+  "sbomCreated": "2026-07-22T09:50:57Z",
   "families": [
     {
       "family": "pdftex",
