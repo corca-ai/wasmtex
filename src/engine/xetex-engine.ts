@@ -63,6 +63,18 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     return [this.dvipdfm]
   }
 
+  /** Project files must exist in BOTH workers: XeTeX only records an image
+   *  reference in the XDV; dvipdfmx re-opens the actual file (`\includegraphics`,
+   *  `pdfpages` imports) from its own FS when embedding. */
+  override async writeFile(path: string, content: string | Uint8Array): Promise<void> {
+    await Promise.all([super.writeFile(path, content), this.dvipdfm.writeFile(path, content)])
+  }
+
+  override async mkdir(path: string): Promise<void> {
+    await super.mkdir(path)
+    this.dvipdfm.mkdir(path)
+  }
+
   async compile(): Promise<CompileResult> {
     const start = performance.now()
     // 0. Ensure the XeLaTeX format is built and present in the work dir.
