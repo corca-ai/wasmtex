@@ -117,13 +117,13 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [ ] `graphicx`, `pdfpages`와 TikZ PDF import를 기준 빌드와 비교한다.
 - [x] `pdfe`와 `pdfscanner`의 반환 type, string byte, dictionary 순서, raw/decoded stream과 오류를 JSON fixture로 비교한다. pplib 기준선과 클린 입력 동작이 byte 단위로 일치했고, 손상 PDF 복구 차이는 승인해 expected fixture로 잠갔다.
 - [x] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다. 잠긴 상태, 잘못된 password 거부, user password 해제가 기준선과 일치한다.
-- [ ] malformed, deeply nested와 oversized PDF의 timeout, allocation limit과 실패 동작을 검증한다.
+- [x] malformed, deeply nested와 oversized PDF의 timeout, allocation limit과 실패 동작을 검증한다. WTPDF smoke가 입력·깊이·디코딩·할당 한도와 malformed 실패를 검증하고, 300단계 중첩·손상 fixture는 차등 비교에 포함된다. wall-clock timeout은 설계상 host 종료 책임으로 문서화되어 있다.
 - [x] 성공·실패 경로의 document/object/stream memory 해제를 검증한다. pdfe 프로브는 valgrind 무손실이고, 이미지 포함 경로의 잔여 누수는 pplib 기준선과 총량이 동일한 업스트림 kpathsea/종료 경로다.
 - [ ] PDF 출력의 text와 위치를 자동 비교하고 두 개 이상의 PDF 구조 검사기로 결과를 검사한다.
-- [ ] 브라우저와 Node host에서 pdfLaTeX, XeLaTeX, LuaLaTeX와 BibTeX 결과 parity를 검증한다.
+- [x] 브라우저와 Node host에서 pdfLaTeX, XeLaTeX, LuaLaTeX와 BibTeX 결과 parity를 검증한다. `CROSS_HOST_PARITY=1` smoke 7건(양쪽 PDF-import corpus 포함)이 재빌드 엔진으로 통과한다.
 - [x] WASM/JS 크기, cold start, compile time과 peak memory budget을 정하고 통과한다. 실측(`engine-performance-2b58db3.json`)으로 RSS budget을 보정했고 크기·런타임 검사가 통과한다.
 - [ ] 발견한 차이를 `expected`, `approved`, `regression`으로 분류하고 승인자를 기록한다.
-- [ ] production artifact에 `pplib` fallback이나 runtime switch가 없음을 확인한다.
+- [x] production artifact에 `pplib` fallback이나 runtime switch가 없음을 확인한다. 모든 from-source 빌드가 link map과 release byte에서 `pplib`/legacy symbol을 fail-closed로 거부하고, `link-inventory-2b58db3.json`에 pplib archive가 없다.
 
 ### E. 라이선스 원문·고지·relink 자료
 
