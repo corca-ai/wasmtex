@@ -20,7 +20,14 @@ const assetManifest = JSON.parse(readFileSync(resolve(assetManifestArg), 'utf8')
 const config = JSON.parse(
   readFileSync(resolve(configArg ?? 'scripts/corresponding-source-2025.json'), 'utf8'),
 )
-const entries = execFileSync('tar', ['-tf', archive], { encoding: 'utf8' }).trim().split('\n')
+/* A real archive lists hundreds of thousands of source paths — far past the
+   1 MiB execFileSync default. */
+const entries = execFileSync('tar', ['-tf', archive], {
+  encoding: 'utf8',
+  maxBuffer: 1024 * 1024 * 256,
+})
+  .trim()
+  .split('\n')
 for (const entry of entries) {
   if (entry.startsWith('/') || entry.split('/').includes('..')) {
     console.error(`unsafe source archive entry: ${entry}`)
