@@ -39,7 +39,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | `pplib` | 새 소스에서 제거됨 | XeTeX/LuaHBTeX가 WTPDF/Xpdf를 사용하고 독립 SHA-2 구현을 사용한다. |
 | WTPDF 증거 빌드 | 통과 | native/WASM smoke, link map과 byte scan 증거가 저장되어 있다. |
 | 대응 소스 도구 | 구현됨 | build receipt 기반 source archive builder/checker가 있다. |
-| 새 릴리스 후보 바이너리 | LuaHBTeX 재빌드 필요 | source `23ee539` 후보를 만들었으나, D 단계 repeat-image fixture가 WTPDF 결함 두 건(파일 문서의 미초기화 `memstream` 해제, `/Info` 부재 시 null-kind 값 반환)을 찾아 수정했다. LuaHBTeX 엔진 바이트가 바뀌므로 수정 commit으로 재빌드하고 receipt를 다시 묶어야 한다. |
+| 새 릴리스 후보 바이너리 | 완료 (`2b58db3`) | D 단계가 찾은 WTPDF 결함 두 건을 수정한 뒤 여섯 family 모두 단일 source `2b58db3`로 재빌드해 receipt·link inventory·SBOM에 다시 묶었다. 변경 없는 네 family는 byte 단위로 재현되었고 XeTeX/LuaHBTeX만 수정 범위만큼 바뀌었다. |
 | 최종 대응 소스 archive | 없음 | 새 release receipt로 실제 archive를 만들고 재빌드해야 한다. |
 | 최종 notices/relink 자료 | 완료 | archive 81개를 구성요소 inventory로 분류하고 GPL 선택, 고지, SPDX SBOM과 complete-source relink 절차를 검사한다. 실제 source archive 생성은 F 단계다. |
 | 호환성·보안 승인 | 미완료 | 특히 LuaHBTeX PDF API와 비정상 PDF 검증이 남아 있다. |
@@ -54,6 +54,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [`docs/license-evidence/luahbtex-wtpdf-666663b.md`](docs/license-evidence/luahbtex-wtpdf-666663b.md)
 - [`docs/license-evidence/luahbtex-pdfe-differential-923b196.md`](docs/license-evidence/luahbtex-pdfe-differential-923b196.md)
 - [`docs/license-evidence/wtpdf-v2-63c9303.md`](docs/license-evidence/wtpdf-v2-63c9303.md)
+- [`docs/license-evidence/engine-release-2025-2b58db3.md`](docs/license-evidence/engine-release-2025-2b58db3.md)
 
 ## 3. 공개 단위와 적용 조건
 
@@ -156,7 +157,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] source mode의 `npm run check:licenses`가 미승인 바이너리 추적, `pplib` 재도입과 manifest 불일치를 거부한다.
 - [x] public workflow가 artifact 업로드와 Pages 배포 전에 strict release mode를 실행하도록 했다.
 - [x] asset manifest가 파일별 receipt 누락·중복·hash 불일치와 license family 미분류를 거부한다.
-- [ ] `LICENSE-MANIFEST.json`의 artifact family와 distribution terms를 최종 link inventory에 맞춰 확정한다.
+- [x] `LICENSE-MANIFEST.json`의 artifact family와 distribution terms를 최종 link inventory에 맞춰 확정한다. `check:licenses`가 `link-inventory-2b58db3.json` 기준으로 family 분류·구성요소·SBOM 일치를 fail-closed로 검사한다.
 - [x] `fresh-release-artifacts` 차단 사유를 새 receipt와 link inventory 증거로 해소한다.
 - [x] `third-party-notices-and-relink` 차단 사유를 link inventory, 구성요소 inventory, notices, SPDX SBOM과 relink 절차 증거로 해소한다.
 - [ ] `compatibility-security`, `complete-corresponding-source`, `public-repository-audit` 차단 사유를 각각 증거와 함께 해소한다.
