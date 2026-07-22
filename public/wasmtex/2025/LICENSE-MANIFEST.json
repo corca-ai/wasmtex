@@ -124,10 +124,6 @@
   ],
   "releaseBlockers": [
     {
-      "id": "compatibility-security",
-      "detail": "Complete the WTPDF compatibility, malformed-input, memory, cross-host, and performance release gates."
-    },
-    {
       "id": "complete-corresponding-source",
       "detail": "Publish and hash the complete source archive for the exact engine bytes."
     },

@@ -70,6 +70,9 @@ the xref table and opens it with one page and seven objects. Classification:
 superset of the baseline's behavior, no previously-supported input regressed,
 and the repaired result is stable. This matches the WTPDF adapter contract that
 differential fixtures must approve malformed-input recovery differences.
+Approved by: ak (akcorca, ak@corca.ai), 2026-07-22. The same approval covers
+the identical recovery difference observed in the XeTeX extended differential
+(`xetex-pdf-extended-differential-2d87107.md`).
 
 The candidate's full probe output is checked in as
 `wasm-build/pdf-backend/fixtures/luahbtex-pdf-api.expected.json`, and

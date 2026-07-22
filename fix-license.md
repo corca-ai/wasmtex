@@ -123,7 +123,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] PDF 출력의 text와 위치를 자동 비교하고 두 개 이상의 PDF 구조 검사기로 결과를 검사한다. `pdftotext -layout`과 144dpi 래스터 비교가 자동화되었고 poppler·mupdf·pdf-lib 세 검사기가 결과를 검사한다.
 - [x] 브라우저와 Node host에서 pdfLaTeX, XeLaTeX, LuaLaTeX와 BibTeX 결과 parity를 검증한다. `CROSS_HOST_PARITY=1` smoke 7건(양쪽 PDF-import corpus 포함)이 재빌드 엔진으로 통과한다.
 - [x] WASM/JS 크기, cold start, compile time과 peak memory budget을 정하고 통과한다. 실측(`engine-performance-2b58db3.json`)으로 RSS budget을 보정했고 크기·런타임 검사가 통과한다.
-- [ ] 발견한 차이를 `expected`, `approved`, `regression`으로 분류하고 승인자를 기록한다.
+- [x] 발견한 차이를 `expected`, `approved`, `regression`으로 분류하고 승인자를 기록한다. 유일한 동작 차이(손상 PDF의 Xpdf xref 복구, regression 없음)를 approved로 분류했고 승인자 ak(2026-07-22)를 차등 증거 문서에 기록했다.
 - [x] production artifact에 `pplib` fallback이나 runtime switch가 없음을 확인한다. 모든 from-source 빌드가 link map과 release byte에서 `pplib`/legacy symbol을 fail-closed로 거부하고, `link-inventory-2b58db3.json`에 pplib archive가 없다.
 
 ### E. 라이선스 원문·고지·relink 자료
