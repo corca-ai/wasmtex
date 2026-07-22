@@ -1,0 +1,10 @@
+name: WasmTex CodeQL config
+
+# `lib/` is the committed, generated build output (a bundled duplicate of `src/`)
+# and `dist/` is the demo build — scanning them would double every finding and add
+# noise from minified/vendored code. Analyze the authored source instead.
+paths-ignore:
+  - lib
+  - dist
+  - node_modules
+  - compat
