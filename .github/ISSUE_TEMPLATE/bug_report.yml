@@ -1,0 +1,88 @@
+name: 🐛 Bug report
+description: Report incorrect behavior in the editor, compiler, or SDK
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please search
+        [existing issues](https://github.com/corca-ai/wasmtex/issues) first.
+
+        ⚠️ **Security issue?** Do **not** file it here — follow
+        [SECURITY.md](https://github.com/corca-ai/wasmtex/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Minimal steps to reproduce. A small, self-contained LaTeX snippet and/or
+        code sample is the fastest path to a fix.
+      placeholder: |
+        1. Initialize WasmTex with `...`
+        2. Compile this document: `\documentclass{article}...`
+        3. See error / wrong output
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      description: Which engine is involved (if applicable)?
+      options:
+        - "pdflatex (default)"
+        - xelatex
+        - lualatex
+        - "BibTeX / Biber"
+        - makeindex / xindy
+        - "Not engine-specific / unsure"
+    validations:
+      required: false
+  - type: dropdown
+    id: entry-point
+    attributes:
+      label: Entry point
+      description: Which package/import surface are you using?
+      options:
+        - "wasmtex (full editor + preview)"
+        - wasmtex/headless
+        - wasmtex/node
+        - "wasmtex/lsp (+ monaco/server)"
+        - wasmtex/synctex
+        - wasmtex/warmup
+        - Unsure
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: The installed ref or commit SHA (e.g. `github:corca-ai/wasmtex#<sha>`).
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser + version, or Node version and OS. Framework/bundler if relevant.
+      placeholder: |
+        - Browser: Chrome 130 / Firefox 131 / …
+        - Node: v24.x (for headless/node paths)
+        - OS: macOS 15 / Ubuntu 24.04 / …
+        - Bundler: Vite / webpack / …
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output / logs
+      description: Relevant console errors or compiler log. Will be rendered as code.
+      render: shell
+    validations:
+      required: false
