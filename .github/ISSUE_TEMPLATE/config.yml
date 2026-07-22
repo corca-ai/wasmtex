@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔐 Report a security vulnerability
+    url: https://github.com/corca-ai/wasmtex/security/advisories/new
+    about: Please report security issues privately, not as a public issue. See SECURITY.md.
+  - name: 📖 Documentation
+    url: https://github.com/corca-ai/wasmtex/tree/main/docs
+    about: Integration guide, API reference, architecture, and more — check here first.
+  - name: 💬 Questions & discussion
+    url: https://github.com/corca-ai/wasmtex/discussions
+    about: For usage help and open-ended questions (enable Discussions in repo settings).

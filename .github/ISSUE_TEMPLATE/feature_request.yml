@@ -1,0 +1,50 @@
+name: 💡 Feature request
+description: Suggest a new capability or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Please check
+        [existing issues](https://github.com/corca-ai/wasmtex/issues) and the
+        [docs](https://github.com/corca-ai/wasmtex/tree/main/docs) first — the
+        capability may already exist or be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and what's getting in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like WasmTex to do? Sketch the API/behavior if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches or workarounds you've tried or ruled out.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of WasmTex does this touch?
+      options:
+        - Editor / UI
+        - PDF preview / viewer
+        - Compiler / engines
+        - Headless / Node host
+        - LSP / language features
+        - Bibliography (BibTeX/Biber)
+        - SyncTeX
+        - Warmup / performance
+        - Docs
+        - Other / unsure
+    validations:
+      required: false

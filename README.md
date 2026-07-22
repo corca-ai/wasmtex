@@ -64,9 +64,9 @@ setup and copy-pasteable recipes. A minimal example lives in
 - **[Licensing](docs/licensing.md)** — SDK/engine license scope and release requirements.
 - **[Corresponding source](docs/corresponding-source.md)** — exact engine source archive and verification workflow.
 - **[Proprietary integration](docs/proprietary-integration.md)** — keep a host application closed-source while distributing engines compliantly.
-- **[Bibliography](docs/bibliography.md)** · **[Warmup](docs/warmup.md)** · **[Contributing](docs/develop.md)**
+- **[Bibliography](docs/bibliography.md)** · **[Warmup](docs/warmup.md)** · **[Development guide](docs/develop.md)**
 
-> Contributing to WasmTex itself? See **[AGENTS.md](AGENTS.md)** and [docs/develop.md](docs/develop.md).
+> Contributing to WasmTex itself? Start with **[CONTRIBUTING.md](CONTRIBUTING.md)** (setup, standards, PR process), then [AGENTS.md](AGENTS.md) and [docs/develop.md](docs/develop.md).
 
 ## Language features
 
@@ -88,6 +88,16 @@ The built-in LaTeX language server (editor-neutral cores in `src/lsp/`, with a M
 | Document links (`\input`/`\include`, `\url`/`\href`) | ✅ |
 | Semantic tokens (commands, math, comments, verbatim) | ✅ |
 | Formatting (`latexindent`-style) | ⏳ planned |
+
+## Contributing
+
+Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup,
+coding standards, and the PR process, and note the committed-`lib/` rebuild rule.
+
+- 🐛 **Bugs / features:** open an [issue](https://github.com/corca-ai/wasmtex/issues/new/choose).
+- 🔐 **Security:** report privately — see [SECURITY.md](SECURITY.md).
+- 🤝 **Conduct:** participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
+- 📓 **Changes:** notable changes are tracked in the [Changelog](CHANGELOG.md).
 
 ## License
 
