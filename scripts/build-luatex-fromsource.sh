@@ -66,6 +66,26 @@ docker run --rm --platform linux/amd64 --tmpfs /work \
     done
   ' || { echo "LuaHBTeX repeat-image gate failed"; exit 1; }
 
+echo "Checking pdfe/pdfscanner public API behavior ..."
+# Locks the probe's JSON (types, string bytes/syntax, dictionary order,
+# raw/decoded streams, encryption, damaged-input recovery) to the
+# pplib-differential-approved expectation in
+# wasm-build/pdf-backend/fixtures/luahbtex-pdf-api.expected.json.
+docker run --rm --platform linux/amd64 --tmpfs /work \
+  -v "$REPO_ROOT/scripts/generate-pdf-compat-fixtures.mjs:/gen-fixtures.mjs:ro" \
+  -v "$REPO_ROOT/scripts/probe-luahbtex-pdf-api.lua:/probe.lua:ro" \
+  -v "$REPO_ROOT/wasm-build/pdf-backend/fixtures/luahbtex-pdf-api.expected.json:/expected.json:ro" \
+  --entrypoint sh "$IMAGE" -c '
+    set -eu
+    node /gen-fixtures.mjs /work/fixtures
+    /build/native/texk/web2c/luahbtex --luaonly /probe.lua /work/fixtures \
+      | sed -n "s/^WASMTEX_PDF_API_JSON=//p" > /work/pdf-api.json
+    cmp /work/pdf-api.json /expected.json || {
+      echo "pdfe/pdfscanner behavior diverged from the approved expectation"
+      exit 1
+    }
+  ' || { echo "LuaHBTeX pdfe/pdfscanner gate failed"; exit 1; }
+
 echo "Running Phase 2 (emcc cross-compile + glue relink) ..."
 docker run --rm --platform linux/amd64 \
   -v "$REPO_ROOT/$OUT_DIR":/dist \

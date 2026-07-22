@@ -51,6 +51,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [`docs/license-evidence/xetex-geometry-differential-aa23fbb.md`](docs/license-evidence/xetex-geometry-differential-aa23fbb.md)
 - [`docs/license-evidence/xetex-visual-differential-77fef0c.md`](docs/license-evidence/xetex-visual-differential-77fef0c.md)
 - [`docs/license-evidence/luahbtex-wtpdf-666663b.md`](docs/license-evidence/luahbtex-wtpdf-666663b.md)
+- [`docs/license-evidence/luahbtex-pdfe-differential-923b196.md`](docs/license-evidence/luahbtex-pdfe-differential-923b196.md)
 - [`docs/license-evidence/wtpdf-v2-63c9303.md`](docs/license-evidence/wtpdf-v2-63c9303.md)
 
 ## 3. 공개 단위와 적용 조건
@@ -110,10 +111,10 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] XeTeX 자체 생성 vector corpus 11페이지의 고정 renderer visual differential test를 통과했다.
 - [x] LuaHBTeX caller를 WTPDF API로 전환하고 native/Emscripten compile 및 기본 smoke를 통과했다.
 - [ ] xref stream, object stream, 암호화·손상 PDF와 실제 문서를 포함한 XeTeX 확장 corpus를 통과한다.
-- [ ] LuaHBTeX의 classic xref, xref stream과 object stream 동작을 fixture로 검증한다.
+- [x] LuaHBTeX의 classic xref, xref stream과 object stream 동작을 fixture로 검증한다. pdfe 차등 비교와 repeat-image 빌드 게이트가 두 xref 배치 모두를 검증한다.
 - [ ] `graphicx`, `pdfpages`와 TikZ PDF import를 기준 빌드와 비교한다.
-- [ ] `pdfe`와 `pdfscanner`의 반환 type, string byte, dictionary 순서, raw/decoded stream과 오류를 JSON fixture로 비교한다.
-- [ ] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다.
+- [x] `pdfe`와 `pdfscanner`의 반환 type, string byte, dictionary 순서, raw/decoded stream과 오류를 JSON fixture로 비교한다. pplib 기준선과 클린 입력 동작이 byte 단위로 일치했고, 손상 PDF 복구 차이는 승인해 expected fixture로 잠갔다.
+- [x] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다. 잠긴 상태, 잘못된 password 거부, user password 해제가 기준선과 일치한다.
 - [ ] malformed, deeply nested와 oversized PDF의 timeout, allocation limit과 실패 동작을 검증한다.
 - [ ] 성공·실패 경로의 document/object/stream memory 해제를 검증한다.
 - [ ] PDF 출력의 text와 위치를 자동 비교하고 두 개 이상의 PDF 구조 검사기로 결과를 검사한다.
