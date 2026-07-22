@@ -160,8 +160,11 @@ registry.register(BIBLIOGRAPHY_STAGE, withCache(
 const compiler = new WasmTexCompiler({ files, backends: registry })
 ```
 
-`withCache` wraps any string-producing backend for the shared content-addressed cache
-(`CacheStore`, keyed by `contentKey`). The compiler auto-routes the `bibliography` **and
+`withCache` wraps any string-producing backend for the shared content-addressed cache.
+Store keys are produced by `backendCacheKey`: the stage, backend id/version, backend options,
+and request content are all namespaced, so two tools cannot reuse each other's artifact.
+Supplying a backend `version` is recommended whenever a deployment upgrade can change output.
+The compiler auto-routes the `bibliography` **and
 `index`** stages: `\printindex` runs client-side via the bundled makeindex WASM by default,
 and a registered `index` backend (`createMakeindexBackend` / `createXindyBackend`) offloads
 it. The biber (`.bcf`-based `BiberRequest`, `createBiberBackend`) biblatex flow and the

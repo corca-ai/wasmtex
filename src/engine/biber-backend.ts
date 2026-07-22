@@ -27,6 +27,8 @@ export interface BiberRequest {
 export interface BiberBackendOptions {
   /** Integrator endpoint that runs Biber and returns the `.bbl`. */
   endpoint: string
+  /** Deployed Biber version, used to isolate shared cache entries. */
+  version?: string
   /** Injectable for tests / non-global-fetch hosts. */
   fetchImpl?: typeof fetch
   /** Content-address key (e.g. a hash of the `.bcf` + `.bib`s) so a shared cache can
@@ -39,6 +41,7 @@ export function createBiberBackend(opts: BiberBackendOptions): ToolBackend<Biber
   return createJsonTextBackend<BiberRequest>({
     id: 'biber',
     stage: BIBLIOGRAPHY_STAGE,
+    version: opts.version,
     endpoint: opts.endpoint,
     fetchImpl: opts.fetchImpl,
     cacheKey: opts.cacheKey,

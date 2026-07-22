@@ -30,6 +30,25 @@ export class MemoryCacheStore implements CacheStore {
   }
 }
 
+/** Identity fields that separate artifacts produced by different tools, stages, versions,
+ * or non-request backend configuration in a shared store. */
+export interface BackendCacheIdentity {
+  backendId: string
+  stage?: string | undefined
+  backendVersion?: string | undefined
+  backendOptions?: unknown
+}
+
+/** Options for {@link withCache}. Passing a function directly remains supported as the
+ * legacy shorthand for `keyOf`. */
+export interface WithCacheOptions<Req> {
+  keyOf?: ((request: Req) => Promise<string> | string) | undefined
+  stage?: string | undefined
+  backendVersion?: string | undefined
+  /** Configuration that affects output but is not already represented in `request`. */
+  backendOptions?: unknown
+}
+
 /** Deterministic JSON: object keys sorted recursively, so equal inputs hash equally.
  *  `undefined` is kept distinct from `null` (so they don't share a key), and object keys
  *  whose value is `undefined` are omitted — matching `JSON.stringify` (the actual POSTed
@@ -64,21 +83,50 @@ export async function contentKey(parts: unknown): Promise<string> {
     .join('')
 }
 
+/** Build the final shared-store key. The schema marker intentionally invalidates the old
+ * request-only key space, whose entries cannot prove which backend produced them. */
+export function backendCacheKey(
+  identity: BackendCacheIdentity,
+  requestKey: unknown,
+): Promise<string> {
+  return contentKey({
+    schema: 'wasmtex-tool-cache',
+    schemaVersion: 1,
+    stage: identity.stage ?? null,
+    backendId: identity.backendId,
+    backendVersion: identity.backendVersion ?? null,
+    backendOptions: identity.backendOptions ?? null,
+    requestKey,
+  })
+}
+
 /**
  * Wrap a string-producing {@link ToolBackend} with content-addressed caching: a cache hit
- * (keyed by the request's {@link contentKey}, or a custom `keyOf`) returns instantly and
- * never runs the backend — so a stage compiled once on any host is free everywhere.
+ * (keyed by the backend identity plus the request's {@link contentKey}, or a custom `keyOf`)
+ * returns instantly and never runs the backend — so a stage compiled once on any host is
+ * free everywhere without reusing an artifact from another tool or version.
  */
 export function withCache<Req, Res extends string>(
   backend: ToolBackend<Req, Res>,
   store: CacheStore,
-  keyOf: (request: Req) => Promise<string> | string = contentKey,
+  keyOfOrOptions: ((request: Req) => Promise<string> | string) | WithCacheOptions<Req> = {},
 ): ToolBackend<Req, Res> {
+  const options: WithCacheOptions<Req> =
+    typeof keyOfOrOptions === 'function' ? { keyOf: keyOfOrOptions } : keyOfOrOptions
+  const keyOf = options.keyOf ?? contentKey
+  const identity: BackendCacheIdentity = {
+    backendId: backend.id,
+    stage: options.stage ?? backend.stage,
+    backendVersion: options.backendVersion ?? backend.version,
+    backendOptions: options.backendOptions,
+  }
   return {
     id: `${backend.id}+cache`,
+    ...(identity.stage ? { stage: identity.stage } : {}),
+    ...(identity.backendVersion ? { version: identity.backendVersion } : {}),
     location: backend.location,
     async run(request: Req): Promise<Res> {
-      const key = await keyOf(request)
+      const key = await backendCacheKey(identity, await keyOf(request))
       const hit = await store.get(key)
       if (hit !== undefined) return hit as Res
       const result = await backend.run(request)

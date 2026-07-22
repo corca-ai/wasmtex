@@ -16,6 +16,9 @@
 /** A backend that runs one compile stage. `Req`/`Res` are the stage's payloads. */
 export interface ToolBackend<Req, Res> {
   readonly id: string
+  /** Compile stage and implementation version used to namespace shared cache entries. */
+  readonly stage?: string
+  readonly version?: string
   /** Where this backend runs. Drives telemetry and the privacy default — a `server`
    *  backend only ever sees what the integrator routes to it. */
   readonly location: 'client' | 'server'
@@ -54,6 +57,9 @@ export interface RemoteBackendOptions<Req, Res> {
   id: string
   /** Stage name, sent as a header so one endpoint can serve many stages. */
   stage: string
+  /** Backend implementation version. Include it when different deployed versions can emit
+   *  different artifacts for the same request. */
+  version?: string
   /** Integrator endpoint that runs the same headless engine for this stage. */
   endpoint: string
   /** Injectable for tests / non-global-fetch hosts. Defaults to the global `fetch`. */
@@ -75,6 +81,8 @@ export function createRemoteBackend<Req, Res>(
 ): ToolBackend<Req, Res> {
   return {
     id: opts.id,
+    stage: opts.stage,
+    ...(opts.version ? { version: opts.version } : {}),
     location: 'server',
     async run(request: Req): Promise<Res> {
       const doFetch = opts.fetchImpl ?? fetch
@@ -100,6 +108,7 @@ export function createRemoteBackend<Req, Res>(
 export interface JsonTextBackendOptions<Req> {
   id: string
   stage: string
+  version?: string | undefined
   endpoint: string
   fetchImpl?: typeof fetch | undefined
   cacheKey?: ((request: Req) => string) | undefined
@@ -117,6 +126,7 @@ export function createJsonTextBackend<Req>(
   return createRemoteBackend<Req, string>({
     id: opts.id,
     stage: opts.stage,
+    ...(opts.version ? { version: opts.version } : {}),
     endpoint: opts.endpoint,
     encodeRequest: (request) => JSON.stringify(request),
     decodeResponse: (response) => response.text(),

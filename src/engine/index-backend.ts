@@ -51,6 +51,8 @@ export async function runRemoteIndex(
 export interface MakeindexBackendOptions {
   /** Integrator endpoint that runs makeindex and returns the `.ind`. */
   endpoint: string
+  /** Deployed makeindex version, used to isolate shared cache entries. */
+  version?: string
   fetchImpl?: typeof fetch
   /** Content-address key for caching (S5 #112). */
   cacheKey?: (request: IndexStageRequest) => string
@@ -67,6 +69,7 @@ export function createMakeindexBackend(
   return createJsonTextBackend<IndexStageRequest>({
     id: 'makeindex',
     stage: INDEX_STAGE,
+    version: opts.version,
     endpoint: opts.endpoint,
     fetchImpl: opts.fetchImpl,
     cacheKey: opts.cacheKey,

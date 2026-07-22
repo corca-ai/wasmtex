@@ -22,6 +22,8 @@ export interface XindyRequest {
 export interface XindyBackendOptions {
   /** Integrator endpoint that runs xindy and returns the `.ind`. */
   endpoint: string
+  /** Deployed xindy version, used to isolate shared cache entries. */
+  version?: string
   fetchImpl?: typeof fetch
   /** Content-address key for caching (S5 #112). */
   cacheKey?: (request: XindyRequest) => string
@@ -32,6 +34,7 @@ export function createXindyBackend(opts: XindyBackendOptions): ToolBackend<Xindy
   return createJsonTextBackend<XindyRequest>({
     id: 'xindy',
     stage: 'index',
+    version: opts.version,
     endpoint: opts.endpoint,
     fetchImpl: opts.fetchImpl,
     cacheKey: opts.cacheKey,

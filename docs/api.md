@@ -138,7 +138,7 @@ from `wasmtex/headless`:
 | `createMakeindexBackend` / `IndexStageRequest` / `MakeindexBackendOptions` | Server makeindex backend for the `index` stage (`.idx` → `.ind`). The client default needs no backend. |
 | `createXindyBackend` / `XindyRequest` / `XindyBackendOptions` | Server xindy backend for the `index` stage (multilingual / complex indexing). |
 | `detectIndexUse` / `runRemoteIndex` / `INDEX_STAGE` | Index-stage detection + registry routing (mirrors the bibliography seam). |
-| `withCache` / `MemoryCacheStore` / `contentKey` / `CacheStore` | Wrap a backend with the shared content-addressed cache. |
+| `withCache` / `MemoryCacheStore` / `backendCacheKey` / `contentKey` / `CacheStore` | Wrap a backend with a shared cache namespaced by stage, backend id/version, options, and request content. |
 
 See [Execution model](execution-model.md) for the client/server boundary.
 

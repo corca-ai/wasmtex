@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ToolBackend } from './backend-registry'
-import { contentKey, MemoryCacheStore, withCache } from './content-cache'
+import { backendCacheKey, contentKey, MemoryCacheStore, withCache } from './content-cache'
 
 describe('contentKey (#112)', () => {
   it('is deterministic and order-independent for object keys', async () => {
@@ -73,12 +73,42 @@ describe('withCache (#112)', () => {
 
   it('a store pre-populated on one host serves the other host instantly (shared cache)', async () => {
     const store = new MemoryCacheStore()
-    const serverKey = await contentKey('shared-input')
+    const serverKey = await backendCacheKey({ backendId: 'b' }, await contentKey('shared-input'))
     store.set(serverKey, 'precomputed-by-server')
 
     const { backend, runs } = countingBackend()
     const clientCached = withCache(backend, store)
     expect(await clientCached.run('shared-input')).toBe('precomputed-by-server')
     expect(runs()).toBe(0) // never ran the (client) backend — the server's result was reused
+  })
+
+  it('namespaces keys by stage, backend version, and backend options', async () => {
+    const requestKey = await contentKey({ idx: 'same' })
+    const base = { backendId: 'xindy', stage: 'index', backendVersion: '2.5' }
+    const key = await backendCacheKey(base, requestKey)
+
+    expect(await backendCacheKey({ ...base, stage: 'export' }, requestKey)).not.toBe(key)
+    expect(await backendCacheKey({ ...base, backendVersion: '2.6' }, requestKey)).not.toBe(key)
+    expect(
+      await backendCacheKey({ ...base, backendOptions: { language: 'german' } }, requestKey),
+    ).not.toBe(key)
+  })
+
+  it('never reuses an artifact produced by a different backend for the same request', async () => {
+    const store = new MemoryCacheStore()
+    const makeindex = withCache(
+      {
+        id: 'makeindex',
+        location: 'server',
+        run: async () => 'MAKEINDEX',
+      },
+      store,
+    )
+    const xindyRun = vi.fn(async () => 'XINDY')
+    const xindy = withCache({ id: 'xindy', location: 'server', run: xindyRun }, store)
+
+    expect(await makeindex.run({ idx: 'same' })).toBe('MAKEINDEX')
+    expect(await xindy.run({ idx: 'same' })).toBe('XINDY')
+    expect(xindyRun).toHaveBeenCalledOnce()
   })
 })

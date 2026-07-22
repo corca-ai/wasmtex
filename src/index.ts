@@ -1,48 +1,6 @@
+export * from './backend-api'
 export type { WasmTexEventMap, WasmTexOptions } from './component-types'
 export { ensureLanguagesRegistered } from './editor/setup'
-export {
-  BackendRegistry,
-  createJsonTextBackend,
-  createRemoteBackend,
-  type JsonTextBackendOptions,
-  type RemoteBackendOptions,
-  type ToolBackend,
-} from './engine/backend-registry'
-export {
-  type BiberBackendOptions,
-  type BiberRequest,
-  createBiberBackend,
-  runRemoteBiber,
-} from './engine/biber-backend'
-export {
-  type BblInput,
-  BIBLIOGRAPHY_STAGE,
-  type BibliographyBackend,
-  type BibliographyMode,
-  type BibliographyStageRequest,
-  biblatexLiteBackend,
-  detectBiblatexBackend,
-  detectBiblatexSort,
-  detectBibliographyMode,
-  generateBiblatexBbl,
-  parseBcfCitedKeys,
-  runRemoteBibliography,
-  selectBiblatexBackend,
-} from './engine/bibliography-backend'
-export {
-  type CacheStore,
-  contentKey,
-  MemoryCacheStore,
-  withCache,
-} from './engine/content-cache'
-export {
-  createMakeindexBackend,
-  detectIndexUse,
-  INDEX_STAGE,
-  type IndexStageRequest,
-  type MakeindexBackendOptions,
-  runRemoteIndex,
-} from './engine/index-backend'
 export {
   clearTexliveCache,
   isIndexedDbSupported,
@@ -51,11 +9,6 @@ export {
 } from './engine/persistent-cache'
 export { warmup } from './engine/warmup'
 export { wasmSimdSupported } from './engine/wasm-features'
-export {
-  createXindyBackend,
-  type XindyBackendOptions,
-  type XindyRequest,
-} from './engine/xindy-backend'
 export {
   DEFAULT_LINT_CONFIG,
   type LintConfig,
