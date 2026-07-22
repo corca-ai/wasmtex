@@ -42,7 +42,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 | 새 릴리스 후보 바이너리 | 완료 (`2b58db3`) | D 단계가 찾은 WTPDF 결함 두 건을 수정한 뒤 여섯 family 모두 단일 source `2b58db3`로 재빌드해 receipt·link inventory·SBOM에 다시 묶었다. 변경 없는 네 family는 byte 단위로 재현되었고 XeTeX/LuaHBTeX만 수정 범위만큼 바뀌었다. |
 | 최종 대응 소스 archive | 없음 | 새 release receipt로 실제 archive를 만들고 재빌드해야 한다. |
 | 최종 notices/relink 자료 | 완료 | archive 81개를 구성요소 inventory로 분류하고 GPL 선택, 고지, SPDX SBOM과 complete-source relink 절차를 검사한다. 실제 source archive 생성은 F 단계다. |
-| 호환성·보안 승인 | 미완료 | 특히 LuaHBTeX PDF API와 비정상 PDF 검증이 남아 있다. |
+| 호환성·보안 승인 | 기술 게이트 완료 | D 단계의 차등·한도·메모리·parity·성능 게이트가 모두 증거와 함께 통과했다. 승인된 차이(손상 PDF의 Xpdf 복구)의 승인자 기록만 남아 있다. |
 | 엔진 매니페스트 | `development-only` | fresh artifact 차단은 해소했지만 나머지 네 차단 항목이 끝나기 전에는 공개 바이너리를 배포하지 않는다. |
 
 새 WTPDF 구현의 주요 증거는 다음 문서에 있다.
