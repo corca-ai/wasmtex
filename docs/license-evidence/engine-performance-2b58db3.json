@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2025",
+  "environment": {
+    "host": "Node host adapter (installNodeWorkerHost), darwin arm64, Node v24.11.1",
+    "date": "2026-07-22",
+    "sourceRevision": "2b58db337f9917925988dc51fbebd9e457f76128",
+    "note": "peakRssMiB is process.resourceUsage().maxRSS/1024 of the whole Node process per engine run"
+  },
+  "engines": {
+    "pdflatex": {
+      "engine": "pdflatex",
+      "success": true,
+      "pdfBytes": 48999,
+      "initMs": 249,
+      "firstCompileMs": 936,
+      "secondCompileMs": 114,
+      "peakRssMiB": 1268
+    },
+    "xelatex": {
+      "engine": "xelatex",
+      "success": true,
+      "pdfBytes": 10418,
+      "initMs": 121,
+      "firstCompileMs": 4744,
+      "secondCompileMs": 286,
+      "peakRssMiB": 3116
+    },
+    "lualatex": {
+      "engine": "lualatex",
+      "success": true,
+      "pdfBytes": 43065,
+      "initMs": 398,
+      "firstCompileMs": 2609,
+      "secondCompileMs": 503,
+      "peakRssMiB": 1761
+    }
+  }
+}
