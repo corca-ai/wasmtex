@@ -14,8 +14,8 @@
  *   const c = new WasmTexCompiler({ engine: 'pdflatex', assetBaseUrl: 'http://assets.local/',
  *                                     texliveUrl: 'https://…cloudfront.net/2025/', files })
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { type EngineWorker, setWorkerFactory } from './worker-host'
 
@@ -30,6 +30,13 @@ export interface NodeWorkerHostOptions {
   assetBaseUrl: string
   /** Wrapped fetch (defaults to the global). */
   baseFetch?: typeof fetch
+}
+
+/** Resources installed globally by {@link installNodeWorkerHost}. Dispose this only after
+ *  all compilers using the host have been disposed. */
+export interface NodeWorkerHostInstallation {
+  /** Restore the previous global `fetch` and worker factory. Idempotent. */
+  dispose(): void
 }
 
 // The worker thread program. Reuses the browser controller with host shims + a wasmBinary
@@ -145,37 +152,116 @@ function makeNodeEngineWorker(workerPath: string, wasmPath: string): EngineWorke
   }
 }
 
+interface AssetRoute {
+  matched: boolean
+  localPath: string | null
+}
+
+function isWithin(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate)
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
+}
+
+/** Map an asset URL to a lexical path below `publicRoot`. URL parsing canonicalizes raw and
+ * encoded dot segments before the relative path is extracted; segment decoding then rejects
+ * encoded separators, backslashes and NULs so they cannot become filesystem traversal. */
+function routeAssetUrl(rawUrl: string, baseUrl: URL, publicRoot: string): AssetRoute {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return { matched: false, localPath: null }
+  }
+  if (url.origin !== baseUrl.origin || !url.pathname.startsWith(baseUrl.pathname)) {
+    return { matched: false, localPath: null }
+  }
+
+  const segments: string[] = []
+  for (const encoded of url.pathname.slice(baseUrl.pathname.length).split('/')) {
+    let segment: string
+    try {
+      segment = decodeURIComponent(encoded)
+    } catch {
+      return { matched: true, localPath: null }
+    }
+    if (
+      segment === '.' ||
+      segment === '..' ||
+      segment.includes('/') ||
+      segment.includes('\\') ||
+      segment.includes('\0')
+    ) {
+      return { matched: true, localPath: null }
+    }
+    if (segment) segments.push(segment)
+  }
+
+  const localPath = resolve(publicRoot, ...segments)
+  return { matched: true, localPath: isWithin(publicRoot, localPath) ? localPath : null }
+}
+
+function readableAssetPath(localPath: string | null, publicRoot: string): string | null {
+  if (!localPath) return null
+  try {
+    const realPath = realpathSync(localPath)
+    return isWithin(publicRoot, realPath) && statSync(realPath).isFile() ? realPath : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Install the Node worker host: a `worker_threads` engine-worker factory + an asset
  * `fetch` shim that serves `assetBaseUrl` files from `publicDir`. Call once before
- * constructing any `WasmTexCompiler`.
+ * constructing any `WasmTexCompiler`. The returned handle restores both globals when
+ * disposed, so tests and multi-tenant Node processes do not retain the adapter forever.
  */
-export function installNodeWorkerHost(opts: NodeWorkerHostOptions): void {
-  const base = opts.assetBaseUrl.endsWith('/') ? opts.assetBaseUrl : `${opts.assetBaseUrl}/`
-  const realFetch = opts.baseFetch ?? globalThis.fetch
+export function installNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHostInstallation {
+  const previousFetch = globalThis.fetch
+  const baseFetch = opts.baseFetch ?? previousFetch
+  const baseUrl = new URL(
+    opts.assetBaseUrl.endsWith('/') ? opts.assetBaseUrl : `${opts.assetBaseUrl}/`,
+  )
+  baseUrl.search = ''
+  baseUrl.hash = ''
+  const publicRoot = realpathSync(opts.publicDir)
 
   // Serve the engine assets (.js/.wasm/.fmt[.gz]/bloom) from disk; the CDN passes through.
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const assetFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     // A Request stringifies to '[object Request]', not its URL — resolve it via
     // `.url` so asset routing works for every documented fetch input type.
     const url =
       typeof input === 'string' ? input : input instanceof Request ? input.url : input.toString()
-    if (url.startsWith(base)) {
-      const local = join(opts.publicDir, url.slice(base.length).split('?')[0] as string)
-      const hit = existsSync(local)
+    const route = routeAssetUrl(url, baseUrl, publicRoot)
+    if (route.matched) {
+      const local = readableAssetPath(route.localPath, publicRoot)
+      const hit = local !== null
       dbg('fetch local', hit ? 'HIT' : '404', url)
       if (hit) return new Response(readFileSync(local) as unknown as BodyInit)
       return new Response(null, { status: 404 })
     }
     dbg('fetch cdn', url)
-    return realFetch(input, init)
+    return baseFetch(input, init)
   }) as typeof fetch
+  globalThis.fetch = assetFetch
 
-  setWorkerFactory((enginePath: string) => {
+  const restoreWorkerFactory = setWorkerFactory((enginePath: string) => {
     // enginePath is `${assetBaseUrl}wasmtex/<ver>/wasmtex-<engine>.worker.js`.
-    const rel = enginePath.startsWith(base) ? enginePath.slice(base.length) : enginePath
-    const workerPath = join(opts.publicDir, rel)
-    const wasmPath = workerPath.replace(/\.worker\.js$/, '.wasm')
+    const route = routeAssetUrl(enginePath, baseUrl, publicRoot)
+    const workerPath = route.matched ? readableAssetPath(route.localPath, publicRoot) : null
+    if (!workerPath) throw new Error(`worker asset is outside publicDir or missing: ${enginePath}`)
+    const wasmPath = readableAssetPath(workerPath.replace(/\.worker\.js$/, '.wasm'), publicRoot)
+    if (!wasmPath) throw new Error(`WASM asset is outside publicDir or missing: ${enginePath}`)
     return makeNodeEngineWorker(workerPath, wasmPath)
   })
+
+  let disposed = false
+  return {
+    dispose() {
+      if (disposed) return
+      disposed = true
+      if (globalThis.fetch === assetFetch) globalThis.fetch = previousFetch
+      restoreWorkerFactory()
+    },
+  }
 }

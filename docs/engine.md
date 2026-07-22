@@ -373,7 +373,10 @@ just pdfTeX:
 ```ts
 import { installNodeWorkerHost, WasmTexCompiler } from 'wasmtex/node'
 
-installNodeWorkerHost({ publicDir: '…/public', assetBaseUrl: 'http://assets.local/' })
+const nodeHost = installNodeWorkerHost({
+  publicDir: '…/public',
+  assetBaseUrl: 'http://assets.local/',
+})
 const c = new WasmTexCompiler({
   engine: 'xelatex',                 // pdflatex | xelatex | lualatex | auto
   assetBaseUrl: 'http://assets.local/',
@@ -382,6 +385,8 @@ const c = new WasmTexCompiler({
 })
 await c.init()
 const { pdf } = await c.compile()
+c.dispose()
+nodeHost.dispose() // restores the previous global fetch and worker factory
 ```
 
 Cross-host parity is verified in CI: `src/engine/cross-host-parity.smoke.test.ts`

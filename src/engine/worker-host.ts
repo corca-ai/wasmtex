@@ -29,10 +29,15 @@ export type WorkerFactory = (enginePath: string) => EngineWorker
 // its own factory via setWorkerFactory() before creating any engine.
 let factory: WorkerFactory = (enginePath) => new Worker(enginePath) as unknown as EngineWorker
 
-/** Install a host-specific worker factory (e.g. Node `worker_threads`). Call once at
- *  startup, before constructing any engine. */
-export function setWorkerFactory(next: WorkerFactory): void {
+/** Install a host-specific worker factory (e.g. Node `worker_threads`). Call before
+ *  constructing an engine. Returns an idempotent cleanup that restores the previous
+ *  factory, unless another host has replaced this one in the meantime. */
+export function setWorkerFactory(next: WorkerFactory): () => void {
+  const previous = factory
   factory = next
+  return () => {
+    if (factory === next) factory = previous
+  }
 }
 
 /** Create an engine worker via the installed factory (browser Web Worker by default). */

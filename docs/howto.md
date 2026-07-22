@@ -177,7 +177,7 @@ under Node.
 ```typescript
 import { installNodeWorkerHost, WasmTexCompiler } from 'wasmtex/node'
 
-installNodeWorkerHost({
+const nodeHost = installNodeWorkerHost({
   publicDir: '/path/to/public',                  // holds versioned controller/core/WASM assets
   assetBaseUrl: 'http://assets.local/',
 })
@@ -189,6 +189,8 @@ const compiler = new WasmTexCompiler({
 })
 await compiler.init()
 const { pdf } = await compiler.compile()
+compiler.dispose()
+nodeHost.dispose() // restores the previous global fetch and worker factory
 ```
 
 > Node ≥ 24 is required, and the engine `.js`/`.wasm` assets must be present under

@@ -28,4 +28,21 @@ describe('worker-host seam (#109)', () => {
     setWorkerFactory(() => b)
     expect(createEngineWorker('x')).toBe(b)
   })
+
+  it('restores the previous adapter without clobbering a newer replacement', () => {
+    const a = fakeWorker()
+    const b = fakeWorker()
+    const c = fakeWorker()
+    setWorkerFactory(() => a)
+    const restoreA = setWorkerFactory(() => b)
+    expect(createEngineWorker('x')).toBe(b)
+
+    restoreA()
+    expect(createEngineWorker('x')).toBe(a)
+
+    const restoreB = setWorkerFactory(() => b)
+    setWorkerFactory(() => c)
+    restoreB()
+    expect(createEngineWorker('x')).toBe(c)
+  })
 })
