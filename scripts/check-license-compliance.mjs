@@ -576,8 +576,20 @@ for (const requiredArtifact of [
   'wasm-xetex',
   'wasm-luatex',
 ]) {
-  if (!aggregateWorkflow.includes(`name: ${requiredArtifact}`)) {
+  const artifactMarker = `name: ${requiredArtifact}`
+  const artifactOffset = aggregateWorkflow.indexOf(artifactMarker)
+  if (artifactOffset === -1) {
     fail(`aggregate workflow omits required build artifact: ${requiredArtifact}`)
+    continue
+  }
+
+  const nextStepOffset = aggregateWorkflow.indexOf('\n      - ', artifactOffset)
+  const artifactStep = aggregateWorkflow.slice(
+    artifactOffset,
+    nextStepOffset === -1 ? undefined : nextStepOffset,
+  )
+  if (!/^\s+branch:\s+main\s*$/m.test(artifactStep)) {
+    fail(`aggregate workflow must download ${requiredArtifact} artifacts from main`)
   }
 }
 

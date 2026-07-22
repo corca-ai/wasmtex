@@ -67,6 +67,7 @@ jobs:
           workflow: wasm-build.yml
           name: wasm-pdftex
           path: public/wasmtex/2025
+          branch: main
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest BibTeX WASM
@@ -75,6 +76,7 @@ jobs:
           workflow: wasm-build.yml
           name: wasm-bibtex
           path: public/wasmtex/2025
+          branch: main
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest BibTeX8 WASM
@@ -83,6 +85,7 @@ jobs:
           workflow: wasm-bibtex8.yml
           name: wasm-bibtex8
           path: public/wasmtex/2025
+          branch: main
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest makeindex WASM
@@ -91,6 +94,7 @@ jobs:
           workflow: wasm-makeindex.yml
           name: wasm-makeindex
           path: public/wasmtex/2025
+          branch: main
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest XeLaTeX WASM (xetex + dvipdfmx)
@@ -104,6 +108,7 @@ jobs:
           workflow: wasm-xetex.yml
           name: wasm-xetex
           path: public/wasmtex/2025
+          branch: main
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest LuaLaTeX WASM (luatex)
@@ -117,6 +122,7 @@ jobs:
           workflow: wasm-luatex.yml
           name: wasm-luatex
           path: public/wasmtex/2025
+          branch: main
           search_artifacts: true
           if_no_artifact_found: warn
       - run: npm run lint
