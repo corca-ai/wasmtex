@@ -56,6 +56,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [`docs/license-evidence/luahbtex-pdf-import-differential-2b58db3.md`](docs/license-evidence/luahbtex-pdf-import-differential-2b58db3.md)
 - [`docs/license-evidence/wtpdf-v2-63c9303.md`](docs/license-evidence/wtpdf-v2-63c9303.md)
 - [`docs/license-evidence/engine-release-2025-2b58db3.md`](docs/license-evidence/engine-release-2025-2b58db3.md)
+- [`docs/license-evidence/repository-audit-3ec3290.md`](docs/license-evidence/repository-audit-3ec3290.md)
 
 ## 3. 공개 단위와 적용 조건
 
@@ -175,12 +176,12 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] 내부 빌드 환경 식별자를 문서와 현재 Git object history에서 제거했다.
 - [x] 공개 가능한 compliance manifest만 `public/wasmtex/<version>/`에서 추적한다.
 - [x] B 단계의 무시된 과거 로컬 바이너리를 저장소 밖으로 격리한다.
-- [ ] 현재 tree와 `git rev-list --objects --all` 전체 이력에 secret scanner를 실행하고 결과를 보존한다.
-- [ ] 전체 이력의 대용량 blob, binary/archive와 제3자 source provenance를 감사한다.
-- [ ] 제3자에서 복사·포팅한 모든 source header와 적용 notice를 확인한다.
-- [ ] license scanner와 SBOM 생성을 CI에 추가하고 미확인 항목을 fail-closed 처리한다.
-- [ ] branch, tag, stash와 Git LFS object를 포함해 공개하면 안 되는 파일이 없는지 확인한다.
-- [ ] 공개 전까지 원격 저장소를 만들지 않거나 private으로 유지한다.
+- [x] 현재 tree와 `git rev-list --objects --all` 전체 이력에 secret scanner를 실행하고 결과를 보존한다. gitleaks 8.30.1이 68개 commit 이력과 무시 파일 포함 worktree에서 누출 0건이며 결과는 `repository-audit-3ec3290.md`에 있다.
+- [x] 전체 이력의 대용량 blob, binary/archive와 제3자 source provenance를 감사한다. 이력 전체에 binary/archive 확장자 파일이 0개이고 최대 blob이 모두 출처가 확인된 텍스트다.
+- [x] 제3자에서 복사·포팅한 모든 source header와 적용 notice를 확인한다. 제3자 포팅 파일은 SyncTeX parser 하나이며 원저작자·notice 포인터를 갖추고 있다.
+- [x] license scanner와 SBOM 생성을 CI에 추가하고 미확인 항목을 fail-closed 처리한다. `check:licenses`(SBOM 신선도 검사 포함)가 ci.yml과 모든 엔진 workflow에서 실행되고 엔진 workflow는 release strict mode도 실행한다.
+- [x] branch, tag, stash와 Git LFS object를 포함해 공개하면 안 되는 파일이 없는지 확인한다. main 단일 branch에 tag·stash·LFS object가 없다.
+- [x] 공개 전까지 원격 저장소를 만들지 않거나 private으로 유지한다. 현재 원격이 구성되어 있지 않다.
 - [ ] 공개 직전에 `npm run check`, `npm run test:license-tools`와 source-mode license gate를 다시 실행한다.
 - [ ] 모든 공개 준비 변경을 commit하고 worktree가 깨끗한지 확인한다.
 
@@ -191,10 +192,10 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 다음을 만족하면 엔진 바이너리 릴리스보다 먼저 GitHub source 저장소를 공개할
 수 있다.
 
-- [ ] H 단계의 history·secret·binary·provenance 감사를 통과했다.
-- [ ] 저장소가 생성 engine byte나 uncleared third-party source를 추적하지 않는다.
+- [x] H 단계의 history·secret·binary·provenance 감사를 통과했다.
+- [x] 저장소가 생성 engine byte나 uncleared third-party source를 추적하지 않는다. 이력 감사가 binary 부재와 제3자 header 상태를 확인했다.
 - [ ] 루트 라이선스, third-party notices와 문서가 현재 source tree를 정확히 설명한다.
-- [ ] `LICENSE-MANIFEST.json`이 계속 `development-only`이고 공개 바이너리 배포가 자동 차단된다.
+- [x] `LICENSE-MANIFEST.json`이 계속 `development-only`이고 공개 바이너리 배포가 자동 차단된다.
 
 ### 엔진 바이너리 공개
 
