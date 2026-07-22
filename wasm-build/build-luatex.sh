@@ -159,7 +159,13 @@ if [ -n "$NM" ]; then
     echo "ERROR: kpse_find_file not defined in '$KPLIB' — -Wl,--wrap=kpse_find_file would no-op (interposition drift)" >&2; exit 1
   fi
 fi
-em++ -O2 -g0 \
+LUATEX_DEBUG_FLAGS=(-g0)
+if [ "${WASMTEX_LUATEX_PROFILE_NAMES:-0}" = "1" ]; then
+  # Release debugging aid: retain WebAssembly function names without changing
+  # optimization, so a browser trap can be mapped back to the linked routine.
+  LUATEX_DEBUG_FLAGS=(--profiling-funcs)
+fi
+em++ -O2 "${LUATEX_DEBUG_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   luatex-entry.o kpse-hook.o \
   luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
