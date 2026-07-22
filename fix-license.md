@@ -116,7 +116,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] `pdfe`와 `pdfscanner`의 반환 type, string byte, dictionary 순서, raw/decoded stream과 오류를 JSON fixture로 비교한다. pplib 기준선과 클린 입력 동작이 byte 단위로 일치했고, 손상 PDF 복구 차이는 승인해 expected fixture로 잠갔다.
 - [x] post-open 인증과 잘못된 password의 기존 `pdfe` 계약을 구현·검증한다. 잠긴 상태, 잘못된 password 거부, user password 해제가 기준선과 일치한다.
 - [ ] malformed, deeply nested와 oversized PDF의 timeout, allocation limit과 실패 동작을 검증한다.
-- [ ] 성공·실패 경로의 document/object/stream memory 해제를 검증한다.
+- [x] 성공·실패 경로의 document/object/stream memory 해제를 검증한다. pdfe 프로브는 valgrind 무손실이고, 이미지 포함 경로의 잔여 누수는 pplib 기준선과 총량이 동일한 업스트림 kpathsea/종료 경로다.
 - [ ] PDF 출력의 text와 위치를 자동 비교하고 두 개 이상의 PDF 구조 검사기로 결과를 검사한다.
 - [ ] 브라우저와 Node host에서 pdfLaTeX, XeLaTeX, LuaLaTeX와 BibTeX 결과 parity를 검증한다.
 - [ ] WASM/JS 크기, cold start, compile time과 peak memory budget을 정하고 통과한다.

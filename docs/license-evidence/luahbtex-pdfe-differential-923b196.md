@@ -81,6 +81,23 @@ opens the classic-xref and xref/object-stream fixtures twice each and ships
 them out, covering image inclusion over both xref layouts and the
 PdfDocument/WTPDF lifetime boundary.
 
+## Memory release
+
+Valgrind (`--leak-check=full`) ran against the candidate native binary in the
+same environment:
+
+- the full pdfe/pdfscanner probe — open/close, values, stream readers, failed
+  and successful authentication, damaged input, and garbage-collected
+  userdata — reported **0 bytes definitely or indirectly lost and 0 errors**;
+- the repeat-image inclusion fixture reported 1,504 definitely-lost bytes in
+  75 blocks, **byte-for-byte equal to the pplib baseline's total on the same
+  fixture**. The records trace to upstream kpathsea path handling and the
+  `PdfDocument` registry node that upstream intentionally retains at exit
+  (`destroyPdfDocument` carries an upstream TODO); none trace to `wtpdf_*`
+  frames. The WTPDF port introduces no new leak;
+- the WTPDF smoke test additionally asserts a zero child-handle count after
+  every success, failure, and locked-document path.
+
 ## Remaining scope
 
 This evidence does not cover `graphicx`/`pdfpages`/TikZ package-level import
