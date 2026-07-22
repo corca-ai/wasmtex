@@ -50,6 +50,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [`docs/license-evidence/xetex-wtpdf-23f2ce1.md`](docs/license-evidence/xetex-wtpdf-23f2ce1.md)
 - [`docs/license-evidence/xetex-geometry-differential-aa23fbb.md`](docs/license-evidence/xetex-geometry-differential-aa23fbb.md)
 - [`docs/license-evidence/xetex-visual-differential-77fef0c.md`](docs/license-evidence/xetex-visual-differential-77fef0c.md)
+- [`docs/license-evidence/xetex-pdf-extended-differential-2d87107.md`](docs/license-evidence/xetex-pdf-extended-differential-2d87107.md)
 - [`docs/license-evidence/luahbtex-wtpdf-666663b.md`](docs/license-evidence/luahbtex-wtpdf-666663b.md)
 - [`docs/license-evidence/luahbtex-pdfe-differential-923b196.md`](docs/license-evidence/luahbtex-pdfe-differential-923b196.md)
 - [`docs/license-evidence/wtpdf-v2-63c9303.md`](docs/license-evidence/wtpdf-v2-63c9303.md)
@@ -110,7 +111,7 @@ glue, WASM과 포맷은 npm 패키지의 MIT 표지만으로 배포하지 않고
 - [x] XeTeX의 classic-xref page selection, page box, rotation과 XDV geometry differential test를 통과했다.
 - [x] XeTeX 자체 생성 vector corpus 11페이지의 고정 renderer visual differential test를 통과했다.
 - [x] LuaHBTeX caller를 WTPDF API로 전환하고 native/Emscripten compile 및 기본 smoke를 통과했다.
-- [ ] xref stream, object stream, 암호화·손상 PDF와 실제 문서를 포함한 XeTeX 확장 corpus를 통과한다.
+- [x] xref stream, object stream, 암호화·손상 PDF와 실제 문서를 포함한 XeTeX 확장 corpus를 통과한다. pplib 기준선과 clean JSON, XDV, xdvipdfmx PDF, 144dpi 래스터와 실제 문서 XDV가 byte 단위로 일치한다.
 - [x] LuaHBTeX의 classic xref, xref stream과 object stream 동작을 fixture로 검증한다. pdfe 차등 비교와 repeat-image 빌드 게이트가 두 xref 배치 모두를 검증한다.
 - [ ] `graphicx`, `pdfpages`와 TikZ PDF import를 기준 빌드와 비교한다.
 - [x] `pdfe`와 `pdfscanner`의 반환 type, string byte, dictionary 순서, raw/decoded stream과 오류를 JSON fixture로 비교한다. pplib 기준선과 클린 입력 동작이 byte 단위로 일치했고, 손상 PDF 복구 차이는 승인해 expected fixture로 잠갔다.
