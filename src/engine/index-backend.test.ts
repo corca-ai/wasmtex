@@ -40,13 +40,17 @@ describe('detectIndexUse', () => {
 
 describe('runRemoteIndex', () => {
   const req: IndexStageRequest = { idx: '\\indexentry{alpha}{1}' }
-  const clientBackend = (): ToolBackend<IndexStageRequest, string> => ({
+  const clientBackend = (): ToolBackend<IndexStageRequest, string, typeof INDEX_STAGE> => ({
     id: 'client-makeindex',
+    stage: INDEX_STAGE,
     location: 'client',
     run: async () => 'CLIENT',
   })
-  const serverBackend = (run: () => Promise<string>): ToolBackend<IndexStageRequest, string> => ({
+  const serverBackend = (
+    run: () => Promise<string>,
+  ): ToolBackend<IndexStageRequest, string, typeof INDEX_STAGE> => ({
     id: 'remote-index',
+    stage: INDEX_STAGE,
     location: 'server',
     run,
   })

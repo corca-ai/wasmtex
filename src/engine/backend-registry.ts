@@ -12,12 +12,51 @@
  * This generalizes the bibliography-only `BibliographyBackend` seam in
  * `bibliography-backend.ts` (which stays as the bibliography stage's client backend).
  */
+import type { BiberRequest } from './biber-backend'
+import type { BibliographyStageRequest } from './bibliography-backend'
+import type { IndexStageRequest } from './index-backend'
+
+export const BIBTEX_STAGE = 'bibliography:bibtex'
+export const BIBER_STAGE = 'bibliography:biber'
+export const INDEX_STAGE = 'index'
+
+/** Compile-time request/response contract owned by one registry stage. */
+export interface BackendStageContract<Req, Res> {
+  readonly request: Req
+  readonly response: Res
+}
+
+/** Built-in stage contracts accepted by {@link WasmTexCompiler}. Classic BibTeX and Biber
+ * are deliberately different slots because their `.aux` and `.bcf` requests are not
+ * interchangeable. */
+export interface WasmTexBackendStages {
+  [BIBTEX_STAGE]: BackendStageContract<BibliographyStageRequest, string>
+  [BIBER_STAGE]: BackendStageContract<BiberRequest, string>
+  [INDEX_STAGE]: BackendStageContract<IndexStageRequest, string>
+}
+
+type StageMapConstraint<Stages> = {
+  [Stage in keyof Stages]: BackendStageContract<unknown, unknown>
+}
+type StageName<Stages> = Extract<keyof Stages, string>
+type StageRequest<Contract> =
+  Contract extends BackendStageContract<infer Req, unknown> ? Req : never
+type StageResponse<Contract> =
+  Contract extends BackendStageContract<unknown, infer Res> ? Res : never
+type BackendImplementations<Stages> = {
+  [Stage in StageName<Stages>]: ToolBackend<
+    StageRequest<Stages[Stage]>,
+    StageResponse<Stages[Stage]>,
+    Stage
+  >
+}
 
 /** A backend that runs one compile stage. `Req`/`Res` are the stage's payloads. */
-export interface ToolBackend<Req, Res> {
+export interface ToolBackend<Req, Res, Stage extends string = string> {
   readonly id: string
-  /** Compile stage and implementation version used to namespace shared cache entries. */
-  readonly stage?: string
+  /** Compile stage. Required both for runtime registration validation and cache identity. */
+  readonly stage: Stage
+  /** Implementation version used to namespace shared cache entries. */
   readonly version?: string
   /** Where this backend runs. Drives telemetry and the privacy default — a `server`
    *  backend only ever sees what the integrator routes to it. */
@@ -31,32 +70,45 @@ export interface ToolBackend<Req, Res> {
  * the default (or null if neither exists), so the default path is 100% client unless a
  * stage is explicitly re-routed.
  */
-export class BackendRegistry {
-  private readonly overrides = new Map<string, ToolBackend<unknown, unknown>>()
+export class BackendRegistry<Stages extends StageMapConstraint<Stages> = WasmTexBackendStages> {
+  private readonly overrides: Partial<BackendImplementations<Stages>> = {}
 
-  constructor(
-    private readonly defaults: Readonly<Record<string, ToolBackend<unknown, unknown>>> = {},
-  ) {}
+  constructor(private readonly defaults?: Readonly<Partial<BackendImplementations<Stages>>>) {}
 
-  register<Req, Res>(stage: string, backend: ToolBackend<Req, Res>): void {
-    this.overrides.set(stage, backend as ToolBackend<unknown, unknown>)
+  register<Stage extends StageName<Stages>>(
+    stage: Stage,
+    backend: BackendImplementations<Stages>[Stage],
+  ): void {
+    if (backend.stage !== stage) {
+      throw new Error(
+        `backend "${backend.id}" declares stage "${backend.stage}" but was registered for "${stage}"`,
+      )
+    }
+    this.overrides[stage] = backend
   }
 
-  resolve<Req, Res>(stage: string): ToolBackend<Req, Res> | null {
-    const backend = this.overrides.get(stage) ?? this.defaults[stage] ?? null
-    return backend as ToolBackend<Req, Res> | null
+  resolve<Stage extends StageName<Stages>>(
+    stage: Stage,
+  ): BackendImplementations<Stages>[Stage] | null {
+    const backend = this.overrides[stage] ?? this.defaults?.[stage] ?? null
+    if (backend && backend.stage !== stage) {
+      throw new Error(
+        `backend "${backend.id}" declares stage "${backend.stage}" but was resolved for "${stage}"`,
+      )
+    }
+    return backend
   }
 
   /** True if the resolved backend for `stage` runs off-device (a server backend). */
-  isRemote(stage: string): boolean {
+  isRemote<Stage extends StageName<Stages>>(stage: Stage): boolean {
     return this.resolve(stage)?.location === 'server'
   }
 }
 
-export interface RemoteBackendOptions<Req, Res> {
+export interface RemoteBackendOptions<Req, Res, Stage extends string = string> {
   id: string
   /** Stage name, sent as a header so one endpoint can serve many stages. */
-  stage: string
+  stage: Stage
   /** Backend implementation version. Include it when different deployed versions can emit
    *  different artifacts for the same request. */
   version?: string
@@ -76,9 +128,9 @@ export interface RemoteBackendOptions<Req, Res> {
  * endpoint and returns the artifact. The endpoint runs the same deterministic engine,
  * so its output is identical to the client path (verified by S4 #111).
  */
-export function createRemoteBackend<Req, Res>(
-  opts: RemoteBackendOptions<Req, Res>,
-): ToolBackend<Req, Res> {
+export function createRemoteBackend<Req, Res, const Stage extends string = string>(
+  opts: RemoteBackendOptions<Req, Res, Stage>,
+): ToolBackend<Req, Res, Stage> {
   return {
     id: opts.id,
     stage: opts.stage,
@@ -105,9 +157,9 @@ export function createRemoteBackend<Req, Res>(
 /** Options for {@link createJsonTextBackend} — a remote backend whose request is JSON
  *  and whose response is text. `fetchImpl`/`cacheKey` accept `undefined` so callers can
  *  forward optional fields without the `exactOptionalPropertyTypes` spread dance. */
-export interface JsonTextBackendOptions<Req> {
+export interface JsonTextBackendOptions<Req, Stage extends string = string> {
   id: string
-  stage: string
+  stage: Stage
   version?: string | undefined
   endpoint: string
   fetchImpl?: typeof fetch | undefined
@@ -120,10 +172,10 @@ export interface JsonTextBackendOptions<Req> {
  * …) shares. Thin wrapper over {@link createRemoteBackend} that fills in the JSON
  * encode / text decode and forwards the optional `fetchImpl`/`cacheKey`.
  */
-export function createJsonTextBackend<Req>(
-  opts: JsonTextBackendOptions<Req>,
-): ToolBackend<Req, string> {
-  return createRemoteBackend<Req, string>({
+export function createJsonTextBackend<Req, const Stage extends string = string>(
+  opts: JsonTextBackendOptions<Req, Stage>,
+): ToolBackend<Req, string, Stage> {
+  return createRemoteBackend<Req, string, Stage>({
     id: opts.id,
     stage: opts.stage,
     ...(opts.version ? { version: opts.version } : {}),

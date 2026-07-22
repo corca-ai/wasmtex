@@ -52,7 +52,7 @@ describe('withCache (#112)', () => {
   function countingBackend(): { backend: ToolBackend<string, string>; runs: () => number } {
     const run = vi.fn(async (req: string) => `out:${req}`)
     return {
-      backend: { id: 'b', location: 'server', run },
+      backend: { id: 'b', stage: 'test', location: 'server', run },
       runs: () => run.mock.calls.length,
     }
   }
@@ -73,7 +73,10 @@ describe('withCache (#112)', () => {
 
   it('a store pre-populated on one host serves the other host instantly (shared cache)', async () => {
     const store = new MemoryCacheStore()
-    const serverKey = await backendCacheKey({ backendId: 'b' }, await contentKey('shared-input'))
+    const serverKey = await backendCacheKey(
+      { backendId: 'b', stage: 'test' },
+      await contentKey('shared-input'),
+    )
     store.set(serverKey, 'precomputed-by-server')
 
     const { backend, runs } = countingBackend()
@@ -99,13 +102,17 @@ describe('withCache (#112)', () => {
     const makeindex = withCache(
       {
         id: 'makeindex',
+        stage: 'index',
         location: 'server',
         run: async () => 'MAKEINDEX',
       },
       store,
     )
     const xindyRun = vi.fn(async () => 'XINDY')
-    const xindy = withCache({ id: 'xindy', location: 'server', run: xindyRun }, store)
+    const xindy = withCache(
+      { id: 'xindy', stage: 'index', location: 'server', run: xindyRun },
+      store,
+    )
 
     expect(await makeindex.run({ idx: 'same' })).toBe('MAKEINDEX')
     expect(await xindy.run({ idx: 'same' })).toBe('XINDY')

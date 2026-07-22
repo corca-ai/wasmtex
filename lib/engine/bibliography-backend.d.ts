@@ -1,11 +1,11 @@
 import { BibEntry } from '../lsp/types';
-import { BackendRegistry } from './backend-registry';
+import { BackendRegistry, BIBTEX_STAGE } from './backend-registry';
 export type BibliographyMode = 'biblatex' | 'bibtex' | 'none';
 /** Detect which bibliography toolchain a LaTeX source needs. */
 export declare function detectBibliographyMode(source: string): BibliographyMode;
-/** The per-stage backend name the compiler resolves the bibliography pass through.
- *  Matches the stage used by the server biber backend (`biber-backend.ts`). */
-export declare const BIBLIOGRAPHY_STAGE = "bibliography";
+/** @deprecated Use {@link BIBTEX_STAGE}. Biber has its own `BIBER_STAGE` contract. */
+export declare const BIBLIOGRAPHY_STAGE = "bibliography:bibtex";
+export { BIBTEX_STAGE };
 /** What {@link WasmTexCompiler} sends to a **server** bibliography backend for the
  *  classic BibTeX flow: the `.aux` emitted by the first LaTeX pass plus the project's
  *  `.bib` databases. The backend runs BibTeX off-device and returns the `.bbl`. (Biber's
@@ -31,7 +31,7 @@ export declare function resolveBstFile(auxContent: string, read: (path: string) 
 } | null;
 /**
  * Route the bibliography stage through the backend registry: if the integrator registered
- * a **server** backend for {@link BIBLIOGRAPHY_STAGE}, run it and return the `.bbl`;
+ * a **server** backend for {@link BIBTEX_STAGE}, run it and return the `.bbl`;
  * otherwise return `null` so the caller falls back to the built-in client BibTeX engine.
  *
  * This is what keeps the client-first default non-negotiable — a remote backend runs only

@@ -6,12 +6,17 @@
  * {@link createMakeindexBackend}, or xindy (#117, `xindy-backend.ts`) for multilingual /
  * complex indexing. Mirrors the bibliography stage in `bibliography-backend.ts`.
  */
-import { type BackendRegistry, createJsonTextBackend, type ToolBackend } from './backend-registry'
+import {
+  type BackendRegistry,
+  createJsonTextBackend,
+  INDEX_STAGE,
+  type ToolBackend,
+} from './backend-registry'
 import { stripTexComments } from './tex-comments'
 
 /** The per-stage backend name the compiler resolves the index pass through. Shared with
  *  the server xindy backend (`xindy-backend.ts`, which uses the literal `'index'`). */
-export const INDEX_STAGE = 'index'
+export { INDEX_STAGE }
 
 /** What {@link WasmTexCompiler} sends to a **server** index backend: the `.idx` emitted
  *  by the LaTeX pass. The backend runs makeindex/xindy off-device and returns the `.ind`. */
@@ -43,7 +48,7 @@ export async function runRemoteIndex(
   registry: BackendRegistry | undefined,
   request: IndexStageRequest,
 ): Promise<string | null> {
-  const backend = registry?.resolve<IndexStageRequest, string>(INDEX_STAGE)
+  const backend = registry?.resolve(INDEX_STAGE)
   if (!backend || backend.location !== 'server') return null
   return backend.run(request)
 }
@@ -65,8 +70,8 @@ export interface MakeindexBackendOptions {
  */
 export function createMakeindexBackend(
   opts: MakeindexBackendOptions,
-): ToolBackend<IndexStageRequest, string> {
-  return createJsonTextBackend<IndexStageRequest>({
+): ToolBackend<IndexStageRequest, string, typeof INDEX_STAGE> {
+  return createJsonTextBackend<IndexStageRequest, typeof INDEX_STAGE>({
     id: 'makeindex',
     stage: INDEX_STAGE,
     version: opts.version,

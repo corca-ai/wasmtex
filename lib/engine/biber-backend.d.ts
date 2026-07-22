@@ -1,4 +1,4 @@
-import { BackendRegistry, ToolBackend } from './backend-registry';
+import { BackendRegistry, BIBER_STAGE, ToolBackend } from './backend-registry';
 /**
  * Biber as a server-first pluggable backend (M4 / #116, execution-model principle 3).
  *
@@ -23,17 +23,19 @@ export interface BiberRequest {
 export interface BiberBackendOptions {
     /** Integrator endpoint that runs Biber and returns the `.bbl`. */
     endpoint: string;
+    /** Deployed Biber version, used to isolate shared cache entries. */
+    version?: string;
     /** Injectable for tests / non-global-fetch hosts. */
     fetchImpl?: typeof fetch;
     /** Content-address key (e.g. a hash of the `.bcf` + `.bib`s) so a shared cache can
      *  dedupe identical Biber runs (S5 #112). */
     cacheKey?: (request: BiberRequest) => string;
 }
-/** Build a server Biber backend for the `bibliography` stage. */
-export declare function createBiberBackend(opts: BiberBackendOptions): ToolBackend<BiberRequest, string>;
+/** Build a server Biber backend for the `.bcf`-typed {@link BIBER_STAGE}. */
+export declare function createBiberBackend(opts: BiberBackendOptions): ToolBackend<BiberRequest, string, typeof BIBER_STAGE>;
 /**
  * Route a biblatex document's bibliography stage through a **server** Biber backend: if the
- * integrator registered one for {@link BIBLIOGRAPHY_STAGE}, run it on the `.bcf`-based
+ * integrator registered one for {@link BIBER_STAGE}, run it on the `.bcf`-based
  * {@link BiberRequest} and return the `.bbl`; otherwise return `null` so the caller falls
  * back to the bundled biblatex-lite. Keeps the client-first default non-negotiable — a remote
  * Biber runs only when the integrator explicitly wired one. The `.bcf` sibling of
@@ -41,3 +43,4 @@ export declare function createBiberBackend(opts: BiberBackendOptions): ToolBacke
  * without a WASM engine.
  */
 export declare function runRemoteBiber(registry: BackendRegistry | undefined, request: BiberRequest): Promise<string | null>;
+export { BIBER_STAGE };

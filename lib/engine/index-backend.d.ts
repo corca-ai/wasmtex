@@ -1,7 +1,7 @@
-import { BackendRegistry, ToolBackend } from './backend-registry';
+import { BackendRegistry, INDEX_STAGE, ToolBackend } from './backend-registry';
 /** The per-stage backend name the compiler resolves the index pass through. Shared with
  *  the server xindy backend (`xindy-backend.ts`, which uses the literal `'index'`). */
-export declare const INDEX_STAGE = "index";
+export { INDEX_STAGE };
 /** What {@link WasmTexCompiler} sends to a **server** index backend: the `.idx` emitted
  *  by the LaTeX pass. The backend runs makeindex/xindy off-device and returns the `.ind`. */
 export interface IndexStageRequest {
@@ -27,6 +27,8 @@ export declare function runRemoteIndex(registry: BackendRegistry | undefined, re
 export interface MakeindexBackendOptions {
     /** Integrator endpoint that runs makeindex and returns the `.ind`. */
     endpoint: string;
+    /** Deployed makeindex version, used to isolate shared cache entries. */
+    version?: string;
     fetchImpl?: typeof fetch;
     /** Content-address key for caching (S5 #112). */
     cacheKey?: (request: IndexStageRequest) => string;
@@ -36,4 +38,4 @@ export interface MakeindexBackendOptions {
  * default (bundled WASM) needs no backend; register this only to offload the index pass to
  * an endpoint running the same makeindex — mirrors {@link createXindyBackend}.
  */
-export declare function createMakeindexBackend(opts: MakeindexBackendOptions): ToolBackend<IndexStageRequest, string>;
+export declare function createMakeindexBackend(opts: MakeindexBackendOptions): ToolBackend<IndexStageRequest, string, typeof INDEX_STAGE>;

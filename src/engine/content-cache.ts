@@ -106,11 +106,11 @@ export function backendCacheKey(
  * returns instantly and never runs the backend — so a stage compiled once on any host is
  * free everywhere without reusing an artifact from another tool or version.
  */
-export function withCache<Req, Res extends string>(
-  backend: ToolBackend<Req, Res>,
+export function withCache<Req, Res extends string, Stage extends string>(
+  backend: ToolBackend<Req, Res, Stage>,
   store: CacheStore,
   keyOfOrOptions: ((request: Req) => Promise<string> | string) | WithCacheOptions<Req> = {},
-): ToolBackend<Req, Res> {
+): ToolBackend<Req, Res, Stage> {
   const options: WithCacheOptions<Req> =
     typeof keyOfOrOptions === 'function' ? { keyOf: keyOfOrOptions } : keyOfOrOptions
   const keyOf = options.keyOf ?? contentKey
@@ -122,7 +122,7 @@ export function withCache<Req, Res extends string>(
   }
   return {
     id: `${backend.id}+cache`,
-    ...(identity.stage ? { stage: identity.stage } : {}),
+    stage: backend.stage,
     ...(identity.backendVersion ? { version: identity.backendVersion } : {}),
     location: backend.location,
     async run(request: Req): Promise<Res> {

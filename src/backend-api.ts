@@ -1,11 +1,16 @@
 /** Headless-safe public exports for pluggable compile-stage backends. */
 export {
   BackendRegistry,
+  type BackendStageContract,
+  BIBER_STAGE,
+  BIBTEX_STAGE,
   createJsonTextBackend,
   createRemoteBackend,
+  INDEX_STAGE,
   type JsonTextBackendOptions,
   type RemoteBackendOptions,
   type ToolBackend,
+  type WasmTexBackendStages,
 } from './engine/backend-registry'
 export {
   type BiberBackendOptions,
@@ -40,7 +45,6 @@ export {
 export {
   createMakeindexBackend,
   detectIndexUse,
-  INDEX_STAGE,
   type IndexStageRequest,
   type MakeindexBackendOptions,
   runRemoteIndex,

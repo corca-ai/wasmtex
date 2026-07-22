@@ -1,4 +1,4 @@
-import { ToolBackend } from './backend-registry';
+import { INDEX_STAGE, ToolBackend } from './backend-registry';
 /**
  * xindy as a server-first pluggable backend (M5 / #117, execution-model principle 3).
  *
@@ -24,9 +24,11 @@ export interface XindyRequest {
 export interface XindyBackendOptions {
     /** Integrator endpoint that runs xindy and returns the `.ind`. */
     endpoint: string;
+    /** Deployed xindy version, used to isolate shared cache entries. */
+    version?: string;
     fetchImpl?: typeof fetch;
     /** Content-address key for caching (S5 #112). */
     cacheKey?: (request: XindyRequest) => string;
 }
 /** Build a server xindy backend for the `index` stage (`.idx` → `.ind`). */
-export declare function createXindyBackend(opts: XindyBackendOptions): ToolBackend<XindyRequest, string>;
+export declare function createXindyBackend(opts: XindyBackendOptions): ToolBackend<XindyRequest, string, typeof INDEX_STAGE>;

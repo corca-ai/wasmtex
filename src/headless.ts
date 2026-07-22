@@ -36,10 +36,12 @@ import { ProjectIndex } from './lsp/project-index'
 import { parseTraceFile } from './lsp/trace-parser'
 import type { CompileResult, TexliveVersion, WarmupCache } from './types'
 
+export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api'
 // Per-stage backend toolkit (execution-model principle 3), re-exported so a headless
 // (server/CI) integrator can wire a server backend for the `backends` option without
 // also pulling in the browser-component entry.
 export * from './backend-api'
+export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api'
 
 export interface WasmTexCompilerOptions {
   /** TeX Live version to use. Defaults to '2025'. */

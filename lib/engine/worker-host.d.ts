@@ -23,8 +23,9 @@ export interface EngineWorker {
 }
 /** Creates an {@link EngineWorker} that loads the engine glue at `enginePath`. */
 export type WorkerFactory = (enginePath: string) => EngineWorker;
-/** Install a host-specific worker factory (e.g. Node `worker_threads`). Call once at
- *  startup, before constructing any engine. */
-export declare function setWorkerFactory(next: WorkerFactory): void;
+/** Install a host-specific worker factory (e.g. Node `worker_threads`). Call before
+ *  constructing an engine. Returns an idempotent cleanup that restores the previous
+ *  factory, unless another host has replaced this one in the meantime. */
+export declare function setWorkerFactory(next: WorkerFactory): () => void;
 /** Create an engine worker via the installed factory (browser Web Worker by default). */
 export declare function createEngineWorker(enginePath: string): EngineWorker;

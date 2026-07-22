@@ -137,20 +137,19 @@ if (result.pdf) {
 By default every compile stage runs **client-side** (WASM/TS), so nothing leaves the
 device. To offload a stage to a server that runs the same deterministic engine, pass a
 `backends` registry to `WasmTexCompiler`. Stages left unregistered keep the client
-default. Today the headless compiler routes the **bibliography** stage through the
-registry; register a *server* backend there and the client BibTeX (WASM) engine is
-skipped in favor of the server's `.bbl`.
+default. The `.aux`-based `BIBTEX_STAGE` and `.bcf`-based `BIBER_STAGE` are distinct
+contracts, so one processor can never receive the other's request.
 
 ```typescript
-import { WasmTexCompiler, BackendRegistry, createBiberBackend } from 'wasmtex/headless'
+import { WasmTexCompiler, BackendRegistry, BIBER_STAGE, createBiberBackend } from 'wasmtex/headless'
 
 const backends = new BackendRegistry()
-// Offload biblatex's Biber to an endpoint that runs the same Biber (stage = 'bibliography').
-backends.register('bibliography', createBiberBackend({ endpoint: '/api/biber' }))
+// BIBER_STAGE accepts only the .bcf-based BiberRequest contract.
+backends.register(BIBER_STAGE, createBiberBackend({ endpoint: '/api/biber' }))
 
 const compiler = new WasmTexCompiler({ files, backends })
 await compiler.init()
-const result = await compiler.compile() // BibTeX runs remotely; rest stays client-side.
+const result = await compiler.compile() // Biber runs remotely; rest stays client-side.
 ```
 
 `createBiberBackend` (biblatex `.bcf` → `.bbl`), `createMakeindexBackend` and

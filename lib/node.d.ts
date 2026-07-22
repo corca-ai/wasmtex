@@ -7,6 +7,6 @@
  *   const c = new WasmTexCompiler({ engine: 'pdflatex', assetBaseUrl, texliveUrl, files })
  *   await c.init(); const { pdf } = await c.compile()
  */
-export { installNodeWorkerHost, type NodeWorkerHostOptions } from './engine/node-host';
+export { installNodeWorkerHost, type NodeWorkerHostInstallation, type NodeWorkerHostOptions, } from './engine/node-host';
 export { WasmTexCompiler, type WasmTexCompilerOptions } from './headless';
 export type { CompileResult } from './types';

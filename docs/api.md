@@ -118,9 +118,9 @@ See [Persistent cache](engine.md#persistent-cache).
 
 `biblatexLiteBackend`, `selectBiblatexBackend`, `generateBiblatexBbl`,
 `detectBibliographyMode`, `detectBiblatexBackend`, `runRemoteBibliography`, the
-`BIBLIOGRAPHY_STAGE` constant, and the types `BibliographyBackend`,
+`BIBTEX_STAGE` / `BIBER_STAGE` constants, and the types `BibliographyBackend`,
 `BibliographyMode`, `BblInput`, `BibliographyStageRequest`. These let a host
-generate a biblatex `.bbl` or route the bibliography stage to a server backend.
+generate a biblatex `.bbl` or route either typed bibliography stage to a server backend.
 Full guide: **[Bibliography backends](bibliography.md)**.
 
 ### Per-stage backends
@@ -130,11 +130,11 @@ from `wasmtex/headless`:
 
 | Export | Purpose |
 |--------|---------|
-| `BackendRegistry` | Per-stage registry. `register(stage, backend)` overrides a stage; unregistered stages keep the client default. |
-| `ToolBackend` | A stage backend (`id`, `location: 'client' \| 'server'`, `run(request)`). |
+| `BackendRegistry` | Typed per-stage registry. `register(stage, backend)` checks the stage's request/response contract; unregistered stages keep the client default. |
+| `ToolBackend` | A stage backend (`id`, required `stage`, `location: 'client' \| 'server'`, `run(request)`). |
 | `createRemoteBackend` / `RemoteBackendOptions` | Build a **server** backend that POSTs a stage request to an integrator endpoint running the same engine. |
 | `createJsonTextBackend` | `createRemoteBackend` specialized to a JSON request / text response (the shape every text-artifact stage shares). |
-| `createBiberBackend` / `BiberRequest` / `BiberBackendOptions` | Server Biber backend for the `bibliography` stage. |
+| `createBiberBackend` / `BiberRequest` / `BiberBackendOptions` | Server Biber backend for the `.bcf`-typed `BIBER_STAGE`. |
 | `createMakeindexBackend` / `IndexStageRequest` / `MakeindexBackendOptions` | Server makeindex backend for the `index` stage (`.idx` → `.ind`). The client default needs no backend. |
 | `createXindyBackend` / `XindyRequest` / `XindyBackendOptions` | Server xindy backend for the `index` stage (multilingual / complex indexing). |
 | `detectIndexUse` / `runRemoteIndex` / `INDEX_STAGE` | Index-stage detection + registry routing (mirrors the bibliography seam). |
@@ -200,19 +200,19 @@ const result = await compiler.compile()
 `backends` lets a headless/server integrator move a compile stage off the
 device. Construct a [`BackendRegistry`](#per-stage-backends) and register a
 **server** backend for a stage — the default for every unregistered stage stays
-client/local. The compiler currently resolves the `bibliography` stage
-(`BIBLIOGRAPHY_STAGE`) through it; a server backend receives a
-`BibliographyStageRequest` (`{ aux, bibFiles }`) and returns the `.bbl`.
+client/local. Classic BibTeX uses `BIBTEX_STAGE` with `BibliographyStageRequest`
+(`{ aux, bibFiles }`); Biber uses `BIBER_STAGE` with `BiberRequest`
+(`{ bcf, bibFiles }`). These contracts cannot be registered in each other's slots.
 
 ```ts
-import { WasmTexCompiler, BackendRegistry, createBiberBackend } from 'wasmtex/headless'
+import { WasmTexCompiler, BackendRegistry, BIBER_STAGE, createBiberBackend } from 'wasmtex/headless'
 
 const backends = new BackendRegistry()
-backends.register('bibliography', createBiberBackend({ endpoint: 'https://my-host/biber' }))
+backends.register(BIBER_STAGE, createBiberBackend({ endpoint: 'https://my-host/biber' }))
 
 const compiler = new WasmTexCompiler({ files, backends })
 await compiler.init()
-await compiler.compile() // bibliography runs on your endpoint; client BibTeX is skipped
+await compiler.compile() // Biber runs on your endpoint; client biblatex-lite is skipped
 ```
 
 `createBiberBackend` (biblatex/Biber → `.bbl`), `createMakeindexBackend` and

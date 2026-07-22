@@ -2,12 +2,9 @@ import { BackendRegistry } from './engine/backend-registry';
 import { EngineOption } from './engine/engine-select';
 import { ProjectIndex } from './lsp/project-index';
 import { CompileResult, TexliveVersion, WarmupCache } from './types';
-export { BackendRegistry, createJsonTextBackend, createRemoteBackend, type JsonTextBackendOptions, type RemoteBackendOptions, type ToolBackend, } from './engine/backend-registry';
-export { type BiberBackendOptions, type BiberRequest, createBiberBackend, runRemoteBiber, } from './engine/biber-backend';
-export { type BblInput, BIBLIOGRAPHY_STAGE, type BibliographyBackend, type BibliographyMode, type BibliographyStageRequest, biblatexLiteBackend, detectBiblatexBackend, detectBiblatexSort, detectBibliographyMode, generateBiblatexBbl, parseBcfCitedKeys, runRemoteBibliography, selectBiblatexBackend, } from './engine/bibliography-backend';
-export { type CacheStore, contentKey, MemoryCacheStore, withCache } from './engine/content-cache';
-export { createMakeindexBackend, detectIndexUse, INDEX_STAGE, type IndexStageRequest, type MakeindexBackendOptions, runRemoteIndex, } from './engine/index-backend';
-export { createXindyBackend, type XindyBackendOptions, type XindyRequest, } from './engine/xindy-backend';
+export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api';
+export * from './backend-api';
+export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
 export interface WasmTexCompilerOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;

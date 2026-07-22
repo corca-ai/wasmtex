@@ -1,29 +1,45 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BackendRegistry, createRemoteBackend, type ToolBackend } from './backend-registry'
+import {
+  BackendRegistry,
+  type BackendStageContract,
+  createRemoteBackend,
+  type ToolBackend,
+} from './backend-registry'
 
-function clientBackend(id: string): ToolBackend<string, string> {
-  return { id, location: 'client', run: async (req) => `${id}:${req}` }
+interface TestStages {
+  bibliography: BackendStageContract<string, string>
+  index: BackendStageContract<string, string>
+}
+
+function clientBackend<Stage extends keyof TestStages>(
+  stage: Stage,
+  id: string,
+): ToolBackend<string, string, Stage> {
+  return { id, stage, location: 'client', run: async (req) => `${id}:${req}` }
 }
 
 describe('BackendRegistry (#110)', () => {
   it('resolves the default (client) backend when no override is registered', () => {
-    const reg = new BackendRegistry({ bibliography: clientBackend('biblatex-lite') })
+    const reg = new BackendRegistry<TestStages>({
+      bibliography: clientBackend('bibliography', 'biblatex-lite'),
+    })
     expect(reg.resolve('bibliography')?.id).toBe('biblatex-lite')
     expect(reg.isRemote('bibliography')).toBe(false)
   })
 
   it('returns null for an unknown stage with no default', () => {
-    const reg = new BackendRegistry({})
+    const reg = new BackendRegistry<TestStages>()
     expect(reg.resolve('index')).toBeNull()
   })
 
   it('an override replaces the default for that stage only', () => {
-    const reg = new BackendRegistry({
-      bibliography: clientBackend('biblatex-lite'),
-      index: clientBackend('makeindex'),
+    const reg = new BackendRegistry<TestStages>({
+      bibliography: clientBackend('bibliography', 'biblatex-lite'),
+      index: clientBackend('index', 'makeindex'),
     })
-    const remote: ToolBackend<string, string> = {
+    const remote: ToolBackend<string, string, 'bibliography'> = {
       id: 'biber-remote',
+      stage: 'bibliography',
       location: 'server',
       run: async () => 'bbl',
     }
@@ -33,6 +49,26 @@ describe('BackendRegistry (#110)', () => {
     // other stages keep their client default
     expect(reg.resolve('index')?.id).toBe('makeindex')
     expect(reg.isRemote('index')).toBe(false)
+  })
+
+  it('rejects a backend whose runtime stage metadata does not match its slot', () => {
+    const reg = new BackendRegistry<TestStages>()
+    const backend = clientBackend('bibliography', 'wrong-stage')
+    Object.defineProperty(backend, 'stage', { value: 'index' })
+
+    expect(() => reg.register('bibliography', backend)).toThrow(
+      /declares stage "index" but was registered for "bibliography"/,
+    )
+  })
+
+  it('rejects mismatched default metadata when an untyped caller resolves it', () => {
+    const backend = clientBackend('bibliography', 'wrong-default')
+    const reg = new BackendRegistry<TestStages>({ bibliography: backend })
+    Object.defineProperty(backend, 'stage', { value: 'index' })
+
+    expect(() => reg.resolve('bibliography')).toThrow(
+      /declares stage "index" but was resolved for "bibliography"/,
+    )
   })
 })
 
@@ -50,6 +86,7 @@ describe('createRemoteBackend (#110)', () => {
     })
 
     expect(backend.location).toBe('server')
+    expect(backend.stage).toBe('bibliography')
     const out = await backend.run({ key: 'hash123', bib: '@article{a}' })
     expect(out).toBe('THE-BBL')
 

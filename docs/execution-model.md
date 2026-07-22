@@ -130,18 +130,19 @@ The mechanism is **pluggable per-stage backends**, generalizing the existing
 - Privacy is preserved by construction: a remote backend only sees what the integrator
   routes to it, and only when they wire one up.
 
-**Wired today.** `WasmTexCompiler` takes an optional `backends?: BackendRegistry`. The
-**bibliography** stage (classic BibTeX, stage name `BIBLIOGRAPHY_STAGE = 'bibliography'`)
-resolves through it: register a server backend for that stage (request `{ aux, bibFiles }`
-→ `.bbl`, see `BibliographyStageRequest`) and the compiler offloads that pass and skips the
-client BibTeX engine entirely; leave it unregistered and the bundled client BibTeX runs
-exactly as before. The backend toolkit (`BackendRegistry`, `createRemoteBackend`,
-`createJsonTextBackend`, `BIBLIOGRAPHY_STAGE`, `withCache`, `MemoryCacheStore`, `contentKey`)
+**Wired today.** `WasmTexCompiler` takes an optional `backends?: BackendRegistry`. Classic
+BibTeX resolves `BIBTEX_STAGE` (`'bibliography:bibtex'`, request `{ aux, bibFiles }`), while
+Biber resolves `BIBER_STAGE` (`'bibliography:biber'`, request `{ bcf, bibFiles }`). These are
+separate typed slots, so registering a Biber backend for the BibTeX flow is both a TypeScript
+error and a runtime registration error. Leave them unregistered and the bundled client
+BibTeX/biblatex-lite paths run exactly as before. The backend toolkit (`BackendRegistry`,
+`createRemoteBackend`, `createJsonTextBackend`, `BIBTEX_STAGE`, `BIBER_STAGE`, `withCache`,
+`MemoryCacheStore`, `contentKey`)
 is re-exported from `wasmtex/headless`:
 
 ```ts
 import {
-  WasmTexCompiler, BackendRegistry, createJsonTextBackend, BIBLIOGRAPHY_STAGE,
+  WasmTexCompiler, BackendRegistry, createJsonTextBackend, BIBTEX_STAGE,
   withCache, MemoryCacheStore, type BibliographyStageRequest,
 } from 'wasmtex/headless'
 
@@ -150,9 +151,9 @@ const registry = new BackendRegistry()
 // Offload the classic-BibTeX bibliography pass ({ aux, bibFiles } → .bbl) to an endpoint
 // running the same engine, and cache the result. The endpoint receives the request as
 // JSON tagged with the `x-wasmtex-stage` header and returns the `.bbl` as text.
-registry.register(BIBLIOGRAPHY_STAGE, withCache(
-  createJsonTextBackend<BibliographyStageRequest>({
-    id: 'bibtex-remote', stage: BIBLIOGRAPHY_STAGE,
+registry.register(BIBTEX_STAGE, withCache(
+  createJsonTextBackend<BibliographyStageRequest, typeof BIBTEX_STAGE>({
+    id: 'bibtex-remote', stage: BIBTEX_STAGE,
     endpoint: 'https://my-host/latex/bibliography',
   }),
   cache,

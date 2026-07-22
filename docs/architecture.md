@@ -79,19 +79,20 @@ stage is **client/local** (WASM/TS), so nothing leaves the device. Pass a regist
 `backends` option on `WasmTexCompilerOptions` to re-route a stage to a **server** backend:
 
 ```ts
-import { WasmTexCompiler, BackendRegistry, createBiberBackend, BIBLIOGRAPHY_STAGE } from 'wasmtex/headless'
+import { WasmTexCompiler, BackendRegistry, createBiberBackend, BIBER_STAGE } from 'wasmtex/headless'
 
 const backends = new BackendRegistry()
-backends.register(BIBLIOGRAPHY_STAGE, createBiberBackend({ endpoint: '/api/biber' }))
+backends.register(BIBER_STAGE, createBiberBackend({ endpoint: '/api/biber' }))
 const compiler = new WasmTexCompiler({ engine: 'pdflatex', files, backends })
 ```
 
-When a *server* backend is registered for `BIBLIOGRAPHY_STAGE`, `runRemoteBibliography`
-offloads BibTeX (`{aux, bibFiles}` → `.bbl`) and the client BibTeX WASM engine is skipped;
-with no registry the client BibTeX path is unchanged. `createBiberBackend` and
-`createXindyBackend` are server-first backends for full biblatex/Biber and xindy (the
-compiler auto-routes only the `bibliography` stage so far; the `index` stage backend is
-exposed but not yet invoked). Wrap any backend with `withCache`
+Bibliography has two typed slots: `BIBTEX_STAGE` receives `{ aux, bibFiles }`, while
+`BIBER_STAGE` receives `{ bcf, bibFiles }`. The registry rejects a backend whose declared
+stage does not match its slot, preventing a Biber endpoint from receiving a classic BibTeX
+request. With no registry the client BibTeX/biblatex-lite paths are unchanged.
+`createBiberBackend` and `createXindyBackend` are server-first backends for full
+biblatex/Biber and xindy; the compiler auto-routes both bibliography slots and the `index`
+slot. Wrap any backend with `withCache`
 (`src/engine/content-cache.ts`) to dedupe identical work. See
 [Execution Model](execution-model.md) and [Bibliography Backends](bibliography.md).
 

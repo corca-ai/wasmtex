@@ -1,6 +1,9 @@
-import type { BackendRegistry } from './backend-registry'
-import { createJsonTextBackend, type ToolBackend } from './backend-registry'
-import { BIBLIOGRAPHY_STAGE } from './bibliography-backend'
+import {
+  type BackendRegistry,
+  BIBER_STAGE,
+  createJsonTextBackend,
+  type ToolBackend,
+} from './backend-registry'
 
 /**
  * Biber as a server-first pluggable backend (M4 / #116, execution-model principle 3).
@@ -36,11 +39,13 @@ export interface BiberBackendOptions {
   cacheKey?: (request: BiberRequest) => string
 }
 
-/** Build a server Biber backend for the `bibliography` stage. */
-export function createBiberBackend(opts: BiberBackendOptions): ToolBackend<BiberRequest, string> {
-  return createJsonTextBackend<BiberRequest>({
+/** Build a server Biber backend for the `.bcf`-typed {@link BIBER_STAGE}. */
+export function createBiberBackend(
+  opts: BiberBackendOptions,
+): ToolBackend<BiberRequest, string, typeof BIBER_STAGE> {
+  return createJsonTextBackend<BiberRequest, typeof BIBER_STAGE>({
     id: 'biber',
-    stage: BIBLIOGRAPHY_STAGE,
+    stage: BIBER_STAGE,
     version: opts.version,
     endpoint: opts.endpoint,
     fetchImpl: opts.fetchImpl,
@@ -50,7 +55,7 @@ export function createBiberBackend(opts: BiberBackendOptions): ToolBackend<Biber
 
 /**
  * Route a biblatex document's bibliography stage through a **server** Biber backend: if the
- * integrator registered one for {@link BIBLIOGRAPHY_STAGE}, run it on the `.bcf`-based
+ * integrator registered one for {@link BIBER_STAGE}, run it on the `.bcf`-based
  * {@link BiberRequest} and return the `.bbl`; otherwise return `null` so the caller falls
  * back to the bundled biblatex-lite. Keeps the client-first default non-negotiable — a remote
  * Biber runs only when the integrator explicitly wired one. The `.bcf` sibling of
@@ -61,7 +66,9 @@ export async function runRemoteBiber(
   registry: BackendRegistry | undefined,
   request: BiberRequest,
 ): Promise<string | null> {
-  const backend = registry?.resolve<BiberRequest, string>(BIBLIOGRAPHY_STAGE)
+  const backend = registry?.resolve(BIBER_STAGE)
   if (!backend || backend.location !== 'server') return null
   return backend.run(request)
 }
+
+export { BIBER_STAGE }

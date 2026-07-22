@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { VirtualFS } from '../fs/virtual-fs'
 import { parseBibFile } from '../lsp/bib-parser'
 import type { BibEntry } from '../lsp/types'
-import { BackendRegistry, type ToolBackend } from './backend-registry'
+import { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, type ToolBackend } from './backend-registry'
+import { type BiberRequest, runRemoteBiber } from './biber-backend'
 import {
-  BIBLIOGRAPHY_STAGE,
   type BibliographyBackend,
   type BibliographyStageRequest,
   biblatexLiteBackend,
@@ -330,15 +330,17 @@ describe('runRemoteBibliography', () => {
     aux: '\\citation{x}\\bibdata{refs}',
     bibFiles: { 'refs.bib': '@book{x, title={T}}' },
   }
-  const clientBackend = (): ToolBackend<BibliographyStageRequest, string> => ({
+  const clientBackend = (): ToolBackend<BibliographyStageRequest, string, typeof BIBTEX_STAGE> => ({
     id: 'client-bibtex',
+    stage: BIBTEX_STAGE,
     location: 'client',
     run: async () => 'CLIENT',
   })
   const serverBackend = (
     run: () => Promise<string>,
-  ): ToolBackend<BibliographyStageRequest, string> => ({
+  ): ToolBackend<BibliographyStageRequest, string, typeof BIBTEX_STAGE> => ({
     id: 'remote-bibtex',
+    stage: BIBTEX_STAGE,
     location: 'server',
     run,
   })
@@ -348,17 +350,41 @@ describe('runRemoteBibliography', () => {
   })
 
   it('returns null when the resolved backend runs on the client (no offload)', async () => {
-    const reg = new BackendRegistry({ [BIBLIOGRAPHY_STAGE]: clientBackend() })
+    const reg = new BackendRegistry({ [BIBTEX_STAGE]: clientBackend() })
     expect(await runRemoteBibliography(reg, req)).toBeNull()
   })
 
   it('runs a registered server backend and returns its .bbl', async () => {
     const reg = new BackendRegistry()
     reg.register(
-      BIBLIOGRAPHY_STAGE,
+      BIBTEX_STAGE,
       serverBackend(async () => 'REMOTE-BBL'),
     )
     expect(await runRemoteBibliography(reg, req)).toBe('REMOTE-BBL')
+  })
+
+  it('never dispatches a classic BibTeX request to a Biber backend', async () => {
+    let seen: BiberRequest | null = null
+    const biberBackend: ToolBackend<BiberRequest, string, typeof BIBER_STAGE> = {
+      id: 'biber',
+      stage: BIBER_STAGE,
+      location: 'server',
+      async run(request) {
+        seen = request
+        return 'BIBER-BBL'
+      },
+    }
+    const reg = new BackendRegistry()
+    reg.register(BIBER_STAGE, biberBackend)
+
+    expect(await runRemoteBibliography(reg, req)).toBeNull()
+    expect(seen).toBeNull()
+    expect(
+      await runRemoteBiber(reg, {
+        bcf: '<bcf:controlfile/>',
+        bibFiles: req.bibFiles,
+      }),
+    ).toBe('BIBER-BBL')
   })
 
   it('a content-cached server backend runs once for identical requests (compile once, instant everywhere)', async () => {
@@ -372,7 +398,7 @@ describe('runRemoteBibliography', () => {
       new MemoryCacheStore(),
       (r) => r.aux,
     )
-    reg.register(BIBLIOGRAPHY_STAGE, cached)
+    reg.register(BIBTEX_STAGE, cached)
     expect(await runRemoteBibliography(reg, req)).toBe('BBL')
     expect(await runRemoteBibliography(reg, req)).toBe('BBL')
     expect(calls).toBe(1)

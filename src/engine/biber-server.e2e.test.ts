@@ -3,9 +3,8 @@ import type { AddressInfo } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { BackendRegistry } from './backend-registry'
+import { BackendRegistry, BIBER_STAGE } from './backend-registry'
 import { type BiberRequest, createBiberBackend, runRemoteBiber } from './biber-backend'
-import { BIBLIOGRAPHY_STAGE } from './bibliography-backend'
 import { MemoryCacheStore, withCache } from './content-cache'
 
 /**
@@ -14,7 +13,7 @@ import { MemoryCacheStore, withCache } from './content-cache'
  *
  * 1. **Hermetic contract e2e (runs in CI).** A localhost HTTP endpoint mimics a Biber server;
  *    the consumer's exact wiring — `withCache(createBiberBackend({ endpoint }), store)` under
- *    `BIBLIOGRAPHY_STAGE` — drives it over a **real `fetch`** round-trip (not an injected
+ *    `BIBER_STAGE` — drives it over a **real `fetch`** round-trip (not an injected
  *    `fetchImpl`). Asserts the `{ bcf, bibFiles }` request shape + headers cross the wire and
  *    that two identical requests yield exactly **one** server invocation.
  * 2. **Opt-in real-engine e2e (skipped in CI).** Gated by `BIBER_E2E_ENDPOINT`, it drives the
@@ -83,17 +82,14 @@ describe('Biber server connection (hermetic localhost e2e)', () => {
     const bbl = await backend.run(req)
     expect(bbl).toContain('\\entry{knuth84}{book}{}{}')
     expect(hits).toHaveLength(1)
-    expect(hits[0]!.stage).toBe('bibliography')
+    expect(hits[0]!.stage).toBe(BIBER_STAGE)
     expect(hits[0]!.body).toEqual(req)
   })
 
   it('withCache dedupes identical { bcf, bibFiles } to a single server invocation', async () => {
     hits.length = 0
     const reg = new BackendRegistry()
-    reg.register(
-      BIBLIOGRAPHY_STAGE,
-      withCache(createBiberBackend({ endpoint }), new MemoryCacheStore()),
-    )
+    reg.register(BIBER_STAGE, withCache(createBiberBackend({ endpoint }), new MemoryCacheStore()))
     const req: BiberRequest = {
       bcf: '<bcf:citekey order="1">knuth84</bcf:citekey>',
       bibFiles: { 'refs.bib': '@book{knuth84, title={T}}' },
@@ -137,7 +133,7 @@ describe.runIf(REAL_ENDPOINT)('real Biber server e2e (opt-in, #175)', () => {
     installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
 
     const backends = new BackendRegistry()
-    backends.register(BIBLIOGRAPHY_STAGE, createBiberBackend({ endpoint: REAL_ENDPOINT! }))
+    backends.register(BIBER_STAGE, createBiberBackend({ endpoint: REAL_ENDPOINT! }))
 
     const compiler = new WasmTexCompiler({
       engine: 'pdflatex',

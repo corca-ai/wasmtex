@@ -22,12 +22,33 @@ export declare class MemoryCacheStore implements CacheStore {
     get(key: string): string | undefined;
     set(key: string, value: string): void;
 }
+/** Identity fields that separate artifacts produced by different tools, stages, versions,
+ * or non-request backend configuration in a shared store. */
+export interface BackendCacheIdentity {
+    backendId: string;
+    stage?: string | undefined;
+    backendVersion?: string | undefined;
+    backendOptions?: unknown;
+}
+/** Options for {@link withCache}. Passing a function directly remains supported as the
+ * legacy shorthand for `keyOf`. */
+export interface WithCacheOptions<Req> {
+    keyOf?: ((request: Req) => Promise<string> | string) | undefined;
+    stage?: string | undefined;
+    backendVersion?: string | undefined;
+    /** Configuration that affects output but is not already represented in `request`. */
+    backendOptions?: unknown;
+}
 /** Content-address key: a SHA-256 hex digest of the input (works in the browser and Node
  *  via WebCrypto). Use as the cache key and the `x-wasmtex-cache-key` header value. */
 export declare function contentKey(parts: unknown): Promise<string>;
+/** Build the final shared-store key. The schema marker intentionally invalidates the old
+ * request-only key space, whose entries cannot prove which backend produced them. */
+export declare function backendCacheKey(identity: BackendCacheIdentity, requestKey: unknown): Promise<string>;
 /**
  * Wrap a string-producing {@link ToolBackend} with content-addressed caching: a cache hit
- * (keyed by the request's {@link contentKey}, or a custom `keyOf`) returns instantly and
- * never runs the backend — so a stage compiled once on any host is free everywhere.
+ * (keyed by the backend identity plus the request's {@link contentKey}, or a custom `keyOf`)
+ * returns instantly and never runs the backend — so a stage compiled once on any host is
+ * free everywhere without reusing an artifact from another tool or version.
  */
-export declare function withCache<Req, Res extends string>(backend: ToolBackend<Req, Res>, store: CacheStore, keyOf?: (request: Req) => Promise<string> | string): ToolBackend<Req, Res>;
+export declare function withCache<Req, Res extends string, Stage extends string>(backend: ToolBackend<Req, Res, Stage>, store: CacheStore, keyOfOrOptions?: ((request: Req) => Promise<string> | string) | WithCacheOptions<Req>): ToolBackend<Req, Res, Stage>;

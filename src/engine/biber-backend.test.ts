@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BackendRegistry, type ToolBackend } from './backend-registry'
+import { BackendRegistry, BIBER_STAGE, type ToolBackend } from './backend-registry'
 import { type BiberRequest, createBiberBackend, runRemoteBiber } from './biber-backend'
-import { BIBLIOGRAPHY_STAGE } from './bibliography-backend'
 import { MemoryCacheStore, withCache } from './content-cache'
 
 describe('createBiberBackend (#116)', () => {
@@ -31,7 +30,7 @@ describe('createBiberBackend (#116)', () => {
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual(req)
     const headers = init.headers as Record<string, string>
-    expect(headers['x-wasmtex-stage']).toBe('bibliography')
+    expect(headers['x-wasmtex-stage']).toBe(BIBER_STAGE)
     expect(headers['x-wasmtex-cache-key']).toBe('k:1')
   })
 
@@ -50,13 +49,17 @@ describe('runRemoteBiber', () => {
     bcf: '<bcf:citekey order="1">knuth84</bcf:citekey>',
     bibFiles: { 'refs.bib': '@book{knuth84, title={Literate Programming}}' },
   }
-  const clientBackend = (): ToolBackend<BiberRequest, string> => ({
+  const clientBackend = (): ToolBackend<BiberRequest, string, typeof BIBER_STAGE> => ({
     id: 'client-biblatex-lite',
+    stage: BIBER_STAGE,
     location: 'client',
     run: async () => 'CLIENT',
   })
-  const serverBackend = (run: () => Promise<string>): ToolBackend<BiberRequest, string> => ({
+  const serverBackend = (
+    run: () => Promise<string>,
+  ): ToolBackend<BiberRequest, string, typeof BIBER_STAGE> => ({
     id: 'remote-biber',
+    stage: BIBER_STAGE,
     location: 'server',
     run,
   })
@@ -66,7 +69,7 @@ describe('runRemoteBiber', () => {
   })
 
   it('returns null when the resolved backend runs on the client (no offload)', async () => {
-    const reg = new BackendRegistry({ [BIBLIOGRAPHY_STAGE]: clientBackend() })
+    const reg = new BackendRegistry({ [BIBER_STAGE]: clientBackend() })
     expect(await runRemoteBiber(reg, req)).toBeNull()
   })
 
@@ -74,7 +77,7 @@ describe('runRemoteBiber', () => {
     let seen: BiberRequest | null = null
     const reg = new BackendRegistry()
     reg.register(
-      BIBLIOGRAPHY_STAGE,
+      BIBER_STAGE,
       serverBackend(async () => {
         seen = req
         return 'REMOTE-BBL'
@@ -88,7 +91,7 @@ describe('runRemoteBiber', () => {
     let calls = 0
     const reg = new BackendRegistry()
     reg.register(
-      BIBLIOGRAPHY_STAGE,
+      BIBER_STAGE,
       withCache(
         serverBackend(async () => {
           calls++

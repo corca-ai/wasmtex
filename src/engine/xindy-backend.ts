@@ -1,4 +1,4 @@
-import { createJsonTextBackend, type ToolBackend } from './backend-registry'
+import { createJsonTextBackend, INDEX_STAGE, type ToolBackend } from './backend-registry'
 
 /**
  * xindy as a server-first pluggable backend (M5 / #117, execution-model principle 3).
@@ -30,10 +30,12 @@ export interface XindyBackendOptions {
 }
 
 /** Build a server xindy backend for the `index` stage (`.idx` → `.ind`). */
-export function createXindyBackend(opts: XindyBackendOptions): ToolBackend<XindyRequest, string> {
-  return createJsonTextBackend<XindyRequest>({
+export function createXindyBackend(
+  opts: XindyBackendOptions,
+): ToolBackend<XindyRequest, string, typeof INDEX_STAGE> {
+  return createJsonTextBackend<XindyRequest, typeof INDEX_STAGE>({
     id: 'xindy',
-    stage: 'index',
+    stage: INDEX_STAGE,
     version: opts.version,
     endpoint: opts.endpoint,
     fetchImpl: opts.fetchImpl,

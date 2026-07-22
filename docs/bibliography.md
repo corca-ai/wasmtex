@@ -84,13 +84,13 @@ client default.
 Two distinct request shapes flow off-device, both file-level:
 
 - **Server BibTeX** — the classic `\bibliography` flow. The headless compiler
-  routes it through `runRemoteBibliography` under the `BIBLIOGRAPHY_STAGE`
-  (`'bibliography'`) stage. The server backend receives a
+  routes it through `runRemoteBibliography` under `BIBTEX_STAGE`
+  (`'bibliography:bibtex'`). The server backend receives a
   `BibliographyStageRequest` (`{ aux, bibFiles }` — the first pass's `.aux` plus
   the `.bib` databases) and returns the `.bbl`; the client BibTeX (WASM) engine
   is then skipped. With no registry, the client BibTeX engine runs, unchanged.
 - **Server Biber** — full biblatex fidelity. `createBiberBackend({ endpoint })`
-  builds a server backend for the same `bibliography` stage that consumes a
+  builds a server backend for the separate `BIBER_STAGE` (`'bibliography:biber'`) that consumes a
   `BiberRequest` (`{ bcf, bibFiles }` — the `.bcf` control file plus the `.bib`s)
   and returns the `.bbl`. The compiler auto-routes here for a biblatex +
   `backend=biber` document: it reads the `.bcf`, calls `runRemoteBiber`, injects
@@ -100,7 +100,7 @@ Two distinct request shapes flow off-device, both file-level:
 ```ts
 import {
   BackendRegistry,
-  BIBLIOGRAPHY_STAGE,
+  BIBER_STAGE,
   createBiberBackend,
   WasmTexCompiler,
   MemoryCacheStore,
@@ -110,7 +110,7 @@ import {
 const backends = new BackendRegistry()
 // Full-fidelity Biber, with a content-addressed cache so identical runs are free.
 backends.register(
-  BIBLIOGRAPHY_STAGE,
+  BIBER_STAGE,
   withCache(createBiberBackend({ endpoint: '/api/biber' }), new MemoryCacheStore()),
 )
 
