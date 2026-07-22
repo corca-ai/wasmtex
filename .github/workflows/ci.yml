@@ -34,6 +34,25 @@ jobs:
             exit 1
           fi
 
+  # Unit-test coverage (Vitest + v8), reporting-only — no threshold gate yet.
+  # The unit suite needs no engine assets, so this is a fast, standalone job; the
+  # HTML/lcov report is uploaded as an artifact and the text summary lands in the log.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run test:coverage
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+
   build:
     runs-on: ubuntu-latest
     steps:
