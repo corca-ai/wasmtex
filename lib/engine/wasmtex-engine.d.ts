@@ -44,6 +44,7 @@ interface WorkerMessage {
     preambleRebuilt?: boolean;
     engineCommands?: string[];
     inputFiles?: string[];
+    inputFilesComplete?: boolean;
     semanticTrace?: string;
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];

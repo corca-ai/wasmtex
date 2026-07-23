@@ -275,9 +275,39 @@ const { telemetry } = await compiler.compile()
 |-------|------|-------------|
 | `diagnostics` | `Diagnostic[]` | Every error/warning with a stable `code` (`tex-error`, `package-error`, `missing-package`, `font-not-found`, `missing-glyph`, `undefined-reference`, `undefined-citation`, `rerun-needed`, `overfull-box`, `package-warning`, `latex-warning`), `severity`, `message`, and optional `file`/`line`. A `missing-glyph` entry carries the affected font + characters in `glyph`. |
 | `geometry` | `DocumentGeometry` | Page/box geometry parsed from the XDV — per page: `width`/`height` (media box, bp), `textRuns` (positioned runs with `x`/`y`/`width`/`size`/`glyphs`, plus `text`/`font` when available), `rules`, and a `contentBox`. The substrate for text extraction, click-to-source, cropping, and overlays. **XeLaTeX only** (the engine that emits XDV); `reliable: false` flags an unparseable/desynced run. |
-| `dependencies` | `DependencyGraph` | What the compile depended on: `nodes` (each with `kind: 'tex' \| 'class' \| 'package' \| 'font' \| 'image' \| 'bib' \| 'other'`, `origin: 'project' \| 'system'`, and `discoveredBy`) + `edges` (`includes`/`loads`/`uses-font`/`reads`) + `root`. The substrate for cache invalidation and incremental compile. Derived from the log (all engines) and enriched with the source `\usepackage`/`\input`, XDV fonts (XeLaTeX), and the `.fls` recorder (pdfLaTeX). |
+| `dependencies` | `DependencyGraph` | What the compile depended on: `nodes` (each with `kind: 'tex' \| 'class' \| 'package' \| 'font' \| 'image' \| 'bib' \| 'other'`, `origin: 'project' \| 'system'`, and `discoveredBy`) + `edges` (`includes`/`loads`/`uses-font`/`reads`) + `root`. Rich tooling data derived from the log and enriched with source declarations, XDV fonts, and each TeX engine's `.fls` recorder. It remains useful when observations are incomplete, so do not treat the graph alone as a safe invalidation proof. |
+| `dependencyManifest` | `DependencyManifest` | Versioned, normalized project-input boundary produced by `WasmTexCompiler`. `projectInputs` includes arbitrary project files read by the engine plus the inputs forwarded to bibliography/index stages. `complete: true` is a correctness guarantee, not a confidence score. `coverage` identifies the contributing stages/signals; `incompleteReason` explains why a host must compile conservatively. |
 
 Coordinates are PDF points (bp) measured from each page's top-left. Geometry text and dependency fonts are best-effort — XeTeX emits run text only for some runs, and font edges come from the XeLaTeX XDV.
+
+#### Safe host-side invalidation
+
+Only the manifest from the current successful rendered result can justify reusing
+that result. The host must also know that the compile profile and root are unchanged,
+and should conservatively compile on project topology changes (add/delete/rename):
+
+```ts
+const result = await compiler.compile()
+const manifest = result.telemetry?.dependencyManifest
+
+const mayReuseAfterContentChanges =
+  result.success &&
+  !!result.pdf &&
+  manifest?.complete === true &&
+  changedPaths.every((path) => !manifest.projectInputs.includes(path))
+```
+
+pdfLaTeX and LuaLaTeX full compiles use recorder-backed manifests. XeLaTeX records
+its TeX inputs, but its separate dvipdfmx conversion stage does not yet expose an
+authoritative project-input list, so the combined manifest remains incomplete.
+Incremental checkpoint results are also explicitly incomplete until tail recorder
+observations can be soundly combined with the unchanged head. Failed or partial
+results never carry `complete: true`.
+
+The bibliography coverage follows the actual stage request: because the current
+compiler forwards every project `.bib`, every one is listed, along with a selected
+project-local `.bst`. Generated `.bbl`/`.ind` files and engine scratch files are
+excluded from `projectInputs`.
 
 ## LSP Core
 

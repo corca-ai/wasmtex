@@ -4,7 +4,7 @@
  * without an engine patch:
  *   - the **log** (every engine): each `(./file … )` open is a file the compile read,
  *     nested under its parent (reuses {@link scanFileEvents});
- *   - the **`.fls` recorder** (pdfLaTeX `inputFiles`): the authoritative read list;
+ *   - the TeX engine's **`.fls` recorder** (`inputFiles`): the authoritative read list;
  *   - **XDV font defs** (XeLaTeX): the fonts actually used;
  *   - the **source** (`\documentclass`/`\usepackage`/`\input`): declared dependencies,
  *     which also catch intent the log formats oddly.
@@ -142,7 +142,7 @@ function addLogDeps(g: GraphBuilder, log: string): void {
   }
 }
 
-/** The pdfTeX `.fls` recorder list: authoritative reads, but without parent info — so
+/** The TeX engine's `.fls` recorder list: authoritative reads, but without parent info — so
  *  attach each to the root with a `reads` edge. */
 function addFlsDeps(g: GraphBuilder, inputFiles: string[]): void {
   for (const raw of inputFiles) {
@@ -190,7 +190,7 @@ function addSourceDeps(g: GraphBuilder, source: string): void {
 }
 
 export interface DependencyOpts {
-  /** pdfTeX `.fls` input list (`CompileResult.inputFiles`). */
+  /** TeX engine `.fls` input list (`CompileResult.inputFiles`). */
   inputFiles?: string[] | undefined
   /** Font basenames used by the document (from the XeTeX XDV). */
   fonts?: string[] | undefined

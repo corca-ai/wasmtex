@@ -31,9 +31,9 @@ int setMainEntry(const char *entry) {
 }
 
 int compileLaTeX(void) {
-  char *argv[] = {
-      PROG, "-no-pdf", "-interaction=nonstopmode", "--fmt=wasmtex-xetex", main_entry, NULL};
-  return main(5, argv);
+  char *argv[] = {PROG, "-no-pdf", "-interaction=nonstopmode", "-recorder",
+                  "--fmt=wasmtex-xetex", main_entry, NULL};
+  return main(6, argv);
 }
 
 int compileFormat(void) {

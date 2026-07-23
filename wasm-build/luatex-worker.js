@@ -231,20 +231,59 @@ function cleanDir(dir) {
   }
 }
 
+function readRecorderInputs(jobName) {
+  const path = `${WORKROOT}/${jobName}.fls`
+  let inputs = null
+  try {
+    const data = FS.readFile(path, { encoding: 'utf8' })
+    if (data) {
+      inputs = [
+        ...new Set(
+          data
+            .trimEnd()
+            .split('\n')
+            .filter((line) => line.startsWith('INPUT '))
+            .map((line) => line.slice(6)),
+        ),
+      ]
+    }
+  } catch {}
+  try {
+    FS.unlink(path)
+  } catch {}
+  return inputs
+}
+
 /** Read an engine output file and post it back (PDF for compile, fmt for format).
  *  Output-file existence is the success signal: TeX exits non-zero on warnings
  *  (e.g. optional files missing) while still producing a valid PDF/format, so we
  *  report `ok` whenever the file is readable and surface the raw exit code only on
  *  failure. */
-function postOutput(relPath, status) {
+function postOutput(relPath, status, recorderJobName) {
+  const inputFiles = recorderJobName ? readRecorderInputs(recorderJobName) : undefined
   try {
     const buf = FS.readFile(relPath, { encoding: 'binary' })
     self.postMessage(
-      { result: 'ok', status: 0, log: self.memlog, pdf: buf.buffer, cmd: 'compile' },
+      {
+        result: 'ok',
+        status: 0,
+        log: self.memlog,
+        pdf: buf.buffer,
+        cmd: 'compile',
+        inputFiles,
+        inputFilesComplete: recorderJobName ? inputFiles !== null : undefined,
+      },
       [buf.buffer],
     )
   } catch {
-    self.postMessage({ result: 'failed', status: status ?? -253, log: self.memlog, cmd: 'compile' })
+    self.postMessage({
+      result: 'failed',
+      status: status ?? -253,
+      log: self.memlog,
+      cmd: 'compile',
+      inputFiles,
+      inputFilesComplete: false,
+    })
   }
 }
 
@@ -253,7 +292,8 @@ function compileLaTeXRoutine() {
   cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
   const status = runEngine(_compileLaTeX)
   // LuaTeX writes PDF directly — no XDV, no dvipdfmx.
-  postOutput(`${WORKROOT}/${self.mainfile.replace(/\.tex$/, '')}.pdf`, status)
+  const jobName = self.mainfile.replace(/\.tex$/, '')
+  postOutput(`${WORKROOT}/${jobName}.pdf`, status, jobName)
 }
 
 function compileFormatRoutine() {

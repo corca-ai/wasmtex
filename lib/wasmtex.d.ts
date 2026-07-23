@@ -159,6 +159,7 @@ export declare class WasmTex {
     private showBinaryPreview;
     private hideBinaryPreview;
     private updateEngineMetadata;
+    private updateRecordedInputMetadata;
     private onCompileResult;
     private handleSuccessfulCompile;
     private handlePostCompile;

@@ -132,6 +132,23 @@ if (result.pdf) {
 }
 ```
 
+If the host wants to skip a later compile after unrelated content edits, use only
+the headless result's complete dependency manifest:
+
+```ts
+const manifest = result.telemetry?.dependencyManifest
+const canReuse =
+  result.success &&
+  !!result.pdf &&
+  manifest?.complete === true &&
+  changedPaths.every((path) => !manifest.projectInputs.includes(path))
+```
+
+This check assumes the same main file, engine/options, and project topology.
+Compile conservatively when the manifest is absent/incomplete or a file was
+added, deleted, or renamed. The richer `telemetry.dependencies` graph is useful
+for inspection, but its best-effort observations are not itself a reuse proof.
+
 ### Server backends (BibTeX / Biber / xindy offload)
 
 By default every compile stage runs **client-side** (WASM/TS), so nothing leaves the

@@ -13,6 +13,8 @@ export interface WasmTexWorkerMsg {
     errorMessage?: string;
     errorStack?: string;
     errorLog?: string;
+    inputFiles?: string[];
+    inputFilesComplete?: boolean;
     /** dumpcache response: fetched files + known-missing entries. */
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];
@@ -40,6 +42,8 @@ export interface CompileWorkerResult {
     log: string;
     /** The binary the worker produced (PDF for luatex/dvipdfmx, XDV/fmt for xetex). */
     out: Uint8Array | null;
+    inputFiles?: string[];
+    inputFilesComplete?: boolean;
 }
 /**
  * A WasmTex worker with a single-command compile entry point, shared by
