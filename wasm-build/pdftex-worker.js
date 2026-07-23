@@ -284,10 +284,61 @@ function runMain(programName, args) {
     return status;
 }
 
+// Read every INPUT entry from a recorder file. Keep the raw path so the host can
+// distinguish /work project files from /tex/system files and normalize against
+// its authoritative project VFS. Filtering by extension here would silently lose
+// \includegraphics, \input-ed data, and project-local fonts.
+function readRecorderInputs(jobName) {
+    var flsPath = WORKROOT + "/" + jobName + ".fls";
+    var inputs = null;
+    try {
+        var flsData = FS.readFile(flsPath, { encoding: "utf8" });
+        if (flsData) {
+            inputs = flsData.trimEnd().split("\n")
+                .filter(function(line) { return line.startsWith("INPUT "); })
+                .map(function(line) { return line.slice(6); });
+            inputs = Array.from(new Set(inputs));
+        }
+    } catch(e) {}
+    try { FS.unlink(flsPath); } catch(e) {}
+    return inputs;
+}
+
+function mergeRecorderInputs(first, second) {
+    if (first === null || second === null) return null;
+    return Array.from(new Set(first.concat(second)));
+}
+
+function recorderProjectPath(raw) {
+    var path = raw;
+    if (path.startsWith(WORKROOT + "/")) path = path.slice(WORKROOT.length + 1);
+    else if (path.startsWith("/")) return null;
+    var parts = [];
+    path.split("/").forEach(function(part) {
+        if (!part || part === ".") return;
+        if (part === "..") parts.pop();
+        else parts.push(part);
+    });
+    return parts.join("/");
+}
+
+function invalidatePreambleForWrite(filename) {
+    if (!self._preambleInputFiles) return;
+    var projectPath = recorderProjectPath(filename);
+    var dependedOn = self._preambleInputFiles.some(function(raw) {
+        return recorderProjectPath(raw) === projectPath;
+    });
+    if (!dependedOn) return;
+    self._preambleFmtData = null;
+    self._preambleInputFiles = null;
+    self._preambleHash = "";
+}
+
 // --- Preamble snapshot -------------------------------------------------------
 
 self._preambleHash = "";
 self._preambleFmtData = null;
+self._preambleInputFiles = null;
 self._fmtIsNative = false;    // true only when base format was built by our WASM binary
 self._preambleSnapshotEnabled = true;  // host opt-out: false forces full compiles
 
@@ -328,6 +379,7 @@ function buildPreambleFormat(preambleText) {
     prepareExecutionContext();
     writeTexmfCnf();
     try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
+    self._preambleInputFiles = null;
 
     // Base format must be available for -ini "&pdflatex"
     if (self._fmtData) {
@@ -340,7 +392,8 @@ function buildPreambleFormat(preambleText) {
     FS.writeFile(WORKROOT + "/_preamble.tex", preambleText + "\\dump\n");
 
     var status = runMain("pdflatex", ["-ini", "-interaction=nonstopmode",
-                                       "&pdflatex", "_preamble.tex"]);
+                                       "-recorder", "&pdflatex", "_preamble.tex"]);
+    self._preambleInputFiles = readRecorderInputs("_preamble");
 
     if (status === 0) {
         // Check build log for errors that indicate a broken format
@@ -816,6 +869,7 @@ function compileLaTeXRoutine() {
     if (usedPreamble && (status !== 0 || preambleHasCriticalErrors)) {
         console.log("[preamble] fallback to full compile");
         self._preambleFmtData = null;
+        self._preambleInputFiles = null;
         self._preambleHash = "";
         usedPreamble = false;
 
@@ -864,23 +918,15 @@ function compileLaTeXRoutine() {
         try { FS.unlink(WORKROOT + "/.commands"); } catch(e2) {}
     } catch(e) {}
 
-    // Read .fls (file recorder output) to discover input files.
+    // Read .fls (file recorder output) to discover every engine input. A cached
+    // preamble format hides its reads from the body pass, so union the recorder
+    // list captured when that exact preamble snapshot was built.
     var baseName = self.mainfile.substr(0, self.mainfile.length - 4);
-    var inputFiles = null;
-    try {
-        var flsData = FS.readFile(WORKROOT + "/" + baseName + ".fls", { encoding: "utf8" });
-        if (flsData) {
-            inputFiles = flsData.trimEnd().split("\n")
-                .filter(function(l) { return l.startsWith("INPUT "); })
-                .map(function(l) { return l.slice(6); })
-                .filter(function(p) { return p.startsWith(WORKROOT + "/"); })
-                .map(function(p) { return p.slice(WORKROOT.length + 1); })
-                .filter(function(p) { return p.endsWith(".tex"); });
-            // Deduplicate
-            inputFiles = Array.from(new Set(inputFiles));
-        }
-        try { FS.unlink(WORKROOT + "/" + baseName + ".fls"); } catch(e2) {}
-    } catch(e) {}
+    var bodyInputFiles = readRecorderInputs(baseName);
+    var inputFiles = usedPreamble
+        ? mergeRecorderInputs(self._preambleInputFiles, bodyInputFiles)
+        : bodyInputFiles;
+    var inputFilesComplete = inputFiles !== null;
 
     // Read .trace (semantic trace output from \label/\ref hooks).
     var semanticTrace = null;
@@ -912,6 +958,7 @@ function compileLaTeXRoutine() {
                 "cmd": "compile",
                 "engineCommands": engineCommands,
                 "inputFiles": inputFiles,
+                "inputFilesComplete": inputFilesComplete,
                 "semanticTrace": semanticTrace
             });
             return;
@@ -942,6 +989,7 @@ function compileLaTeXRoutine() {
             "preambleRebuilt": preambleRebuilt,
             "engineCommands": engineCommands,
             "inputFiles": inputFiles,
+            "inputFilesComplete": inputFilesComplete,
             "semanticTrace": semanticTrace
         };
 
@@ -972,6 +1020,7 @@ function compileLaTeXRoutine() {
             "preambleRebuilt": preambleRebuilt,
             "engineCommands": engineCommands,
             "inputFiles": inputFiles,
+            "inputFilesComplete": false,
             "semanticTrace": semanticTrace
         });
     }
@@ -1140,6 +1189,11 @@ function mkdirRoutine(dirname) {
 
 function writeFileRoutine(filename, content) {
     try {
+        // A cached format can embed project files read by the preamble. Invalidate
+        // only when one of those recorded inputs changes; main.tex body edits keep
+        // using the preamble hash fast path, and unrelated/body-only files do not
+        // force a costly snapshot rebuild.
+        invalidatePreambleForWrite(filename);
         FS.writeFile(WORKROOT + "/" + filename, content);
         self.postMessage({ "result": "ok", "cmd": "writefile" });
     } catch(err) {
@@ -1264,6 +1318,7 @@ self["onmessage"] = function(ev) {
         if (!self._preambleSnapshotEnabled) {
             // Drop any cached preamble format so re-enabling rebuilds it cleanly.
             self._preambleFmtData = null;
+            self._preambleInputFiles = null;
             self._preambleHash = "";
         }
         self.postMessage({ "result": "ok", "cmd": "setpreamblesnapshot" });
@@ -1306,6 +1361,11 @@ self["onmessage"] = function(ev) {
         );
     } else if (cmd === "flushcache") {
         cleanDir(WORKROOT);
+        // A snapshot can embed project-local inputs. It must never survive a
+        // project replacement whose preamble text happens to hash identically.
+        self._preambleFmtData = null;
+        self._preambleInputFiles = null;
+        self._preambleHash = "";
     } else if (cmd === "buildcheckpoint") {
         buildCheckpointRoutine(data);
     } else if (cmd === "compilefromcheckpoint") {

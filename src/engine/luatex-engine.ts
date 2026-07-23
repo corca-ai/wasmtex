@@ -45,7 +45,14 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
     // 1. LuaTeX: main.tex -> main.pdf (single pass; PDF returned in "out").
     const lua = await this.tex.run('compilelatex')
     const log = `${fmtLog}\n${lua.log}`.trim()
-    const result = this.result(lua.success && !!lua.out, lua.out, log, start)
+    const result = this.result(
+      lua.success && !!lua.out,
+      lua.out,
+      log,
+      start,
+      lua.inputFiles,
+      lua.inputFilesComplete,
+    )
     // After a successful compile that fetched new files, persist the worker's
     // cache to IndexedDB (non-blocking, best-effort) for instant return visits.
     if (result.success) this.maybePersist()

@@ -13,4 +13,11 @@ export {
   type NodeWorkerHostOptions,
 } from './engine/node-host'
 export { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
-export type { CompileResult } from './types'
+export type {
+  CompileResult,
+  DependencyManifest,
+  DependencyManifestCoverage,
+  DependencyManifestIncompleteReason,
+  DependencyManifestSource,
+  DependencyManifestStage,
+} from './types'

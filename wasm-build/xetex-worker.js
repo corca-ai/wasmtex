@@ -191,17 +191,56 @@ function cleanDir(dir) {
   }
 }
 
+function readRecorderInputs(jobName) {
+  const path = `${WORKROOT}/${jobName}.fls`
+  let inputs = null
+  try {
+    const data = FS.readFile(path, { encoding: 'utf8' })
+    if (data) {
+      inputs = [
+        ...new Set(
+          data
+            .trimEnd()
+            .split('\n')
+            .filter((line) => line.startsWith('INPUT '))
+            .map((line) => line.slice(6)),
+        ),
+      ]
+    }
+  } catch {}
+  try {
+    FS.unlink(path)
+  } catch {}
+  return inputs
+}
+
 /** Read an engine output file and post it back (xdv for compile, fmt for format).
  *  `status` is the engine exit code; if the output file is missing we surface it. */
-function postOutput(relPath, status) {
+function postOutput(relPath, status, recorderJobName) {
+  const inputFiles = recorderJobName ? readRecorderInputs(recorderJobName) : undefined
   try {
     const buf = FS.readFile(relPath, { encoding: 'binary' })
     self.postMessage(
-      { result: 'ok', status: 0, log: self.memlog, pdf: buf.buffer, cmd: 'compile' },
+      {
+        result: 'ok',
+        status: 0,
+        log: self.memlog,
+        pdf: buf.buffer,
+        cmd: 'compile',
+        inputFiles,
+        inputFilesComplete: recorderJobName ? inputFiles !== null : undefined,
+      },
       [buf.buffer],
     )
   } catch {
-    self.postMessage({ result: 'failed', status: status ?? -253, log: self.memlog, cmd: 'compile' })
+    self.postMessage({
+      result: 'failed',
+      status: status ?? -253,
+      log: self.memlog,
+      cmd: 'compile',
+      inputFiles,
+      inputFilesComplete: false,
+    })
   }
 }
 
@@ -209,7 +248,8 @@ function compileLaTeXRoutine() {
   prepareExecutionContext()
   cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
   const status = runEngine(_compileLaTeX)
-  postOutput(`${WORKROOT}/${self.mainfile.replace(/\.tex$/, '')}.xdv`, status)
+  const jobName = self.mainfile.replace(/\.tex$/, '')
+  postOutput(`${WORKROOT}/${jobName}.xdv`, status, jobName)
 }
 
 function compileFormatRoutine() {

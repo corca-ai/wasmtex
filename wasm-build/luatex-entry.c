@@ -29,11 +29,12 @@ int compileLaTeX(void) {
     char *argv[] = {
         PROG,
         "-interaction=nonstopmode",
+        "-recorder",
         "--fmt=wasmtex-luatex",
         main_entry,
         NULL
     };
-    return main(4, argv);
+    return main(5, argv);
 }
 
 int compileFormat(void) {

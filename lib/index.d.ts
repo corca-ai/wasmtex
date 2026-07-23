@@ -7,5 +7,5 @@ export { wasmSimdSupported } from './engine/wasm-features';
 export { DEFAULT_LINT_CONFIG, type LintConfig, type LintRuleConfig, type LintRuleId, lintSource, } from './lsp/linter';
 export { type CommandArg, formatSignature, getCommandPackage, getCommandSignature, parseSignature, registerShard, } from './lsp/package-db';
 export { type PackageShard, PackageShardLoader, type PackageShardLoaderOptions, type ShardStore, } from './lsp/package-shard-loader';
-export type { AppStatus, BoxGeometry, CachedTexliveFile, CompileResult, DependencyEdge, DependencyGraph, DependencyNode, Diagnostic, DiagnosticCode, DocumentGeometry, EngineTelemetry, FontGlyphGap, GlyphCoverageReport, GlyphMiss, PageGeometry, TexError, TextRun, WarmupCache, } from './types';
+export type { AppStatus, BoxGeometry, CachedTexliveFile, CompileResult, DependencyEdge, DependencyGraph, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, DependencyNode, Diagnostic, DiagnosticCode, DocumentGeometry, EngineTelemetry, FontGlyphGap, GlyphCoverageReport, GlyphMiss, PageGeometry, TexError, TextRun, WarmupCache, } from './types';
 export { WasmTex } from './wasmtex';

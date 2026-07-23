@@ -1,6 +1,6 @@
 import { DependencyGraph } from '../types';
 export interface DependencyOpts {
-    /** pdfTeX `.fls` input list (`CompileResult.inputFiles`). */
+    /** TeX engine `.fls` input list (`CompileResult.inputFiles`). */
     inputFiles?: string[] | undefined;
     /** Font basenames used by the document (from the XeTeX XDV). */
     fonts?: string[] | undefined;

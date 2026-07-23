@@ -82,7 +82,14 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     // 1. XeTeX: main.tex -> main.xdv (returned in the "out" field).
     const xelatex = await this.tex.run('compilelatex')
     if (!xelatex.success || !xelatex.out) {
-      return this.result(false, null, `${fmtLog}\n${xelatex.log}`.trim(), start)
+      return this.result(
+        false,
+        null,
+        `${fmtLog}\n${xelatex.log}`.trim(),
+        start,
+        xelatex.inputFiles,
+        false,
+      )
     }
     // 2. dvipdfmx: main.xdv -> main.pdf (fetches + embeds fonts from the CDN).
     const xdvName = `${this.mainBase}.xdv`
@@ -90,20 +97,28 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     this.dvipdfm.setMainFile(xdvName)
     const dvi = await this.dvipdfm.run('compilepdf')
     const log = `${xelatex.log}\n${dvi.log}`
-    const result = this.result(dvi.success && !!dvi.out, dvi.out, log, start)
+    const result = this.result(
+      dvi.success && !!dvi.out,
+      dvi.out,
+      log,
+      start,
+      xelatex.inputFiles,
+      xelatex.inputFilesComplete,
+    )
     // Parse the XDV once (xelatex.out is the XeTeX output, before dvipdfmx) — headless,
     // no engine patch — and use it for both products: page/box geometry telemetry
     // (#54 slice 3) and the .notdef overlay positions (#89 L2b).
     const { pages, placements, reliable } = parseXdv(xelatex.out)
     if (result.telemetry) result.telemetry.geometry = { pages, reliable }
     if (result.glyphCoverage) attachPlacements(result.glyphCoverage.gaps, placements, reliable, log)
-    // Enrich the dependency graph (#54 slice 4): the XeLaTeX path has no `.fls`, so
-    // fill it from the XDV fonts actually used + the main source's declared deps.
+    // Enrich the dependency graph (#54 slice 4): combine the XeTeX `.fls` with
+    // XDV fonts actually used and the main source's declared dependencies.
     if (result.telemetry) {
       const fonts = [...new Set(pages.flatMap((p) => p.textRuns.map((r) => r.font)))].filter(
         (f): f is string => !!f,
       )
       result.telemetry.dependencies = buildDependencyGraph(log, {
+        inputFiles: xelatex.inputFiles,
         fonts,
         source: this.mainSource(),
       })

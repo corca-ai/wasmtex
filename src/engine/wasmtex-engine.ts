@@ -63,6 +63,7 @@ interface WorkerMessage {
   preambleRebuilt?: boolean
   engineCommands?: string[]
   inputFiles?: string[]
+  inputFilesComplete?: boolean
   semanticTrace?: string
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
@@ -501,6 +502,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (data.inputFiles) {
       result.inputFiles = data.inputFiles
     }
+    result.inputFilesComplete = data.inputFilesComplete === true
     if (data.semanticTrace) {
       result.semanticTrace = data.semanticTrace
     }

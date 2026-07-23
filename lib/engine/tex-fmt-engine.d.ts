@@ -134,7 +134,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** Mark the injected format as gone (call after a flushCache wipes the work
      *  dir) so the next {@link ensureFormat} re-injects it. */
     protected clearInjectedFormat(): void;
-    protected result(success: boolean, pdf: Uint8Array | null, log: string, start: number): CompileResult;
+    protected result(success: boolean, pdf: Uint8Array | null, log: string, start: number, inputFiles?: string[], inputFilesComplete?: boolean): CompileResult;
     writeFile(path: string, content: string | Uint8Array): Promise<void>;
     /** The main `.tex` source as last written, for dependency extraction. */
     protected mainSource(): string | undefined;

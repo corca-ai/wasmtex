@@ -20,8 +20,14 @@ export interface CompileResult {
     preambleRebuilt?: boolean;
     /** Control sequences from pdfTeX hash table (package + user commands) */
     engineCommands?: string[];
-    /** Input .tex files discovered by pdfTeX -recorder (.fls) */
+    /** Input files discovered by the TeX engine's `-recorder` (`.fls`). Includes project and
+     *  system paths; use `telemetry.dependencyManifest.projectInputs` for the
+     *  normalized, project-only invalidation boundary. */
     inputFiles?: string[];
+    /** Whether `inputFiles` covers every recorder-enabled phase that contributed to
+     *  this result (including a reused preamble snapshot). Absent means unproven,
+     *  which preserves safety with older worker assets. */
+    inputFilesComplete?: boolean;
     /** Raw .trace file content from semantic trace hooks */
     semanticTrace?: string;
     /** Fonts that lack glyphs for characters the document actually uses. Present
@@ -59,9 +65,39 @@ export interface EngineTelemetry {
     geometry?: DocumentGeometry;
     /** What this compile depended on — the file/package/font dependency graph
      *  (#54 slice 4). The substrate for exact cache invalidation and incremental
-     *  compile. Derived from the log (every engine), enriched with the `.fls` recorder
-     *  (pdfLaTeX), XDV fonts (XeLaTeX), and the source's `\usepackage`/`\input`. */
+     *  compile. Derived from the log (every engine), enriched with the TeX engine's
+     *  `.fls` recorder, XDV fonts (XeLaTeX), and the source's `\usepackage`/`\input`. */
     dependencies?: DependencyGraph;
+    /** Sound, project-only invalidation boundary for the rendered result. Unlike the
+     *  richer best-effort graph, `complete: true` is a correctness guarantee: a host
+     *  may reuse the result when no listed project input changed (and its compile
+     *  profile/root/topology are unchanged). Produced by the headless orchestrator,
+     *  which can combine engine recorder data with auxiliary-stage requests. */
+    dependencyManifest?: DependencyManifest;
+}
+export type DependencyManifestStage = 'latex' | 'bibliography' | 'index' | 'pdf-conversion';
+export type DependencyManifestSource = 'recorder' | 'backend-request' | 'log' | 'source' | 'xdv';
+export type DependencyManifestIncompleteReason = 'compile-failed' | 'recorder-unavailable' | 'engine-recorder-unavailable' | 'pdf-conversion-recorder-unavailable' | 'incremental-dependencies-unavailable' | 'auxiliary-stage-failed';
+export interface DependencyManifestCoverage {
+    stage: DependencyManifestStage;
+    source: DependencyManifestSource;
+    /** True only when this observation is authoritative for every project input
+     *  consumed by the stage. */
+    complete: boolean;
+}
+/**
+ * Versioned, normalized project-input contract for safe host-side reuse.
+ *
+ * `complete` is deliberately binary, not a confidence score. A host must treat
+ * an absent/incomplete manifest conservatively and compile again.
+ */
+export interface DependencyManifest {
+    version: 1;
+    root: string;
+    projectInputs: string[];
+    complete: boolean;
+    coverage: DependencyManifestCoverage[];
+    incompleteReason?: DependencyManifestIncompleteReason;
 }
 /** A node in the compile dependency graph: a file/package/font the compile touched. */
 export interface DependencyNode {
@@ -70,7 +106,7 @@ export interface DependencyNode {
     kind: 'tex' | 'class' | 'package' | 'font' | 'image' | 'bib' | 'other';
     /** `project` = a file in the user's project; `system` = from the bundled mirror. */
     origin: 'project' | 'system';
-    /** How this node was discovered — `log` (engine output), `fls` (pdfTeX recorder),
+    /** How this node was discovered — `log` (engine output), `fls` (TeX recorder),
      *  `xdv` (XeTeX font defs), `source` (`\usepackage`/`\input` scan). May be several. */
     discoveredBy: Array<'log' | 'fls' | 'xdv' | 'source'>;
 }

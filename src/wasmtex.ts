@@ -9,6 +9,7 @@ import { createEditor, createFileModel, revealLine } from './editor/setup'
 import { BibtexEngine } from './engine/bibtex-engine'
 import { unavailableEngineResult } from './engine/compile-engine'
 import { CompileScheduler } from './engine/compile-scheduler'
+import { normalizeProjectDependencyPath } from './engine/dependency-manifest'
 import { type EngineDetection, resolveEngine } from './engine/engine-select'
 import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
@@ -1460,18 +1461,17 @@ export class WasmTex {
       this.projectIndex.updateSemanticTrace({ labels: new Set(), refs: new Set() })
     }
 
-    if (result.inputFiles?.length) {
-      for (const path of result.inputFiles) {
-        if (!this.projectIndex.getFileSymbols(path)) {
-          const file = this.fs.getFile(path)
+    if (result.inputFiles?.length) this.updateRecordedInputMetadata(result.inputFiles)
+  }
 
-          if (file && typeof file.content === 'string') {
-            this.projectIndex.updateFile(path, file.content)
-
-            this.ensureModel(path, file.content)
-          }
-        }
-      }
+  private updateRecordedInputMetadata(inputFiles: string[]): void {
+    for (const rawPath of inputFiles) {
+      const path = normalizeProjectDependencyPath(rawPath)
+      if (!path || this.projectIndex.getFileSymbols(path)) continue
+      const file = this.fs.getFile(path)
+      if (!file || typeof file.content !== 'string') continue
+      this.projectIndex.updateFile(path, file.content)
+      this.ensureModel(path, file.content)
     }
   }
 

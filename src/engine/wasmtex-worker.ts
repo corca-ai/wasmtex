@@ -15,6 +15,8 @@ export interface WasmTexWorkerMsg {
   errorMessage?: string
   errorStack?: string
   errorLog?: string
+  inputFiles?: string[]
+  inputFilesComplete?: boolean
   /** dumpcache response: fetched files + known-missing entries. */
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
@@ -134,6 +136,8 @@ export interface CompileWorkerResult {
   log: string
   /** The binary the worker produced (PDF for luatex/dvipdfmx, XDV/fmt for xetex). */
   out: Uint8Array | null
+  inputFiles?: string[]
+  inputFilesComplete?: boolean
 }
 
 /**
@@ -153,7 +157,15 @@ export class CompileWorkerDriver extends WasmTexWorker {
     this.status = 'ready'
     const success = data.result === 'ok' && (data.status === 0 || data.status === 1)
     const out = data.pdf ? new Uint8Array(data.pdf) : null
-    return { success, log: data.log || '', out }
+    return {
+      success,
+      log: data.log || '',
+      out,
+      ...(data.inputFiles ? { inputFiles: data.inputFiles } : {}),
+      ...(typeof data.inputFilesComplete === 'boolean'
+        ? { inputFilesComplete: data.inputFilesComplete }
+        : {}),
+    }
   }
 
   /** Load the CDN bloom filter so the worker skips sync XHR for definitely-

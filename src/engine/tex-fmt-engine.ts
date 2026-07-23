@@ -351,6 +351,8 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     pdf: Uint8Array | null,
     log: string,
     start: number,
+    inputFiles?: string[],
+    inputFilesComplete?: boolean,
   ): CompileResult {
     const glyphGaps = parseGlyphGaps(log)
     if (glyphGaps.length > 0) enrichGlyphSuggestions(glyphGaps)
@@ -361,13 +363,18 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       errors: parseTexErrors(log),
       compileTime: performance.now() - start,
       synctex: null,
+      ...(inputFiles ? { inputFiles } : {}),
+      ...(typeof inputFilesComplete === 'boolean' ? { inputFilesComplete } : {}),
       ...(glyphGaps.length > 0 ? { glyphCoverage: { gaps: glyphGaps } } : {}),
       telemetry: {
         diagnostics: buildDiagnostics(log, glyphGaps),
         // Source enrichment here covers LuaLaTeX (uses this result() directly) and the
         // XeLaTeX failure path (early return). XeLaTeX's success path re-derives this
         // with XDV fonts too. Recovers packages the preamble snapshot hides from the log.
-        dependencies: buildDependencyGraph(log, { source: this.mainSource() }),
+        dependencies: buildDependencyGraph(log, {
+          inputFiles,
+          source: this.mainSource(),
+        }),
       },
     }
   }

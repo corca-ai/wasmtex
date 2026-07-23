@@ -122,6 +122,18 @@ triggers). Unicode formats ship **gzipped** (`wasmtex-xetex.fmt.gz` ~3.6 MB from
 in-browser (`DecompressionStream`), tolerating either a raw `.gz` or one the server
 already decoded via `Content-Encoding`.
 
+**Project input recording.** pdfTeX, XeTeX, and LuaHBTeX run their LaTeX pass with
+`-recorder` and return every `.fls` `INPUT`, without filtering by extension. The
+headless orchestrator intersects those paths with its project VFS and combines the
+result with bibliography/index requests to produce
+`telemetry.dependencyManifest`. pdfTeX also records the preamble-format build and
+unions those inputs when a snapshot is reused; otherwise a snapshot could hide
+project files loaded by the preamble. Writing one of those recorded project files
+invalidates the cached snapshot, while body-only/unrelated writes keep the fast path.
+XeTeX's separate dvipdfmx stage still lacks
+an equivalent authoritative input signal, so XeLaTeX manifests remain explicitly
+incomplete even when its TeX-stage recorder succeeded.
+
 **Bloom filter + built-in warmup.** The other cold-start cost is the worker
 fetching its runtime (luaotfload/lualibs `.lua`, fonts) synchronously, one file
 at a time, plus wasted lookups for files that don't exist. Two mechanisms
