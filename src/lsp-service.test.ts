@@ -72,6 +72,19 @@ describe('LatexLanguageService', () => {
     expect(service.getDiagnostics().map((diag) => diag.code)).toContain('undefined-cite')
   })
 
+  it('drops BibTeX entries when a bibliography file becomes binary', () => {
+    const service = createLatexLanguageService({
+      files: {
+        'main.tex': '\\cite{knuth84}',
+        'refs.bib': '@book{knuth84, title = {The TeXbook}}',
+      },
+    })
+
+    service.updateFile('refs.bib', new Uint8Array([0]))
+
+    expect(service.getDiagnostics().map((diag) => diag.code)).toContain('undefined-cite')
+  })
+
   it('exposes the editor-neutral language features', () => {
     const service = createLatexLanguageService({
       files: { 'main.tex': '\\section{Intro}\n\\label{a}\n\\ref{a}\n\\begin{x}\ny\n\\end{x}' },
