@@ -2,6 +2,7 @@ import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
 import { rebuildBibIndex } from './lsp/bib-parser'
 import { computeDiagnostics, type Diagnostic } from './lsp/diagnostic-provider'
+import { IncrementalLinter } from './lsp/incremental-linter'
 import {
   type CodeAction,
   type DocumentLink,
@@ -95,9 +96,11 @@ export class LatexLanguageService {
   private fs = new VirtualFS({ empty: true })
   private index = new ProjectIndex()
   private lint: boolean | Partial<LintConfig>
+  private linter: IncrementalLinter
 
   constructor(options: LatexLanguageServiceOptions = {}) {
     this.lint = options.lint ?? true
+    this.linter = new IncrementalLinter(this.lint)
     this.loadProject(options.files ?? {})
     if (options.aux) this.updateAux(options.aux)
     if (options.engineCommands) this.updateEngineCommands(options.engineCommands)
@@ -107,20 +110,30 @@ export class LatexLanguageService {
   loadProject(files: Record<string, string | Uint8Array>): void {
     this.fs = new VirtualFS({ empty: true })
     this.index = new ProjectIndex()
+    this.linter = new IncrementalLinter(this.lint)
     for (const [path, content] of Object.entries(files)) {
       this.updateFile(path, content)
     }
   }
 
   updateFile(path: string, content: string | Uint8Array): void {
+    const previous = this.fs.readFile(path)
+    if (previous === content) return
+
     this.fs.writeFile(path, content)
-    if (typeof content !== 'string') return
+    this.linter.updateFile(path, content)
+    if (typeof content !== 'string') {
+      if (path.endsWith('.tex')) this.index.removeFile(path)
+      if (path.endsWith('.bib')) this.updateBibIndex()
+      return
+    }
     if (path.endsWith('.tex')) this.index.updateFile(path, content)
     if (path.endsWith('.bib')) this.updateBibIndex()
   }
 
   removeFile(path: string): boolean {
     const removed = this.fs.deleteFile(path)
+    this.linter.removeFile(path)
     if (path.endsWith('.tex')) this.index.removeFile(path)
     if (path.endsWith('.bib')) this.updateBibIndex()
     return removed
@@ -148,13 +161,7 @@ export class LatexLanguageService {
 
   getDiagnostics(): Diagnostic[] {
     const diagnostics = computeDiagnostics(this.index)
-    if (this.lint === false) return diagnostics
-    const lintConfig = this.lint === true ? undefined : this.lint
-    for (const path of this.fs.listFiles()) {
-      if (!path.endsWith('.tex')) continue
-      const content = this.fs.readFile(path)
-      if (typeof content === 'string') diagnostics.push(...lintSource(content, path, lintConfig))
-    }
+    diagnostics.push(...this.linter.diagnostics(this.fs.listFiles()))
     return diagnostics
   }
 

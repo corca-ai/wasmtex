@@ -374,7 +374,8 @@ alongside the reference/citation checks. The linter is comment/verbatim/math
 aware (it never fires inside comments, `\verb`, verbatim environments, or — for
 text rules — math mode). Each rule is individually toggleable with a severity;
 lint diagnostics use codes distinct from the index diagnostics, so the two never
-double-report.
+double-report. Results are cached per `.tex` file, and `updateFile()` re-lints
+only content that changed.
 
 Configure via the `lint` option (on `WasmTex` and `LatexLanguageService`):
 `false` disables the linter; an object overrides per-rule `enabled`/`severity`.

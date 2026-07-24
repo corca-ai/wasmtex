@@ -143,7 +143,12 @@ Cross-file rename edits are reported to the host via the `workspaceEdit` event.
 Go-to-definition and references can target locations in other project files. When this happens, WasmTex switches the active file internally and emits a `fileOpen` event so the host can update its UI (file tabs, collaboration bindings, etc.).
 
 ### Diagnostics
-Diagnostics are computed by `computeDiagnostics()` (in `src/lsp/diagnostic-provider.ts`) by cross-referencing the `ProjectIndex`. For example, it flags `\ref{key}` if `key` does not exist in any loaded file.
+Project diagnostics are computed by `computeDiagnostics()` (in
+`src/lsp/diagnostic-provider.ts`) by cross-referencing the `ProjectIndex`. For
+example, it flags `\ref{key}` if `key` does not exist in any loaded file. The
+ChkTeX-style source linter is cached per `.tex` file: `updateFile()` re-lints
+only changed source bytes, while `getDiagnostics()` combines those cached
+results with the current project-index diagnostics.
 
 ### BibTeX / `.bib` parsing
 `src/lsp/bib-parser.ts` is a robust BibTeX/biblatex parser: all entry types, brace- and quote-delimited values with nested braces, multi-line values, `#` string concatenation, `@string` macro expansion, `@preamble`/`@comment`, and `crossref`/`xdata` field inheritance. Parsed entries expose `title`, `author`, `year`, `journal` (venue), and a full `fields` map. `formatReference()` renders the citation hover preview; the `unused-bib-entry` diagnostic (for any entry never cited) is emitted by `computeDiagnostics()` in `src/lsp/diagnostic-provider.ts`.

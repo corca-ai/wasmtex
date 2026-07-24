@@ -37,6 +37,7 @@ export declare class LatexLanguageService {
     private fs;
     private index;
     private lint;
+    private linter;
     constructor(options?: LatexLanguageServiceOptions);
     loadProject(files: Record<string, string | Uint8Array>): void;
     updateFile(path: string, content: string | Uint8Array): void;
