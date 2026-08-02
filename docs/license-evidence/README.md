@@ -6,17 +6,15 @@ revision in its name; they are records, not living documents — supersede them
 with a new snapshot instead of editing history. `npm run check:licenses`
 requires the load-bearing set to stay tracked.
 
-## Current release candidate (`9f7c7d4`)
+## Current release (`57ad3e9`)
 
 | File | What it evidences |
 | --- | --- |
-| `engine-release-2025-2b58db3.md` | The candidate build: single-revision receipts, reproducibility, gates |
-| `link-inventory-9f7c7d4.json` | The 81 static archives actually selected by the seven linker maps |
-| `link-inventory-2b58db3.json` | The prior binding of the same maps (engine bytes unchanged) |
-| `engine-sbom-2025-9f7c7d4.spdx.json` | SPDX SBOM generated from the component inventory (freshness-checked in CI) |
-| `format-inputs-xetex-2b58db3.json`, `format-inputs-luahbtex-2b58db3.json` | Observed inputs of the format dumps |
-| `format-inputs-pdftex-23ee539.json` | Observed inputs of the pdfTeX format (bytes unchanged since that build) |
-| `corresponding-source-2025-3a630ec.md` | Source archive creation, verification, and the clean-builder rebuild |
+| `engine-release-2025-57ad3e9.md` | The release build: single-revision receipts, runtime gates, and clean rebuild |
+| `link-inventory-57ad3e9.json` | The 81 static archive occurrences actually selected by the seven linker maps |
+| `engine-sbom-2025-57ad3e9.spdx.json` | SPDX SBOM generated from the current component inventory (freshness-checked in CI) |
+| `format-inputs-xetex-2b58db3.json`, `format-inputs-luahbtex-2b58db3.json`, `format-inputs-pdftex-23ee539.json` | Prior observed fetch inventories for the unchanged pinned TeX Live inputs and format-generation procedures; format bytes themselves are nondeterministic |
+| `corresponding-source-2025-baa63e6.md` | Published source archive, verification, and the clean-builder rebuild |
 | `engine-performance-2b58db3.json` | Runtime performance measurements behind the budget gate |
 | `repository-audit-3ec3290.md` | Pre-publication secret/blob/header audit of the repository history |
 
@@ -48,3 +46,9 @@ They are retained as the audit trail for how the current candidate differs
 bit-identically). `linked-components-2025-23ee539.md` remains the human-readable
 archive-to-component mapping; the component set is unchanged in the current
 inventory and is machine-checked by `scripts/check-engine-license-inventory.mjs`.
+
+The `2b58db3` and `9f7c7d4` inventories, SBOMs, engine-release record, and
+`corresponding-source-2025-3a630ec.md` are retained as the immediately prior
+published-release audit trail. The current `57ad3e9` link inventory has the
+same archive-path/component classification; pdfTeX selects one additional
+member from the already classified libc archive for completion tracing.

@@ -71,9 +71,13 @@ for (const path of [
   'docs/license-evidence/format-inputs-xetex-23ee539.json',
   'docs/license-evidence/format-inputs-luahbtex-23ee539.json',
   'docs/license-evidence/engine-release-2025-2b58db3.md',
+  'docs/license-evidence/engine-release-2025-57ad3e9.md',
   'docs/license-evidence/link-inventory-2b58db3.json',
   'docs/license-evidence/link-inventory-9f7c7d4.json',
   'docs/license-evidence/engine-sbom-2025-9f7c7d4.spdx.json',
+  'docs/license-evidence/link-inventory-57ad3e9.json',
+  'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json',
+  'docs/license-evidence/corresponding-source-2025-baa63e6.md',
   'docs/license-evidence/engine-sbom-2025-2b58db3.spdx.json',
   'docs/license-evidence/format-inputs-xetex-2b58db3.json',
   'docs/license-evidence/format-inputs-luahbtex-2b58db3.json',
@@ -123,7 +127,7 @@ const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
 const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
 const semanticOverrides = readJson(`scripts/tex-semantic-overrides-${version}.json`)
 const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
-const linkInventory = readJson('docs/license-evidence/link-inventory-9f7c7d4.json')
+const linkInventory = readJson('docs/license-evidence/link-inventory-57ad3e9.json')
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
 
 if (semanticOverrides) {
@@ -246,7 +250,7 @@ try {
       resolve(root, 'scripts/gen-engine-sbom.mjs'),
       version,
       '--check',
-      'docs/license-evidence/engine-sbom-2025-9f7c7d4.spdx.json',
+      'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json',
     ],
     { cwd: root, stdio: 'pipe' },
   )
