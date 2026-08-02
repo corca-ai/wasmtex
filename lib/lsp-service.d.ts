@@ -88,6 +88,7 @@ export declare class LatexLanguageService {
     updateSemanticTrace(trace: string | SemanticTrace): void;
     updateCompletionSnapshot(snapshot: CompletionSnapshot): Promise<CompletionSnapshotState>;
     getCompletionSnapshotState(): CompletionSnapshotState;
+    clearCompletionSnapshot(): void;
     private assertCompletionProfile;
     getDiagnostics(): Diagnostic[];
     getFileSymbols(path: string): FileSymbols | undefined;
