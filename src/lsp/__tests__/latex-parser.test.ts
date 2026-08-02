@@ -381,6 +381,35 @@ describe('parseLatexFile', () => {
 
   // --- Edge cases ---
   describe('edge cases', () => {
+    it('keeps malformed command-prefix parsing within the interactive budget', () => {
+      const malformedPrefixes = [
+        String.raw`\bibitem[`,
+        String.raw`\newenvironment{{`,
+        String.raw`\LoadClass[\x`,
+        String.raw`\addglobalbib[`,
+        String.raw`\newglossaryentry[`,
+        String.raw`\Gls*[`,
+        String.raw`\newacronym[`,
+        String.raw`\Ac*[`,
+        String.raw`\fontspec[`,
+        String.raw`\newfontface\alias[`,
+        String.raw`\DeclareFontFamily{{`,
+        String.raw`\definekey[`,
+        String.raw`\DeclareKeys[\x`,
+      ]
+      const source = [
+        ...malformedPrefixes.map((prefix) => prefix.repeat(2_000)),
+        String.raw`\DeclareKeys[${'/'.repeat(20_000)}]{key .code={}}`,
+      ].join('\n')
+      const start = performance.now()
+
+      expect(() => parseLatexFile(source, 'hostile.tex')).not.toThrow()
+      // A linear scan takes ~100 ms locally; leave headroom for Vitest's
+      // parallel-file contention while still rejecting the prior multi-second,
+      // input-length-squared behavior across these malformed prefixes.
+      expect(performance.now() - start).toBeLessThan(750)
+    })
+
     it('handles empty content', () => {
       const result = parseLatexFile('', 'main.tex')
       expect(result.labels).toHaveLength(0)

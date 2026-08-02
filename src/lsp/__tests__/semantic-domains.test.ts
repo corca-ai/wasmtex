@@ -93,6 +93,32 @@ describe('project semantic domains', () => {
     ])
   })
 
+  it('parses optional and braced semantic invocations without changing their domains', () => {
+    const symbols = parseLatexFile(
+      String.raw`
+\LoadClass[draft]{book}
+\addglobalbib[location=remote]{refs.bib}
+\Gls*[format=emph]{tensor}
+\Ac*[long-short]{fft}
+\fontspec[Ligatures=TeX]{Project Serif}
+\newfontface{\displayfont}[Color=blue]{Project Sans}
+\DeclareFontFamily{TU}{project}{}
+\define@key[prefix]{layout}{mode}{}`,
+      'semantic.sty',
+    )
+
+    expect(symbols.classes).toMatchObject([{ name: 'book', options: 'draft' }])
+    expect(symbols.bibliographies).toMatchObject([{ path: 'refs.bib' }])
+    expect(symbols.glossaryEntries).toMatchObject([{ name: 'tensor', role: 'usage' }])
+    expect(symbols.acronymEntries).toMatchObject([{ name: 'fft', role: 'usage' }])
+    expect(symbols.fontFamilies).toMatchObject([
+      { name: 'Project Serif', role: 'usage' },
+      { name: 'Project Sans', role: 'alias', target: '\\displayfont' },
+      { name: 'project', role: 'definition' },
+    ])
+    expect(symbols.keys).toMatchObject([{ family: 'layout', name: 'mode', valueType: 'free-text' }])
+  })
+
   it('recovers LaTeX3 and pgfkeys choice values', () => {
     const symbols = parseLatexFile(
       String.raw`\DeclareKeys[layout]{
