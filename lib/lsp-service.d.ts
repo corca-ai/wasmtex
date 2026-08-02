@@ -44,6 +44,13 @@ export interface LatexLanguageServiceOptions {
      *  per-rule enabled/severity. Defaults to on with the default rule set. */
     lint?: boolean | Partial<LintConfig>;
 }
+/** Atomically replace the profile-bound completion sources without rebuilding the project index. */
+export interface LatexCompletionConfiguration {
+    completionProfile?: CompletionSnapshotProfile;
+    completionRegistry?: CompletionResolverRegistry;
+    resourceCatalog?: TexResourceCatalogProvider;
+    semanticCatalog?: TexSemanticCatalogProvider;
+}
 export interface LatexWorkspaceEdit {
     edits: Array<{
         file: string;
@@ -75,6 +82,7 @@ export declare class LatexLanguageService {
     getFile(path: string): string | Uint8Array | null;
     listFiles(): string[];
     setMainFile(path: string): void;
+    configureCompletion(configuration: LatexCompletionConfiguration): void;
     updateAux(content: string): void;
     updateEngineCommands(commands: string[]): void;
     updateSemanticTrace(trace: string | SemanticTrace): void;

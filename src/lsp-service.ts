@@ -180,6 +180,14 @@ export interface LatexLanguageServiceOptions {
   lint?: boolean | Partial<LintConfig>
 }
 
+/** Atomically replace the profile-bound completion sources without rebuilding the project index. */
+export interface LatexCompletionConfiguration {
+  completionProfile?: CompletionSnapshotProfile
+  completionRegistry?: CompletionResolverRegistry
+  resourceCatalog?: TexResourceCatalogProvider
+  semanticCatalog?: TexSemanticCatalogProvider
+}
+
 export interface LatexWorkspaceEdit {
   edits: Array<{
     file: string
@@ -286,6 +294,25 @@ export class LatexLanguageService {
     this.mainFile = path
     this.projectRevisionEpoch++
     this.index.invalidateCompletionSnapshot()
+  }
+
+  configureCompletion(configuration: LatexCompletionConfiguration): void {
+    this.completionSnapshotUpdate++
+    this.completionProfile = configuration.completionProfile
+    this.resourceCatalog = configuration.resourceCatalog
+    this.semanticCatalog = configuration.semanticCatalog
+    this.completionRegistry =
+      configuration.completionRegistry ??
+      createDefaultCompletionRegistry({
+        ...(configuration.resourceCatalog
+          ? { resourceCatalog: configuration.resourceCatalog }
+          : {}),
+        ...(configuration.semanticCatalog
+          ? { semanticCatalog: configuration.semanticCatalog }
+          : {}),
+      })
+    this.index.clearCompletionSnapshot()
+    preloadSemanticCatalog(this.completionRegistry, this.index)
   }
 
   updateAux(content: string): void {

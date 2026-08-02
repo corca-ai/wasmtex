@@ -260,6 +260,12 @@ shards. Project color declarations remain local and are scoped through the activ
 include graph. Schema/year/revision mismatch is isolated rather than mixed with the
 active profile.
 
+When the host changes a long-lived editor to another compile profile, create new
+providers for that exact identity and call
+`lsp.configureCompletion({ completionProfile, resourceCatalog, semanticCatalog })`.
+This retains the project index but clears prior runtime evidence and swaps in a fresh
+resolver registry, so completed loads from the old profile cannot leak into the new one.
+
 If compilation and LSP run in separate processes, forward the snapshot from the
 latest stabilized full compile and await revision validation:
 

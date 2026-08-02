@@ -358,6 +358,7 @@ your own UI.
 - `updateEngineCommands(commands): void` — feed back the engine's command hash (improves completion).
 - `updateSemanticTrace(trace): void` — feed back semantic-trace data for richer tokens.
 - `setMainFile(path): void` — selects the compile root used to validate runtime snapshot identity.
+- `configureCompletion(configuration): void` — atomically replaces the completion profile, resource/semantic providers, and optional registry while retaining the existing project index; prior runtime evidence is cleared so profile-scoped metadata cannot leak across a host profile switch.
 - `updateCompletionSnapshot(snapshot): Promise<CompletionSnapshotState>` — validates bounds/profile and recomputes the current project revision before accepting runtime evidence.
 - `getCompletionSnapshotState(): CompletionSnapshotState` — reports `absent`, `fresh`, or `stale` and returns a defensive snapshot copy.
 
@@ -424,6 +425,12 @@ const semanticCatalog = new HttpTexSemanticCatalogProvider({
 
 const lsp = createLatexLanguageService({ files, resourceCatalog, semanticCatalog })
 ```
+
+A long-lived host that switches compile profiles should construct fresh providers and
+call `lsp.configureCompletion({ completionProfile, resourceCatalog, semanticCatalog })`.
+The replacement is synchronous, keeps project symbols intact, discards the previous
+runtime snapshot, and uses a fresh isolated resolver registry; in-flight loads on the
+old providers can therefore never populate the new profile.
 
 The provider loads immutable `catalog/<mirrorRevision>/index.json` and only the
 requested class/package/bibliography/font shard. It verifies the shard hash and

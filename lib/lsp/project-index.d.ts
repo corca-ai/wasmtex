@@ -97,6 +97,8 @@ export declare class ProjectIndex {
     /** Mark observations stale on any project/source topology change. Static/project
      *  declarations stay available, but runtime values are no longer consumed. */
     invalidateCompletionSnapshot(): void;
+    /** Remove runtime completion evidence when the host changes compile profile. */
+    clearCompletionSnapshot(): void;
     getCompletionSnapshotState(): CompletionSnapshotState;
     getCompletionSnapshotStatus(): CompletionSnapshotState['status'];
     getEngineCommands(): ReadonlyMap<string, EngineCommandInfo>;

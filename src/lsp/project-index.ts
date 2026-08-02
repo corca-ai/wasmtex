@@ -794,6 +794,17 @@ export class ProjectIndex {
     this.runtimeKeys = []
   }
 
+  /** Remove runtime completion evidence when the host changes compile profile. */
+  clearCompletionSnapshot(): void {
+    this.completionSnapshot = null
+    this.completionSnapshotStale = false
+    this.engineCommands = new Map()
+    this.engineEnvironments = new Set()
+    this.runtimeColors = []
+    this.runtimeValues.clear()
+    this.runtimeKeys = []
+  }
+
   getCompletionSnapshotState(): CompletionSnapshotState {
     if (!this.completionSnapshot) return { status: 'absent' }
     return {
