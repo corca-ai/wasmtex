@@ -273,6 +273,63 @@ test('fails closed when a package has no declared or reviewed license', () => {
   )
 })
 
+test('generates completion metadata without turning package review into a catalog gate', () => {
+  const value = fixture()
+  mkdirSync(join(value.texmf, 'tex/latex/example'), { recursive: true })
+  writeFileSync(join(value.texmf, 'tex/latex/example/dvipsnam.def'), '\\definecolor{sample}\n')
+  writeFileSync(join(value.texmf, 'tex/latex/example/helper.lua'), 'return {}\n')
+  writeFileSync(
+    value.tlpdb,
+    [
+      'name example',
+      'revision 42',
+      'catalogue example',
+      'runfiles size=3',
+      ' texmf-dist/tex/latex/example/example.sty',
+      ' texmf-dist/tex/latex/example/dvipsnam.def',
+      ' texmf-dist/tex/latex/example/helper.lua',
+      '',
+    ].join('\n'),
+  )
+  value.config.tlpdb.sha256 = createHash('sha256').update(readFileSync(value.tlpdb)).digest('hex')
+  const outputDir = join(value.root, 'completion-metadata')
+  const manifest = generateMirror({
+    texmfDist: value.texmf,
+    tlpdbPath: value.tlpdb,
+    outputDir,
+    manifestPath: join(value.root, 'completion-provenance.json'),
+    config: value.config,
+    overrides: value.overrides,
+    texmfArchivePath: value.texmfArchive,
+    metadataArchivePath: value.metadataArchive,
+    scope: 'completion-metadata',
+  })
+
+  assert.equal(manifest.releaseStatus, 'metadata-only')
+  assert.deepEqual(
+    manifest.files.map((file) => file.key),
+    ['pdftex/26/dvipsnam.def', 'pdftex/26/example.sty'],
+  )
+  assert.equal('license' in manifest.files[0].source, false)
+  assert.deepEqual(
+    checkMirror({ manifest, mirrorRoot: outputDir, allowCompletionMetadata: true }),
+    [],
+  )
+  assert.match(
+    checkMirror({ manifest, mirrorRoot: outputDir }).join('\n'),
+    /requires explicit allowCompletionMetadata/,
+  )
+  assert.match(
+    checkMirror({
+      manifest,
+      mirrorRoot: outputDir,
+      allowCompletionMetadata: true,
+      requireLicenseReview: true,
+    }).join('\n'),
+    /not provenance-reviewed/,
+  )
+})
+
 test('fails closed on a differing flattened-name collision', () => {
   const value = fixture()
   mkdirSync(join(value.texmf, 'tex/generic/example'), { recursive: true })

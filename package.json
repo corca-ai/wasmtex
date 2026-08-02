@@ -89,6 +89,7 @@
     "gen-texlive-provenance": "node scripts/gen-texlive-provenance.mjs",
     "gen:texlive-catalog": "node scripts/gen-texlive-catalog.mjs",
     "check:texlive-catalog": "node scripts/check-texlive-catalog.mjs",
+    "check:deployed-completion": "node scripts/check-deployed-completion.mjs",
     "gen:tex-semantic-catalog": "node scripts/gen-tex-semantic-catalog.mjs",
     "check:tex-semantic-catalog": "node scripts/check-tex-semantic-catalog.mjs",
     "probe:tex-semantics": "node scripts/run-tex-semantic-probes.mjs",

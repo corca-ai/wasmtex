@@ -139,6 +139,13 @@ bytes, the option-gated xcolor `.def` sources, and the year-specific override fi
 produce the same final-inventory manifest and immutable catalogs as part of that
 deployment rather than deriving completion from an upstream or pre-transform file list.
 
+For an existing separately operated mirror, use `sync-texlive-s3.sh --catalog-only`.
+It keeps the mirror redistribution gate separate, inventories only completion and
+semantic inputs, and refuses publication unless every selected byte matches the
+deployed endpoint. `--catalog-only` never uploads the staged `pdftex/` files; it
+publishes only immutable `catalog/<mirrorRevision>/`,
+`semantic/<mirrorRevision>/`, and their versioned inventory evidence.
+
 After provisioning, run the read-only runtime coverage audit. It flags formats
 expected but absent, such as OpenType/TrueType fonts required by XeLaTeX and
 LuaLaTeX:

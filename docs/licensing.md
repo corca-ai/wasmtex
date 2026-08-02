@@ -305,6 +305,10 @@ manifest. They contain file/package identity, hashes, selected source paths,
 collision decisions, and optional CTAN documentation links; CTAN is enrichment,
 not a runtime availability or licensing authority. Do not import third-party
 completion corpora into these shards without a separate source and license review.
+The catalog-only publication lane deliberately omits package license/notice fields:
+those fields govern redistribution of the referenced TeX Live bytes, while the lane
+uploads only WasmTex-authored factual metadata. It still retains exact upstream paths,
+package ownership, deployed-byte hashes, and collision decisions as provenance.
 
 Semantic extraction reads the mirrored package source already covered by that
 package's upstream license. Option-gated color records are derived from the exact

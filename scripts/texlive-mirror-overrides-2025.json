@@ -2,5 +2,11 @@
   "schemaVersion": 1,
   "fileOwners": {},
   "packageLicenses": {},
-  "collisions": {}
+  "collisions": {
+    "pdftex/26/afoot.sty": {
+      "selectedSource": "texmf-dist/tex/latex/arabtex/afoot.sty",
+      "rejectedSources": ["texmf-dist/tex/latex/ledmac/afoot.sty"],
+      "rationale": "Matches the deployed 2025 CDN object: SHA-256 a5aad927c13347f21d06d46bf650098da18ec325c8079a25f395dc7381371466."
+    }
+  }
 }

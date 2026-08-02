@@ -239,6 +239,15 @@ coverage report under `semantic/<mirrorRevision>/`. Both immutable trees upload
 before publication of the manifest. A
 custom host must expose the matching catalog identity in its compile profile.
 
+When the TeX Live files are already deployed, `scripts/sync-texlive-s3.sh
+--catalog-only` emits only the completion-relevant inventory (`.cls`, `.sty`,
+bibliography styles, fonts, and the configured xcolor `.def` inputs), catalogs, and semantic
+shards. This lane does not copy or upload TeX Live package bytes and therefore does
+not require the full-mirror package-review state. Before `--catalog-only --upload`,
+the checker streams every selected object from `TEXLIVE_DEPLOYED_URL` and verifies
+its byte count and SHA-256. Differing basename collisions still require an exact
+deployed-byte decision; unrelated mirror collisions do not block metadata output.
+
 The production TeX Live 2025
 CDN is operated separately as a mirror of the full official distribution, so this
 helper's package-review state is not part of the engine `LICENSE-MANIFEST.json` and
