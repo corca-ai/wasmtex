@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor'
 import type { VirtualFS } from '../fs/virtual-fs'
 import { createCompletionProvider } from './completion-provider'
+import type { CompletionResolverRegistry } from './completion-registry'
 import { createDefinitionProvider } from './definition-provider'
 import { createHoverProvider } from './hover-provider'
 import {
@@ -22,11 +23,12 @@ export function registerLatexProviders(
   fs: VirtualFS,
   onWorkspaceEdit?: (info: WorkspaceEditInfo) => void,
   languageId = 'latex',
+  completionRegistry?: CompletionResolverRegistry,
 ): monaco.IDisposable[] {
   return [
     monaco.languages.registerCompletionItemProvider(
       languageId,
-      createCompletionProvider(index, fs),
+      createCompletionProvider(index, fs, completionRegistry),
     ),
     monaco.languages.registerDefinitionProvider(languageId, createDefinitionProvider(index)),
     monaco.languages.registerHoverProvider(languageId, createHoverProvider(index)),

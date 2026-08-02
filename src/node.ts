@@ -12,9 +12,28 @@ export {
   type NodeWorkerHostInstallation,
   type NodeWorkerHostOptions,
 } from './engine/node-host'
-export { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
+export {
+  COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
+  COMPLETION_SNAPSHOT_SCHEMA_VERSION,
+  WasmTexCompiler,
+  type WasmTexCompilerOptions,
+} from './headless'
 export type {
   CompileResult,
+  CompletionSnapshot,
+  CompletionSnapshotCollection,
+  CompletionSnapshotCommand,
+  CompletionSnapshotEngine,
+  CompletionSnapshotEvidence,
+  CompletionSnapshotFieldName,
+  CompletionSnapshotFields,
+  CompletionSnapshotIdentity,
+  CompletionSnapshotKey,
+  CompletionSnapshotKeyFamily,
+  CompletionSnapshotProfile,
+  CompletionSnapshotResource,
+  CompletionSnapshotState,
+  CompletionSnapshotValue,
   DependencyManifest,
   DependencyManifestCoverage,
   DependencyManifestIncompleteReason,

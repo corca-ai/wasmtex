@@ -19,6 +19,7 @@ import type {
   NeutralRange,
 } from './lsp/protocol'
 import { LatexLanguageService, type LatexLanguageServiceOptions } from './lsp-service'
+import type { CompletionSnapshot } from './types'
 
 export interface JsonRpcMessage {
   jsonrpc?: '2.0'
@@ -84,22 +85,19 @@ export class LatexLspServer {
   }
 
   /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
-  handle(message: JsonRpcMessage): void {
+  handle(message: JsonRpcMessage): void | Promise<void> {
     if (!message.method) return
     try {
-      this.dispatch(message)
-    } catch (err) {
-      // A malformed request must not crash the dispatch loop — and neither may
-      // building the error reply, so read the message defensively (dispatch
-      // could throw a non-Error like null/undefined).
-      if (message.id != null) {
-        const detail = err instanceof Error ? err.message : String(err)
-        this.respondError(message.id, -32603, `Internal error: ${detail}`)
+      const pending = this.dispatch(message)
+      if (pending) {
+        return pending.catch((err) => this.respondDispatchError(message, err))
       }
+    } catch (err) {
+      this.respondDispatchError(message, err)
     }
   }
 
-  private dispatch(message: JsonRpcMessage): void {
+  private dispatch(message: JsonRpcMessage): void | Promise<void> {
     const { id, method, params } = message
     const pos = params as unknown as DocPositionParams
     switch (method) {
@@ -131,9 +129,28 @@ export class LatexLspServer {
       case 'textDocument/rename':
         this.respond(id, this.rename(params))
         break
+      case 'wasmtex/updateCompletionSnapshot':
+        return this.service
+          .updateCompletionSnapshot(params?.snapshot as unknown as CompletionSnapshot)
+          .then((state) => this.respond(id, state))
+      case 'wasmtex/setMainFile':
+        this.service.setMainFile(String(params?.path ?? ''))
+        this.respond(id, null)
+        break
+      case 'wasmtex/completionSnapshotState':
+        this.respond(id, this.service.getCompletionSnapshotState())
+        break
       default:
         if (id != null) this.respondError(id, -32601, `Unknown method: ${method}`)
     }
+  }
+
+  private respondDispatchError(message: JsonRpcMessage, err: unknown): void {
+    // A malformed request must not crash the dispatch loop — and neither may
+    // building the error reply, so read the failure defensively.
+    if (message.id == null) return
+    const detail = err instanceof Error ? err.message : String(err)
+    this.respondError(message.id, -32603, `Internal error: ${detail}`)
   }
 
   private respond(id: JsonRpcMessage['id'], result: unknown): void {
@@ -162,11 +179,10 @@ export class LatexLspServer {
 
   private completion(params: DocPositionParams): { isIncomplete: boolean; items: object[] } {
     const { path, line, column } = locate(params)
+    const result = this.service.getCompletionResult(path, line, column)
     return {
-      isIncomplete: false,
-      items: this.service
-        .getCompletions(path, line, column)
-        .map((it) => toLspCompletionItem(it, params.position)),
+      isIncomplete: result.isIncomplete,
+      items: result.items.map((it) => toLspCompletionItem(it, params.position)),
     }
   }
 
@@ -259,21 +275,25 @@ function toLspCompletionItem(it: NeutralCompletionItem, pos: LspPosition): objec
   // Emit an explicit textEdit so the replaced range is exact. Command items
   // strip the leading backslash from insertText, so without this the client's
   // own word pattern could delete the `\`.
+  const range = it.replacementRange
+    ? toLspRange(it.replacementRange)
+    : {
+        start: { line: pos.line, character: Math.max(0, pos.character - it.replaceLength) },
+        end: pos,
+      }
   const item: Record<string, unknown> = {
     label: it.label,
     kind: LSP_COMPLETION_KIND[it.kind],
     insertTextFormat: it.snippet ? 2 : 1, // 2 = snippet
     textEdit: {
-      range: {
-        start: { line: pos.line, character: Math.max(0, pos.character - it.replaceLength) },
-        end: pos,
-      },
+      range,
       newText: it.insertText,
     },
   }
   if (it.detail) item.detail = it.detail
   if (it.documentation) item.documentation = it.documentation
   if (it.sortText) item.sortText = it.sortText
+  if (it.data) item.data = it.data
   return item
 }
 
@@ -304,7 +324,7 @@ function toLspDiagnostic(d: Diagnostic): object {
 function serverCapabilities(): object {
   return {
     textDocumentSync: 1, // full
-    completionProvider: { triggerCharacters: ['\\', '{'] },
+    completionProvider: { triggerCharacters: ['\\', '{', '[', ',', '=', '@'] },
     hoverProvider: true,
     definitionProvider: true,
     referencesProvider: true,

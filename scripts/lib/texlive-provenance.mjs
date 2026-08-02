@@ -11,12 +11,24 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, join, relative, resolve, sep } from 'node:path'
+import { basename, extname, join, relative, resolve, sep } from 'node:path'
 
 const FILE_SECTION = /^(runfiles|docfiles|srcfiles|binfiles)(?:\s|$)/
 const NOTICE_BASENAME = /(^|[-_.])(copying|copyright|licen[cs]e|notice|readme)([-_.]|$)/i
 const SHA256 = /^[a-f0-9]{64}$/i
 const SHA512 = /^[a-f0-9]{128}$/i
+const COMPLETION_METADATA_EXTENSIONS = new Set([
+  '.bbx',
+  '.bst',
+  '.cbx',
+  '.cls',
+  '.lbx',
+  '.otf',
+  '.sty',
+  '.ttc',
+  '.ttf',
+])
+const COMPLETION_METADATA_EXTRA_FILES = new Set(['dvipsnam.def', 'svgnam.def', 'x11nam.def'])
 
 export const FORMAT_RULES = [
   {
@@ -68,6 +80,25 @@ function validateHex(value, pattern, label) {
   if (typeof value !== 'string' || !pattern.test(value)) {
     throw new Error(`${label} is not a valid ${pattern === SHA256 ? 'SHA-256' : 'SHA-512'} digest`)
   }
+}
+
+/** Immutable identity of the flattened mirror bytes and their selected provenance. */
+export function mirrorRevisionFor(texliveYear, files) {
+  if (!/^\d{4}$/.test(texliveYear ?? '')) throw new Error('mirror revision requires a year')
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('mirror revision requires a non-empty file inventory')
+  }
+  const inventory = [...files]
+    .map((file) => ({
+      key: file.key,
+      sha256: file.sha256,
+      sourcePath: file.source?.path,
+      package: file.source?.package,
+      packageRevision: file.source?.packageRevision,
+    }))
+    .sort((a, b) => String(a.key).localeCompare(String(b.key)))
+  const digest = createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
+  return `${texliveYear}-${digest.slice(0, 16)}`
 }
 
 function parseFileEntry(line) {
@@ -168,6 +199,13 @@ function outputName(path, rule) {
   if (!rule.stripExtension) return name
   const extension = rule.extensions.find((candidate) => name.toLowerCase().endsWith(candidate))
   return extension ? name.slice(0, -extension.length) : name
+}
+
+function isCompletionMetadataKey(key) {
+  const name = basename(key).toLowerCase()
+  return (
+    COMPLETION_METADATA_EXTENSIONS.has(extname(name)) || COMPLETION_METADATA_EXTRA_FILES.has(name)
+  )
 }
 
 function validateConfig(config, overrides) {
@@ -327,7 +365,7 @@ function validateNoticePaths(texmfDist, pkg, noticePaths) {
   }
 }
 
-function collectCandidates(texmfDist) {
+function collectCandidates(texmfDist, includeKey = null) {
   const candidatesByKey = new Map()
   for (const rule of FORMAT_RULES) {
     for (const root of rule.roots) {
@@ -338,6 +376,7 @@ function collectCandidates(texmfDist) {
         const sourcePath = `texmf-dist/${relativePath}`
         const name = outputName(path, rule)
         const key = `pdftex/${rule.format}/${name}`
+        if (includeKey && !includeKey(key)) continue
         const fileStat = statSync(path)
         const candidates = candidatesByKey.get(key) ?? []
         candidates.push({
@@ -639,13 +678,20 @@ export function generateMirror({
   overrides,
   texmfArchivePath = null,
   metadataArchivePath = null,
+  scope = 'full-mirror',
 }) {
   validateConfig(config, overrides)
+  if (!['full-mirror', 'completion-metadata'].includes(scope)) {
+    throw new Error(`unsupported provenance scope: ${String(scope)}`)
+  }
   if (!existsSync(texmfDist) || !statSync(texmfDist).isDirectory()) {
     throw new Error(`texmf-dist directory does not exist: ${texmfDist}`)
   }
   const { tlpdbSha256, parsed } = loadPinnedTlpdb(tlpdbPath, config)
-  const candidatesByKey = collectCandidates(texmfDist)
+  const candidatesByKey = collectCandidates(
+    texmfDist,
+    scope === 'completion-metadata' ? isCompletionMetadataKey : null,
+  )
 
   const files = []
   for (const key of [...candidatesByKey.keys()].sort()) {
@@ -653,8 +699,8 @@ export function generateMirror({
     const { selected, collision } = resolveCollision(key, candidates, overrides)
     const owner = resolveOwner(selected.sourcePath, parsed, overrides)
     const pkg = parsed.packages.get(owner)
-    const license = resolveLicense(pkg, overrides)
-    validateNoticePaths(texmfDist, pkg, license.noticePaths)
+    const license = scope === 'full-mirror' ? resolveLicense(pkg, overrides) : null
+    if (license) validateNoticePaths(texmfDist, pkg, license.noticePaths)
     files.push({
       key,
       format: Number(key.split('/')[1]),
@@ -665,13 +711,17 @@ export function generateMirror({
         package: pkg.name,
         packageRevision: pkg.revision,
         catalogue: pkg.catalogue,
-        license: {
-          ids: license.ids,
-          references: license.references,
-          source: license.source,
-          reviewed: license.reviewed,
-        },
-        noticePaths: license.noticePaths,
+        ...(license
+          ? {
+              license: {
+                ids: license.ids,
+                references: license.references,
+                source: license.source,
+                reviewed: license.reviewed,
+              },
+              noticePaths: license.noticePaths,
+            }
+          : {}),
       },
       ...(collision ? { collision } : {}),
       _absolutePath: selected.absolutePath,
@@ -704,27 +754,37 @@ export function generateMirror({
 
   const byFormat = {}
   for (const file of files) byFormat[file.format] = (byFormat[file.format] ?? 0) + 1
-  const unreviewedPackages = [
-    ...new Set(
-      files
-        .filter((file) => file.source.license.reviewed !== true)
-        .map((file) => file.source.package),
-    ),
-  ].sort()
-  const packagesWithoutNoticeEvidence = [
-    ...new Set(
-      files
-        .filter((file) => file.source.noticePaths.length === 0)
-        .map((file) => file.source.package),
-    ),
-  ].sort()
+  const unreviewedPackages =
+    scope === 'full-mirror'
+      ? [
+          ...new Set(
+            files
+              .filter((file) => file.source.license?.reviewed !== true)
+              .map((file) => file.source.package),
+          ),
+        ].sort()
+      : []
+  const packagesWithoutNoticeEvidence =
+    scope === 'full-mirror'
+      ? [
+          ...new Set(
+            files
+              .filter((file) => (file.source.noticePaths?.length ?? 0) === 0)
+              .map((file) => file.source.package),
+          ),
+        ].sort()
+      : []
   const manifest = {
     schemaVersion: 1,
+    ...(scope === 'completion-metadata' ? { scope } : {}),
     texliveYear: config.texliveYear,
+    mirrorRevision: mirrorRevisionFor(config.texliveYear, files),
     releaseStatus:
-      unreviewedPackages.length === 0 && packagesWithoutNoticeEvidence.length === 0
-        ? 'provenance-reviewed'
-        : 'review-required',
+      scope === 'completion-metadata'
+        ? 'metadata-only'
+        : unreviewedPackages.length === 0 && packagesWithoutNoticeEvidence.length === 0
+          ? 'provenance-reviewed'
+          : 'review-required',
     source: {
       texmfArchive: { ...config.texmfArchive, ...texmfArchiveVerification },
       metadataArchive: { ...config.metadataArchive, ...metadataArchiveVerification },
@@ -755,12 +815,25 @@ export function checkMirror({
   mirrorRoot,
   requireVerifiedArchives = true,
   requireLicenseReview = false,
+  allowCompletionMetadata = false,
 }) {
   const failures = []
   const fail = (message) => failures.push(message)
   if (manifest.schemaVersion !== 1) fail('manifest schemaVersion must be 1')
   if (!/^\d{4}$/.test(manifest.texliveYear ?? '')) fail('manifest texliveYear must be a year')
+  if (!/^\d{4}-[a-f0-9]{16}$/.test(manifest.mirrorRevision ?? '')) {
+    fail('manifest mirrorRevision is invalid')
+  } else if (manifest.mirrorRevision !== mirrorRevisionFor(manifest.texliveYear, manifest.files)) {
+    fail('manifest mirrorRevision does not match its file inventory')
+  }
   if (manifest.layout?.root !== 'pdftex') fail('manifest layout.root must be pdftex')
+  const completionMetadata = manifest.scope === 'completion-metadata'
+  if (completionMetadata && !allowCompletionMetadata) {
+    fail('completion metadata manifest requires explicit allowCompletionMetadata')
+  }
+  if (!completionMetadata && manifest.scope !== undefined && manifest.scope !== 'full-mirror') {
+    fail(`unsupported manifest scope: ${String(manifest.scope)}`)
+  }
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     fail('manifest files must be non-empty')
   }
@@ -788,7 +861,13 @@ export function checkMirror({
     if (!/^texmf-dist\//.test(file.source?.path ?? '') || file.source.path.includes('..')) {
       fail(`${file.key}: invalid or unsafe source path`)
     }
-    if (!Array.isArray(file.source?.license?.ids) || file.source.license.ids.length === 0) {
+    if (completionMetadata && !isCompletionMetadataKey(file.key)) {
+      fail(`${file.key}: unsupported completion metadata resource`)
+    }
+    if (
+      !completionMetadata &&
+      (!Array.isArray(file.source?.license?.ids) || file.source.license.ids.length === 0)
+    ) {
       fail(`${file.key}: missing license identifiers`)
     }
     if (requireLicenseReview && file.source?.license?.reviewed !== true) {
@@ -828,6 +907,9 @@ export function checkMirror({
     fail(`file count mismatch: manifest=${declared.size}, mirror=${actual.length}`)
   }
   if (manifest.summary?.files !== declared.size) fail('summary.files does not match manifest files')
+  if (completionMetadata && manifest.releaseStatus !== 'metadata-only') {
+    fail(`manifest releaseStatus is ${String(manifest.releaseStatus)}, not metadata-only`)
+  }
   if (requireLicenseReview && manifest.releaseStatus !== 'provenance-reviewed') {
     fail(`manifest releaseStatus is ${String(manifest.releaseStatus)}, not provenance-reviewed`)
   }

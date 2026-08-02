@@ -47,6 +47,12 @@ type WorkerReply = {
   pdf?: ArrayBuffer
   synctex?: ArrayBuffer
   log?: string
+  engineCommands?: unknown[]
+  engineCommandsComplete?: boolean
+  engineCommandsDropped?: number
+  inputFiles?: unknown[]
+  inputFilesComplete?: boolean
+  completionObservations?: unknown[]
 }
 
 /** Drives the engine without a real Worker by exposing the protected seams. */
@@ -59,14 +65,14 @@ class TestableEngine extends WasmTexPdftexEngine {
   installWorker(reply?: () => WorkerReply): void {
     this.worker = {
       postMessage: () => {
-        if (reply) this.dispatchWorkerMessage(reply(), noop, noop)
+        if (reply) this.dispatchWorkerMessage(reply() as never, noop, noop)
       },
     } as unknown as EngineWorker
   }
 
   /** Simulate a worker → main message through the real dispatch path. */
   deliver(reply: WorkerReply): void {
-    this.dispatchWorkerMessage(reply, noop, noop)
+    this.dispatchWorkerMessage(reply as never, noop, noop)
   }
 }
 
@@ -241,6 +247,92 @@ describe('WasmTexPdftexEngine persist watermark', () => {
 })
 
 describe('WasmTexPdftexEngine compile() result mapping', () => {
+  it('maps bounded worker observations without changing compile output', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    const pdf = Uint8Array.of(37, 80, 68, 70).buffer
+    engine.markReady()
+    engine.installWorker(() => ({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      pdf,
+      log: 'stable engine log',
+      engineCommands: ['runtimecmd\t111\t1'],
+      engineCommandsComplete: true,
+      engineCommandsDropped: 0,
+      inputFiles: ['/work/main.tex', '/tex/xcolor.sty'],
+      inputFilesComplete: true,
+      completionObservations: [
+        'counter\truntimecounter',
+        'color\truntimecolor',
+        'key\tlayout\truntimekey',
+        'meta\tcounter\t0',
+        'meta\tcolor\t0',
+        'meta\tkey\t0',
+      ],
+    }))
+
+    const result = await engine.compile()
+
+    expect(result).toMatchObject({
+      success: true,
+      log: 'stable engine log',
+      engineCommands: ['runtimecmd\t111\t1'],
+      engineCommandsComplete: true,
+      engineCommandsDropped: 0,
+      inputFiles: ['/work/main.tex', '/tex/xcolor.sty'],
+      inputFilesComplete: true,
+    })
+    expect(result.pdf).toEqual(Uint8Array.of(37, 80, 68, 70))
+    expect(engine.getCompletionObservation()).toEqual({
+      counters: ['runtimecounter'],
+      colors: ['runtimecolor'],
+      keyFamilies: [{ name: 'layout', keys: ['runtimekey'] }],
+      complete: true,
+      fieldCompleteness: { counters: true, colors: true, keyFamilies: true },
+      dropped: { counters: 0, colors: 0, keyFamilies: 0 },
+    })
+
+    const observation = engine.getCompletionObservation()
+    observation?.colors.push('mutated-by-consumer')
+    expect(engine.getCompletionObservation()?.colors).toEqual(['runtimecolor'])
+  })
+
+  it('bounds malformed worker observations and marks their coverage incomplete', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    engine.installWorker(() => ({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      pdf: Uint8Array.of(37, 80, 68, 70).buffer,
+      engineCommands: ['kept\t111\t0', { forged: 'command' }],
+      engineCommandsComplete: true,
+      engineCommandsDropped: 0,
+      inputFiles: ['/work/main.tex', { forged: 'path' }],
+      inputFilesComplete: true,
+      completionObservations: [
+        'meta\tcounter\t0',
+        'meta\tcolor\t0',
+        'meta\tkey\t0',
+        { forged: 'observation' },
+      ],
+    }))
+
+    const result = await engine.compile()
+
+    expect(result.engineCommands).toEqual(['kept\t111\t0'])
+    expect(result.engineCommandsComplete).toBe(false)
+    expect(result.engineCommandsDropped).toBe(1)
+    expect(result.inputFiles).toEqual(['/work/main.tex'])
+    expect(result.inputFilesComplete).toBe(false)
+    expect(engine.getCompletionObservation()?.fieldCompleteness).toEqual({
+      counters: false,
+      colors: false,
+      keyFamilies: false,
+    })
+  })
+
   it('returns null synctex when the worker omits the synctex field on a successful compile', async () => {
     const engine = new TestableEngine({ assetBaseUrl: '/' })
     const pdf = new Uint8Array([1, 2, 3]).buffer

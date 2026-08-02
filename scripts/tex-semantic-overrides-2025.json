@@ -1,0 +1,438 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2025",
+  "source": "scripts/tex-semantic-overrides-2025.json",
+  "license": "MIT",
+  "description": "WasmTex-authored high-value supplements for dynamic TeX interfaces. Applied only when the exact class/package resource exists in the selected mirror.",
+  "scopes": {
+    "class/article": {
+      "sourceId": "LaTeX2e standard classes documentation",
+      "keyFamilies": [{
+        "name": "class-options",
+        "keys": [
+          { "name": "10pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "11pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "12pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "a4paper", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "letterpaper", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "draft", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "final", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "onecolumn", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "twocolumn", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "oneside", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "twoside", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "titlepage", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "notitlepage", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "class/report": {
+      "sourceId": "LaTeX2e standard classes documentation",
+      "keyFamilies": [{
+        "name": "class-options",
+        "keys": [
+          { "name": "10pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "11pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "12pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "a4paper", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "letterpaper", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "draft", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "final", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "openright", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "openany", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "oneside", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "twoside", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "class/book": {
+      "sourceId": "LaTeX2e standard classes documentation",
+      "keyFamilies": [{
+        "name": "class-options",
+        "keys": [
+          { "name": "10pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "11pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "12pt", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "a4paper", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "letterpaper", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "draft", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "final", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "openright", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "openany", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "oneside", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "twoside", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "class/beamer": {
+      "sourceId": "Beamer user guide",
+      "keyFamilies": [{
+        "name": "class-options",
+        "keys": [
+          { "name": "aspectratio", "value": { "type": "enum", "values": ["43", "169", "1610", "149", "141", "54", "32"] }, "repeatable": false },
+          { "name": "professionalfonts", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "serif", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "handout", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "draft", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "compress", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "t", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "c", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "package/amsmath": {
+      "sourceId": "AMS-LaTeX amsmath documentation",
+      "keyFamilies": [{
+        "name": "package-options",
+        "keys": [
+          { "name": "centertags", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "tbtags", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "sumlimits", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "nosumlimits", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "intlimits", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "nointlimits", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "namelimits", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "nonamelimits", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "leqno", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "fleqn", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "package/graphicx": {
+      "sourceId": "LaTeX graphics bundle documentation",
+      "keyFamilies": [
+        {
+          "name": "package-options",
+          "keys": [
+            { "name": "draft", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "final", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "demo", "value": { "type": "flag" }, "repeatable": false }
+          ]
+        },
+        {
+          "name": "graphicx/includegraphics",
+          "keys": [
+            { "name": "width", "value": { "type": "dimension" } },
+            { "name": "height", "value": { "type": "dimension" } },
+            { "name": "totalheight", "value": { "type": "dimension" } },
+            { "name": "keepaspectratio", "value": { "type": "boolean" } },
+            { "name": "scale", "value": { "type": "number" } },
+            { "name": "angle", "value": { "type": "number" } },
+            { "name": "origin", "value": { "type": "enum", "values": ["l", "c", "r", "t", "b", "B"] } },
+            { "name": "page", "value": { "type": "number" } },
+            { "name": "pagebox", "value": { "type": "enum", "values": ["mediabox", "cropbox", "bleedbox", "trimbox", "artbox"] } },
+            { "name": "trim", "value": { "type": "free-text" } },
+            { "name": "viewport", "value": { "type": "free-text" } },
+            { "name": "clip", "value": { "type": "boolean" } }
+          ]
+        }
+      ]
+    },
+    "package/xcolor": {
+      "sourceId": "xcolor package documentation",
+      "colorSources": [
+        { "fileName": "dvipsnam.def", "anyOptions": ["dvipsnames"], "deferredOptions": ["dvipsnames*"], "priority": 10, "expectedCount": 68 },
+        { "fileName": "svgnam.def", "anyOptions": ["svgnames"], "deferredOptions": ["svgnames*"], "priority": 20, "expectedCount": 151 },
+        { "fileName": "x11nam.def", "anyOptions": ["x11names"], "deferredOptions": ["x11names*"], "priority": 30, "expectedCount": 317 }
+      ],
+      "keyFamilies": [{
+        "name": "package-options",
+        "keys": [
+          { "name": "monochrome", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "natural", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "table", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "dvipsnames", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "dvipsnames*", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "svgnames", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "svgnames*", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "x11names", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "x11names*", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "package/hyperref": {
+      "sourceId": "hyperref manual",
+      "keyFamilies": [
+        {
+          "name": "package-options",
+          "keys": [
+            { "name": "draft", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "final", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "colorlinks", "value": { "type": "boolean" }, "repeatable": false },
+            { "name": "unicode", "value": { "type": "boolean" }, "repeatable": false },
+            { "name": "bookmarks", "value": { "type": "boolean" }, "repeatable": false }
+          ]
+        },
+        {
+          "name": "hyperref/hypersetup",
+          "keys": [
+            { "name": "pdftitle", "value": { "type": "free-text" } },
+            { "name": "pdfauthor", "value": { "type": "free-text" } },
+            { "name": "pdfsubject", "value": { "type": "free-text" } },
+            { "name": "pdfkeywords", "value": { "type": "free-text" } },
+            { "name": "colorlinks", "value": { "type": "boolean" } },
+            { "name": "linkcolor", "value": { "type": "color" } },
+            { "name": "citecolor", "value": { "type": "color" } },
+            { "name": "urlcolor", "value": { "type": "color" } },
+            { "name": "filecolor", "value": { "type": "color" } },
+            { "name": "pdfborder", "value": { "type": "free-text" } },
+            { "name": "bookmarksopen", "value": { "type": "boolean" } }
+          ]
+        }
+      ],
+      "commands": [{
+        "name": "hypersetup",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "hyperref/hypersetup", "list": true }]
+      }]
+    },
+    "package/geometry": {
+      "sourceId": "geometry package documentation",
+      "keyFamilies": [{
+        "name": "geometry/geometry",
+        "keys": [
+          { "name": "paper", "value": { "type": "enum", "values": ["a4paper", "a5paper", "letterpaper", "legalpaper", "executivepaper"] } },
+          { "name": "margin", "value": { "type": "dimension" } },
+          { "name": "left", "value": { "type": "dimension" } },
+          { "name": "right", "value": { "type": "dimension" } },
+          { "name": "top", "value": { "type": "dimension" } },
+          { "name": "bottom", "value": { "type": "dimension" } },
+          { "name": "hmargin", "value": { "type": "free-text" } },
+          { "name": "vmargin", "value": { "type": "free-text" } },
+          { "name": "includehead", "value": { "type": "boolean" } },
+          { "name": "includefoot", "value": { "type": "boolean" } },
+          { "name": "landscape", "value": { "type": "boolean" } },
+          { "name": "showframe", "value": { "type": "boolean" } }
+        ]
+      }],
+      "commands": [{
+        "name": "geometry",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "geometry/geometry", "list": true }]
+      }]
+    },
+    "package/babel": {
+      "sourceId": "Babel base manual",
+      "keyFamilies": [{
+        "name": "package-options",
+        "keys": [
+          { "name": "main", "value": { "type": "free-text" }, "repeatable": false },
+          { "name": "provide", "value": { "type": "free-text" }, "repeatable": false },
+          { "name": "safe", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "shorthands", "value": { "type": "free-text" }, "repeatable": false }
+        ]
+      }]
+    },
+    "package/polyglossia": {
+      "sourceId": "Polyglossia manual",
+      "engines": ["xetex", "luatex"],
+      "keyFamilies": [{
+        "name": "polyglossia/setdefaultlanguage",
+        "keys": [
+          { "name": "variant", "value": { "type": "free-text" } },
+          { "name": "script", "value": { "type": "free-text" } },
+          { "name": "numerals", "value": { "type": "free-text" } }
+        ]
+      }],
+      "commands": [{
+        "name": "setdefaultlanguage",
+        "args": [
+          { "kind": "optional", "valueKind": "key-value", "keyFamily": "polyglossia/setdefaultlanguage", "list": true },
+          { "kind": "required", "valueKind": "free-text" }
+        ]
+      }]
+    },
+    "package/fontspec": {
+      "sourceId": "fontspec manual",
+      "engines": ["xetex", "luatex"],
+      "keyFamilies": [{
+        "name": "fontspec/font",
+        "keys": [
+          { "name": "Path", "value": { "type": "file" } },
+          { "name": "Extension", "value": { "type": "free-text" } },
+          { "name": "UprightFont", "value": { "type": "font-family" } },
+          { "name": "BoldFont", "value": { "type": "font-family" } },
+          { "name": "ItalicFont", "value": { "type": "font-family" } },
+          { "name": "BoldItalicFont", "value": { "type": "font-family" } },
+          { "name": "Scale", "value": { "type": "free-text" } },
+          { "name": "Ligatures", "value": { "type": "free-text" } },
+          { "name": "Numbers", "value": { "type": "free-text" } },
+          { "name": "Color", "value": { "type": "color" } }
+        ]
+      }]
+    },
+    "package/biblatex": {
+      "sourceId": "biblatex manual",
+      "keyFamilies": [
+        {
+          "name": "package-options",
+          "keys": [
+            { "name": "style", "value": { "type": "biblatex-style" }, "repeatable": false },
+            { "name": "citestyle", "value": { "type": "biblatex-style" }, "repeatable": false },
+            { "name": "bibstyle", "value": { "type": "biblatex-style" }, "repeatable": false },
+            { "name": "backend", "value": { "type": "enum", "values": ["biber", "bibtex", "bibtex8"] }, "repeatable": false },
+            { "name": "sorting", "value": { "type": "free-text" }, "repeatable": false },
+            { "name": "maxnames", "value": { "type": "number" }, "repeatable": false },
+            { "name": "minnames", "value": { "type": "number" }, "repeatable": false },
+            { "name": "doi", "value": { "type": "boolean" }, "repeatable": false },
+            { "name": "isbn", "value": { "type": "boolean" }, "repeatable": false },
+            { "name": "url", "value": { "type": "boolean" }, "repeatable": false }
+          ]
+        },
+        {
+          "name": "biblatex/printbibliography",
+          "keys": [
+            { "name": "heading", "value": { "type": "free-text" } },
+            { "name": "title", "value": { "type": "free-text" } },
+            { "name": "type", "value": { "type": "free-text" } },
+            { "name": "keyword", "value": { "type": "free-text" } },
+            { "name": "notkeyword", "value": { "type": "free-text" } }
+          ]
+        }
+      ],
+      "commands": [{
+        "name": "printbibliography",
+        "args": [{ "kind": "optional", "valueKind": "key-value", "keyFamily": "biblatex/printbibliography", "list": true }]
+      }]
+    },
+    "package/tikz": {
+      "sourceId": "PGF/TikZ manual",
+      "keyFamilies": [{
+        "name": "tikz/tikzset",
+        "keys": [
+          { "name": "draw", "value": { "type": "color" } },
+          { "name": "fill", "value": { "type": "color" } },
+          { "name": "color", "value": { "type": "color" } },
+          { "name": "line width", "value": { "type": "dimension" } },
+          { "name": "scale", "value": { "type": "number" } },
+          { "name": "rotate", "value": { "type": "number" } },
+          { "name": "opacity", "value": { "type": "number" } },
+          { "name": "font", "value": { "type": "command" } }
+        ]
+      }],
+      "commands": [{
+        "name": "tikzset",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "tikz/tikzset", "list": true }]
+      }]
+    },
+    "package/pgfplots": {
+      "sourceId": "PGFPlots manual",
+      "dependencies": ["tikz"],
+      "keyFamilies": [{
+        "name": "pgfplots/pgfplotsset",
+        "keys": [
+          { "name": "compat", "value": { "type": "free-text" } },
+          { "name": "width", "value": { "type": "dimension" } },
+          { "name": "height", "value": { "type": "dimension" } },
+          { "name": "xlabel", "value": { "type": "free-text" } },
+          { "name": "ylabel", "value": { "type": "free-text" } },
+          { "name": "title", "value": { "type": "free-text" } },
+          { "name": "legend pos", "value": { "type": "free-text" } }
+        ]
+      }],
+      "commands": [{
+        "name": "pgfplotsset",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "pgfplots/pgfplotsset", "list": true }]
+      }]
+    },
+    "package/siunitx": {
+      "sourceId": "siunitx manual",
+      "keyFamilies": [{
+        "name": "siunitx/sisetup",
+        "keys": [
+          { "name": "mode", "value": { "type": "enum", "values": ["match", "math", "text"] } },
+          { "name": "per-mode", "value": { "type": "enum", "values": ["power", "fraction", "symbol", "repeated-symbol", "single-symbol"] } },
+          { "name": "round-mode", "value": { "type": "enum", "values": ["none", "figures", "places", "uncertainty"] } },
+          { "name": "round-precision", "value": { "type": "number" } },
+          { "name": "group-separator", "value": { "type": "free-text" } },
+          { "name": "detect-all", "value": { "type": "boolean" } }
+        ]
+      }],
+      "commands": [{
+        "name": "sisetup",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "siunitx/sisetup", "list": true }]
+      }]
+    },
+    "package/listings": {
+      "sourceId": "listings package documentation",
+      "keyFamilies": [{
+        "name": "listings/lstset",
+        "keys": [
+          { "name": "language", "value": { "type": "free-text" } },
+          { "name": "basicstyle", "value": { "type": "command" } },
+          { "name": "keywordstyle", "value": { "type": "command" } },
+          { "name": "commentstyle", "value": { "type": "command" } },
+          { "name": "numbers", "value": { "type": "enum", "values": ["none", "left", "right"] } },
+          { "name": "breaklines", "value": { "type": "boolean" } },
+          { "name": "frame", "value": { "type": "free-text" } }
+        ]
+      }],
+      "commands": [{
+        "name": "lstset",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "listings/lstset", "list": true }]
+      }]
+    },
+    "package/minted": {
+      "sourceId": "minted package documentation",
+      "keyFamilies": [{
+        "name": "minted/setminted",
+        "keys": [
+          { "name": "breaklines", "value": { "type": "boolean" } },
+          { "name": "fontsize", "value": { "type": "command" } },
+          { "name": "frame", "value": { "type": "enum", "values": ["none", "leftline", "topline", "bottomline", "lines", "single"] } },
+          { "name": "linenos", "value": { "type": "boolean" } },
+          { "name": "style", "value": { "type": "free-text" } },
+          { "name": "bgcolor", "value": { "type": "color" } }
+        ]
+      }],
+      "commands": [{
+        "name": "setminted",
+        "args": [{ "kind": "required", "valueKind": "key-value", "keyFamily": "minted/setminted", "list": true }]
+      }]
+    },
+    "package/cleveref": {
+      "sourceId": "cleveref package documentation",
+      "keyFamilies": [{
+        "name": "package-options",
+        "keys": [
+          { "name": "capitalise", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "nameinlink", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "noabbrev", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "poorman", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "sort", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "compress", "value": { "type": "flag" }, "repeatable": false }
+        ]
+      }]
+    },
+    "package/glossaries": {
+      "sourceId": "glossaries package documentation",
+      "keyFamilies": [
+        {
+          "name": "package-options",
+          "keys": [
+            { "name": "acronym", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "toc", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "section", "value": { "type": "free-text" }, "repeatable": false },
+            { "name": "nonumberlist", "value": { "type": "flag" }, "repeatable": false },
+            { "name": "automake", "value": { "type": "boolean" }, "repeatable": false }
+          ]
+        },
+        {
+          "name": "glossaries/newglossaryentry",
+          "keys": [
+            { "name": "name", "value": { "type": "free-text" }, "repeatable": false },
+            { "name": "description", "value": { "type": "free-text" }, "repeatable": false },
+            { "name": "plural", "value": { "type": "free-text" }, "repeatable": false },
+            { "name": "symbol", "value": { "type": "free-text" }, "repeatable": false },
+            { "name": "type", "value": { "type": "free-text" }, "repeatable": false }
+          ]
+        }
+      ],
+      "commands": [{
+        "name": "newglossaryentry",
+        "args": [
+          { "kind": "required", "valueKind": "glossary-key" },
+          { "kind": "required", "valueKind": "key-value", "keyFamily": "glossaries/newglossaryentry", "list": true }
+        ]
+      }]
+    }
+  }
+}

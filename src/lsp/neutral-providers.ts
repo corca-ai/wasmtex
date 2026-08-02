@@ -4,86 +4,326 @@
  * server are thin wrappers that convert these neutral results.
  */
 import type { VirtualFS } from '../fs/virtual-fs'
+import { registerBibCompletionResolvers } from './bib-completion'
 import { formatReference } from './bib-parser'
+import { completeColors } from './color-completion'
 import {
-  COMMON_PACKAGES,
+  analyzeCompletionContext,
+  type CommandArgumentCompletionContext,
+  type CompletionContext,
+} from './completion-context'
+import {
+  type CompletionCancellationToken,
+  type CompletionResolverEnvironment,
+  CompletionResolverRegistry,
+} from './completion-registry'
+import { completeProjectFiles } from './file-completion'
+import {
   getCommandByName,
   getEnvironmentByName,
   LATEX_COMMANDS,
   LATEX_ENVIRONMENTS,
 } from './latex-commands'
-import { CITE_CMDS, COMMAND_TOKEN, INPUT_CMDS, REF_CMDS, USEPACKAGE_CMDS } from './latex-patterns'
-import { formatSignature, getShardEnvironments, parseSignature } from './package-db'
+import { CITE_CMDS, COMMAND_TOKEN, REF_CMDS } from './latex-patterns'
+import {
+  type CompletionValueKind,
+  formatSignature,
+  getShardEnvironments,
+  parseSignature,
+} from './package-db'
 import type { EngineCommandInfo, Occurrence, ProjectIndex } from './project-index'
 import type {
   NeutralCompletionItem,
+  NeutralCompletionList,
   NeutralDocument,
   NeutralHover,
   NeutralLocation,
   NeutralPosition,
 } from './protocol'
+import type {
+  TexResourceCatalogProvider,
+  TexResourceKind,
+  TexResourceRecord,
+} from './resource-catalog'
+import {
+  registerTexSemanticShard,
+  type TexSemanticCatalogProvider,
+  type TexSemanticKey,
+  type TexSemanticShard,
+  type TexSemanticValueType,
+} from './semantic-catalog'
 import { buildLineStarts, offsetToLineCol } from './source-position'
+import type { ProjectKeyDefinition, ProjectValue } from './types'
 
 // --- Completion context ------------------------------------------------------
 
-type CompletionContextType = 'command' | 'ref' | 'cite' | 'begin' | 'end' | 'usepackage' | 'include'
+type LegacyCompletionContextType =
+  | 'command'
+  | 'ref'
+  | 'cite'
+  | 'begin'
+  | 'end'
+  | 'usepackage'
+  | 'include'
 
-interface CompletionContext {
-  type: CompletionContextType
+interface LegacyCompletionContext {
+  type: LegacyCompletionContextType
   prefix: string
 }
 
-/** Detect what kind of completion the cursor is in (editor-neutral). */
+/**
+ * Compatibility wrapper for the former line-only context API. New integrations should use
+ * {@link analyzeCompletionContext}, which handles multiline invocations and exact ranges.
+ */
 export function detectCompletionContext(
   lineContent: string,
   column: number,
-): CompletionContext | null {
-  const before = lineContent.slice(0, column - 1)
-  // Trim leading whitespace from each braced argument: consumers filter with
-  // name.startsWith(prefix), so a stray space after the `{` (e.g. "\ref{ fig") would
-  // otherwise yield zero suggestions and an inflated replace range.
-  const refMatch = before.match(new RegExp(`\\\\(?:${REF_CMDS})\\{([^}]*)$`))
-  if (refMatch) {
-    // \cref/\Cref take a comma-separated label list; complete only the segment under the
-    // cursor (mirrors the cite/usepackage branches), else "fig:a,fig:" matches no label.
-    const inner = refMatch[1]!
-    const lastComma = inner.lastIndexOf(',')
-    return {
-      type: 'ref',
-      prefix: lastComma >= 0 ? inner.slice(lastComma + 1).trim() : inner.trimStart(),
-    }
-  }
+): LegacyCompletionContext | null {
+  const context = analyzeCompletionContext(
+    { path: '', getText: () => lineContent, lineAt: () => lineContent },
+    { line: 1, column },
+  )
+  if (!context) return null
+  if (context.type === 'command') return { type: 'command', prefix: context.prefix }
+  if (context.type === 'bibtex') return null
+  const type = legacyContextType(context)
+  return type ? { type, prefix: context.prefix } : null
+}
 
-  const citeMatch = before.match(new RegExp(`\\\\(?:${CITE_CMDS})(?:\\[.*?\\])?\\{([^}]*)$`))
-  if (citeMatch) {
-    const inner = citeMatch[1]!
-    const lastComma = inner.lastIndexOf(',')
-    return {
-      type: 'cite',
-      prefix: lastComma >= 0 ? inner.slice(lastComma + 1).trim() : inner.trimStart(),
-    }
+function legacyContextType(
+  context: CommandArgumentCompletionContext,
+): LegacyCompletionContextType | null {
+  if (context.valueKind === 'label') return 'ref'
+  if (context.valueKind === 'citation') return 'cite'
+  if (context.valueKind === 'environment') return context.command === 'end' ? 'end' : 'begin'
+  if (context.valueKind === 'tex-package') return 'usepackage'
+  if (
+    context.valueKind === 'project-tex' ||
+    context.valueKind === 'project-bib' ||
+    context.valueKind === 'project-image' ||
+    context.valueKind === 'project-listing' ||
+    context.valueKind === 'project-data' ||
+    context.valueKind === 'project-file'
+  ) {
+    return 'include'
   }
-  const beginMatch = before.match(/\\begin\{([^}]*)$/)
-  if (beginMatch) return { type: 'begin', prefix: beginMatch[1]!.trimStart() }
-  const endMatch = before.match(/\\end\{([^}]*)$/)
-  if (endMatch) return { type: 'end', prefix: endMatch[1]!.trimStart() }
-  const pkgMatch = before.match(new RegExp(`\\\\(?:${USEPACKAGE_CMDS})(?:\\[.*?\\])?\\{([^}]*)$`))
-  if (pkgMatch) {
-    // \usepackage takes a comma-separated list; complete only the segment under the cursor
-    // (mirrors the cite branch), else "amsmath,amss" matches no package and clobbers the first.
-    const inner = pkgMatch[1]!
-    const lastComma = inner.lastIndexOf(',')
-    return {
-      type: 'usepackage',
-      prefix: lastComma >= 0 ? inner.slice(lastComma + 1).trim() : inner.trimStart(),
-    }
-  }
-  const includeMatch = before.match(new RegExp(`\\\\(?:${INPUT_CMDS})\\{([^}]*)$`))
-  if (includeMatch) return { type: 'include', prefix: includeMatch[1]!.trimStart() }
-  const cmdMatch = before.match(/\\(\w*)$/)
-  if (cmdMatch) return { type: 'command', prefix: cmdMatch[1]! }
   return null
 }
+
+export interface ProvideCompletionOptions {
+  registry?: CompletionResolverRegistry
+  cancellationToken?: CompletionCancellationToken
+}
+
+export interface DefaultCompletionRegistryOptions {
+  resourceCatalog?: TexResourceCatalogProvider
+  semanticCatalog?: TexSemanticCatalogProvider
+}
+
+interface SemanticSyncResult {
+  shards: TexSemanticShard[]
+  isIncomplete: boolean
+}
+
+class SemanticCompletionBinding {
+  private registeredScopes = new Set<string>()
+
+  constructor(
+    private provider: TexSemanticCatalogProvider,
+    private registry: CompletionResolverRegistry,
+  ) {}
+
+  syncProject(
+    index: ProjectIndex,
+    cancellationToken?: CompletionCancellationToken,
+    documentPath?: string,
+  ): SemanticSyncResult {
+    return this.syncScopes(
+      [
+        ...[...index.getLoadedPackages(documentPath)].map((name) => `package/${name}`),
+        ...[...index.getLoadedClasses(documentPath)].map((name) => `class/${name}`),
+      ],
+      cancellationToken,
+    )
+  }
+
+  syncScopes(
+    scopeIds: Iterable<string>,
+    cancellationToken?: CompletionCancellationToken,
+  ): SemanticSyncResult {
+    const shards: TexSemanticShard[] = []
+    let isIncomplete = false
+    const pending = [...new Set(scopeIds)]
+    const visited = new Set<string>()
+    while (pending.length > 0) {
+      const scopeId = pending.shift()!
+      if (visited.has(scopeId)) continue
+      visited.add(scopeId)
+      const state = this.provider.getState(scopeId)
+      if (state.status === 'ready') {
+        this.register(state.shard)
+        shards.push(state.shard)
+        for (const dependency of state.shard.dependencies) {
+          pending.push(`package/${dependency}`)
+        }
+      } else if (
+        state.status === 'idle' ||
+        state.status === 'loading' ||
+        state.status === 'error'
+      ) {
+        isIncomplete = true
+        if (state.status !== 'loading') {
+          void this.provider.load(scopeId, cancellationToken).then((loaded) => {
+            if (loaded.status === 'ready') this.register(loaded.shard)
+          })
+        }
+      }
+    }
+    return { shards, isIncomplete }
+  }
+
+  private register(shard: TexSemanticShard): void {
+    if (this.registeredScopes.has(shard.scope.id)) return
+    registerTexSemanticShard(this.registry, shard)
+    this.registeredScopes.add(shard.scope.id)
+  }
+}
+
+const semanticBindings = new WeakMap<CompletionResolverRegistry, SemanticCompletionBinding>()
+
+/** Create an isolated registry with WasmTex's built-in completion domains. */
+export function createDefaultCompletionRegistry(
+  options: DefaultCompletionRegistryOptions = {},
+): CompletionResolverRegistry {
+  const registry = new CompletionResolverRegistry()
+  const semanticBinding = options.semanticCatalog
+    ? new SemanticCompletionBinding(options.semanticCatalog, registry)
+    : undefined
+  if (semanticBinding) semanticBindings.set(registry, semanticBinding)
+  registerBibCompletionResolvers(registry)
+  registry.registerResolver('command', (context, env) => {
+    const semantic = semanticBinding?.syncProject(
+      env.index,
+      env.cancellationToken,
+      env.document.path,
+    )
+    return {
+      items: completeCommands(context.prefix, context.prefix.length, env.index, env.document.path),
+      isIncomplete: semantic?.isIncomplete ?? false,
+    }
+  })
+  registry.registerResolver('label', (context, env) =>
+    completeRefs(context.prefix, context.prefix.length, env.index, env.document.path),
+  )
+  registry.registerResolver('citation', (context, env) =>
+    completeCites(context.prefix, context.prefix.length, env.index, env.document.path),
+  )
+  registry.registerResolver('environment', (context, env) => {
+    const semantic = semanticBinding?.syncProject(
+      env.index,
+      env.cancellationToken,
+      env.document.path,
+    )
+    const items = completeEnvironments(
+      context.prefix,
+      context.prefix.length,
+      env.index,
+      context.type === 'argument' && context.command === 'begin',
+      env.document.path,
+    )
+    appendSemanticEnvironments(items, context.prefix, context.prefix.length, semantic?.shards ?? [])
+    return { items, isIncomplete: semantic?.isIncomplete ?? false }
+  })
+  registry.registerResolver('tex-class', resourceResolver('tex-class', options.resourceCatalog))
+  registry.registerResolver('tex-package', resourceResolver('tex-package', options.resourceCatalog))
+  registry.registerResolver('bib-style', resourceResolver('bib-style', options.resourceCatalog))
+  registry.registerResolver(
+    'biblatex-style',
+    resourceResolver('biblatex-style', options.resourceCatalog),
+  )
+  const fontResources = resourceResolver('font-file', options.resourceCatalog)
+  registry.registerResolver('font-family', (context, env) => {
+    const project = completeProjectValues(context, env, 'font-family')
+    const catalog = fontResources(context, env)
+    const result = Array.isArray(catalog) ? { items: catalog, isIncomplete: false } : catalog
+    return {
+      items: dedupeResources([...project, ...result.items]),
+      isIncomplete: result.isIncomplete,
+    }
+  })
+  registry.registerResolver('boolean', (context) =>
+    ['true', 'false']
+      .filter((value) => value.startsWith(context.prefix))
+      .map((value) => ({
+        label: value,
+        kind: 'keyword',
+        insertText: value,
+        replaceLength: context.prefix.length,
+      })),
+  )
+  registry.registerResolver('color', (context, env) => {
+    if (context.type !== 'argument') return []
+    if (
+      context.argumentIndex > 0 &&
+      (context.command === 'color' ||
+        context.command === 'textcolor' ||
+        context.command === 'colorbox')
+    ) {
+      return []
+    }
+    const semantic = semanticBinding?.syncProject(
+      env.index,
+      env.cancellationToken,
+      env.document.path,
+    )
+    return {
+      items: completeColors(env, semantic?.shards ?? []),
+      isIncomplete: semantic?.isIncomplete ?? false,
+    }
+  })
+  registry.registerResolver('counter', (context, env) =>
+    completeProjectValues(context, env, 'counter'),
+  )
+  registry.registerResolver('length', (context, env) =>
+    completeProjectValues(context, env, 'length'),
+  )
+  registry.registerResolver('glossary-key', (context, env) =>
+    completeProjectValues(context, env, 'glossary'),
+  )
+  registry.registerResolver('acronym-key', (context, env) =>
+    completeProjectValues(context, env, 'acronym'),
+  )
+  registry.registerResolver('key-family', (context, env) =>
+    completeProjectKeyFamilies(context, env),
+  )
+  registry.registerResolver('key-value', (context, env) =>
+    context.type === 'argument' ? resolveKeyValue(context, env, semanticBinding, registry) : [],
+  )
+  for (const kind of [
+    'project-tex',
+    'project-bib',
+    'project-image',
+    'project-listing',
+    'project-data',
+    'project-file',
+  ] as const) {
+    registry.registerResolver(kind, (context, env) =>
+      completeProjectFiles(kind, context.prefix, env.document.path, env.fs),
+    )
+  }
+  return registry
+}
+
+/** Start loading semantic shards for packages already present in the project. */
+export function preloadSemanticCatalog(
+  registry: CompletionResolverRegistry,
+  index: ProjectIndex,
+  cancellationToken?: CompletionCancellationToken,
+): void {
+  semanticBindings.get(registry)?.syncProject(index, cancellationToken)
+}
+
+const defaultCompletionRegistry = createDefaultCompletionRegistry()
 
 /** Compute completions at a position (editor-neutral). */
 export function provideCompletions(
@@ -91,25 +331,32 @@ export function provideCompletions(
   pos: NeutralPosition,
   index: ProjectIndex,
   fs: VirtualFS,
+  options: ProvideCompletionOptions = {},
 ): NeutralCompletionItem[] {
-  const ctx = detectCompletionContext(doc.lineAt(pos.line), pos.column)
-  if (!ctx) return []
-  const len = ctx.prefix.length
-  switch (ctx.type) {
-    case 'command':
-      return completeCommands(ctx.prefix, len, index)
-    case 'ref':
-      return completeRefs(ctx.prefix, len, index)
-    case 'cite':
-      return completeCites(ctx.prefix, len, index)
-    case 'begin':
-    case 'end':
-      return completeEnvironments(ctx.prefix, len, index, ctx.type === 'begin')
-    case 'usepackage':
-      return completePackages(ctx.prefix, len)
-    case 'include':
-      return completeIncludes(ctx.prefix, len, fs)
+  return provideCompletionResult(doc, pos, index, fs, options).items
+}
+
+/** Compute completions plus lazy-loading state at a position (editor-neutral). */
+export function provideCompletionResult(
+  doc: NeutralDocument,
+  pos: NeutralPosition,
+  index: ProjectIndex,
+  fs: VirtualFS,
+  options: ProvideCompletionOptions = {},
+): NeutralCompletionList {
+  const registry = options.registry ?? defaultCompletionRegistry
+  if (options.cancellationToken?.isCancellationRequested) {
+    return { items: [], isIncomplete: false }
   }
+  const context = analyzeCompletionContext(doc, pos, registry)
+  if (!context) return { items: [], isIncomplete: false }
+  return registry.resolveResult(context, {
+    document: doc,
+    position: pos,
+    index,
+    fs,
+    ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
+  })
 }
 
 function argSuffix(argCount: number): string {
@@ -132,9 +379,10 @@ function completeCommands(
   prefix: string,
   len: number,
   index: ProjectIndex,
+  documentPath?: string,
 ): NeutralCompletionItem[] {
   const items: NeutralCompletionItem[] = []
-  const loaded = index.getLoadedPackages()
+  const loaded = index.getLoadedPackages(documentPath)
   for (const cmd of LATEX_COMMANDS) {
     if (!cmd.name.startsWith(prefix)) continue
     const available = !cmd.package || loaded.has(cmd.package)
@@ -151,7 +399,7 @@ function completeCommands(
     if (doc) item.documentation = doc
     items.push(item)
   }
-  for (const cmd of index.getCommandDefs()) {
+  for (const cmd of index.getCommandDefs(documentPath)) {
     if (!cmd.name.startsWith(prefix)) continue
     items.push({
       label: `\\${cmd.name}`,
@@ -200,9 +448,14 @@ function appendEngineCommands(
   }
 }
 
-function completeRefs(prefix: string, len: number, index: ProjectIndex): NeutralCompletionItem[] {
+function completeRefs(
+  prefix: string,
+  len: number,
+  index: ProjectIndex,
+  documentPath?: string,
+): NeutralCompletionItem[] {
   const items: NeutralCompletionItem[] = []
-  for (const label of index.getAllLabels()) {
+  for (const label of index.getAllLabels(documentPath)) {
     if (!label.name.startsWith(prefix)) continue
     const resolved = index.resolveLabel(label.name)
     const where = `${label.location.file}:${label.location.line}`
@@ -217,7 +470,12 @@ function completeRefs(prefix: string, len: number, index: ProjectIndex): Neutral
   return items
 }
 
-function completeCites(prefix: string, len: number, index: ProjectIndex): NeutralCompletionItem[] {
+function completeCites(
+  prefix: string,
+  len: number,
+  index: ProjectIndex,
+  documentPath?: string,
+): NeutralCompletionItem[] {
   const items: NeutralCompletionItem[] = []
   const seen = new Set<string>()
   for (const key of index.getAuxCitations()) {
@@ -231,7 +489,7 @@ function completeCites(prefix: string, len: number, index: ProjectIndex): Neutra
       replaceLength: len,
     })
   }
-  for (const entry of index.getBibEntries()) {
+  for (const entry of index.getBibEntries(documentPath)) {
     if (seen.has(entry.key) || !entry.key.startsWith(prefix)) continue
     const byline = [entry.author, entry.year].filter(Boolean).join(', ')
     items.push({
@@ -250,6 +508,7 @@ function completeEnvironments(
   len: number,
   index: ProjectIndex,
   isBegin: boolean,
+  documentPath?: string,
 ): NeutralCompletionItem[] {
   const items: NeutralCompletionItem[] = []
   const seen = new Set<string>()
@@ -266,7 +525,7 @@ function completeEnvironments(
     if (isBegin) item.sortText = `0_${env.name}`
     items.push(item)
   }
-  for (const name of index.getAllEnvironments()) {
+  for (const name of index.getAllEnvironments(documentPath)) {
     if (!name.startsWith(prefix) || seen.has(name)) continue
     seen.add(name)
     items.push({
@@ -277,6 +536,13 @@ function completeEnvironments(
       sortText: `1_${name}`,
       replaceLength: len,
     })
+  }
+  for (const definition of index.getEnvironmentDefinitions(documentPath)) {
+    const existing = items.find((item) => item.label === definition.name)
+    if (!existing) continue
+    const source = `Project definition: ${definition.location.file}:${definition.location.line}`
+    existing.documentation = [existing.documentation, source].filter(Boolean).join('\n\n')
+    existing.sortText = `0_${definition.name}`
   }
   appendEngineEnvironments(items, prefix, len, seen, index)
   return items
@@ -306,20 +572,517 @@ function appendEngineEnvironments(
   }
 }
 
-function completePackages(prefix: string, len: number): NeutralCompletionItem[] {
-  return COMMON_PACKAGES.filter((pkg) => pkg.startsWith(prefix)).map((pkg) => ({
-    label: pkg,
-    kind: 'module',
-    insertText: pkg,
-    replaceLength: len,
-  }))
+function appendSemanticEnvironments(
+  items: NeutralCompletionItem[],
+  prefix: string,
+  len: number,
+  shards: TexSemanticShard[],
+): void {
+  const seen = new Set(items.map((item) => item.insertText))
+  for (const shard of shards) {
+    for (const environment of shard.environments) {
+      if (!environment.name.startsWith(prefix) || seen.has(environment.name)) continue
+      seen.add(environment.name)
+      const item: NeutralCompletionItem = {
+        label: environment.name,
+        kind: 'module',
+        insertText: environment.name,
+        detail: `TeX Live ${shard.texliveYear}: ${shard.scope.name} environment`,
+        sortText: `2_${environment.name}`,
+        replaceLength: len,
+      }
+      if (environment.doc) item.documentation = environment.doc
+      items.push(item)
+    }
+  }
 }
 
-function completeIncludes(prefix: string, len: number, fs: VirtualFS): NeutralCompletionItem[] {
+type ProjectValueDomain = 'counter' | 'length' | 'glossary' | 'acronym' | 'font-family'
+
+const BUILTIN_PROJECT_VALUES: Partial<Record<ProjectValueDomain, readonly string[]>> = {
+  counter: [
+    'page',
+    'part',
+    'chapter',
+    'section',
+    'subsection',
+    'subsubsection',
+    'paragraph',
+    'subparagraph',
+    'figure',
+    'table',
+    'equation',
+    'footnote',
+    'mpfootnote',
+    'enumi',
+    'enumii',
+    'enumiii',
+    'enumiv',
+  ],
+  length: [
+    '\\textwidth',
+    '\\textheight',
+    '\\linewidth',
+    '\\columnwidth',
+    '\\paperwidth',
+    '\\paperheight',
+    '\\parindent',
+    '\\parskip',
+    '\\baselineskip',
+    '\\topmargin',
+    '\\oddsidemargin',
+    '\\evensidemargin',
+  ],
+}
+
+function projectValueSources(values: ProjectValue[]): string[] {
+  return values.map(
+    (value) =>
+      `${value.role}: ${value.location.file}:${value.location.line}` +
+      (value.target ? ` (alias ${value.target})` : ''),
+  )
+}
+
+function projectValuesFor(
+  environment: CompletionResolverEnvironment,
+  domain: ProjectValueDomain,
+): ProjectValue[] {
+  const values = environment.index.getProjectValues(domain, environment.document.path)
+  return domain === 'glossary'
+    ? [...values, ...environment.index.getProjectValues('acronym', environment.document.path)]
+    : values
+}
+
+function completeProjectValues(
+  context: CompletionContext,
+  environment: CompletionResolverEnvironment,
+  domain: ProjectValueDomain,
+): NeutralCompletionItem[] {
+  const grouped = new Map<string, ProjectValue[]>()
+  for (const value of projectValuesFor(environment, domain)) {
+    const entries = grouped.get(value.name) ?? []
+    entries.push(value)
+    grouped.set(value.name, entries)
+  }
+  const names = new Set([...(BUILTIN_PROJECT_VALUES[domain] ?? []), ...grouped.keys()])
+  return [...names]
+    .filter((name) => name.startsWith(context.prefix))
+    .sort()
+    .map((name) => {
+      const values = grouped.get(name) ?? []
+      const sources = projectValueSources(values)
+      return {
+        label: name,
+        kind: domain === 'font-family' ? ('text' as const) : ('variable' as const),
+        insertText: name,
+        detail:
+          sources[0] ??
+          (domain === 'counter' || domain === 'length' ? 'LaTeX kernel value' : domain),
+        ...(sources.length > 0 ? { documentation: sources.join('\n\n') } : {}),
+        sortText: `${values.length > 0 ? '0' : '1'}_${name}`,
+        replaceLength: context.prefix.length,
+      }
+    })
+}
+
+function completeProjectKeyFamilies(
+  context: CompletionContext,
+  environment: CompletionResolverEnvironment,
+): NeutralCompletionItem[] {
+  const families = new Map<string, ProjectKeyDefinition[]>()
+  for (const key of environment.index.getProjectKeys(environment.document.path)) {
+    const definitions = families.get(key.family) ?? []
+    definitions.push(key)
+    families.set(key.family, definitions)
+  }
+  return [...families]
+    .filter(([family]) => family.startsWith(context.prefix))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([family, definitions]) => ({
+      label: family,
+      kind: 'module',
+      insertText: family,
+      detail: `Project key family · ${definitions[0]!.location.file}:${definitions[0]!.location.line}`,
+      documentation: `${definitions.length} statically recovered key(s)`,
+      replaceLength: context.prefix.length,
+    }))
+}
+
+function semanticScopeIds(context: CommandArgumentCompletionContext): string[] {
+  if (context.keyFamily === 'class-options' || context.keyFamily === 'package-options') {
+    const kind = context.keyFamily === 'class-options' ? 'class' : 'package'
+    return (context.selector?.values ?? [])
+      .map((name) => name.trim().replace(/\.(?:cls|sty)$/i, ''))
+      .filter(Boolean)
+      .map((name) => `${kind}/${name}`)
+  }
+  const owner = context.keyFamily?.split('/')[0]?.trim()
+  return owner ? [`package/${owner}`] : []
+}
+
+function semanticFamilies(
+  context: CommandArgumentCompletionContext,
+  shards: TexSemanticShard[],
+): Array<{ shard: TexSemanticShard; keys: TexSemanticKey[] }> {
+  if (!context.keyFamily) return []
+  return shards.flatMap((shard) => {
+    const family = shard.keyFamilies.find((candidate) => candidate.name === context.keyFamily)
+    return family ? [{ shard, keys: family.keys }] : []
+  })
+}
+
+function semanticKeyDocumentation(key: TexSemanticKey, scopes: string[]): string {
+  const provenance = key.provenance
+    .map(
+      (entry) => `${entry.evidence}: \`${entry.sourcePath}\`${entry.line ? `:${entry.line}` : ''}`,
+    )
+    .join('\n\n')
+  return [
+    key.documentation,
+    `Scopes: ${scopes.map((scope) => `\`${scope}\``).join(', ')}`,
+    `Confidence: ${key.confidence}`,
+    provenance,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function keySnippet(key: TexSemanticKey): { insertText: string; snippet?: true } {
+  if (key.value.type === 'flag') return { insertText: key.name }
+  return { insertText: `${key.name}=\${1}`, snippet: true }
+}
+
+function completeSemanticKeys(
+  context: CommandArgumentCompletionContext,
+  families: Array<{ shard: TexSemanticShard; keys: TexSemanticKey[] }>,
+): NeutralCompletionItem[] {
+  const byName = new Map<string, { key: TexSemanticKey; scopes: string[] }>()
+  for (const { shard, keys } of families) {
+    for (const key of keys) {
+      const current = byName.get(key.name)
+      if (current) {
+        current.scopes.push(shard.scope.id)
+        current.key.repeatable &&= key.repeatable
+      } else byName.set(key.name, { key: { ...key }, scopes: [shard.scope.id] })
+    }
+  }
+  return [...byName.values()]
+    .filter(
+      ({ key }) =>
+        key.name.startsWith(context.prefix) &&
+        (key.repeatable || !context.usedKeys.includes(key.name)),
+    )
+    .map(({ key, scopes }) => ({
+      label: key.name,
+      kind: 'keyword',
+      ...keySnippet(key),
+      detail: `${key.value.type} key · ${scopes.join(', ')}`,
+      documentation: semanticKeyDocumentation(key, scopes),
+      sortText: `0_${key.name}`,
+      replaceLength: context.prefix.length,
+    }))
+}
+
+function semanticValueDomain(type: TexSemanticValueType): CompletionValueKind | null {
+  const domains: Partial<Record<TexSemanticValueType, CompletionValueKind>> = {
+    boolean: 'boolean',
+    color: 'color',
+    file: 'project-file',
+    command: 'command',
+    'tex-class': 'tex-class',
+    'tex-package': 'tex-package',
+    'bib-style': 'bib-style',
+    'biblatex-style': 'biblatex-style',
+    'font-family': 'font-family',
+  }
+  return domains[type] ?? null
+}
+
+function completeEnumValues(
+  context: CommandArgumentCompletionContext,
+  keys: TexSemanticKey[],
+): NeutralCompletionItem[] {
+  const values = new Set(
+    keys.flatMap((key) => (key.value.type === 'enum' ? (key.value.values ?? []) : [])),
+  )
+  return [...values]
+    .filter((value) => value.startsWith(context.prefix))
+    .sort()
+    .map((value) => ({
+      label: value,
+      kind: 'keyword',
+      insertText: value,
+      replaceLength: context.prefix.length,
+    }))
+}
+
+function completeCommandValues(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+): NeutralCompletionItem[] {
+  const hasSlash = context.prefix.startsWith('\\')
+  const prefix = hasSlash ? context.prefix.slice(1) : context.prefix
+  return completeCommands(prefix, prefix.length, environment.index, environment.document.path).map(
+    (item) => ({
+      ...item,
+      insertText: hasSlash ? `\\${item.insertText}` : item.insertText,
+      replaceLength: context.prefix.length,
+    }),
+  )
+}
+
+function resolveSemanticValues(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+  registry: CompletionResolverRegistry,
+  keys: TexSemanticKey[],
+): NeutralCompletionList {
+  if (keys.some((key) => key.value.type === 'enum')) {
+    return { items: completeEnumValues(context, keys), isIncomplete: false }
+  }
+  if (keys.some((key) => key.value.type === 'command')) {
+    return { items: completeCommandValues(context, environment), isIncomplete: false }
+  }
+  const domain = keys.map((key) => semanticValueDomain(key.value.type)).find(Boolean)
+  if (!domain) return { items: [], isIncomplete: false }
+  return registry.resolveResult({ ...context, domain, valueKind: domain }, environment)
+}
+
+function normalizedProjectFamilies(context: CommandArgumentCompletionContext): Set<string> {
+  const families = new Set(
+    (context.keyFamilySelector?.values ?? []).map((family) =>
+      family.trim().replace(/^\/+|\/+$/g, ''),
+    ),
+  )
+  if (context.keyFamily) families.add(context.keyFamily.replace(/^\/+|\/+$/g, ''))
+  for (const key of context.usedKeys) {
+    if (key.endsWith('/.cd')) families.add(key.slice(0, -4).replace(/^\/+|\/+$/g, ''))
+  }
+  return families
+}
+
+function projectKeysForContext(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+): ProjectKeyDefinition[] {
+  const families = normalizedProjectFamilies(context)
+  return environment.index.getProjectKeys(
+    environment.document.path,
+    families.size > 0 ? families : undefined,
+  )
+}
+
+function completeProjectKeys(
+  context: CommandArgumentCompletionContext,
+  keys: ProjectKeyDefinition[],
+): NeutralCompletionItem[] {
+  const grouped = new Map<string, ProjectKeyDefinition[]>()
+  for (const key of keys) {
+    const definitions = grouped.get(key.name) ?? []
+    definitions.push(key)
+    grouped.set(key.name, definitions)
+  }
+  return [...grouped]
+    .filter(([name]) => name.startsWith(context.prefix) && !context.usedKeys.includes(name))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, definitions]) => {
+      const first = definitions.at(-1)!
+      const needsValue = first.valueType !== 'flag'
+      return {
+        label: name,
+        kind: 'keyword',
+        insertText: needsValue ? `${name}=\${1}` : name,
+        ...(needsValue ? { snippet: true as const } : {}),
+        detail: `${first.valueType} key · ${first.provenance === 'runtime-observed' ? 'runtime-observed' : 'project'}/${first.family}`,
+        documentation: definitions
+          .map((key) => `${key.location.file}:${key.location.line}`)
+          .join('\n\n'),
+        sortText: `00_${name}`,
+        replaceLength: context.prefix.length,
+      }
+    })
+}
+
+function projectValueDomain(key: ProjectKeyDefinition): CompletionValueKind | null {
+  const domains: Partial<Record<ProjectKeyDefinition['valueType'], CompletionValueKind>> = {
+    boolean: 'boolean',
+    color: 'color',
+    file: 'project-file',
+    command: 'command',
+  }
+  return domains[key.valueType] ?? null
+}
+
+function completeProjectKeyValues(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+  registry: CompletionResolverRegistry,
+  keys: ProjectKeyDefinition[],
+): NeutralCompletionList {
+  const active = keys.at(-1)
+  if (!active) return { items: [], isIncomplete: false }
+  const values = new Set(active.valueType === 'enum' ? (active.values ?? []) : [])
+  if (values.size > 0) {
+    return {
+      items: [...values]
+        .filter((value) => value.startsWith(context.prefix))
+        .sort()
+        .map((value) => ({
+          label: value,
+          kind: 'keyword',
+          insertText: value,
+          detail: `Project enum value for ${context.key}`,
+          replaceLength: context.prefix.length,
+        })),
+      isIncomplete: false,
+    }
+  }
+  const domain = projectValueDomain(active)
+  return domain
+    ? registry.resolveResult({ ...context, domain, valueKind: domain }, environment)
+    : { items: [], isIncomplete: false }
+}
+
+function dedupeCompletionItems(items: NeutralCompletionItem[]): NeutralCompletionItem[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    if (seen.has(item.insertText)) return false
+    seen.add(item.insertText)
+    return true
+  })
+}
+
+function resolveKeyValue(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+  binding: SemanticCompletionBinding | undefined,
+  registry: CompletionResolverRegistry,
+): NeutralCompletionList {
+  const semantic = binding?.syncScopes(
+    semanticScopeIds(context),
+    environment.cancellationToken,
+  ) ?? {
+    shards: [],
+    isIncomplete: false,
+  }
+  const families = semanticFamilies(context, semantic.shards)
+  const projectKeys = projectKeysForContext(context, environment)
+  if (context.keyValuePosition !== 'value') {
+    return {
+      items: dedupeCompletionItems([
+        ...completeProjectKeys(context, projectKeys),
+        ...completeSemanticKeys(context, families),
+      ]),
+      isIncomplete: semantic.isIncomplete,
+    }
+  }
+  if (!context.key) return { items: [], isIncomplete: semantic.isIncomplete }
+  const keys = families.flatMap((family) => family.keys.filter((key) => key.name === context.key))
+  const semanticValues = resolveSemanticValues(context, environment, registry, keys)
+  const projectValues = completeProjectKeyValues(
+    context,
+    environment,
+    registry,
+    projectKeys.filter((key) => key.name === context.key),
+  )
+  return {
+    items: dedupeCompletionItems([...projectValues.items, ...semanticValues.items]),
+    isIncomplete:
+      semantic.isIncomplete || semanticValues.isIncomplete || projectValues.isIncomplete,
+  }
+}
+
+const PROJECT_RESOURCE_EXTENSIONS: Record<TexResourceKind, ReadonlySet<string>> = {
+  'tex-class': new Set(['cls']),
+  'tex-package': new Set(['sty']),
+  'bib-style': new Set(['bst']),
+  'biblatex-style': new Set(['bbx', 'cbx', 'lbx']),
+  'font-file': new Set(['otf', 'ttf', 'ttc']),
+}
+
+function projectResourceName(path: string, kind: TexResourceKind): string | null {
+  const dot = path.lastIndexOf('.')
+  if (dot < 0 || !PROJECT_RESOURCE_EXTENSIONS[kind].has(path.slice(dot + 1).toLowerCase())) {
+    return null
+  }
+  return path.slice(0, dot)
+}
+
+function projectResourceCompletions(
+  prefix: string,
+  len: number,
+  kind: TexResourceKind,
+  fs: VirtualFS,
+): NeutralCompletionItem[] {
   return fs
     .listFiles()
-    .filter((path) => path.startsWith(prefix))
-    .map((path) => ({ label: path, kind: 'file', insertText: path, replaceLength: len }))
+    .map((path) => ({ path, name: projectResourceName(path, kind) }))
+    .filter(
+      (item): item is { path: string; name: string } => item.name?.startsWith(prefix) === true,
+    )
+    .map(({ path, name }) => ({
+      label: name,
+      kind: kind === 'font-file' ? ('file' as const) : ('module' as const),
+      insertText: name,
+      detail: `Project resource: ${path}`,
+      sortText: `0_${name}`,
+      replaceLength: len,
+    }))
+}
+
+function catalogResourceItem(
+  resource: TexResourceRecord,
+  prefix: string,
+  len: number,
+  kind: TexResourceKind,
+): NeutralCompletionItem | null {
+  const insertText = kind === 'font-file' ? resource.fileName : resource.name
+  if (!insertText.startsWith(prefix)) return null
+  const item: NeutralCompletionItem = {
+    label: insertText,
+    kind: kind === 'font-file' ? 'file' : 'module',
+    insertText,
+    detail: `TeX Live ${resource.texliveYear}: ${resource.texlivePackage} (${resource.fileName})`,
+    sortText: `1_${insertText}`,
+    replaceLength: len,
+  }
+  if (resource.documentationUrl) {
+    item.documentation = `[Package documentation](${resource.documentationUrl})\n\nSource: \`${resource.sourcePath}\``
+  }
+  return item
+}
+
+function resourceResolver(
+  kind: TexResourceKind,
+  provider: TexResourceCatalogProvider | undefined,
+): Parameters<CompletionResolverRegistry['registerResolver']>[1] {
+  return (context, env) => {
+    const project = projectResourceCompletions(context.prefix, context.prefix.length, kind, env.fs)
+    if (!provider) return project
+    const state = provider.getState(kind)
+    if (state.status === 'idle' || state.status === 'error') {
+      void provider.load(kind, env.cancellationToken)
+    }
+    if (state.status !== 'ready') {
+      return {
+        items: project,
+        isIncomplete: state.status !== 'mismatch',
+      }
+    }
+    const mirror = state.shard.resources
+      .map((resource) => catalogResourceItem(resource, context.prefix, context.prefix.length, kind))
+      .filter((item): item is NeutralCompletionItem => item !== null)
+    return { items: dedupeResources([...project, ...mirror]), isIncomplete: false }
+  }
+}
+
+function dedupeResources(items: NeutralCompletionItem[]): NeutralCompletionItem[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    if (seen.has(item.insertText)) return false
+    seen.add(item.insertText)
+    return true
+  })
 }
 
 // --- Hover -------------------------------------------------------------------

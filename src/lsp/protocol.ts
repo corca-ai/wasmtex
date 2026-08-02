@@ -44,6 +44,16 @@ export interface NeutralCompletionItem {
   sortText?: string
   /** Prefix length to replace (so adapters can compute the edit range). */
   replaceLength: number
+  /** Exact replacement range. New adapters prefer this over the legacy same-line length. */
+  replacementRange?: NeutralRange
+  /** Host-neutral structured metadata that adapters preserve verbatim. */
+  data?: Record<string, unknown>
+}
+
+export interface NeutralCompletionList {
+  items: NeutralCompletionItem[]
+  /** More candidates may become available after lazy metadata finishes loading. */
+  isIncomplete: boolean
 }
 
 export interface NeutralHover {

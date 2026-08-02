@@ -1,11 +1,12 @@
 import { BackendRegistry } from './engine/backend-registry';
 import { EngineOption } from './engine/engine-select';
 import { ProjectIndex } from './lsp/project-index';
-import { CompileResult, TexliveVersion, WarmupCache } from './types';
+import { CompileResult, CompletionSnapshotState, TexliveVersion, WarmupCache } from './types';
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api';
 export * from './backend-api';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
-export type { DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
+export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
+export type { CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
 export interface WasmTexCompilerOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -44,6 +45,12 @@ export interface WasmTexCompilerOptions {
      *  that stage to an endpoint running the same deterministic engine; the client-first
      *  default stays intact for any stage left unregistered. */
     backends?: BackendRegistry;
+    /** Stable identity for the compile profile that produced runtime completion evidence.
+     *  Bind `mirrorRevision` when the TeX Live endpoint is immutable/catalog-backed. */
+    completionProfile?: {
+        id: string;
+        mirrorRevision: string | null;
+    };
 }
 type FileContent = string | Uint8Array;
 export declare class WasmTexCompiler {
@@ -104,6 +111,7 @@ export declare class WasmTexCompiler {
     getMainFile(): string;
     setMainFile(path: string): void;
     getProjectIndex(): ProjectIndex;
+    getCompletionSnapshotState(): CompletionSnapshotState;
     readOutput(path: string): Promise<string | null>;
     flushCache(): Promise<void>;
     /**
@@ -118,6 +126,8 @@ export declare class WasmTexCompiler {
      * engine layer alone cannot distinguish host project files from generated VFS
      * artifacts or account for server/client stage requests. */
     private attachDependencyManifest;
+    private completionProfile;
+    private attachCompletionSnapshot;
     private syncAllFilesToEngine;
     private syncModifiedFilesToEngine;
     private ensureEngineDirectories;

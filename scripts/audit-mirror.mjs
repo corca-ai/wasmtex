@@ -9,7 +9,7 @@
  *
  * Read-only. Requires AWS credentials:
  *   AWS_PROFILE=cc node scripts/audit-mirror.mjs
- *   AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket corca-wasmtex-texlib --year 2025
+ *   AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket corca-fastlatex-texlib --year 2025
  *
  * Writes compat/mirror-coverage.md and prints a summary.
  */
@@ -55,7 +55,7 @@ const CURATED_PACKAGES = [
 ]
 
 function parseArgs(argv) {
-  const args = { bucket: 'corca-wasmtex-texlib', year: '2025', check: false }
+  const args = { bucket: 'corca-fastlatex-texlib', year: '2025', check: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--bucket') args.bucket = argv[++i]
     else if (argv[i] === '--year') args.year = argv[++i]

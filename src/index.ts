@@ -2,6 +2,10 @@ export * from './backend-api'
 export type { WasmTexEventMap, WasmTexOptions } from './component-types'
 export { ensureLanguagesRegistered } from './editor/setup'
 export {
+  COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
+  COMPLETION_SNAPSHOT_SCHEMA_VERSION,
+} from './engine/completion-snapshot'
+export {
   clearTexliveCache,
   isIndexedDbSupported,
   PersistentCache,
@@ -35,6 +39,20 @@ export type {
   BoxGeometry,
   CachedTexliveFile,
   CompileResult,
+  CompletionSnapshot,
+  CompletionSnapshotCollection,
+  CompletionSnapshotCommand,
+  CompletionSnapshotEngine,
+  CompletionSnapshotEvidence,
+  CompletionSnapshotFieldName,
+  CompletionSnapshotFields,
+  CompletionSnapshotIdentity,
+  CompletionSnapshotKey,
+  CompletionSnapshotKeyFamily,
+  CompletionSnapshotProfile,
+  CompletionSnapshotResource,
+  CompletionSnapshotState,
+  CompletionSnapshotValue,
   DependencyEdge,
   DependencyGraph,
   DependencyManifest,

@@ -129,7 +129,14 @@ Language features are backed by a small, error-tolerant LaTeX parser:
   generate are indexed at their call sites.
 
 ### Project Index
-`ProjectIndex` maintains a global state of symbols (labels, citations, commands) across all files in the `VirtualFS`. It is updated on every keystroke (debounced). Updates are **incremental** — only the edited file is re-parsed — and per-name lookups (`findLabelDef`, `getAllLabelRefs`, `findAllOccurrences`, …) are backed by **inverted indexes**, so a query is O(result) rather than a full-project scan.
+`ProjectIndex` maintains symbols across all host-owned files in the `VirtualFS`. Besides
+labels, citations, and commands, it records active classes/packages, counters, lengths,
+custom/theorem environments, glossary/acronym keys, font declarations, project key
+families, colors, and bibliography resources. `.tex`, `.sty`, and `.cls` edits re-parse
+only the edited file; `.bib` entries and strings are likewise stored and replaced per
+file. The cached active graph follows `input`/`include`/`subfile` plus project-local
+class/package load edges. Queries for completion use that graph, while per-name navigation
+lookups remain backed by inverted indexes.
 
 ### Rename (F2)
 Rename functionality uses `ProjectIndex.findAllOccurrences()` to find symbols in both `.tex` and `.bib` files. It handles:
@@ -151,9 +158,90 @@ only changed source bytes, while `getDiagnostics()` combines those cached
 results with the current project-index diagnostics.
 
 ### BibTeX / `.bib` parsing
-`src/lsp/bib-parser.ts` is a robust BibTeX/biblatex parser: all entry types, brace- and quote-delimited values with nested braces, multi-line values, `#` string concatenation, `@string` macro expansion, `@preamble`/`@comment`, and `crossref`/`xdata` field inheritance. Parsed entries expose `title`, `author`, `year`, `journal` (venue), and a full `fields` map. `formatReference()` renders the citation hover preview; the `unused-bib-entry` diagnostic (for any entry never cited) is emitted by `computeDiagnostics()` in `src/lsp/diagnostic-provider.ts`.
+`src/lsp/bib-parser.ts` is a robust BibTeX/biblatex parser: all entry types, brace- and quote-delimited values with nested braces, multi-line values, `#` string concatenation, `@string` macro expansion, `@preamble`/`@comment`, and `crossref`/`xdata` field inheritance. Parsed entries expose `title`, `author`, `year`, `journal` (venue), and a full `fields` map. `bib-completion-context.ts` separately performs error-tolerant cursor analysis, so incomplete databases get entry-type, type-ranked field, `crossref`/`xdata` target, and bare `@string` macro completion with exact edit ranges. Bibliography declarations select the active `.bib` component; an unreferenced database falls back to the host's full project set. `formatReference()` renders the citation hover preview; the `unused-bib-entry` diagnostic (for any entry never cited) is emitted by `computeDiagnostics()` in `src/lsp/diagnostic-provider.ts`.
 
 ### Package-aware command intelligence
-`src/lsp/package-db.ts` derives argument signatures (required vs optional, with placeholders) from the bundled command snippets and reports each command's source package. Completion is **package-aware**: commands from packages loaded via `\usepackage` (and the LaTeX kernel) rank first, while commands from packages not loaded are still offered but ranked lower and annotated with the `\usepackage{X}` they need. Hover shows the argument signature plus the source package; `getCommandSignature()` feeds signature help.
+`src/lsp/completion-context.ts` parses the complete active command invocation at the cursor instead of matching one line with a command-specific regular expression. It tolerates unfinished input, masks comments and verbatim regions through the shared tokenizer, understands multiline/nested required and optional groups, comma lists, and key/value positions, and returns an exact edit range plus sibling resource selectors. `src/lsp/completion-registry.ts` dispatches that context to typed, host-neutral value-domain resolvers; a service owns an isolated registry and adapters forward cancellation. Monaco and JSON-RPC therefore share the same analysis and candidates.
 
-**Data & licensing.** The command database is wasmtex-authored (the snippet DB in `src/lsp/latex-commands.ts`); we intentionally do **not** bundle the GPL-licensed CWL corpus, so there are no redistribution constraints. Signatures are computed deterministically from those snippets (`parseSignature`), so the dataset is reproducible from source — no opaque generated blob. For the long tail beyond the bundled core, `src/lsp/package-shard-loader.ts` can fetch a small per-package JSON shard on demand (keyed on the project's `\usepackage`s), cache it via a pluggable store so it works offline afterward, and register it with the DB. This is opt-in (a host supplies the shard `baseUrl`); no public shard registry ships yet, so it is off by default — the bundled core plus the engine hash dump cover the common case with zero network.
+`src/lsp/package-db.ts` derives argument signatures (required vs optional, with placeholders) from the bundled command snippets and reports each command's source package. Structural commands and package shards may additionally type arguments as class/package resources, labels, citations, compatible project files, colors, counters, lengths, glossary/acronym keys, font families, key/value families, and other semantic domains. File resolvers retain `/`-, `./`-, or `../`-style input and filter TeX, bibliography, graphics, listing/verbatim, and data assets by the typed argument. Project key declarations recover enum values from common xkeyval, pgfkeys, and LaTeX3 forms. Completion is **package-aware**: commands from packages loaded via `\usepackage` (and the LaTeX kernel) rank first, while commands from packages not loaded are still offered but ranked lower and annotated with the `\usepackage{X}` they need. Hover shows the argument signature plus the source package; `getCommandSignature()` feeds signature help and completion context analysis.
+
+Arguments left as `free-text`, and dynamic TeX constructs that static parsing cannot
+recover, intentionally receive no guessed values. Hosts can extend these positions with
+an isolated `CompletionResolverRegistry`; compile-observed runtime semantics are a
+separate evidence source rather than an excuse to treat arbitrary text as an enum.
+
+### Exact TeX Live resource catalogs
+
+`scripts/lib/texlive-catalog.mjs` deterministically derives class (`.cls`), package
+(`.sty`), BibTeX (`.bst`), biblatex (`.bbx`/`.cbx`/`.lbx`), and supported font-file
+shards from the final flattened mirror provenance manifest. The manifest's file
+inventory determines an immutable `mirrorRevision`; catalogs are published under
+`catalog/<mirrorRevision>/` and carry the TeX Live year, source package, selected
+source path, hashes, collision decision, and known engine constraint for every
+record. The checker regenerates the expected bytes and rejects missing, extra,
+reordered, or altered records.
+
+`src/lsp/resource-catalog.ts` keeps transport outside the completion core. A host
+injects a profile-bound provider; the HTTP implementation lazily fetches hashed
+shards, accepts a pluggable offline store, deduplicates concurrent loads, and rejects
+schema or profile mismatches. Until a shard is ready the neutral result explicitly
+sets `isIncomplete`. Without a matching provider, only project-local resources are
+offered—there is no guessed mirror fallback. Project files are ranked first and
+shadow same-named mirror entries. The same registry feeds Monaco, the neutral API,
+and JSON-RPC LSP.
+
+### Typed class/package semantic shards
+
+Resource existence and resource semantics are separate immutable layers.
+`scripts/lib/tex-semantic-extractor.mjs` reads the exact mirrored `.cls`/`.sty`
+bytes and extracts legacy `DeclareOption`, kvoptions, `define@key`, l3/modern key
+declarations, pgfkeys, and xparse command/environment signatures with balanced-group
+parsing. It also extracts package/project color declarations; the xcolor shard reads
+the selected mirror's `dvipsnam.def`, `svgnam.def`, and `x11nam.def` bytes and records
+their activating package/class options. Starred palette options remain deferred until
+the project activates individual names with `definecolors` or `providecolors`. Dynamic catch-alls are reported as unsupported instead of silently treated
+as complete. An optional observed report comes from the bounded, network-isolated
+probe contract; `scripts/tex-semantic-overrides-<year>.json` supplies MIT,
+WasmTex-authored high-value corrections. Every record retains declared, observed,
+inferred, or override provenance plus confidence.
+
+The deterministic generator emits `semantic/<mirrorRevision>/{classes,packages}/`
+shards, an index, and a coverage report that separates exact, declared, observed,
+inferred, overridden, and unresolved metadata. Overrides are applied only when the
+matching resource exists in the final mirror. Golden and regeneration checks reject
+source, schema, provenance, or output drift.
+
+At runtime `src/lsp/semantic-catalog.ts` lazily loads profile-matched shards. The
+key/value resolver uses the class or package selector—even when it follows the
+optional argument—merges multiple selected package scopes, removes already-used
+non-repeatable keys, inserts either a flag or `key=` snippet, and dispatches value
+positions to enum, boolean, color, file, command, bibliography, font, and other typed
+domains. Free-form/unknown values stay editable; this metadata is completion evidence,
+not a validator.
+
+### Revision-bound runtime completion evidence
+
+Static source extraction cannot fully model TeX execution. After a normal pdfTeX pass,
+the authored controller performs a read-only, bounded scan of the existing hash table
+and standard LaTeX registries. It never runs TeX on behalf of completion and writes its
+observations to a separate worker response field, so PDF, log, and auxiliary convergence
+are unchanged. `src/engine/completion-snapshot.ts` combines those observations with the
+engine recorder into the versioned `CompletionSnapshot` contract.
+
+The snapshot identity covers the project-content revision, root, engine, TeX Live year,
+and integrator-selected mirror/profile. `ProjectIndex` atomically replaces all runtime
+fields. A source or topology mutation immediately marks them stale and removes their
+candidates; the standalone LSP recomputes the project revision before accepting a new
+snapshot. Project declarations have the highest precedence, fresh runtime observations
+come next, and inferred static metadata comes last. XeLaTeX/LuaLaTeX return the same
+schema with unsupported observation fields rather than pretending coverage.
+
+The first-class color resolver combines active semantic shards, class/package options,
+and `definecolor`/`providecolor`/`colorlet`/`definecolorset` declarations from the
+current include graph. Later definitions deterministically replace earlier ones while
+`providecolor` never clobbers an existing name. Direct color commands and color-valued
+keys share the resolver. In an xcolor mix such as `red!50!blue`, only the color-name
+segment at the cursor is replaced. Neutral candidates carry optional structured color
+preview and provenance data that JSON-RPC and Monaco adapters preserve.
+
+**Data & licensing.** The command database is wasmtex-authored (the snippet DB in `src/lsp/latex-commands.ts`); we intentionally do **not** bundle the GPL-licensed CWL corpus, so there are no redistribution constraints. Signatures are computed deterministically from those snippets (`parseSignature`), so the dataset is reproducible from source — no opaque generated blob. For the long tail beyond the bundled core, `src/lsp/package-shard-loader.ts` remains a backward-compatible host-supplied command-shard loader. Exact release semantics use the profile-bound semantic catalog above; neither path imports an external completion corpus.

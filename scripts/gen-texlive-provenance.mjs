@@ -37,6 +37,7 @@ try {
     overrides: JSON.parse(readFileSync(overridesPath, 'utf8')),
     texmfArchivePath: value['texmf-archive'] ? resolve(value['texmf-archive']) : null,
     metadataArchivePath: value['metadata-archive'] ? resolve(value['metadata-archive']) : null,
+    scope: value.scope ?? 'full-mirror',
   })
   console.log(
     `generated ${manifest.summary.files} files from ${manifest.summary.packages} packages; ` +

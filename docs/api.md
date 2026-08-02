@@ -48,6 +48,9 @@ or a CSS selector string.
 | `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine. `'auto'` detects it from the main file — a `% !TEX program = …` magic comment, or `fontspec`/`unicode-math`/CJK (`xeCJK`)/`\directlua` in the preamble — falling back to pdfLaTeX. See [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex). |
 | `texliveVersion` | `'2025'` | `'2025'` | TeX Live engine/assets version. The option remains versioned for future TeX Live releases. |
 | `texliveUrl` | `string` | Public CDN | TexLive server endpoint. Defaults to `https://d1jectpaw0dlvl.cloudfront.net/{version}/` |
+| `resourceCatalog` | `TexResourceCatalogProvider` | - | Exact completion catalog for the selected compile profile. Custom `texliveUrl` hosts should inject their matching provider; without one, resource completion is project-local only. |
+| `semanticCatalog` | `TexSemanticCatalogProvider` | - | Versioned class/package options, key families, and typed command/environment metadata for the same compile profile. |
+| `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable identity attached to compile-observed completion snapshots. Catalog-backed hosts should use the catalog's exact mirror revision. |
 | `mainFile` | `string` | `'main.tex'` | Main TeX file name |
 | `files` | `Record<string, string \| Uint8Array>` | `{}` | Initial project files (path → content) |
 | `serviceWorker`| `boolean`| `true` | Cache texlive packages via SW |
@@ -152,7 +155,12 @@ For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
 | `getCommandPackage` | The source `\usepackage` a command belongs to. |
 | `registerShard` | Register an extra package-command shard with the DB. |
 | `PackageShardLoader` / `ShardStore` / `PackageShardLoaderOptions` / `PackageShard` | On-demand per-package shard fetching + pluggable cache store. |
-| `CommandArg` | Argument descriptor type. |
+| `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, resource-selector, and project-key-family selector relationships. |
+| `HttpTexResourceCatalogProvider` / `TexResourceCatalogProvider` | Profile-bound exact class/package/bibliography/font availability. |
+| `HttpTexSemanticCatalogProvider` / `TexSemanticCatalogProvider` | Profile-bound typed options, key/value families, commands, environments, colors, provenance, and coverage. |
+| `analyzeCompletionContext` / `CompletionContext` | Parse a LaTeX command invocation or `.bib` entry at a cursor, including unfinished input, list/key-value position, selectors, BibTeX entry metadata, and an exact replacement range. |
+| `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
+| `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
 
 ### Linter
 
@@ -193,6 +201,7 @@ const result = await compiler.compile()
 | `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. No-ops without IndexedDB. |
 | `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only). |
+| `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. Today the headless compiler routes the `bibliography` stage through the registry — a registered server backend turns `{aux, bibFiles} → .bbl` and the client BibTeX (WASM) engine is skipped. See [Server backends](#server-backends). |
 
 #### Server backends
@@ -258,6 +267,7 @@ that changed since the last full compile falls back to a background full reconci
 - `getMainFile(): string`
 - `setMainFile(path): void`
 - `getProjectIndex(): ProjectIndex` — escape hatch to the shared symbol index (labels, citations, commands) for host-built tooling.
+- `getCompletionSnapshotState(): CompletionSnapshotState` — `absent`, `fresh`, or `stale`; any project edit stales runtime evidence until a matching full compile.
 - `readOutput(path): Promise<string | null>` — reads generated files such as `main.log`, `main.aux`, or `main.bbl`.
 - `flushCache(): Promise<void>`
 - `clearCache(): Promise<void>` — clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live year.
@@ -277,6 +287,7 @@ const { telemetry } = await compiler.compile()
 | `geometry` | `DocumentGeometry` | Page/box geometry parsed from the XDV — per page: `width`/`height` (media box, bp), `textRuns` (positioned runs with `x`/`y`/`width`/`size`/`glyphs`, plus `text`/`font` when available), `rules`, and a `contentBox`. The substrate for text extraction, click-to-source, cropping, and overlays. **XeLaTeX only** (the engine that emits XDV); `reliable: false` flags an unparseable/desynced run. |
 | `dependencies` | `DependencyGraph` | What the compile depended on: `nodes` (each with `kind: 'tex' \| 'class' \| 'package' \| 'font' \| 'image' \| 'bib' \| 'other'`, `origin: 'project' \| 'system'`, and `discoveredBy`) + `edges` (`includes`/`loads`/`uses-font`/`reads`) + `root`. Rich tooling data derived from the log and enriched with source declarations, XDV fonts, and each TeX engine's `.fls` recorder. It remains useful when observations are incomplete, so do not treat the graph alone as a safe invalidation proof. |
 | `dependencyManifest` | `DependencyManifest` | Versioned, normalized project-input boundary produced by `WasmTexCompiler`. `projectInputs` includes arbitrary project files read by the engine plus the inputs forwarded to bibliography/index stages. `complete: true` is a correctness guarantee, not a confidence score. `coverage` identifies the contributing stages/signals; `incompleteReason` explains why a host must compile conservatively. |
+| `completionSnapshot` | `CompletionSnapshot` | Versioned, bounded runtime evidence produced only as a by-product of this full compile. Its identity binds the project revision, root, engine, TeX Live year, and mirror/profile. Fields independently report `observed`/`unsupported`, `complete`, and truncation. |
 
 Coordinates are PDF points (bp) measured from each page's top-left. Geometry text and dependency fonts are best-effort — XeTeX emits run text only for some runs, and font edges come from the XeLaTeX XDV.
 
@@ -328,9 +339,11 @@ const outline = lsp.getOutline('main.tex')
 
 Construct it with `createLatexLanguageService(options?)` or `new LatexLanguageService(options?)`;
 `options` (`LatexLanguageServiceOptions`) seeds `files`, `aux`, `engineCommands`,
-`semanticTrace`, and `lint`. The editor-neutral result types — `SemanticToken`, `InlayHint`,
+`semanticTrace`, `lint`, an optional isolated `completionRegistry`, and optional
+profile-bound `resourceCatalog` and `semanticCatalog` providers. The editor-neutral result types — `SemanticToken`, `InlayHint`,
 `CodeAction`, `DocumentLink`, `FoldingRange`, `SignatureHelp`, `WorkspaceSymbol`,
-`Diagnostic`, `FileSymbols`, `SectionDef` — are exported from `wasmtex/lsp` for typing
+`Diagnostic`, `FileSymbols`, `SectionDef`, `BibCompletionContext`, `ParsedBibFile`,
+`ProjectValue`, and `ProjectKeyDefinition` — are exported from `wasmtex/lsp` for typing
 your own UI.
 
 ### `LatexLanguageService` Methods
@@ -344,12 +357,18 @@ your own UI.
 - `updateAux(content): void` — feed back `.aux` numbers (resolves `\ref`/`\cite` inlay hints).
 - `updateEngineCommands(commands): void` — feed back the engine's command hash (improves completion).
 - `updateSemanticTrace(trace): void` — feed back semantic-trace data for richer tokens.
+- `setMainFile(path): void` — selects the compile root used to validate runtime snapshot identity.
+- `configureCompletion(configuration): void` — atomically replaces the completion profile, resource/semantic providers, and optional registry while retaining the existing project index; prior runtime evidence is cleared so profile-scoped metadata cannot leak across a host profile switch.
+- `updateCompletionSnapshot(snapshot): Promise<CompletionSnapshotState>` — validates bounds/profile and recomputes the current project revision before accepting runtime evidence.
+- `getCompletionSnapshotState(): CompletionSnapshotState` — reports `absent`, `fresh`, or `stale` and returns a defensive snapshot copy.
 
 **Language features** (all return editor-neutral types)
 - `getDiagnostics(): Diagnostic[]`
 - `getFileSymbols(path): FileSymbols | undefined`
 - `getOutline(path): SectionDef[]`
-- `getCompletions(path, line, column): NeutralCompletionItem[]`
+- `getCompletionContext(path, line, column): CompletionContext | null`
+- `getCompletions(path, line, column, cancellationToken?): NeutralCompletionItem[]`
+- `getCompletionResult(path, line, column, cancellationToken?): NeutralCompletionList` — includes `isIncomplete` while a lazy resource shard is loading.
 - `getHover(path, line, column): NeutralHover | null`
 - `getDefinition(path, line, column): NeutralLocation | null`
 - `getReferences(path, line, column): NeutralLocation[]`
@@ -366,6 +385,99 @@ your own UI.
 **Escape hatches**
 - `getProjectIndex(): ProjectIndex`
 - `getVirtualFileSystem(): VirtualFS`
+- `getCompletionRegistry(): CompletionResolverRegistry`
+- `getResourceCatalogState(kind): TexResourceCatalogState | null`
+- `loadResourceCatalog(kind, cancellationToken?): Promise<TexResourceCatalogState> | null`
+- `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
+- `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
+
+`ProjectIndex.getStats()` returns `ProjectIndexStats`, including deterministic counts and
+an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
+than as a JavaScript heap profiler.
+
+### Exact TeX Live resource completion
+
+The host chooses the catalog identity as part of the compile profile; the LSP does
+not discover it by querying CTAN or by compiling on completion:
+
+```ts
+import {
+  createLatexLanguageService,
+  HttpTexResourceCatalogProvider,
+  HttpTexSemanticCatalogProvider,
+} from 'wasmtex/lsp'
+
+const identity = {
+  schemaVersion: 1,
+  texliveYear: '2025',
+  mirrorRevision: '2025-0123456789abcdef',
+} as const
+const resourceCatalog = new HttpTexResourceCatalogProvider({
+  baseUrl: 'https://cdn.example/2025/',
+  identity,
+  store: catalogStore, // optional async get/set store, e.g. IndexedDB-backed
+})
+const semanticCatalog = new HttpTexSemanticCatalogProvider({
+  baseUrl: 'https://cdn.example/2025/',
+  identity,
+  store: semanticStore,
+})
+
+const lsp = createLatexLanguageService({ files, resourceCatalog, semanticCatalog })
+```
+
+A long-lived host that switches compile profiles should construct fresh providers and
+call `lsp.configureCompletion({ completionProfile, resourceCatalog, semanticCatalog })`.
+The replacement is synchronous, keeps project symbols intact, discards the previous
+runtime snapshot, and uses a fresh isolated resolver registry; in-flight loads on the
+old providers can therefore never populate the new profile.
+
+The provider loads immutable `catalog/<mirrorRevision>/index.json` and only the
+requested class/package/bibliography/font shard. It verifies the shard hash and
+fails closed on schema, year, or mirror-revision mismatch. `WasmTexOptions` accepts
+the same provider for the built-in Monaco integration. Project-local `.cls`, `.sty`,
+`.bst`, biblatex, and supported font files remain available without a catalog and
+take precedence over matching mirror records.
+
+Semantic shards are selected as `class/<name>` or `package/<name>`. They expose
+`TexSemanticKeyFamily`, `TexSemanticKey`, `TexSemanticCommand`, `TexSemanticColor`, provenance,
+confidence, dependencies, engine constraints, and coverage. A key with value type
+`flag` inserts only its name; other keys insert a `key=` snippet. Enum and boolean
+values complete directly, while color/file/command/bibliography/font values reuse
+the corresponding typed resolver. Already-used keys disappear only when the shard
+marks them non-repeatable; unknown values are never rejected.
+
+Project-local completion does not require either catalog. The active include/load graph
+contributes counters, lengths, custom/theorem environments, glossary/acronym keys, font
+families/aliases, and recoverable key families/enums. Typed file domains cover TeX,
+bibliography, graphics, listings/verbatim, data, and generic files. `.bib` documents add
+entry-type, type-ranked field, `crossref`/`xdata`, and `@string` domains. Literal prose,
+braced/quoted bibliography values, dimensions/numbers, and dynamic declarations remain
+free-form unless a host registers more metadata.
+
+The `color` domain is include-graph and package aware. Base `color`/`xcolor` names,
+option-gated `dvipsnames`/`svgnames`/`x11names` palettes, and project declarations
+from `definecolor`, `providecolor`, `colorlet`, and `definecolorset` feed the same
+resolver used by `color`, `textcolor`, `colorbox`, `fcolorbox`, and typed keys such
+as `linkcolor`. Completion inside an xcolor expression replaces only its active name
+segment. Starred palette options such as `svgnames*` expose only names subsequently
+activated by `definecolors` or `providecolors`. A color candidate may include `NeutralCompletionItem.data.wasmtex.color.css`
+and provenance metadata; both the Monaco and JSON-RPC adapters preserve that object.
+
+### Runtime completion snapshots
+
+Static catalogs describe what a selected class/package version declares. A normal
+compile can additionally observe commands, environments, counters, colors, key
+families, and loaded resources created dynamically by TeX. This evidence is returned
+as `CompileResult.telemetry.completionSnapshot`; requesting completion never starts a
+compile. `pdflatex` currently observes command/registry fields. XeLaTeX and LuaLaTeX
+use the same schema and explicitly mark unavailable fields `unsupported`.
+
+Precedence is deterministic: project declarations override fresh runtime observations,
+which override inferred static metadata. Exact/declared catalog candidates remain
+available when runtime evidence has no matching record. Any file add, removal, or edit
+immediately makes the snapshot stale and removes its candidates; only a snapshot whose
+SHA-256 project revision and compile profile match the current LSP project becomes fresh.
 
 ### Static linter (ChkTeX-style)
 
@@ -440,6 +552,17 @@ transport-agnostic: give it a `send` callback and feed it incoming messages with
 `completion`, `hover`, `definition`, `references`, `rename`, and pushes
 `publishDiagnostics`.
 
+Three WasmTex extension methods carry runtime evidence: send
+`wasmtex/updateCompletionSnapshot` with `{ snapshot }` and await its response before
+requesting completion; query `wasmtex/completionSnapshotState` with no parameters. Set
+the active compile root with `wasmtex/setMainFile` and `{ path }` when it differs from
+the `LatexLanguageService` default `main.tex` (or pass `mainFile` to its constructor).
+Separate compiler hosts should also pass the exact `completionProfile` expected by the
+language service; catalog identities independently verify TeX Live mirror compatibility.
+Invalid, wrong-profile, or unsupported-version payloads return a JSON-RPC error;
+over-budget collections are deterministically truncated and marked incomplete. A
+revision mismatch is retained as `stale`, never consumed as completion data.
+
 ```ts
 import { LatexLspServer } from 'wasmtex/lsp/server'
 
@@ -489,6 +612,7 @@ const mapper = new TextMapper(data)
 - `listFiles(): string[]` — Returns a list of all files in the project.
 - `compile(): void` — Triggers an immediate compilation (bypassing the auto-compile debounce).
 - `getPdf(): Uint8Array | null` — Returns the last successfully generated PDF.
+- `getCompletionSnapshotState(): CompletionSnapshotState` — Returns the runtime completion snapshot state from the latest full compile.
 - `revealLine(line: number, file?: string): void` — Navigates the editor to a specific line/file.
 - `clearCache(): Promise<void>` — Clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live year.
 - `dispose(): void` — Cleans up the editor, workers, and DOM.

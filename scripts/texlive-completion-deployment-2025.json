@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "absentResources": {
+    "pdftex/26/xesearch.sty": {
+      "statuses": [403, 404],
+      "rationale": "The pinned archive contains xesearch.sty, but the production 2025 CDN does not serve this key."
+    },
+    "pdftex/36/ASANA.TTC": {
+      "statuses": [403, 404],
+      "rationale": "The pinned archive contains ASANA.TTC, but the production 2025 CDN does not serve this key."
+    }
+  },
+  "contentOverrides": {
+    "pdftex/26/xetexko.sty": {
+      "bytes": 95394,
+      "sha256": "c1a1ea7de3c6613e123b40b441bf30f09a28d3f7abfb5b99054721ac6465f1f8",
+      "rationale": "The production 2025 CDN serves xetexko v4.6 (2025-08-24), newer than the pinned archive candidate v4.4."
+    }
+  }
+}

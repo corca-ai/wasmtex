@@ -34,6 +34,14 @@ npm run dev               # Start dev server
 | `npm run test:golden` / `npm run update:golden` | Golden-output tests (write/refresh `e2e/goldens/*.json`) |
 | `npm run lint` / `npm run lint:fix` | Lint (Biome) — check / apply fixes |
 | `npm run format` | Format code (Biome) |
+| `npm run gen:texlive-catalog -- --manifest <manifest> --output <dir>` | Generate immutable completion shards from a final `texlive-provenance.json` inventory |
+| `npm run check:texlive-catalog -- <manifest> <dir>` | Verify exact catalog coverage, deterministic bytes, hashes, and provenance |
+| `npm run check:deployed-completion -- --manifest <manifest> --base-url <url>` | Stream and hash every catalog/semantic source against the deployed TeX Live endpoint |
+| `npm run reconcile:deployed-completion -- --manifest <manifest> --mirror-root <dir> --base-url <url> --policy <json>` | Apply only reviewed, hash-pinned CDN absences/hotfixes before immutable catalog generation |
+| `npm run gen:tex-semantic-catalog -- --manifest <manifest> --mirror-root <root> --overrides <json> --output <dir>` | Extract and merge versioned class/package semantic shards, including exact option-gated color definitions, plus a coverage report |
+| `npm run check:tex-semantic-catalog -- --manifest <manifest> --mirror-root <root> --overrides <json> --catalog <dir>` | Regenerate and reject semantic schema, provenance, source-byte, or golden drift |
+| `npm run probe:tex-semantics -- --input <json> --command <probe> --output <json>` | Run an exact-profile probe with fail-closed OS network isolation and bounded time/memory |
+| `npm run test:license-tools` | Test provenance, catalog, release, and licensing scripts with Node's test runner |
 | `npm run sync-engine-assets -- --from <baseUrl>` | Download and SHA-256-verify a complete versioned engine set into `public/wasmtex/<version>/` |
 | `npm run compat` | Compatibility harness — compile a corpus and bucket failures (`node scripts/compat/run.mjs`; writes `compat/report.{json,md}`) |
 | `node scripts/gen-bloom-filter.mjs` | Generate bloom filter for CDN file existence checks (requires AWS CLI) |
@@ -67,6 +75,21 @@ We use **Vitest**. Tests are located in `*.test.ts` files alongside the source c
 npm run test
 ```
 
+Tests must assert observable behavior. In particular, worker/controller changes should
+be exercised through protocol responses, an engine adapter, or a rebuilt engine smoke
+test; reading implementation files and checking that source strings occur in some order
+does not prove the feature works and is not an acceptable regression test.
+
+`src/lsp/__tests__/completion-performance.test.ts` enforces the semantic-index budget on
+a 600-file active graph: indexing under 3,000 ms, warmed completion under 150 ms, a single
+file update under 100 ms, and retained semantic metadata under 8 MiB. These are CI guardrails,
+not end-user timing claims; change a threshold only with benchmark evidence in the PR.
+Runtime completion snapshot tests separately enforce engine/host record ceilings, a
+2 MiB serialized retention ceiling, revision/profile rejection, stale-on-edit behavior,
+and output-neutral worker response mapping. Engine rebuild PRs must also run the Node
+smoke and cross-host parity gates below so the authored C/controller hook is exercised,
+not merely its TypeScript consumer.
+
 ### E2E Tests
 We use **Playwright**. These verify the full compilation loop, SyncTeX, and BibTeX integration.
 ```bash
@@ -79,6 +102,8 @@ The same from-source WASM engine runs under Node via `installNodeWorkerHost`
 (`src/engine/node-host.ts`, exported from `wasmtex/node`). The verification tests are
 **env-gated** so they stay out of the default `npm run test`; they read the engine assets
 from `public/`, so run `npm run sync-engine-assets -- --from <baseUrl>` first.
+To verify a local rebuild without replacing release artifacts, set
+`WASMTEX_SMOKE_PUBLIC_DIR` to an equivalent directory tree containing the rebuilt files.
 ```bash
 # Off-browser pdfTeX smoke
 NODE_COMPILE_SMOKE=1 npx vitest run src/engine/node-compile.smoke.test.ts

@@ -46,6 +46,48 @@ export interface PackageRef {
     options: string;
     location: SourceLocation;
 }
+export interface ClassRef {
+    name: string;
+    options: string;
+    location: SourceLocation;
+}
+export interface ColorDefinition {
+    name: string;
+    kind: 'define' | 'provide' | 'alias';
+    model?: string;
+    value?: string;
+    alias?: string;
+    location: SourceLocation;
+    provenance?: 'project' | 'runtime-observed';
+}
+export interface ColorActivation {
+    names: string[];
+    kind: 'define' | 'provide';
+    location: SourceLocation;
+}
+export type ProjectValueRole = 'definition' | 'usage' | 'alias' | 'runtime-observed';
+/** A statically recoverable named value contributed by project source. */
+export interface ProjectValue {
+    name: string;
+    role: ProjectValueRole;
+    location: SourceLocation;
+    /** Optional declaration target, for example the font behind a command alias. */
+    target?: string;
+}
+export type ProjectKeyValueType = 'flag' | 'boolean' | 'enum' | 'number' | 'dimension' | 'color' | 'file' | 'command' | 'free-text';
+/** A key declared in the project through xkeyval, pgfkeys, or LaTeX3 keys. */
+export interface ProjectKeyDefinition {
+    family: string;
+    name: string;
+    valueType: ProjectKeyValueType;
+    values?: string[];
+    location: SourceLocation;
+    provenance?: 'project' | 'runtime-observed';
+}
+export interface BibliographyRef {
+    path: string;
+    location: SourceLocation;
+}
 export interface FileSymbols {
     labels: LabelDef[];
     labelRefs: LabelRef[];
@@ -56,7 +98,17 @@ export interface FileSymbols {
     environments: EnvironmentUse[];
     environmentDefs: EnvironmentUse[];
     includes: IncludeDef[];
+    classes: ClassRef[];
     packages: PackageRef[];
+    colors: ColorDefinition[];
+    colorActivations: ColorActivation[];
+    counters: ProjectValue[];
+    lengths: ProjectValue[];
+    glossaryEntries: ProjectValue[];
+    acronymEntries: ProjectValue[];
+    fontFamilies: ProjectValue[];
+    keys: ProjectKeyDefinition[];
+    bibliographies: BibliographyRef[];
     bibItems: BibitemDef[];
 }
 export interface AuxData {
@@ -79,4 +131,13 @@ export interface BibEntry {
     journal?: string;
     /** All parsed fields (lowercased names → cleaned values). */
     fields?: Record<string, string>;
+}
+export interface BibStringDef {
+    name: string;
+    value: string;
+    location: SourceLocation;
+}
+export interface ParsedBibFile {
+    entries: BibEntry[];
+    strings: BibStringDef[];
 }

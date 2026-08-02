@@ -9,6 +9,7 @@ import { createEditor, createFileModel, revealLine } from './editor/setup'
 import { BibtexEngine } from './engine/bibtex-engine'
 import { unavailableEngineResult } from './engine/compile-engine'
 import { CompileScheduler } from './engine/compile-scheduler'
+import { createCompletionSnapshot } from './engine/completion-snapshot'
 import { normalizeProjectDependencyPath } from './engine/dependency-manifest'
 import { type EngineDetection, resolveEngine } from './engine/engine-select'
 import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
@@ -20,8 +21,10 @@ import { saveOutgoingFile } from './fs/save-outgoing'
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
 import { rebuildBibIndex } from './lsp/bib-parser'
+import type { CompletionResolverRegistry } from './lsp/completion-registry'
 import { computeDiagnostics } from './lsp/diagnostic-provider'
 import { type LintConfig, lintSource } from './lsp/linter'
+import { createDefaultCompletionRegistry, preloadSemanticCatalog } from './lsp/neutral-providers'
 import { ProjectIndex } from './lsp/project-index'
 import { registerLatexProviders } from './lsp/register-providers'
 import { parseTraceFile } from './lsp/trace-parser'
@@ -30,7 +33,14 @@ import type { SynctexData } from './synctex/synctex-parser'
 import { SynctexParser } from './synctex/synctex-parser'
 import './editor-runtime.css'
 import type { WasmTexEventMap, WasmTexOptions, WasmTexStatusEvent } from './component-types'
-import type { AppStatus, CompileResult, TexError, TexliveVersion } from './types'
+import type {
+  AppStatus,
+  CompileResult,
+  CompletionSnapshotProfile,
+  CompletionSnapshotState,
+  TexError,
+  TexliveVersion,
+} from './types'
 import { setDiagnosticMarkers, setErrorMarkers } from './ui/error-markers'
 import { PdfViewer } from './viewer/pdf-viewer'
 
@@ -148,6 +158,8 @@ export class WasmTex {
 
   private lspDisposables: { dispose(): void }[] = []
 
+  private completionRegistry: CompletionResolverRegistry | undefined
+
   // --- Models (one per project file, kept alive for cross-file diagnostics) ---
 
   private models = new Map<string, Monaco.editor.ITextModel>()
@@ -207,6 +219,10 @@ export class WasmTex {
   private pendingBibtex = false
 
   private bibtexRunId = 0
+
+  /** Auxiliary-stage outputs live in the VFS for compilation and inspection but do
+   *  not participate in the host-authored project revision. */
+  private generatedFiles = new Set<string>()
 
   // --- Incremental fast path (#99, opt-in via `incremental`) ---
   // Set when `incremental` is on (pdfLaTeX-only checkpoint fast path). null = always full.
@@ -411,12 +427,86 @@ export class WasmTex {
       // Full compile: a normal edit, an unservable fast path, or the reconcile after a fast paint.
       this.reconcileArmed = false
       const result = await this.engine.compile()
+      await this.attachCompletionSnapshot(result)
       // Record the full SyncTeX as the head merge-base for the next fast paint's splice (#99 P2).
       this.incremental?.noteFull(this.mainSource(), this.projectStringFiles(), result.synctex)
       return result
     } finally {
       this.compileInFlight = false
     }
+  }
+
+  private completionProfile(): CompletionSnapshotProfile {
+    const texliveYear = this.opts.texliveVersion ?? '2025'
+    const resource = this.opts.resourceCatalog?.identity
+    const semantic = this.opts.semanticCatalog?.identity
+    const identities = [resource, semantic].filter((identity) => identity !== undefined)
+    if (this.opts.completionProfile) {
+      if (
+        identities.some(
+          (identity) =>
+            identity.texliveYear !== texliveYear ||
+            identity.mirrorRevision !== this.opts.completionProfile!.mirrorRevision,
+        )
+      ) {
+        throw new Error('completionProfile does not match the selected completion catalogs')
+      }
+      return { ...this.opts.completionProfile, texliveYear }
+    }
+    if (
+      resource &&
+      semantic &&
+      (resource.texliveYear !== semantic.texliveYear ||
+        resource.mirrorRevision !== semantic.mirrorRevision)
+    ) {
+      throw new Error('resource and semantic completion catalogs use different profiles')
+    }
+    const catalog = resource && semantic ? resource : (resource ?? semantic ?? null)
+    return {
+      id: catalog
+        ? `catalog:${catalog.mirrorRevision}`
+        : `wasmtex:${texliveYear}:${this.opts.texliveUrl ?? 'default-mirror'}`,
+      texliveYear,
+      mirrorRevision: catalog?.mirrorRevision ?? null,
+    }
+  }
+
+  private async attachCompletionSnapshot(result: CompileResult): Promise<void> {
+    if (!result.success) return
+    if (this.fs.getModifiedFiles().length > 0) return
+    const root = this.mainFile
+    const projectFiles = this.fs
+      .listFiles()
+      .filter((path) => !this.generatedFiles.has(path))
+      .flatMap((path) => {
+        const file = this.fs.getFile(path)
+        if (!file) return []
+        return [
+          {
+            path: file.path,
+            content:
+              typeof file.content === 'string' ? file.content : Uint8Array.from(file.content),
+          },
+        ]
+      })
+    const engineObservation = this.engine.getCompletionObservation()
+    const snapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root,
+      profile: this.completionProfile(),
+      projectFiles,
+      ...(result.engineCommands ? { engineCommands: result.engineCommands } : {}),
+      engineCommandsComplete: result.engineCommandsComplete === true,
+      ...(result.engineCommandsDropped !== undefined
+        ? { engineCommandsDropped: result.engineCommandsDropped }
+        : {}),
+      ...(engineObservation ? { engineObservation } : {}),
+      ...(result.inputFiles ? { inputFiles: result.inputFiles } : {}),
+      inputFilesComplete: result.inputFilesComplete === true,
+    })
+    if (root !== this.mainFile || this.fs.getModifiedFiles().length > 0) return
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+    result.telemetry.completionSnapshot = snapshot
   }
 
   /** Attempt an incremental fast paint (#99); returns the spliced result, or null to signal the
@@ -540,7 +630,7 @@ export class WasmTex {
         this.ensureModel(path, file.content)
 
         if (path.endsWith('.tex')) {
-          this.projectIndex.updateFile(path, file.content)
+          this.updateProjectIndex(path, file.content)
         }
       }
     }
@@ -693,9 +783,25 @@ export class WasmTex {
     this.pdfViewer?.setDownloadHandler(() => this.downloadPdf())
   }
 
+  private updateProjectIndex(path: string, content: string): void {
+    this.projectIndex.updateFile(path, content)
+    if (this.completionRegistry) {
+      preloadSemanticCatalog(this.completionRegistry, this.projectIndex)
+    }
+  }
+
   private initRuntimeServices(): void {
-    this.lspDisposables = registerLatexProviders(this.projectIndex, this.fs, (info) =>
-      this.emit('workspaceEdit', info),
+    this.completionRegistry = createDefaultCompletionRegistry({
+      ...(this.opts.resourceCatalog ? { resourceCatalog: this.opts.resourceCatalog } : {}),
+      ...(this.opts.semanticCatalog ? { semanticCatalog: this.opts.semanticCatalog } : {}),
+    })
+    preloadSemanticCatalog(this.completionRegistry, this.projectIndex)
+    this.lspDisposables = registerLatexProviders(
+      this.projectIndex,
+      this.fs,
+      (info) => this.emit('workspaceEdit', info),
+      'latex',
+      this.completionRegistry,
     )
 
     this.perfOverlayDispose = initPerfOverlay()
@@ -757,6 +863,8 @@ export class WasmTex {
     const oldPaths = new Set(this.models.keys())
 
     const newPaths = new Set(Object.keys(files))
+
+    this.generatedFiles.clear()
 
     // Clear existing files and index
 
@@ -833,7 +941,7 @@ export class WasmTex {
 
       if (typeof content === 'string') {
         if (path.endsWith('.tex')) {
-          this.projectIndex.updateFile(path, content)
+          this.updateProjectIndex(path, content)
         }
 
         const existing = this.models.get(path)
@@ -886,6 +994,8 @@ export class WasmTex {
   setFile(path: string, content: string | Uint8Array): void {
     const isNew = !this.fs.getFile(path)
 
+    this.projectIndex.invalidateCompletionSnapshot()
+    this.generatedFiles.delete(path)
     this.fs.writeFile(path, content)
 
     // A non-.tex file (image/data/.bib) can be baked into a checkpoint head yet isn't tracked
@@ -894,7 +1004,7 @@ export class WasmTex {
 
     if (typeof content === 'string') {
       if (path.endsWith('.tex')) {
-        this.projectIndex.updateFile(path, content)
+        this.updateProjectIndex(path, content)
       }
 
       if (path.endsWith('.bib')) {
@@ -937,6 +1047,7 @@ export class WasmTex {
     const deleted = this.fs.deleteFile(path)
 
     if (deleted) {
+      this.generatedFiles.delete(path)
       // A deletion changes the project structure the incremental checkpoints/diff baseline
       // were built against — drop them so the next compile is a clean full one, and clear the
       // fast-path state (mirrors loadProject) so no stale merge base / armed reconcile survives.
@@ -1010,6 +1121,12 @@ export class WasmTex {
 
   getPdf(): Uint8Array | null {
     return this.pdfViewer?.getLastPdf() ?? null
+  }
+
+  /** Runtime completion evidence from the latest full compile. Any project edit
+   *  changes this to `stale` immediately until a matching compile finishes. */
+  getCompletionSnapshotState(): CompletionSnapshotState {
+    return this.projectIndex.getCompletionSnapshotState()
   }
 
   // --- Events ---
@@ -1105,6 +1222,7 @@ export class WasmTex {
     for (const d of this.lspDisposables) d.dispose()
 
     this.lspDisposables = []
+    this.completionRegistry = undefined
 
     for (const d of this.interactionDisposables) d.dispose()
 
@@ -1298,10 +1416,12 @@ export class WasmTex {
     // doesn't track — force a full compile (which re-runs bibtex) by dropping checkpoints.
     if (!path.endsWith('.tex')) this.incremental?.reset()
 
+    this.projectIndex.invalidateCompletionSnapshot()
+    this.generatedFiles.delete(path)
     this.fs.writeFile(path, content)
 
     if (path.endsWith('.tex')) {
-      this.projectIndex.updateFile(path, content)
+      this.updateProjectIndex(path, content)
     }
 
     if (path.endsWith('.bib')) {
@@ -1338,7 +1458,7 @@ export class WasmTex {
       // still the deleted path) would resurrect it in the VFS with stale content.
       if (saveOutgoingFile(this.fs, this.currentFile, value)) {
         if (this.currentFile.endsWith('.tex')) {
-          this.projectIndex.updateFile(this.currentFile, value)
+          this.updateProjectIndex(this.currentFile, value)
         }
       }
     }
@@ -1451,10 +1571,6 @@ export class WasmTex {
   }
 
   private updateEngineMetadata(result: CompileResult): void {
-    if (result.engineCommands?.length) {
-      this.projectIndex.updateEngineCommands(result.engineCommands)
-    }
-
     if (result.semanticTrace) {
       this.projectIndex.updateSemanticTrace(parseTraceFile(result.semanticTrace))
     } else {
@@ -1462,6 +1578,14 @@ export class WasmTex {
     }
 
     if (result.inputFiles?.length) this.updateRecordedInputMetadata(result.inputFiles)
+
+    const snapshot = result.telemetry?.completionSnapshot
+    if (snapshot) this.projectIndex.updateCompletionSnapshot(snapshot)
+    else if (
+      result.engineCommands?.length &&
+      this.projectIndex.getCompletionSnapshotStatus() === 'absent'
+    )
+      this.projectIndex.updateEngineCommands(result.engineCommands)
   }
 
   private updateRecordedInputMetadata(inputFiles: string[]): void {
@@ -1470,7 +1594,7 @@ export class WasmTex {
       if (!path || this.projectIndex.getFileSymbols(path)) continue
       const file = this.fs.getFile(path)
       if (!file || typeof file.content !== 'string') continue
-      this.projectIndex.updateFile(path, file.content)
+      this.updateProjectIndex(path, file.content)
       this.ensureModel(path, file.content)
     }
   }
@@ -1779,7 +1903,9 @@ export class WasmTex {
     if (!this.isCurrentBibtexRun(runId)) return
 
     // Ensure the file is also in our VFS so the user can see it
+    this.projectIndex.invalidateCompletionSnapshot()
     this.fs.writeFile(`${mainBase}.bbl`, bbl)
+    this.generatedFiles.add(`${mainBase}.bbl`)
     this.emit('filesUpdate', { files: this.fs.listFiles() })
 
     this.pendingRecompile = true
@@ -1796,6 +1922,7 @@ export class WasmTex {
       this.pendingRecompile = false
     })
     if (!this.isCurrentBibtexRun(runId)) return
+    await this.attachCompletionSnapshot(r)
 
     // Crucial: calling onCompileResult here will trigger ANOTHER maybeRecompile
     // if the references are still not settled (which is normal after first .bbl write)

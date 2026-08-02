@@ -9,6 +9,7 @@
  * ("this document requires XeLaTeX …") rather than a cryptic pdfTeX error.
  */
 import type { CompileResult, EngineStatus } from '../types'
+import type { EngineCompletionObservation } from './completion-snapshot'
 import type { EngineDetection, TexEngine } from './engine-select'
 import { WasmTexLuatexEngine } from './luatex-engine'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './wasmtex-engine'
@@ -30,6 +31,8 @@ export interface CompileEngine {
    *  don't snapshot, so they omit this). Used to disable the snapshot for `\makeindex`
    *  documents, whose preamble `\openout` can't survive a dumped format. */
   setPreambleSnapshot?(enabled: boolean): void
+  /** Latest bounded post-compile engine observation, when this engine can expose one. */
+  getCompletionObservation?(): EngineCompletionObservation | null
   onProgress?: (progress: number) => void
   onFileDownload?: (filename: string) => void
 }

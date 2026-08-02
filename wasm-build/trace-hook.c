@@ -25,11 +25,12 @@
  *   - Skip empty slots (hash[p].v.RH == 0)
  *   - Skip undefined CS (zeqtb[p].hh eq_type == 0)
  *   - Skip single-character control sequences
- *   - Skip names containing '@' (internal LaTeX macros)
- *   - Skip names longer than 200 chars (sanity bound)
+ *   - Observe selected LaTeX registry prefixes before excluding public-command internals
+ *   - Bound names/records and report every conservative coverage drop
  * ========================================================================== */
 
 #include <stdio.h>
+#include <string.h>
 
 /* --------------------------------------------------------------------------
  * Type definitions matching web2c wasm32 layout
@@ -85,6 +86,8 @@ extern integer memmax;           /* highest valid zmem index (typically 6999999)
 
 /* frozen_control_sequence: the "undefined CS" placeholder */
 #define FROZEN_CS 26627
+#define MAX_COMMAND_RECORDS 20000
+#define MAX_RUNTIME_RECORDS 4096
 
 /* Count macro arguments by walking the parameter token list.
  * Only valid for user macros (eq_type 111-118).
@@ -128,6 +131,15 @@ void scanHashTable(void)
 {
     FILE *f = fopen("/work/.commands", "w");
     if (!f) return;
+    FILE *runtime = fopen("/work/.completion-observations", "w");
+    int command_records = 0;
+    int command_dropped = 0;
+    int counter_records = 0;
+    int counter_dropped = 0;
+    int color_records = 0;
+    int color_dropped = 0;
+    int key_records = 0;
+    int key_dropped = 0;
 
     int p;
     for (p = HASH_OFFSET; p <= hashtop; p++) {
@@ -152,28 +164,113 @@ void scanHashTable(void)
         /* Skip single-character control sequences */
         if (len <= 1) continue;
 
-        /* Skip names longer than 200 chars (sanity bound) */
-        if (len > 200) continue;
+        /* A name outside the protocol bound could belong to any observed field.
+         * Drop it conservatively and make all affected coverage claims incomplete. */
+        if (len > 200) {
+            command_dropped++;
+            counter_dropped++;
+            color_dropped++;
+            key_dropped++;
+            continue;
+        }
 
-        /* Check for internal markers and copy to buffer.
-         * '@' = LaTeX2e internals, '_' and ':' = LaTeX3 (expl3) internals.
-         * In standard LaTeX, '_' is subscript (catcode 8) and ':' is other
-         * (catcode 12) — only expl3 makes them letters (catcode 11). */
+        /* Copy once, rejecting control characters so the tab-delimited protocol
+         * remains one record per line. Internal names are retained only long enough
+         * to recognize bounded runtime semantic registries below. */
         char buf[201];
-        int skip = 0;
+        int unsafe = 0;
         int i;
         for (i = 0; i < len; i++) {
             unsigned char ch = strpool[start + i];
-            if (ch == '@' || ch == '_' || ch == ':') { skip = 1; break; }
+            if (ch < 32 || ch == 127) { unsafe = 1; break; }
             buf[i] = (char)ch;
         }
-        if (skip) continue;
+        if (unsafe) {
+            command_dropped++;
+            counter_dropped++;
+            color_dropped++;
+            key_dropped++;
+            continue;
+        }
         buf[len] = '\0';
+
+        /* Standard LaTeX registries with stable, documented naming conventions.
+         * These are observations only: unknown package-specific encodings are not
+         * guessed and remain explicitly unsupported in the host snapshot. */
+        if (runtime && strncmp(buf, "c@", 2) == 0 && len > 2) {
+            if (counter_records < MAX_RUNTIME_RECORDS) {
+                if (fprintf(runtime, "counter\t%s\n", buf + 2) < 0) {
+                    counter_dropped++;
+                } else {
+                    counter_records++;
+                }
+            } else {
+                counter_dropped++;
+            }
+        /* xcolor stores user color names under a control-sequence name that
+         * literally starts with "\\color@". Names beginning only with "color@"
+         * are model/conversion internals (for example color@RGB). */
+        } else if (runtime && strncmp(buf, "\\color@", 7) == 0 && len > 7) {
+            if (color_records < MAX_RUNTIME_RECORDS) {
+                if (fprintf(runtime, "color\t%s\n", buf + 7) < 0) {
+                    color_dropped++;
+                } else {
+                    color_records++;
+                }
+            } else {
+                color_dropped++;
+            }
+        } else if (runtime && strncmp(buf, "KV@", 3) == 0) {
+            char *separator = strchr(buf + 3, '@');
+            if (separator && separator > buf + 3 && separator[1] != '\0') {
+                if (key_records < MAX_RUNTIME_RECORDS) {
+                    if (fprintf(runtime, "key\t%.*s\t%s\n",
+                                (int)(separator - (buf + 3)),
+                                buf + 3, separator + 1) < 0) {
+                        key_dropped++;
+                    } else {
+                        key_records++;
+                    }
+                } else {
+                    key_dropped++;
+                }
+            }
+        }
+
+        /* Public command inventory excludes LaTeX2e/expl3 internals. In standard
+         * LaTeX, '_' and ':' become letters only inside expl3 code. */
+        if (strchr(buf, '@') || strchr(buf, '_') || strchr(buf, ':')) continue;
+        if (command_records >= MAX_COMMAND_RECORDS) {
+            command_dropped++;
+            continue;
+        }
 
         int eqType = (int)zeqtb[p].hh.u.B0;
         int argCount = count_macro_args(eqType, zeqtb[p].hh.v.RH);
-        fprintf(f, "%s\t%d\t%d\n", buf, eqType, argCount);
+        if (fprintf(f, "%s\t%d\t%d\n", buf, eqType, argCount) < 0) {
+            command_dropped++;
+        } else {
+            command_records++;
+        }
     }
 
+    if (fflush(f) != 0) command_dropped++;
     fclose(f);
+    if (runtime) {
+        if (fflush(runtime) != 0) {
+            counter_dropped++;
+            color_dropped++;
+            key_dropped++;
+            clearerr(runtime);
+        }
+        fprintf(runtime, "meta\tcounter\t%d\n", counter_dropped);
+        fprintf(runtime, "meta\tcolor\t%d\n", color_dropped);
+        fprintf(runtime, "meta\tkey\t%d\n", key_dropped);
+        fclose(runtime);
+    }
+    FILE *command_meta = fopen("/work/.commands-meta", "w");
+    if (command_meta) {
+        fprintf(command_meta, "%d\n", command_dropped);
+        fclose(command_meta);
+    }
 }

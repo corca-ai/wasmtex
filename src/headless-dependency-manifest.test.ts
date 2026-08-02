@@ -42,6 +42,29 @@ class FakeEngine {
   terminate(): void {}
 }
 
+class CompletionFakeEngine extends FakeEngine {
+  override async compile(): Promise<CompileResult> {
+    const result = await super.compile()
+    result.engineCommands = [
+      'runtimecommand\t111\t1',
+      'runtimeenvironment\t111\t0',
+      'endruntimeenvironment\t111\t0',
+    ]
+    result.engineCommandsComplete = true
+    result.engineCommandsDropped = 0
+    return result
+  }
+
+  getCompletionObservation() {
+    return {
+      counters: ['runtimecounter'],
+      colors: ['runtimecolor'],
+      keyFamilies: [{ name: 'runtimefamily', keys: ['runtimekey'] }],
+      complete: true,
+    }
+  }
+}
+
 interface CompilerInternals {
   initialized: boolean
   engine: FakeEngine
@@ -54,6 +77,38 @@ function installFakeEngine(compiler: WasmTexCompiler, engine: FakeEngine): void 
 }
 
 describe('WasmTexCompiler dependency manifest composition', () => {
+  it('attaches only compile-produced runtime evidence and stales it immediately on edit', async () => {
+    const source = '\\documentclass{article}\\begin{document}x\\end{document}'
+    const compiler = new WasmTexCompiler({
+      files: { 'main.tex': source },
+      completionProfile: { id: 'headless-test', mirrorRevision: 'revision-1' },
+    })
+    const engine = new CompletionFakeEngine('')
+    installFakeEngine(compiler, engine)
+
+    const result = await compiler.compile()
+
+    const snapshot = result.telemetry?.completionSnapshot
+    expect(snapshot).toMatchObject({
+      version: 1,
+      identity: {
+        root: 'main.tex',
+        engine: 'pdflatex',
+        profile: { id: 'headless-test', texliveYear: '2025', mirrorRevision: 'revision-1' },
+      },
+      fields: {
+        commands: { status: 'observed', complete: true },
+        colors: { status: 'observed', complete: true },
+      },
+    })
+    expect(compiler.getCompletionSnapshotState().status).toBe('fresh')
+    expect(engine.compileCount).toBe(1)
+
+    compiler.setFile('main.tex', `${source}\n% changed`)
+    expect(compiler.getCompletionSnapshotState().status).toBe('stale')
+    expect(engine.compileCount).toBe(1)
+  })
+
   it('combines classic BibTeX, custom BST, all forwarded BIB files, and index inputs', async () => {
     const bibliography = vi.fn(async () => '\\begin{thebibliography}{1}\\end{thebibliography}')
     const index = vi.fn(async () => '\\begin{theindex}\\end{theindex}')

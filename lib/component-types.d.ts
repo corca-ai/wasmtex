@@ -7,6 +7,17 @@ export interface WasmTexOptions {
     texliveVersion?: TexliveVersion;
     /** TexLive server endpoint URL. Defaults to auto-detected from BASE_URL. */
     texliveUrl?: string;
+    /** Exact completion catalog for the selected TeX Live compile profile.
+     *  Custom `texliveUrl` hosts should inject their matching provider. */
+    resourceCatalog?: import('./lsp/resource-catalog').TexResourceCatalogProvider;
+    /** Versioned class/package option and key metadata for the selected compile profile. */
+    semanticCatalog?: import('./lsp/semantic-catalog').TexSemanticCatalogProvider;
+    /** Stable compile-profile identity for runtime completion snapshots. Catalog-backed
+     *  hosts may omit this; WasmTex derives it from the matching catalog identity. */
+    completionProfile?: {
+        id: string;
+        mirrorRevision: string | null;
+    };
     /** Main TeX file name. Defaults to 'main.tex'. */
     mainFile?: string;
     /** Initial project files. Keys are file paths, values are content. */

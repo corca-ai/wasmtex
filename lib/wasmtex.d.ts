@@ -1,4 +1,5 @@
 import { WasmTexEventMap, WasmTexOptions } from './component-types';
+import { CompletionSnapshotState } from './types';
 import { PdfViewer } from './viewer/pdf-viewer';
 import type * as Monaco from 'monaco-editor';
 type EventHandler<T> = (event: T) => void;
@@ -17,6 +18,7 @@ export declare class WasmTex {
     private editor;
     private projectIndex;
     private lspDisposables;
+    private completionRegistry;
     private models;
     private modelDisposables;
     private currentFile;
@@ -41,6 +43,9 @@ export declare class WasmTex {
     private bibtexDone;
     private pendingBibtex;
     private bibtexRunId;
+    /** Auxiliary-stage outputs live in the VFS for compilation and inspection but do
+     *  not participate in the host-authored project revision. */
+    private generatedFiles;
     private incremental;
     private reconcileArmed;
     private prebuildTimer;
@@ -75,6 +80,8 @@ export declare class WasmTex {
      * a full compile. Serialised against a speculative prebuild (they share the one worker).
      */
     private compileActiveEngine;
+    private completionProfile;
+    private attachCompletionSnapshot;
     /** Attempt an incremental fast paint (#99); returns the spliced result, or null to signal the
      *  caller to run a full compile. On success arms the reconcile/merge (unless a newer edit
      *  superseded this one mid-flight, in which case the scheduler drops the result and the flags
@@ -103,6 +110,7 @@ export declare class WasmTex {
     private initEditorState;
     private initBinaryPreview;
     private initEditorInteraction;
+    private updateProjectIndex;
     private initRuntimeServices;
     init(): Promise<void>;
     /** Load a complete project state. */
@@ -131,6 +139,9 @@ export declare class WasmTex {
     compile(): void;
     /** Get the last rendered PDF as bytes. */
     getPdf(): Uint8Array | null;
+    /** Runtime completion evidence from the latest full compile. Any project edit
+     *  changes this to `stale` immediately until a matching compile finishes. */
+    getCompletionSnapshotState(): CompletionSnapshotState;
     on<K extends keyof WasmTexEventMap>(event: K, handler: EventHandler<WasmTexEventMap[K]>): void;
     off<K extends keyof WasmTexEventMap>(event: K, handler: EventHandler<WasmTexEventMap[K]>): void;
     /** Get the raw Monaco editor instance. */

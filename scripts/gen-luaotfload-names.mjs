@@ -56,7 +56,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'luaotfload-names.lua')
-const S3_BUCKET = process.env.S3_BUCKET || 'corca-wasmtex-texlib'
+const S3_BUCKET = process.env.S3_BUCKET || 'corca-fastlatex-texlib'
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 // Must match the engine's bundled luaotfload (see wasm-build/texlive-source.ref).
 // TeX Live 2025 → luaotfload 3.29 → names DB schema version 6.

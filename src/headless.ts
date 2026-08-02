@@ -16,6 +16,7 @@ import {
   createCompileEngine,
   unavailableEngineResult,
 } from './engine/compile-engine'
+import { createCompletionSnapshot } from './engine/completion-snapshot'
 import {
   type AuxiliaryDependencyObservation,
   buildDependencyManifest,
@@ -40,7 +41,14 @@ import { parseAuxFile } from './lsp/aux-parser'
 import { parseBibFile, rebuildBibIndex } from './lsp/bib-parser'
 import { ProjectIndex } from './lsp/project-index'
 import { parseTraceFile } from './lsp/trace-parser'
-import type { CompileResult, DependencyManifest, TexliveVersion, WarmupCache } from './types'
+import type {
+  CompileResult,
+  CompletionSnapshotProfile,
+  CompletionSnapshotState,
+  DependencyManifest,
+  TexliveVersion,
+  WarmupCache,
+} from './types'
 
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api'
 // Per-stage backend toolkit (execution-model principle 3), re-exported so a headless
@@ -48,7 +56,25 @@ export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './
 // also pulling in the browser-component entry.
 export * from './backend-api'
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api'
+export {
+  COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
+  COMPLETION_SNAPSHOT_SCHEMA_VERSION,
+} from './engine/completion-snapshot'
 export type {
+  CompletionSnapshot,
+  CompletionSnapshotCollection,
+  CompletionSnapshotCommand,
+  CompletionSnapshotEngine,
+  CompletionSnapshotEvidence,
+  CompletionSnapshotFieldName,
+  CompletionSnapshotFields,
+  CompletionSnapshotIdentity,
+  CompletionSnapshotKey,
+  CompletionSnapshotKeyFamily,
+  CompletionSnapshotProfile,
+  CompletionSnapshotResource,
+  CompletionSnapshotState,
+  CompletionSnapshotValue,
   DependencyManifest,
   DependencyManifestCoverage,
   DependencyManifestIncompleteReason,
@@ -94,6 +120,12 @@ export interface WasmTexCompilerOptions {
    *  that stage to an endpoint running the same deterministic engine; the client-first
    *  default stays intact for any stage left unregistered. */
   backends?: BackendRegistry
+  /** Stable identity for the compile profile that produced runtime completion evidence.
+   *  Bind `mirrorRevision` when the TeX Live endpoint is immutable/catalog-backed. */
+  completionProfile?: {
+    id: string
+    mirrorRevision: string | null
+  }
 }
 
 type FileContent = string | Uint8Array
@@ -280,6 +312,7 @@ export class WasmTexCompiler {
     // next incremental compile diffs against + seeds checkpoints from. The SyncTeX is the head
     // merge-base so the next fast paint can return exact `synctexData` (#99 P2).
     this.attachDependencyManifest(result)
+    await this.attachCompletionSnapshot(result)
     this.incremental?.noteFull(this.mainSource(), this.projectTexFiles(), result.synctex)
     return result
   }
@@ -308,6 +341,7 @@ export class WasmTexCompiler {
   }
 
   setFile(path: string, content: FileContent): void {
+    this.projectIndex.invalidateCompletionSnapshot()
     this.fs.writeFile(path, content)
     // A host write replaces any same-named generated artifact with a real project file.
     const dependencyPath = normalizeProjectDependencyPath(path) ?? path
@@ -380,6 +414,7 @@ export class WasmTexCompiler {
   }
 
   setMainFile(path: string): void {
+    this.projectIndex.invalidateCompletionSnapshot()
     this.mainFile = path
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
@@ -392,6 +427,10 @@ export class WasmTexCompiler {
 
   getProjectIndex(): ProjectIndex {
     return this.projectIndex
+  }
+
+  getCompletionSnapshotState(): CompletionSnapshotState {
+    return this.projectIndex.getCompletionSnapshotState()
   }
 
   async readOutput(path: string): Promise<string | null> {
@@ -456,6 +495,60 @@ export class WasmTexCompiler {
     })
     result.telemetry.dependencyManifest = manifest
     this.lastFullDependencyManifest = result.success && result.pdf ? manifest : undefined
+  }
+
+  private completionProfile(): CompletionSnapshotProfile {
+    const texliveYear = this.opts.texliveVersion ?? '2025'
+    return {
+      id:
+        this.opts.completionProfile?.id ??
+        `wasmtex:${texliveYear}:${this.opts.texliveUrl ?? 'default-mirror'}`,
+      texliveYear,
+      mirrorRevision: this.opts.completionProfile?.mirrorRevision ?? null,
+    }
+  }
+
+  private async attachCompletionSnapshot(result: CompileResult): Promise<void> {
+    if (!result.success || !this.engine) return
+    if (this.fs.getModifiedFiles().length > 0) return
+    const engine = this.engine
+    const root = this.mainFile
+    const projectFiles = this.fs
+      .listFiles()
+      .filter((path) => !this.generatedFiles.has(path))
+      .flatMap((path) => {
+        const file = this.fs.getFile(path)
+        if (!file) return []
+        return [
+          {
+            path: file.path,
+            content:
+              typeof file.content === 'string' ? file.content : Uint8Array.from(file.content),
+          },
+        ]
+      })
+    const engineObservation = engine.getCompletionObservation?.()
+    const snapshot = await createCompletionSnapshot({
+      engine: this.engineKind,
+      root,
+      profile: this.completionProfile(),
+      projectFiles,
+      ...(result.engineCommands ? { engineCommands: result.engineCommands } : {}),
+      engineCommandsComplete: result.engineCommandsComplete === true,
+      ...(result.engineCommandsDropped !== undefined
+        ? { engineCommandsDropped: result.engineCommandsDropped }
+        : {}),
+      ...(engineObservation ? { engineObservation } : {}),
+      ...(result.inputFiles ? { inputFiles: result.inputFiles } : {}),
+      inputFilesComplete: result.inputFilesComplete === true,
+    })
+    // A concurrent host write remains modified and belongs to a later project revision.
+    if (root !== this.mainFile || engine !== this.engine || this.fs.getModifiedFiles().length > 0) {
+      return
+    }
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+    result.telemetry.completionSnapshot = snapshot
+    this.projectIndex.updateCompletionSnapshot(snapshot)
   }
 
   private async syncAllFilesToEngine(): Promise<void> {

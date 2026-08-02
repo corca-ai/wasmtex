@@ -1,6 +1,6 @@
 # TeX Live mirror coverage
 
-- Bucket: `s3://corca-wasmtex-texlib/2025/pdftex/`
+- Bucket: `s3://corca-fastlatex-texlib/2025/pdftex/`
 - Served by: `d1jectpaw0dlvl.cloudfront.net/2025/`
 - Total: **155976 objects**, **3.0 GB**
 

@@ -71,9 +71,13 @@ for (const path of [
   'docs/license-evidence/format-inputs-xetex-23ee539.json',
   'docs/license-evidence/format-inputs-luahbtex-23ee539.json',
   'docs/license-evidence/engine-release-2025-2b58db3.md',
+  'docs/license-evidence/engine-release-2025-57ad3e9.md',
   'docs/license-evidence/link-inventory-2b58db3.json',
   'docs/license-evidence/link-inventory-9f7c7d4.json',
   'docs/license-evidence/engine-sbom-2025-9f7c7d4.spdx.json',
+  'docs/license-evidence/link-inventory-57ad3e9.json',
+  'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json',
+  'docs/license-evidence/corresponding-source-2025-baa63e6.md',
   'docs/license-evidence/engine-sbom-2025-2b58db3.spdx.json',
   'docs/license-evidence/format-inputs-xetex-2b58db3.json',
   'docs/license-evidence/format-inputs-luahbtex-2b58db3.json',
@@ -83,14 +87,18 @@ for (const path of [
   'scripts/audit-texlive-provenance.mjs',
   'scripts/build-corresponding-source.mjs',
   'scripts/check-corresponding-source.mjs',
+  'scripts/check-tex-semantic-catalog.mjs',
+  'scripts/check-texlive-catalog.mjs',
   'scripts/check-texlive-provenance.mjs',
   'scripts/corresponding-source-2025.json',
   'scripts/gen-engine-build-receipt.mjs',
   'scripts/gen-link-inventory.mjs',
   'scripts/gen-engine-sbom.mjs',
+  'scripts/gen-tex-semantic-catalog.mjs',
   'scripts/check-engine-license-inventory.mjs',
   'scripts/check-release-notices.mjs',
   'scripts/engine-components-2025.json',
+  'scripts/gen-texlive-catalog.mjs',
   'scripts/gen-texlive-provenance.mjs',
   'scripts/lib/engine-build-receipt.mjs',
   'scripts/lib/engine-license-inventory.mjs',
@@ -98,7 +106,13 @@ for (const path of [
   'scripts/lib/link-inventory.mjs',
   'scripts/lib/corresponding-source.mjs',
   'scripts/lib/release-assets.mjs',
+  'scripts/lib/tex-semantic-catalog.mjs',
+  'scripts/lib/tex-semantic-extractor.mjs',
+  'scripts/lib/tex-semantic-probe.mjs',
+  'scripts/lib/texlive-catalog.mjs',
   'scripts/lib/texlive-provenance.mjs',
+  'scripts/run-tex-semantic-probes.mjs',
+  'scripts/tex-semantic-overrides-2025.json',
   'scripts/texlive-mirror-2025.json',
   'scripts/texlive-mirror-overrides-2025.json',
   'wasm-build/texlive-source.ref',
@@ -111,9 +125,56 @@ const manifestRelativePath = `public/wasmtex/${version}/LICENSE-MANIFEST.json`
 const manifest = readJson(manifestRelativePath)
 const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
 const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
+const semanticOverrides = readJson(`scripts/tex-semantic-overrides-${version}.json`)
 const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
-const linkInventory = readJson('docs/license-evidence/link-inventory-9f7c7d4.json')
+const linkInventory = readJson('docs/license-evidence/link-inventory-57ad3e9.json')
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
+
+if (semanticOverrides) {
+  if (semanticOverrides.schemaVersion !== 1) fail('semantic overrides schemaVersion must be 1')
+  if (semanticOverrides.texliveYear !== version) fail('semantic overrides TeX Live year mismatch')
+  if (semanticOverrides.license !== 'MIT') fail('semantic overrides must record their MIT source license')
+  const scopes = new Set(Object.keys(semanticOverrides.scopes ?? {}))
+  for (const requiredScope of [
+    'class/book',
+    'class/beamer',
+    'package/amsmath',
+    'package/graphicx',
+    'package/xcolor',
+    'package/hyperref',
+    'package/geometry',
+    'package/babel',
+    'package/polyglossia',
+    'package/fontspec',
+    'package/biblatex',
+    'package/tikz',
+    'package/pgfplots',
+    'package/siunitx',
+    'package/listings',
+    'package/minted',
+    'package/cleveref',
+    'package/glossaries',
+  ]) {
+    if (!scopes.has(requiredScope)) fail(`semantic overrides omit verified scope: ${requiredScope}`)
+  }
+  const colorSources = semanticOverrides.scopes?.['package/xcolor']?.colorSources ?? []
+  const colorFiles = new Set(colorSources.map((source) => source.fileName))
+  for (const requiredFile of ['dvipsnam.def', 'svgnam.def', 'x11nam.def']) {
+    if (!colorFiles.has(requiredFile)) fail(`xcolor semantic metadata omits ${requiredFile}`)
+  }
+  for (const source of colorSources) {
+    if (
+      !Array.isArray(source.anyOptions) ||
+      !Array.isArray(source.deferredOptions) ||
+      source.anyOptions.length + source.deferredOptions.length === 0
+    ) {
+      fail(`${String(source.fileName)} color source has no activating options`)
+    }
+    if (!Number.isSafeInteger(source.expectedCount) || source.expectedCount <= 0) {
+      fail(`${String(source.fileName)} color source has no reviewed expected count`)
+    }
+  }
+}
 
 if (sourceConfig) {
   try {
@@ -189,7 +250,7 @@ try {
       resolve(root, 'scripts/gen-engine-sbom.mjs'),
       version,
       '--check',
-      'docs/license-evidence/engine-sbom-2025-9f7c7d4.spdx.json',
+      'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json',
     ],
     { cwd: root, stdio: 'pipe' },
   )
@@ -492,6 +553,10 @@ if (existsSync(mirrorSync)) {
   for (const required of [
     'gen-texlive-provenance.mjs',
     'check-texlive-provenance.mjs',
+    'gen-texlive-catalog.mjs',
+    'check-texlive-catalog.mjs',
+    'gen-tex-semantic-catalog.mjs',
+    'check-tex-semantic-catalog.mjs',
     'TEXMF_ARCHIVE',
     'TEXLIVE_METADATA_ARCHIVE',
     'npm run check:licenses -- --release',

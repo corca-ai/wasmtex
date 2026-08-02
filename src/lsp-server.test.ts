@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { createCompletionSnapshot } from './engine/completion-snapshot'
+import {
+  InMemoryTexResourceCatalogProvider,
+  type TexResourceCatalogIdentity,
+} from './lsp/resource-catalog'
 import { type JsonRpcMessage, LatexLspServer, pathFromUri, uriFromPath } from './lsp-server'
+import type { LatexLanguageServiceOptions } from './lsp-service'
 
-function makeServer() {
+function makeServer(options?: LatexLanguageServiceOptions) {
   const sent: JsonRpcMessage[] = []
-  const server = new LatexLspServer((m) => sent.push(m))
+  const server = new LatexLspServer((m) => sent.push(m), options)
   return { server, sent }
 }
 
@@ -152,6 +158,117 @@ describe('LatexLspServer', () => {
     expect(frac.textEdit.newText).toContain('frac')
   })
 
+  it('returns exact catalog resources over JSON-RPC', () => {
+    const identity: TexResourceCatalogIdentity = {
+      schemaVersion: 1,
+      texliveYear: '2025',
+      mirrorRevision: '2025-0123456789abcdef',
+    }
+    const resourceCatalog = new InMemoryTexResourceCatalogProvider(identity, [
+      {
+        ...identity,
+        kind: 'tex-class',
+        resources: [
+          {
+            name: 'book',
+            fileName: 'book.cls',
+            extension: 'cls',
+            key: 'pdftex/26/book.cls',
+            format: 26,
+            bytes: 10,
+            sha256: 'a'.repeat(64),
+            texliveYear: identity.texliveYear,
+            mirrorRevision: identity.mirrorRevision,
+            sourcePath: 'texmf-dist/tex/latex/base/book.cls',
+            texlivePackage: 'latex',
+            packageRevision: '42',
+            catalogue: 'latex',
+          },
+        ],
+      },
+    ])
+    const { server, sent } = makeServer({ resourceCatalog })
+    const uri = 'file:///m.tex'
+    const line = '\\documentclass{bo}'
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text: line } },
+    })
+    server.handle({
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri }, position: { line: 0, character: line.indexOf('}') } },
+    })
+
+    expect(result(sent, 12)).toMatchObject({
+      isIncomplete: false,
+      items: [{ label: 'book' }],
+    })
+  })
+
+  it('preserves the neutral replacement range for a list item with a suffix', () => {
+    const { server, sent } = makeServer()
+    const uri = 'file:///m.tex'
+    const line = '\\cref{fig:a, fiX:b}'
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text: `\\label{fig:b}\n${line}` } },
+    })
+    const start = line.indexOf('fiX:b')
+    server.handle({
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri }, position: { line: 1, character: start + 2 } },
+    })
+
+    const item = result(sent, 11).items.find(
+      (candidate: { label: string }) => candidate.label === 'fig:b',
+    )
+    expect(item.textEdit).toEqual({
+      range: {
+        start: { line: 1, character: start },
+        end: { line: 1, character: start + 'fiX:b'.length },
+      },
+      newText: 'fig:b',
+    })
+  })
+
+  it('preserves color expression edits and metadata over JSON-RPC', () => {
+    const { server, sent } = makeServer()
+    const uri = 'file:///colors.tex'
+    const lines = [
+      '\\usepackage{xcolor}',
+      '\\definecolor{blueish}{RGB}{1,2,3}',
+      '\\color{red!50!blX}',
+    ]
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text: lines.join('\n') } },
+    })
+    server.handle({
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri }, position: { line: 2, character: 16 } },
+    })
+
+    const blueish = result(sent, 13).items.find(
+      (candidate: { label: string }) => candidate.label === 'blueish',
+    )
+    expect(blueish.textEdit).toEqual({
+      range: {
+        start: { line: 2, character: 14 },
+        end: { line: 2, character: 17 },
+      },
+      newText: 'blueish',
+    })
+    expect(blueish.data).toMatchObject({
+      wasmtex: { domain: 'color', color: { css: '#010203' } },
+    })
+  })
+
   it('does not erase the document when didChange carries no contentChanges', () => {
     const { server, sent } = makeServer()
     const uri = 'file:///m.tex'
@@ -198,6 +315,43 @@ describe('LatexLspServer', () => {
     const { server, sent } = makeServer()
     server.handle({ jsonrpc: '2.0', id: 9, method: 'textDocument/foo', params: {} })
     expect(responseFor(sent, 9)!.error!.code).toBe(-32601)
+  })
+
+  it('accepts revisioned completion snapshots and reports them stale after a change', async () => {
+    const text = '\\runt'
+    const snapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root: 'main.tex',
+      profile: { id: 'rpc-test', texliveYear: '2025', mirrorRevision: 'rev-1' },
+      projectFiles: [{ path: 'main.tex', content: text }],
+      engineCommands: ['runtimecmd\t111\t0'],
+    })
+    const { server, sent } = makeServer({ files: { 'main.tex': text }, lint: false })
+    await server.handle({
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'wasmtex/updateCompletionSnapshot',
+      params: { snapshot },
+    })
+    expect(result(sent, 20).status).toBe('fresh')
+    server.handle({
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri: URI }, position: { line: 0, character: 5 } },
+    })
+    expect(result(sent, 21).items.map((item: { label: string }) => item.label)).toContain(
+      '\\runtimecmd',
+    )
+    server.handle({
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: URI },
+        contentChanges: [{ text: `${text}\n% changed` }],
+      },
+    })
+    server.handle({ jsonrpc: '2.0', id: 22, method: 'wasmtex/completionSnapshotState' })
+    expect(result(sent, 22).status).toBe('stale')
   })
 
   it('does not crash on a malformed request (missing position)', () => {

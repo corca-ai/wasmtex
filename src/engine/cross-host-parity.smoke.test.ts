@@ -13,6 +13,9 @@ import { BIBTEX_FILES, docFor, MAKEINDEX_FILES, pdfImportFiles } from '../../e2e
  * to slide. Opt-in (network + curl + engine assets):
  *
  *   CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
+ *
+ * Set `WASMTEX_SMOKE_PUBLIC_DIR` to exercise locally rebuilt assets without replacing the
+ * checked-in release artifacts under `public/`.
  */
 const RUN = process.env.CROSS_HOST_PARITY === '1'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -35,7 +38,10 @@ async function assertParity(
 ): Promise<void> {
   const { installNodeWorkerHost } = await import('./node-host')
   const { WasmTexCompiler } = await import('../headless')
-  installNodeWorkerHost({ publicDir: join(ROOT, 'public'), assetBaseUrl: ASSET })
+  installNodeWorkerHost({
+    publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(ROOT, 'public'),
+    assetBaseUrl: ASSET,
+  })
 
   const compiler = new WasmTexCompiler({
     engine,
@@ -82,8 +88,11 @@ describe.runIf(RUN)('cross-host parity (#111, #113, #114)', () => {
   }
 
   // Bibliography (pdfLaTeX + BibTeX, M2 #114): the bibtex stage runs under Node too.
-  it('bibtex: Node output equals the browser-generated golden', () =>
-    assertParity('pdflatex', BIBTEX_FILES, 'bibtex.json'))
+  it(
+    'bibtex: Node output equals the browser-generated golden',
+    () => assertParity('pdflatex', BIBTEX_FILES, 'bibtex.json'),
+    180_000,
+  )
 
   // Index (pdfLaTeX + makeindex, M3 #115/#134): the makeindex stage runs under Node too.
   // Skipped until the browser golden is generated (`GOLDEN_UPDATE=1 playwright test
@@ -91,6 +100,7 @@ describe.runIf(RUN)('cross-host parity (#111, #113, #114)', () => {
   it.runIf(existsSync(join(ROOT, 'e2e/goldens/makeindex.json')))(
     'makeindex: Node output equals the browser-generated golden',
     () => assertParity('pdflatex', MAKEINDEX_FILES, 'makeindex.json'),
+    180_000,
   )
 
   for (const engine of ['xelatex', 'lualatex'] as const) {

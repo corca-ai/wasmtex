@@ -108,6 +108,14 @@ The fluid boundary only works if client and server output is reproducible:
 - **Content-addressing** — `(sources + deps)` hash keys artifacts so either side can
   populate a shared cache.
 
+Runtime completion evidence follows the same host-independent contract. A full compile
+may return a bounded `CompletionSnapshot` keyed by project revision, root, engine, TeX
+Live year, and mirror/profile. Completion queries only consume the latest matching
+snapshot and never schedule engine work. Browser and Node run the same authored worker
+scan; unavailable engine capabilities are explicit `unsupported` fields. The scan is
+output-neutral, so parity verification continues to compare PDF/log/aux results while
+also checking the snapshot contract when rebuilt assets provide it.
+
 Break this contract and a server result will not match a client result — so the
 verification environment (principle 5) gates everything else.
 

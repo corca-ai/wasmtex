@@ -1,6 +1,7 @@
 import { CachedTexliveFile, CompileResult, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types';
 import { BaseWorkerEngine } from './base-worker-engine';
 import { CompileEngine } from './compile-engine';
+import { EngineCompletionObservation } from './completion-snapshot';
 export interface WasmTexEngineOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -43,9 +44,12 @@ interface WorkerMessage {
     preambleSnapshot?: boolean;
     preambleRebuilt?: boolean;
     engineCommands?: string[];
+    engineCommandsComplete?: boolean;
+    engineCommandsDropped?: number;
     inputFiles?: string[];
     inputFilesComplete?: boolean;
     semanticTrace?: string;
+    completionObservations?: string[];
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];
 }
@@ -67,6 +71,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     /** Last-written text sources, so dependency extraction can read the main source
      *  synchronously (no worker round-trip). */
     private readonly sources;
+    private completionObservation;
     /** Download/persist watermark (drives auto-persist; single-flight guarded). */
     private readonly persist;
     onFileDownload?: (filename: string) => void;
@@ -122,6 +127,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
      *  or reaching into the worker protocol directly. */
     buildFormat(): Promise<Uint8Array>;
     compile(): Promise<CompileResult>;
+    getCompletionObservation(): EngineCompletionObservation | null;
     /**
      * Build a mid-document checkpoint (#55): run `headText + \dump` in INITEX to capture
      * the engine state at a page boundary as a bootable format, plus the head PDF (pages

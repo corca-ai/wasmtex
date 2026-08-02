@@ -20,6 +20,11 @@ export interface CompileResult {
     preambleRebuilt?: boolean;
     /** Control sequences from pdfTeX hash table (package + user commands) */
     engineCommands?: string[];
+    /** Whether the command inventory is complete for this engine pass. Older worker
+     *  assets omit this, which consumers must treat as unproven. */
+    engineCommandsComplete?: boolean;
+    /** Public command records omitted by the engine-side safety limit. */
+    engineCommandsDropped?: number;
     /** Input files discovered by the TeX engine's `-recorder` (`.fls`). Includes project and
      *  system paths; use `telemetry.dependencyManifest.projectInputs` for the
      *  normalized, project-only invalidation boundary. */
@@ -74,7 +79,87 @@ export interface EngineTelemetry {
      *  profile/root/topology are unchanged). Produced by the headless orchestrator,
      *  which can combine engine recorder data with auxiliary-stage requests. */
     dependencyManifest?: DependencyManifest;
+    /** Revision-bound runtime completion evidence collected only as a by-product of
+     *  this normal compile. It never causes a compile and is replaced atomically. */
+    completionSnapshot?: CompletionSnapshot;
 }
+export type CompletionSnapshotEngine = 'pdflatex' | 'xelatex' | 'lualatex';
+export type CompletionSnapshotEvidence = 'engine-hash-table' | 'recorder';
+export type CompletionSnapshotFieldName = 'commands' | 'environments' | 'colors' | 'counters' | 'lengths' | 'keyFamilies' | 'loadedResources';
+export interface CompletionSnapshotProfile {
+    /** Stable integrator-selected compile-profile identity. */
+    id: string;
+    texliveYear: TexliveVersion;
+    /** Exact catalog/mirror revision, or null when the host did not bind one. */
+    mirrorRevision: string | null;
+}
+export interface CompletionSnapshotIdentity {
+    projectRevision: string;
+    engine: CompletionSnapshotEngine;
+    root: string;
+    profile: CompletionSnapshotProfile;
+}
+export interface CompletionSnapshotCommand {
+    name: string;
+    eqType: number;
+    argCount: number;
+    evidence: 'engine-hash-table';
+}
+export interface CompletionSnapshotValue {
+    name: string;
+    evidence: 'engine-hash-table';
+}
+export interface CompletionSnapshotKey {
+    name: string;
+    evidence: 'engine-hash-table';
+}
+export interface CompletionSnapshotKeyFamily {
+    name: string;
+    keys: CompletionSnapshotKey[];
+    evidence: 'engine-hash-table';
+}
+export interface CompletionSnapshotResource {
+    path: string;
+    evidence: 'recorder';
+}
+/** One independently supported runtime-observation field. `complete` means the
+ *  engine exposed its full bounded observation for this compile, not that arbitrary
+ *  TeX execution can be understood statically. */
+export interface CompletionSnapshotCollection<T> {
+    status: 'observed' | 'unsupported';
+    complete: boolean;
+    values: T[];
+    reason?: string;
+    truncated?: boolean;
+    dropped?: number;
+}
+export interface CompletionSnapshotFields {
+    commands: CompletionSnapshotCollection<CompletionSnapshotCommand>;
+    environments: CompletionSnapshotCollection<CompletionSnapshotValue>;
+    colors: CompletionSnapshotCollection<CompletionSnapshotValue>;
+    counters: CompletionSnapshotCollection<CompletionSnapshotValue>;
+    lengths: CompletionSnapshotCollection<CompletionSnapshotValue>;
+    keyFamilies: CompletionSnapshotCollection<CompletionSnapshotKeyFamily>;
+    loadedResources: CompletionSnapshotCollection<CompletionSnapshotResource>;
+}
+/** Versioned, bounded runtime completion evidence. All values are observations;
+ *  static/project declarations remain separate sources with their own precedence. */
+export interface CompletionSnapshot {
+    version: 1;
+    identity: CompletionSnapshotIdentity;
+    fields: CompletionSnapshotFields;
+    /** Deterministic UTF-16 estimate of this snapshot's serialized payload. */
+    estimatedBytes: number;
+}
+export type CompletionSnapshotState = {
+    status: 'absent';
+} | {
+    status: 'fresh';
+    snapshot: CompletionSnapshot;
+} | {
+    status: 'stale';
+    snapshot: CompletionSnapshot;
+};
 export type DependencyManifestStage = 'latex' | 'bibliography' | 'index' | 'pdf-conversion';
 export type DependencyManifestSource = 'recorder' | 'backend-request' | 'log' | 'source' | 'xdv';
 export type DependencyManifestIncompleteReason = 'compile-failed' | 'recorder-unavailable' | 'engine-recorder-unavailable' | 'pdf-conversion-recorder-unavailable' | 'incremental-dependencies-unavailable' | 'auxiliary-stage-failed';

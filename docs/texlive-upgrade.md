@@ -131,10 +131,20 @@ that distribution. Record the release year and CDN base URL used by the engine. 
 CDN operation is independent of the WasmTex engine release checklist; the engine
 manifest does not wait for a package-by-package override review.
 
-The repository's `sync-texlive-s3.sh` and `texlive-provenance` tools remain available
-for anyone intentionally constructing a transformed or flattened subset. That is a
-separate distribution workflow with its own conservative checks, not the production
-full-mirror procedure documented here.
+The repository's `sync-texlive-s3.sh`, `texlive-provenance`, and catalog tools remain
+available for anyone intentionally constructing a transformed or flattened subset.
+That workflow generates `catalog/<mirrorRevision>/` from the final selected inventory,
+then extracts and checks `semantic/<mirrorRevision>/` from those exact `.cls`/`.sty`
+bytes, the option-gated xcolor `.def` sources, and the year-specific override file. For a separately operated full mirror,
+produce the same final-inventory manifest and immutable catalogs as part of that
+deployment rather than deriving completion from an upstream or pre-transform file list.
+
+For an existing separately operated mirror, use `sync-texlive-s3.sh --catalog-only`.
+It keeps the mirror redistribution gate separate, inventories only completion and
+semantic inputs, and refuses publication unless every selected byte matches the
+deployed endpoint. `--catalog-only` never uploads the staged `pdftex/` files; it
+publishes only immutable `catalog/<mirrorRevision>/`,
+`semantic/<mirrorRevision>/`, and their versioned inventory evidence.
 
 After provisioning, run the read-only runtime coverage audit. It flags formats
 expected but absent, such as OpenType/TrueType fonts required by XeLaTeX and
@@ -143,6 +153,20 @@ LuaLaTeX:
 ```bash
 AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket <bucket> --year <year>
 ```
+
+Before enabling exact resource completion for the new profile:
+
+1. publish `texlive-provenance.json` and the matching immutable catalog shards;
+2. run `npm run check:texlive-catalog -- <manifest> <catalog-dir>` on the bytes to publish;
+3. update `tex-semantic-overrides-<year>.json`, inspect `coverage.json`, run the
+   semantic golden/checker, verify the exact `dvipsnam.def`/`svgnam.def`/`x11nam.def`
+   sources, reviewed expected counts, and activation options, and explicitly review every unresolved high-value scope;
+4. run any needed dynamic probe through `probe:tex-semantics`—never without its OS
+   network sandbox and time/memory limits—and merge the identity-matched report;
+5. put `{ schemaVersion, texliveYear, mirrorRevision }` into the compile profile; and
+6. verify a class/package option/key/value, conditional color palette, and resource
+   sample through that profile, including an offline cache return and a deliberate
+   revision-mismatch rejection.
 
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.

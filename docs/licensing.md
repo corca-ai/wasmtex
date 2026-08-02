@@ -75,7 +75,7 @@ this engine family classification:
 Each engine binary is one linked program, so its distribution terms must be
 satisfiable by every statically linked component simultaneously. The actual
 linked set is not assumed: the
-[release link inventory](license-evidence/link-inventory-9f7c7d4.json) captures
+[release link inventory](license-evidence/link-inventory-57ad3e9.json) captures
 81 static archives across 7 executables, and every archive is classified in
 the component inventory, which CI re-checks fail-closed.
 
@@ -154,7 +154,7 @@ The implementation's independence is both enforced and evidenced:
   approver: Xpdf repairs damaged PDFs the baseline rejects, and the XeTeX
   final link permutes symbol order across identical-input runs of the pinned
   toolchain — functionally equivalent and golden-verified. The
-  [source archive evidence](license-evidence/corresponding-source-2025-3a630ec.md) verifies both differences;
+  [source archive evidence](license-evidence/corresponding-source-2025-baa63e6.md) verifies the current rebuild;
 - parser resource limits (input size, object depth, decoded bytes, adapter
   allocation), malformed-input failure, post-open authentication, and
   valgrind-verified memory release are tested on success and failure paths.
@@ -166,7 +166,7 @@ the WasmTex commit, TeX Live commit, Emscripten commit, digest-pinned build
 image, and per-file SHA-256, and all family receipts must share one source
 revision. A per-archive link inventory and an SPDX SBOM classify everything
 the linker actually selected, as recorded in the
-[engine release evidence](license-evidence/engine-release-2025-2b58db3.md) for that build.
+[engine release evidence](license-evidence/engine-release-2025-57ad3e9.md) for that build.
 Independent rebuilds reproduce the engine bytes, format dumps record their
 observed inputs and known non-determinism, and version control carries no
 engine binaries or formats at all.
@@ -180,9 +180,10 @@ at its pinned commit, hash-verified Emscripten port archives, Dockerfiles,
 build scripts, glue, manifests, and `REBUILD.md`/`RELINK.md`. A checker
 verifies the archive, the bundled TeX Live tree is diffed against an
 independent clone of the pinned commit, and a clean `--no-cache --pull`
-rebuild from the archive snapshot reproduces the release engine bytes, with
-the approved XeTeX link-order permutation as the sole exception documented in
-the [corresponding-source evidence](license-evidence/corresponding-source-2025-3a630ec.md)
+rebuild from the archive snapshot reproduces the current release engine bytes.
+The earlier approved XeTeX link-order permutation and the current
+byte-identical result are documented in
+the [corresponding-source evidence](license-evidence/corresponding-source-2025-baa63e6.md)
 and [corresponding-source guide](corresponding-source.md). Because that link is
 reproducible but not bit-identical, the corresponding source is bound to the
 distributed binaries by **source revision**, not by an exact content-hash
@@ -274,6 +275,8 @@ and hashes. Changing any Dockerfile to a different base makes
 | Standalone demo | The same files, plus notices for bundled Monaco Editor, PDF.js, and pdf-lib when present. |
 | Engine asset host | Per-version notices and complete corresponding source for every distributed binary, including WasmTex glue and build scripts. |
 | Full TeX Live mirror | Retain the official distribution's copying and package license material. It is operated separately from the engine release gate described here. |
+| Generated completion catalogs | WasmTex-authored metadata derived from the exact mirror inventory; preserve each record's upstream package/source provenance and do not treat the catalog as relicensing the referenced TeX Live file. |
+| Semantic overrides and extracted shards | Static declarations, including color names/models derived from selected xcolor `.def` files, retain exact TeX Live source paths; curated activation/typing overrides are MIT WasmTex-authored data. Observed/inferred records remain labeled. External completion corpora require separate file-level provenance and license approval. |
 | ICU data | Retain the ICU 68.2 license bundle and exact source/version evidence. |
 
 Serving JavaScript, WebAssembly, formats, packages, fonts, or data to a browser
@@ -296,6 +299,39 @@ determine whether engine artifacts are `release-cleared`. If a future
 deployment selects, modifies, or repackages TeX Live files instead of mirroring
 the full distribution, review that distribution as a separate project before
 publishing it.
+
+Completion catalogs are generated only from that deployment's final provenance
+manifest. They contain file/package identity, hashes, selected source paths,
+collision decisions, and optional CTAN documentation links; CTAN is enrichment,
+not a runtime availability or licensing authority. Do not import third-party
+completion corpora into these shards without a separate source and license review.
+The catalog-only publication lane deliberately omits package license/notice fields:
+those fields govern redistribution of the referenced TeX Live bytes, while the lane
+uploads only WasmTex-authored factual metadata. It still retains exact upstream paths,
+package ownership, deployed-byte hashes, and collision decisions as provenance.
+
+Semantic extraction reads the mirrored package source already covered by that
+package's upstream license. Option-gated color records are derived from the exact
+selected `dvipsnam.def`, `svgnam.def`, and `x11nam.def` bytes and keep those paths as
+provenance; the generated metadata does not copy package
+documentation or relicense the package. The checked-in
+`tex-semantic-overrides-<year>.json` is original MIT metadata and names its source
+document only as review evidence. The release gate verifies that the override file
+records MIT and that the required high-value scopes are present. CWL or another
+third-party completion dataset must not be blended into this file.
+
+The checked-in BibTeX/biblatex entry-type and field-ranking vocabulary, typed command
+signatures, project-file extension groups, and common kernel counter/length names are
+original WasmTex metadata. They do not embed package documentation or a third-party
+completion corpus. Project declarations and `@string` values are parsed at runtime from
+host-owned files and are not distributed by WasmTex.
+
+Runtime completion snapshots are likewise not a bundled completion corpus. They are
+ephemeral observations of the host's own compile, produced by WasmTex-authored C/worker
+glue and retained only in bounded structured form. Registry naming conventions identify
+records but do not copy package documentation or source. The engine hook remains part of
+the corresponding source and engine-unit release audit; observation does not change the
+license of TeX Live files loaded by that compile.
 
 This scope decision does not remove TeX Live source used to compile the engines
 from the complete corresponding source. It also does not remove generated

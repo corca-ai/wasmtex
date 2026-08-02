@@ -247,9 +247,49 @@ function blankSpans(content: string, spans: Array<[number, number]>): string {
 
 // --- Brace helpers -----------------------------------------------------------
 
+type GroupEndIndex = ReadonlyMap<number, number>
+
+/**
+ * Index matching braces/brackets once. Extractors consult this index instead
+ * of rescanning to the end of the document for every malformed invocation.
+ * Curly and square delimiters intentionally use independent stacks, matching
+ * the previous per-delimiter nesting behavior.
+ */
+function indexGroupEnds(text: string): GroupEndIndex {
+  const ends = new Map<number, number>()
+  const braces: number[] = []
+  const brackets: number[] = []
+  const opening: Record<string, number[] | undefined> = { '{': braces, '[': brackets }
+  const closing: Record<string, number[] | undefined> = { '}': braces, ']': brackets }
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charAt(i)
+    if (ch === '\\') {
+      i++
+      continue
+    }
+    const openStack = opening[ch]
+    if (openStack) {
+      openStack.push(i)
+      continue
+    }
+    const closeStack = closing[ch]
+    const start = closeStack?.pop()
+    if (start !== undefined) ends.set(start, i)
+  }
+  return ends
+}
+
 /** Extract the content of a balanced brace group whose `{` is at startIndex. */
-function extractBraceContent(text: string, startIndex: number): string | null {
+function extractBraceContent(
+  text: string,
+  startIndex: number,
+  groupEnds?: GroupEndIndex,
+): string | null {
   if (text[startIndex] !== '{') return null
+  if (groupEnds) {
+    const end = groupEnds.get(startIndex)
+    return end === undefined ? null : text.slice(startIndex + 1, end)
+  }
   let depth = 0
   for (let i = startIndex; i < text.length; i++) {
     if (text[i] === '\\') {
@@ -275,16 +315,154 @@ const SECTION_RE = new RegExp(`\\\\(${SECTION_CMDS})\\*?(?:\\[[^\\]]*\\])?\\{`, 
 const NEWCOMMAND_RE = new RegExp(`\\\\(?:${NEWCMD_CMDS})\\*?\\{\\\\(\\w+)\\}(?:\\[(\\d+)\\])?`, 'g')
 const DEF_RE = /\\def\\(\w+)/g
 const DECLARE_MATH_RE = /\\DeclareMathOperator\*?\{\\(\w+)\}/g
-const BIBITEM_RE = /\\bibitem(?:\[[^\]]*\])?\{/g
 const BEGIN_RE = /\\begin\{/g
-const NEWENV_RE = /\\(?:newenvironment|renewenvironment)\{([^}]+)\}/g
 const INPUT_RE = new RegExp(`\\\\(${INPUT_CMDS})\\{`, 'g')
 const USEPACKAGE_RE = new RegExp(`\\\\(?:${USEPACKAGE_CMDS})(?:\\[([^\\]]*)\\])?\\{`, 'g')
+const COLOR_DECL_RE =
+  /\\(definecolorset|providecolorset|preparecolorset|DefineNamedColor|definecolor|xdefinecolor|providecolor|colorlet)\*?(?![A-Za-z@:_])/g
+const COLOR_ACTIVATION_RE = /\\(definecolors|providecolors)(?!et)\*?\s*\{/g
+const COUNTER_RE =
+  /\\(newcounter|providecounter|newaliascnt|setcounter|addtocounter|stepcounter|refstepcounter|value|counterwithin|counterwithout)\*?\s*\{/g
+const LENGTH_USE_RE =
+  /\\(setlength|addtolength|settowidth|settoheight|settodepth)\*?\s*\{\s*(\\[A-Za-z@]+)\s*\}/g
+const LENGTH_DEF_RE =
+  /\\(newlength|newdimen|newskip)\s*(?:\{\s*(\\[A-Za-z@]+)\s*\}|(\\[A-Za-z@]+))/g
+const PGF_KEYS_RE = /\\pgfkeys\s*\{/g
+
+const BIBITEM_COMMANDS = new Set(['bibitem'])
+const ENVIRONMENT_DEF_COMMANDS = new Set([
+  'newenvironment',
+  'renewenvironment',
+  'NewDocumentEnvironment',
+  'RenewDocumentEnvironment',
+  'ProvideDocumentEnvironment',
+  'DeclareDocumentEnvironment',
+  'newtheorem',
+])
+const CLASS_COMMANDS = new Set(['documentclass', 'LoadClass', 'LoadClassWithOptions'])
+const BIB_RESOURCE_COMMANDS = new Set([
+  'bibliography',
+  'addbibresource',
+  'addglobalbib',
+  'addsectionbib',
+])
+const GLOSSARY_DEF_COMMANDS = new Set(['longnewglossaryentry', 'newglossaryentry'])
+const GLOSSARY_USE_COMMANDS = new Set([
+  'gls',
+  'Gls',
+  'glspl',
+  'Glspl',
+  'glsdisp',
+  'Glsdisp',
+  'glslink',
+  'Glslink',
+  'glsentryname',
+  'Glsentryname',
+  'glsentrytext',
+  'Glsentrytext',
+  'glsentryplural',
+  'Glsentryplural',
+  'glsentrydesc',
+  'Glsentrydesc',
+  'glsentrydescplural',
+  'Glsentrydescplural',
+  'glsentrysymbol',
+  'Glsentrysymbol',
+  'glsentrysymbolplural',
+  'Glsentrysymbolplural',
+  'glsadd',
+])
+const ACRONYM_DEF_COMMANDS = new Set(['newacronym'])
+const ACRONYM_USE_COMMANDS = new Set([
+  'acrshort',
+  'Acrshort',
+  'ACRshort',
+  'acrlong',
+  'Acrlong',
+  'ACRlong',
+  'acrfull',
+  'Acrfull',
+  'ACRfull',
+  'ac',
+  'Ac',
+  'acf',
+  'Acf',
+  'acl',
+  'Acl',
+  'acs',
+  'Acs',
+  'acp',
+  'Acp',
+])
+const FONT_USE_COMMANDS = new Set(['setmainfont', 'setsansfont', 'setmonofont', 'fontspec'])
+const FONT_ALIAS_COMMANDS = new Set(['newfontfamily', 'newfontface'])
+const FONT_FAMILY_COMMANDS = new Set(['DeclareFontFamily'])
+const XKEYVAL_DECL_COMMANDS = new Set([
+  'definekey',
+  'define@key',
+  'defineboolkey',
+  'definechoicekey',
+  'define@choicekey',
+])
+const DECLARE_KEYS_COMMANDS = new Set(['DeclareKeys'])
+
+interface CommandOccurrence {
+  name: string
+  start: number
+  end: number
+}
+
+function isCommandNameChar(ch: string | undefined): boolean {
+  if (!ch) return false
+  const code = ch.charCodeAt(0)
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    ch === '@' ||
+    ch === ':' ||
+    ch === '_'
+  )
+}
+
+function scanCommandOccurrences(text: string): CommandOccurrence[] {
+  const occurrences: CommandOccurrence[] = []
+  let cursor = 0
+  while (cursor < text.length) {
+    const start = text.indexOf('\\', cursor)
+    if (start < 0) break
+    let end = start + 1
+    while (isCommandNameChar(text[end])) end++
+    if (end > start + 1) occurrences.push({ name: text.slice(start + 1, end), start, end })
+    cursor = Math.max(start + 2, end)
+  }
+  return occurrences
+}
 
 interface Ctx {
   masked: string
   lineStarts: number[]
   file: string
+  groupEnds: GroupEndIndex
+  commandOccurrences: CommandOccurrence[]
+}
+
+function* commandsNamed(ctx: Ctx, names: ReadonlySet<string>): Generator<CommandOccurrence> {
+  for (const occurrence of ctx.commandOccurrences) {
+    if (names.has(occurrence.name)) yield occurrence
+  }
+}
+
+function groupsAfterCommand(ctx: Ctx, command: CommandOccurrence): ParsedInvocationGroup[] {
+  const cursor = ctx.masked[command.end] === '*' ? command.end + 1 : command.end
+  return invocationGroups(ctx.masked, cursor, ctx.groupEnds)
+}
+
+function firstRequired(groups: ParsedInvocationGroup[]): ParsedInvocationGroup | undefined {
+  return groups.find((group) => group.delimiter === 'required')
+}
+
+function groupValueStart(group: ParsedInvocationGroup): number {
+  return group.contentStart + (group.value.length - group.value.trimStart().length)
 }
 
 function locAt(ctx: Ctx, offset: number): SourceLocation {
@@ -309,7 +487,7 @@ function extractBracedName(
 ): void {
   for (const m of ctx.masked.matchAll(re)) {
     const braceIdx = m.index + m[0].length - 1
-    const content = extractBraceContent(ctx.masked, braceIdx)
+    const content = extractBraceContent(ctx.masked, braceIdx, ctx.groupEnds)
     if (!content) continue
     const trimmed = content.trim()
     if (!trimmed || (skipHash && trimmed.includes('#'))) continue
@@ -332,7 +510,7 @@ function extractRefs(ctx: Ctx, symbols: FileSymbols): void {
 function extractCitations(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(CITE_RE)) {
     const braceIdx = m.index + m[0].length - 1
-    const keys = extractBraceContent(ctx.masked, braceIdx)
+    const keys = extractBraceContent(ctx.masked, braceIdx, ctx.groupEnds)
     if (!keys) continue
     let cursor = braceIdx + 1
     for (const key of keys.split(',')) {
@@ -350,7 +528,7 @@ function extractCitations(ctx: Ctx, symbols: FileSymbols): void {
 
 function extractSections(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(SECTION_RE)) {
-    const title = extractBraceContent(ctx.masked, m.index + m[0].length - 1)
+    const title = extractBraceContent(ctx.masked, m.index + m[0].length - 1, ctx.groupEnds)
     if (title) {
       symbols.sections.push({ level: m[1] as SectionLevel, title, location: locAt(ctx, m.index) })
     }
@@ -404,21 +582,29 @@ function extractDeclareMath(ctx: Ctx, symbols: FileSymbols): void {
 }
 
 function extractBibItems(ctx: Ctx, symbols: FileSymbols): void {
-  extractBracedName(ctx, BIBITEM_RE, false, (key, location) =>
-    symbols.bibItems.push({ key, location }),
-  )
+  for (const command of commandsNamed(ctx, BIBITEM_COMMANDS)) {
+    const group = firstRequired(groupsAfterCommand(ctx, command))
+    const key = group?.value.trim()
+    if (group && key) {
+      symbols.bibItems.push({
+        key,
+        location: locAt(ctx, group.contentStart + group.value.indexOf(key)),
+      })
+    }
+  }
 }
 
 function extractEnvironments(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(BEGIN_RE)) {
-    const name = extractBraceContent(ctx.masked, m.index + m[0].length - 1)
+    const name = extractBraceContent(ctx.masked, m.index + m[0].length - 1, ctx.groupEnds)
     if (name) symbols.environments.push({ name, location: locAt(ctx, m.index) })
   }
 }
 
 function extractEnvironmentDefs(ctx: Ctx, symbols: FileSymbols): void {
-  for (const m of ctx.masked.matchAll(NEWENV_RE)) {
-    symbols.environmentDefs.push({ name: m[1]!, location: locAt(ctx, m.index) })
+  for (const command of commandsNamed(ctx, ENVIRONMENT_DEF_COMMANDS)) {
+    const name = firstRequired(groupsAfterCommand(ctx, command))?.value.trim()
+    if (name) symbols.environmentDefs.push({ name, location: locAt(ctx, command.start) })
   }
 }
 
@@ -426,7 +612,7 @@ function extractIncludes(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(INPUT_RE)) {
     const braceIdx = ctx.masked.indexOf('{', m.index + m[1]!.length + 1)
     if (braceIdx < 0) continue
-    const path = extractBraceContent(ctx.masked, braceIdx)
+    const path = extractBraceContent(ctx.masked, braceIdx, ctx.groupEnds)
     if (path) {
       symbols.includes.push({
         path,
@@ -441,7 +627,7 @@ function extractPackages(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(USEPACKAGE_RE)) {
     const braceIdx = ctx.masked.indexOf('{', m.index + m[0].length - 1)
     if (braceIdx < 0) continue
-    const names = extractBraceContent(ctx.masked, braceIdx)
+    const names = extractBraceContent(ctx.masked, braceIdx, ctx.groupEnds)
     if (!names) continue
     const location = locAt(ctx, m.index)
     for (const pkg of names.split(',')) {
@@ -449,6 +635,627 @@ function extractPackages(ctx: Ctx, symbols: FileSymbols): void {
       if (trimmed) symbols.packages.push({ name: trimmed, options: m[1] ?? '', location })
     }
   }
+}
+
+function extractClasses(ctx: Ctx, symbols: FileSymbols): void {
+  for (const command of commandsNamed(ctx, CLASS_COMMANDS)) {
+    const groups = groupsAfterCommand(ctx, command)
+    const name = firstRequired(groups)?.value.trim()
+    if (name) {
+      const options =
+        command.name === 'LoadClassWithOptions'
+          ? ''
+          : (groups.find((group) => group.delimiter === 'optional')?.value ?? '')
+      symbols.classes.push({ name, options, location: locAt(ctx, command.start) })
+    }
+  }
+}
+
+function pushProjectValue(
+  values: import('./types').ProjectValue[],
+  ctx: Ctx,
+  name: string,
+  offset: number,
+  role: import('./types').ProjectValueRole,
+  target?: string,
+): void {
+  const trimmed = name.trim()
+  if (!trimmed || /[#{}]/.test(trimmed)) return
+  values.push({
+    name: trimmed,
+    role,
+    location: locAt(ctx, offset),
+    ...(target ? { target } : {}),
+  })
+}
+
+function extractBibliographies(ctx: Ctx, symbols: FileSymbols): void {
+  for (const command of commandsNamed(ctx, BIB_RESOURCE_COMMANDS)) {
+    const group = firstRequired(groupsAfterCommand(ctx, command))
+    if (!group) continue
+    let cursor = group.contentStart
+    for (const raw of command.name === 'bibliography' ? group.value.split(',') : [group.value]) {
+      const path = raw.trim()
+      if (path && !/[\\#{}]/.test(path)) {
+        symbols.bibliographies.push({
+          path,
+          location: locAt(ctx, cursor + raw.indexOf(path)),
+        })
+      }
+      cursor += raw.length + 1
+    }
+  }
+}
+
+function extractCounters(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(COUNTER_RE)) {
+    const brace = match.index + match[0].length - 1
+    const name = extractBraceContent(ctx.masked, brace, ctx.groupEnds)
+    if (name === null) continue
+    pushProjectValue(
+      symbols.counters,
+      ctx,
+      name,
+      nameStartOffset(brace, name),
+      match[1] === 'newcounter' || match[1] === 'providecounter' || match[1] === 'newaliascnt'
+        ? 'definition'
+        : 'usage',
+    )
+  }
+}
+
+function extractLengths(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(LENGTH_DEF_RE)) {
+    const name = match[2] ?? match[3]
+    if (name)
+      pushProjectValue(
+        symbols.lengths,
+        ctx,
+        name,
+        match.index + match[0].indexOf(name),
+        'definition',
+      )
+  }
+  for (const match of ctx.masked.matchAll(LENGTH_USE_RE)) {
+    const name = match[2]
+    if (name)
+      pushProjectValue(symbols.lengths, ctx, name, match.index + match[0].indexOf(name), 'usage')
+  }
+}
+
+function extractNamedBracedValues(
+  ctx: Ctx,
+  commands: ReadonlySet<string>,
+  values: import('./types').ProjectValue[],
+  role: import('./types').ProjectValueRole,
+): void {
+  for (const command of commandsNamed(ctx, commands)) {
+    const group = firstRequired(groupsAfterCommand(ctx, command))
+    if (group) pushProjectValue(values, ctx, group.value, groupValueStart(group), role)
+  }
+}
+
+function extractGlossaryEntries(ctx: Ctx, symbols: FileSymbols): void {
+  extractNamedBracedValues(ctx, GLOSSARY_DEF_COMMANDS, symbols.glossaryEntries, 'definition')
+  extractNamedBracedValues(ctx, GLOSSARY_USE_COMMANDS, symbols.glossaryEntries, 'usage')
+  extractNamedBracedValues(ctx, ACRONYM_DEF_COMMANDS, symbols.acronymEntries, 'definition')
+  extractNamedBracedValues(ctx, ACRONYM_USE_COMMANDS, symbols.acronymEntries, 'usage')
+}
+
+function readControlSequence(
+  text: string,
+  start: number,
+): { value: string; start: number; end: number } | null {
+  if (text[start] !== '\\') return null
+  let end = start + 1
+  while (isCommandNameChar(text[end])) end++
+  return end === start + 1 ? null : { value: text.slice(start, end), start, end }
+}
+
+function readFontAlias(
+  ctx: Ctx,
+  command: CommandOccurrence,
+): { value: string; end: number } | null {
+  const afterStar = ctx.masked[command.end] === '*' ? command.end + 1 : command.end
+  const cursor = skipSpace(ctx.masked, afterStar)
+  if (ctx.masked[cursor] !== '{') return readControlSequence(ctx.masked, cursor)
+  const end = ctx.groupEnds.get(cursor)
+  if (end === undefined) return null
+  const value = ctx.masked.slice(cursor + 1, end).trim()
+  return value ? { value, end: end + 1 } : null
+}
+
+function extractFontAliases(ctx: Ctx, symbols: FileSymbols): void {
+  for (const command of commandsNamed(ctx, FONT_ALIAS_COMMANDS)) {
+    const alias = readFontAlias(ctx, command)
+    if (!alias) continue
+    const family = firstRequired(invocationGroups(ctx.masked, alias.end, ctx.groupEnds))
+    if (!family) continue
+    pushProjectValue(
+      symbols.fontFamilies,
+      ctx,
+      family.value,
+      groupValueStart(family),
+      'alias',
+      alias.value,
+    )
+  }
+}
+
+function extractDeclaredFontFamilies(ctx: Ctx, symbols: FileSymbols): void {
+  for (const command of commandsNamed(ctx, FONT_FAMILY_COMMANDS)) {
+    const required = groupsAfterCommand(ctx, command).filter(
+      (group) => group.delimiter === 'required',
+    )
+    const family = required[1]
+    if (family)
+      pushProjectValue(
+        symbols.fontFamilies,
+        ctx,
+        family.value,
+        groupValueStart(family),
+        'definition',
+      )
+  }
+}
+
+function extractFontFamilies(ctx: Ctx, symbols: FileSymbols): void {
+  extractNamedBracedValues(ctx, FONT_USE_COMMANDS, symbols.fontFamilies, 'usage')
+  extractFontAliases(ctx, symbols)
+  extractDeclaredFontFamilies(ctx, symbols)
+}
+
+interface ParsedInvocationGroup {
+  delimiter: 'required' | 'optional'
+  value: string
+  contentStart: number
+  end: number
+}
+
+function indexedInvocationGroup(
+  text: string,
+  start: number,
+  groupEnds: GroupEndIndex,
+): ParsedInvocationGroup | null {
+  const open = text[start]
+  if (open !== '{' && open !== '[') return null
+  const end = groupEnds.get(start)
+  return end === undefined
+    ? null
+    : {
+        delimiter: open === '{' ? 'required' : 'optional',
+        value: text.slice(start + 1, end),
+        contentStart: start + 1,
+        end: end + 1,
+      }
+}
+
+function scanInvocationGroup(text: string, start: number): ParsedInvocationGroup | null {
+  const open = text[start]
+  if (open !== '{' && open !== '[') return null
+  const close = open === '{' ? '}' : ']'
+  let depth = 1
+  for (let cursor = start + 1; cursor < text.length; cursor++) {
+    if (text[cursor] === '\\') {
+      cursor++
+      continue
+    }
+    if (text[cursor] === open) depth++
+    else if (text[cursor] === close && --depth === 0) {
+      return {
+        delimiter: open === '{' ? 'required' : 'optional',
+        value: text.slice(start + 1, cursor),
+        contentStart: start + 1,
+        end: cursor + 1,
+      }
+    }
+  }
+  return null
+}
+
+function readInvocationGroup(
+  text: string,
+  start: number,
+  groupEnds?: GroupEndIndex,
+): ParsedInvocationGroup | null {
+  return groupEnds
+    ? indexedInvocationGroup(text, start, groupEnds)
+    : scanInvocationGroup(text, start)
+}
+
+function invocationGroups(
+  text: string,
+  start: number,
+  groupEnds?: GroupEndIndex,
+): ParsedInvocationGroup[] {
+  const groups: ParsedInvocationGroup[] = []
+  let cursor = start
+  while (groups.length < 6) {
+    cursor = skipSpace(text, cursor)
+    const group = readInvocationGroup(text, cursor, groupEnds)
+    if (!group) break
+    groups.push(group)
+    cursor = group.end
+  }
+  return groups
+}
+
+function splitColorSet(value: string): string[] {
+  const result: string[] = []
+  let depth = 0
+  let start = 0
+  for (let cursor = 0; cursor < value.length; cursor++) {
+    if (value[cursor] === '\\') cursor++
+    else if (value[cursor] === '{') depth++
+    else if (value[cursor] === '}') depth = Math.max(0, depth - 1)
+    else if (value[cursor] === ';' && depth === 0) {
+      result.push(value.slice(start, cursor))
+      start = cursor + 1
+    }
+  }
+  result.push(value.slice(start))
+  return result
+}
+
+function splitTopLevel(value: string, separator = ','): string[] {
+  const result: string[] = []
+  const stack: string[] = []
+  let start = 0
+  for (let cursor = 0; cursor < value.length; cursor++) {
+    const ch = value[cursor]!
+    if (ch === '\\') cursor++
+    else if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if (ch === stack[stack.length - 1]) stack.pop()
+    else if (stack.length === 0 && ch === separator) {
+      result.push(value.slice(start, cursor))
+      start = cursor + 1
+    }
+  }
+  result.push(value.slice(start))
+  return result
+}
+
+function pushColor(
+  symbols: FileSymbols,
+  ctx: Ctx,
+  name: string,
+  offset: number,
+  definition: Omit<import('./types').ColorDefinition, 'name' | 'location'>,
+): void {
+  const trimmed = name.trim()
+  if (!trimmed || /[\\#{}]/.test(trimmed)) return
+  symbols.colors.push({ name: trimmed, location: locAt(ctx, offset), ...definition })
+}
+
+function extractColorSet(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  groups: ParsedInvocationGroup[],
+  kind: 'define' | 'provide',
+): void {
+  const required = groups.filter((group) => group.delimiter === 'required')
+  if (required.length < 4) return
+  const models = required[0]!.value.split('/')
+  const prefix = required[1]!.value
+  const suffix = required[2]!.value
+  for (const entry of splitColorSet(required[3]!.value)) {
+    const comma = entry.indexOf(',')
+    if (comma < 0) continue
+    const specs = entry
+      .slice(comma + 1)
+      .trim()
+      .split('/')
+    const model = models[0]?.trim()
+    const colorValue = specs[0]?.trim()
+    pushColor(
+      symbols,
+      ctx,
+      `${prefix}${entry.slice(0, comma).trim()}${suffix}`,
+      required[3]!.contentStart,
+      {
+        kind,
+        ...(model ? { model } : {}),
+        ...(colorValue ? { value: colorValue } : {}),
+      },
+    )
+  }
+}
+
+function extractNamedColor(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  required: ParsedInvocationGroup[],
+): void {
+  if (required.length < 4) return
+  pushColor(symbols, ctx, required[1]!.value, required[1]!.contentStart, {
+    kind: 'define',
+    model: required[2]!.value.trim(),
+    value: required[3]!.value.trim(),
+  })
+}
+
+function extractColorAlias(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  required: ParsedInvocationGroup[],
+): void {
+  if (required.length < 2) return
+  pushColor(symbols, ctx, required[0]!.value, required[0]!.contentStart, {
+    kind: 'alias',
+    alias: required[1]!.value.trim(),
+  })
+}
+
+function extractDirectColor(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  command: string,
+  required: ParsedInvocationGroup[],
+): void {
+  if (required.length < 3) return
+  pushColor(symbols, ctx, required[0]!.value, required[0]!.contentStart, {
+    kind: command === 'providecolor' ? 'provide' : 'define',
+    model: required[1]!.value.trim(),
+    value: required[2]!.value.trim(),
+  })
+}
+
+function extractColors(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(COLOR_DECL_RE)) {
+    const command = match[1]!
+    const groups = invocationGroups(ctx.masked, match.index + match[0].length, ctx.groupEnds)
+    const required = groups.filter((group) => group.delimiter === 'required')
+    if (command.endsWith('colorset')) {
+      extractColorSet(ctx, symbols, groups, command === 'providecolorset' ? 'provide' : 'define')
+    } else if (command === 'DefineNamedColor') {
+      extractNamedColor(ctx, symbols, required)
+    } else if (command === 'colorlet') {
+      extractColorAlias(ctx, symbols, required)
+    } else {
+      extractDirectColor(ctx, symbols, command, required)
+    }
+  }
+}
+
+function extractColorActivations(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(COLOR_ACTIVATION_RE)) {
+    const brace = match.index + match[0].length - 1
+    const value = extractBraceContent(ctx.masked, brace, ctx.groupEnds)
+    if (value === null) continue
+    const names = value
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0 && !/[\\#{}]/.test(name))
+    if (names.length > 0) {
+      symbols.colorActivations.push({
+        names,
+        kind: match[1] === 'providecolors' ? 'provide' : 'define',
+        location: locAt(ctx, match.index),
+      })
+    }
+  }
+}
+
+function stripOuterSlashes(value: string): string {
+  const trimmed = value.trim()
+  let start = 0
+  let end = trimmed.length
+  while (trimmed[start] === '/') start++
+  while (end > start && trimmed[end - 1] === '/') end--
+  return trimmed.slice(start, end)
+}
+
+function normalizeKeyFamily(value: string): string {
+  return stripOuterSlashes(value) || 'document'
+}
+
+function pushProjectKey(
+  symbols: FileSymbols,
+  ctx: Ctx,
+  family: string,
+  name: string,
+  valueType: import('./types').ProjectKeyValueType,
+  offset: number,
+  values?: string[],
+): void {
+  const normalizedName = stripOuterSlashes(name)
+  if (!normalizedName || /[\\#{}]/.test(normalizedName)) return
+  symbols.keys.push({
+    family: normalizeKeyFamily(family),
+    name: normalizedName,
+    valueType,
+    location: locAt(ctx, offset),
+    ...(values?.length ? { values: [...new Set(values)] } : {}),
+  })
+}
+
+function extractXkeyvalKeys(ctx: Ctx, symbols: FileSymbols): void {
+  for (const command of commandsNamed(ctx, XKEYVAL_DECL_COMMANDS)) {
+    const groups = groupsAfterCommand(ctx, command)
+    const required = groups.filter((group) => group.delimiter === 'required')
+    if (required.length < 2) continue
+    const family = required[0]!.value
+    const key = required[1]!.value
+    const type = command.name.includes('choice')
+      ? 'enum'
+      : command.name === 'defineboolkey'
+        ? 'boolean'
+        : 'free-text'
+    const values =
+      type === 'enum'
+        ? required
+            .slice(2)
+            .map((group) =>
+              splitTopLevel(group.value)
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
+            .find((candidate) => candidate.length > 0)
+        : undefined
+    pushProjectKey(symbols, ctx, family, key, type, required[1]!.contentStart, values)
+  }
+}
+
+function declaredKeyType(property: string): import('./types').ProjectKeyValueType {
+  if (/choice|choices/.test(property)) return 'enum'
+  if (/bool/.test(property)) return 'boolean'
+  if (/(?:int|fp)_set/.test(property)) return 'number'
+  if (/dim_set/.test(property)) return 'dimension'
+  if (/code|meta|store|tl_set|initial/.test(property)) return 'free-text'
+  return 'flag'
+}
+
+interface KeyDeclaration {
+  family: string
+  name: string
+  type: import('./types').ProjectKeyValueType
+  offset: number
+}
+
+function declarationHead(segment: string): { name: string; property: string } | null {
+  const equals = segment.indexOf('=')
+  const lhs = segment.slice(0, equals < 0 ? segment.length : equals).trim()
+  const match = lhs.match(/^(.+?)\s+\.([A-Za-z0-9_:]+)\s*$/)
+  return match ? { name: match[1]!.trim(), property: match[2]! } : null
+}
+
+function collectDeclareKey(
+  declarations: KeyDeclaration[],
+  choices: Map<string, string[]>,
+  segment: string,
+  family: string,
+  offset: number,
+): void {
+  const head = declarationHead(segment)
+  if (!head) return
+  declarations.push({ family, name: head.name, type: declaredKeyType(head.property), offset })
+  const slash = head.name.lastIndexOf('/')
+  if (slash <= 0) return
+  const parent = head.name.slice(0, slash).trim()
+  const values = choices.get(parent) ?? []
+  values.push(head.name.slice(slash + 1).trim())
+  choices.set(parent, values)
+}
+
+function indexKeyDeclarations(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  declarations: KeyDeclaration[],
+  choices: Map<string, string[]>,
+): void {
+  for (const declaration of declarations) {
+    pushProjectKey(
+      symbols,
+      ctx,
+      declaration.family,
+      declaration.name,
+      declaration.type,
+      declaration.offset,
+      declaration.type === 'enum'
+        ? (choices.get(`${declaration.family}\u0000${declaration.name}`) ??
+            choices.get(declaration.name))
+        : undefined,
+    )
+  }
+}
+
+function extractDeclareKeys(ctx: Ctx, symbols: FileSymbols): void {
+  for (const command of commandsNamed(ctx, DECLARE_KEYS_COMMANDS)) {
+    const groups = groupsAfterCommand(ctx, command)
+    const contentGroup = firstRequired(groups)
+    if (!contentGroup) continue
+    const family = normalizeKeyFamily(
+      groups.find((group) => group.delimiter === 'optional')?.value ?? 'document',
+    )
+    const declarations: KeyDeclaration[] = []
+    const choices = new Map<string, string[]>()
+    let cursor = 0
+    for (const segment of splitTopLevel(contentGroup.value)) {
+      collectDeclareKey(declarations, choices, segment, family, contentGroup.contentStart + cursor)
+      cursor += segment.length + 1
+    }
+    indexKeyDeclarations(ctx, symbols, declarations, choices)
+  }
+}
+
+interface PgfKeyState {
+  family: string
+  declarations: KeyDeclaration[]
+  choices: Map<string, string[]>
+  enumKeys: Set<string>
+}
+
+function pgfKeyId(family: string, name: string): string {
+  return `${normalizeKeyFamily(family)}\u0000${name}`
+}
+
+function addPgfChoiceValue(state: PgfKeyState, family: string, name: string): boolean {
+  const slash = family.lastIndexOf('/')
+  if (slash < 0) return false
+  const parentFamily = family.slice(0, slash)
+  const parentName = family.slice(slash + 1)
+  const id = pgfKeyId(parentFamily, parentName)
+  if (!state.enumKeys.has(id)) return false
+  const values = state.choices.get(id) ?? []
+  values.push(name)
+  state.choices.set(id, values)
+  return true
+}
+
+function collectPgfKey(state: PgfKeyState, segment: string, offset: number): void {
+  const equals = segment.indexOf('=')
+  const lhs = segment.slice(0, equals < 0 ? segment.length : equals).trim()
+  const property = lhs.lastIndexOf('/.')
+  if (property < 0) return
+  const rawPathWithRoot = lhs.slice(0, property)
+  const absolute = rawPathWithRoot.startsWith('/')
+  const rawPath = stripOuterSlashes(rawPathWithRoot)
+  const prop = lhs.slice(property + 2)
+  if (prop === 'cd' || prop === 'is family') {
+    state.family = normalizeKeyFamily(rawPath)
+    return
+  }
+  const slash = rawPath.lastIndexOf('/')
+  const nestedFamily = slash < 0 ? '' : normalizeKeyFamily(rawPath.slice(0, slash))
+  const family =
+    slash < 0
+      ? state.family
+      : normalizeKeyFamily(absolute ? nestedFamily : `${state.family}/${nestedFamily}`)
+  const name = slash < 0 ? rawPath : rawPath.slice(slash + 1)
+  if (!name) return
+  if (/is choice/.test(prop)) {
+    state.enumKeys.add(pgfKeyId(family, name))
+    state.declarations.push({ family, name, type: 'enum', offset })
+  } else if (!addPgfChoiceValue(state, family, name)) {
+    state.declarations.push({ family, name, type: declaredKeyType(prop), offset })
+  }
+}
+
+function extractPgfKeys(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(PGF_KEYS_RE)) {
+    const brace = match.index + match[0].length - 1
+    const content = extractBraceContent(ctx.masked, brace, ctx.groupEnds)
+    if (content === null) continue
+    const state: PgfKeyState = {
+      family: 'pgfkeys',
+      declarations: [],
+      choices: new Map(),
+      enumKeys: new Set(),
+    }
+    let cursor = 0
+    for (const segment of splitTopLevel(content)) {
+      collectPgfKey(state, segment.trim(), brace + 1 + cursor)
+      cursor += segment.length + 1
+    }
+    indexKeyDeclarations(ctx, symbols, state.declarations, state.choices)
+  }
+}
+
+function extractProjectKeys(ctx: Ctx, symbols: FileSymbols): void {
+  extractXkeyvalKeys(ctx, symbols)
+  extractDeclareKeys(ctx, symbols)
+  extractPgfKeys(ctx, symbols)
 }
 
 // --- Macro shallow expansion -------------------------------------------------
@@ -717,18 +1524,40 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
     environments: [],
     environmentDefs: [],
     includes: [],
+    classes: [],
     packages: [],
+    colors: [],
+    colorActivations: [],
+    counters: [],
+    lengths: [],
+    glossaryEntries: [],
+    acronymEntries: [],
+    fontFamilies: [],
+    keys: [],
+    bibliographies: [],
     bibItems: [],
   }
 
   const tokens = tokenize(content)
   const masked = maskContent(content, tokens)
-  const ctx: Ctx = { masked, lineStarts: buildLineStarts(masked), file: filePath }
+  const ctx: Ctx = {
+    masked,
+    lineStarts: buildLineStarts(masked),
+    file: filePath,
+    groupEnds: indexGroupEnds(masked),
+    commandOccurrences: scanCommandOccurrences(masked),
+  }
 
   // The literal label/ref/cite extractors must not see symbols inside the body of a
   // *called* user macro — those are emitted at call sites by extractMacroExpansions.
   // Blanking preserves length/newlines, so lineStarts stays valid for the same ctx.
-  const literalCtx: Ctx = { ...ctx, masked: blankSpans(masked, calledMacroBodySpans(masked)) }
+  const literalMasked = blankSpans(masked, calledMacroBodySpans(masked))
+  const literalCtx: Ctx = {
+    ...ctx,
+    masked: literalMasked,
+    groupEnds: indexGroupEnds(literalMasked),
+    commandOccurrences: scanCommandOccurrences(literalMasked),
+  }
 
   extractLabels(literalCtx, symbols)
   extractRefs(literalCtx, symbols)
@@ -742,7 +1571,16 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
   extractEnvironments(ctx, symbols)
   extractEnvironmentDefs(ctx, symbols)
   extractIncludes(ctx, symbols)
+  extractClasses(ctx, symbols)
   extractPackages(ctx, symbols)
+  extractColors(ctx, symbols)
+  extractColorActivations(ctx, symbols)
+  extractCounters(ctx, symbols)
+  extractLengths(ctx, symbols)
+  extractGlossaryEntries(ctx, symbols)
+  extractFontFamilies(ctx, symbols)
+  extractProjectKeys(ctx, symbols)
+  extractBibliographies(ctx, symbols)
   extractMacroExpansions(ctx, symbols)
 
   return symbols

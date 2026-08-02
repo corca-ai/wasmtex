@@ -1,5 +1,42 @@
 import { describe, expect, it } from 'vitest'
-import { createLatexLanguageService, LatexLanguageService } from './lsp-service'
+import {
+  createLatexLanguageService,
+  InMemoryTexResourceCatalogProvider,
+  LatexLanguageService,
+  type TexResourceCatalogIdentity,
+  type TexResourceCatalogShard,
+} from './lsp-service'
+
+const resourceIdentity = {
+  schemaVersion: 1,
+  texliveYear: '2025',
+  mirrorRevision: '2025-0123456789abcdef',
+} as const satisfies TexResourceCatalogIdentity
+
+function classCatalog(name: string) {
+  const shard: TexResourceCatalogShard = {
+    ...resourceIdentity,
+    kind: 'tex-class',
+    resources: [
+      {
+        name,
+        fileName: `${name}.cls`,
+        extension: '.cls',
+        key: `${name}.cls`,
+        format: 1,
+        bytes: 1,
+        sha256: 'a'.repeat(64),
+        texliveYear: resourceIdentity.texliveYear,
+        mirrorRevision: resourceIdentity.mirrorRevision,
+        sourcePath: `tex/latex/base/${name}.cls`,
+        texlivePackage: 'latex',
+        packageRevision: '1',
+        catalogue: 'latex',
+      },
+    ],
+  }
+  return new InMemoryTexResourceCatalogProvider(resourceIdentity, [shard])
+}
 
 describe('LatexLanguageService', () => {
   it('indexes project files and exposes diagnostics and outline', () => {
@@ -93,5 +130,27 @@ describe('LatexLanguageService', () => {
     expect(service.getFoldingRanges('main.tex')).toContainEqual({ startLine: 4, endLine: 6 })
     expect(service.getDocumentHighlights('main.tex', 3, 6).length).toBeGreaterThan(0)
     expect(service.getSemanticTokens('main.tex').some((t) => t.type === 'command')).toBe(true)
+  })
+
+  it('atomically replaces profile-bound completion sources without rebuilding the index', () => {
+    const service = createLatexLanguageService({
+      files: { 'main.tex': '\\documentclass{bo' },
+      resourceCatalog: classCatalog('book'),
+    })
+    const index = service.getProjectIndex()
+
+    expect(service.getCompletions('main.tex', 1, 18).map((item) => item.label)).toEqual(['book'])
+    service.configureCompletion({
+      completionProfile: {
+        id: 'second-profile',
+        texliveYear: '2025',
+        mirrorRevision: resourceIdentity.mirrorRevision,
+      },
+      resourceCatalog: classCatalog('bookest'),
+    })
+
+    expect(service.getProjectIndex()).toBe(index)
+    expect(service.getCompletions('main.tex', 1, 18).map((item) => item.label)).toEqual(['bookest'])
+    expect(service.getCompletionSnapshotState()).toEqual({ status: 'absent' })
   })
 })

@@ -297,6 +297,46 @@ describe('parseLatexFile', () => {
     })
   })
 
+  describe('classes and colors', () => {
+    it('extracts class options and common color declaration forms', () => {
+      const result = parseLatexFile(
+        [
+          '\\documentclass[dvipsnames]{book}',
+          '\\definecolor{brand}{HTML}{1A2B3C}',
+          '\\providecolor{fallback}{rgb}{.1,.2,.3}',
+          '\\colorlet{accent}{brand!50!white}',
+          '\\definecolorset{RGB}{pre-}{-suf}{one,1,2,3;two,4,5,6}',
+          '\\definecolors{AliceBlue,AntiqueWhite}',
+        ].join('\n'),
+        'main.tex',
+      )
+
+      expect(result.classes).toMatchObject([{ name: 'book', options: 'dvipsnames' }])
+      expect(
+        result.colors.map((color) => [color.name, color.kind, color.model, color.alias]),
+      ).toEqual([
+        ['brand', 'define', 'HTML', undefined],
+        ['fallback', 'provide', 'rgb', undefined],
+        ['accent', 'alias', undefined, 'brand!50!white'],
+        ['pre-one-suf', 'define', 'RGB', undefined],
+        ['pre-two-suf', 'define', 'RGB', undefined],
+      ])
+      expect(result.colorActivations).toMatchObject([
+        { names: ['AliceBlue', 'AntiqueWhite'], kind: 'define' },
+      ])
+    })
+
+    it('ignores malformed, commented, and verbatim color declarations', () => {
+      const source = [
+        '% \\definecolor{commented}{rgb}{1,0,0}',
+        '\\definecolor{unfinished}{rgb}',
+        '\\begin{verbatim}\\definecolor{raw}{rgb}{1,0,0}\\end{verbatim}',
+      ].join('\n')
+      expect(() => parseLatexFile(source, 'main.tex')).not.toThrow()
+      expect(parseLatexFile(source, 'main.tex').colors).toEqual([])
+    })
+  })
+
   // --- Comments ---
   describe('comment handling', () => {
     it('ignores content after %', () => {
@@ -341,6 +381,35 @@ describe('parseLatexFile', () => {
 
   // --- Edge cases ---
   describe('edge cases', () => {
+    it('keeps malformed command-prefix parsing within the interactive budget', () => {
+      const malformedPrefixes = [
+        String.raw`\bibitem[`,
+        String.raw`\newenvironment{{`,
+        String.raw`\LoadClass[\x`,
+        String.raw`\addglobalbib[`,
+        String.raw`\newglossaryentry[`,
+        String.raw`\Gls*[`,
+        String.raw`\newacronym[`,
+        String.raw`\Ac*[`,
+        String.raw`\fontspec[`,
+        String.raw`\newfontface\alias[`,
+        String.raw`\DeclareFontFamily{{`,
+        String.raw`\definekey[`,
+        String.raw`\DeclareKeys[\x`,
+      ]
+      const source = [
+        ...malformedPrefixes.map((prefix) => prefix.repeat(2_000)),
+        String.raw`\DeclareKeys[${'/'.repeat(20_000)}]{key .code={}}`,
+      ].join('\n')
+      const start = performance.now()
+
+      expect(() => parseLatexFile(source, 'hostile.tex')).not.toThrow()
+      // A linear scan takes ~100 ms locally; leave headroom for Vitest's
+      // parallel-file contention while still rejecting the prior multi-second,
+      // input-length-squared behavior across these malformed prefixes.
+      expect(performance.now() - start).toBeLessThan(750)
+    })
+
     it('handles empty content', () => {
       const result = parseLatexFile('', 'main.tex')
       expect(result.labels).toHaveLength(0)

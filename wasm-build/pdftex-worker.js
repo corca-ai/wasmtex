@@ -614,7 +614,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         console.log("[kpse] Downloaded: " + reqname + " (" + format + ")");
         return ptr;
     } else {
-        console.warn("[kpse] Failed: " + reqname + " (" + format + ") - status: " + xhr.status);
+        var status = xhr ? xhr.status : "network error";
+        console.warn("[kpse] Failed: " + reqname + " (" + format + ") - status: " + status);
         texlive404_cache[cacheKey] = 1;
         return 0;
     }
@@ -909,13 +910,46 @@ function compileLaTeXRoutine() {
     // Run regardless of exit status — the hash table is populated even when
     // pdfTeX returns status 1 (warnings / non-fatal errors).
     var engineCommands = null;
+    var engineCommandsComplete = false;
+    var engineCommandsDropped;
     try {
+        ["/.commands", "/.commands-meta", "/.completion-observations"].forEach(function(path) {
+            try { FS.unlink(WORKROOT + path); } catch(e2) {}
+        });
         _scanHashTable();
         var cmdData = FS.readFile(WORKROOT + "/.commands", { encoding: "utf8" });
         if (cmdData && cmdData.length > 0) {
             engineCommands = cmdData.trimEnd().split("\n");
+        } else {
+            engineCommands = [];
         }
         try { FS.unlink(WORKROOT + "/.commands"); } catch(e2) {}
+    } catch(e) {}
+    try {
+        var commandMeta = FS.readFile(WORKROOT + "/.commands-meta", { encoding: "utf8" });
+        var trimmedCommandMeta = commandMeta.trim();
+        var parsedCommandDropped = /^\d+$/.test(trimmedCommandMeta)
+            ? Number(trimmedCommandMeta)
+            : Number.NaN;
+        if (Number.isSafeInteger(parsedCommandDropped) && parsedCommandDropped >= 0) {
+            engineCommandsDropped = parsedCommandDropped;
+            engineCommandsComplete = parsedCommandDropped === 0;
+        }
+        try { FS.unlink(WORKROOT + "/.commands-meta"); } catch(e2) {}
+    } catch(e) {}
+
+    // Bounded runtime completion evidence (counters, colors, key families) emitted
+    // by the same read-only post-compile hash scan. Older engine cores omit the file;
+    // the host then marks those snapshot fields explicitly unsupported.
+    var completionObservations = null;
+    try {
+        var observationData = FS.readFile(WORKROOT + "/.completion-observations", { encoding: "utf8" });
+        if (observationData && observationData.length > 0) {
+            completionObservations = observationData.trimEnd().split("\n");
+        } else {
+            completionObservations = [];
+        }
+        try { FS.unlink(WORKROOT + "/.completion-observations"); } catch(e2) {}
     } catch(e) {}
 
     // Read .fls (file recorder output) to discover every engine input. A cached
@@ -957,6 +991,9 @@ function compileLaTeXRoutine() {
                 "log": self.memlog,
                 "cmd": "compile",
                 "engineCommands": engineCommands,
+                "engineCommandsComplete": engineCommandsComplete,
+                "engineCommandsDropped": engineCommandsDropped,
+                "completionObservations": completionObservations,
                 "inputFiles": inputFiles,
                 "inputFilesComplete": inputFilesComplete,
                 "semanticTrace": semanticTrace
@@ -988,6 +1025,9 @@ function compileLaTeXRoutine() {
             "preambleSnapshot": usedPreamble,
             "preambleRebuilt": preambleRebuilt,
             "engineCommands": engineCommands,
+            "engineCommandsComplete": engineCommandsComplete,
+            "engineCommandsDropped": engineCommandsDropped,
+            "completionObservations": completionObservations,
             "inputFiles": inputFiles,
             "inputFilesComplete": inputFilesComplete,
             "semanticTrace": semanticTrace
@@ -1019,6 +1059,9 @@ function compileLaTeXRoutine() {
             "preambleSnapshot": false,
             "preambleRebuilt": preambleRebuilt,
             "engineCommands": engineCommands,
+            "engineCommandsComplete": engineCommandsComplete,
+            "engineCommandsDropped": engineCommandsDropped,
+            "completionObservations": completionObservations,
             "inputFiles": inputFiles,
             "inputFilesComplete": false,
             "semanticTrace": semanticTrace

@@ -228,7 +228,29 @@ The release path therefore has no externally downloaded engine or worker artifac
 
 `scripts/sync-texlive-s3.sh` is a conservative helper for constructing and auditing a
 transformed, flattened TeX Live mirror from pinned archives. It verifies archive
-hashes and records flattened-name collision decisions. The production TeX Live 2025
+hashes, records flattened-name collision decisions, derives an immutable
+`mirrorRevision`, and generates exact resource-completion shards under
+`catalog/<mirrorRevision>/`. Generation and the pre-upload release gate check class,
+package, bibliography, biblatex, and supported font resources against every relevant
+file in the final manifest. The same run extracts typed `.cls`/`.sty` declarations
+and exact color sets from the selected xcolor `.def` files,
+merges the year-pinned WasmTex overrides, and publishes semantic shards plus their
+coverage report under `semantic/<mirrorRevision>/`. Both immutable trees upload
+before publication of the manifest. A
+custom host must expose the matching catalog identity in its compile profile.
+
+When the TeX Live files are already deployed, `scripts/sync-texlive-s3.sh
+--catalog-only` emits only the completion-relevant inventory (`.cls`, `.sty`,
+bibliography styles, fonts, and the configured xcolor `.def` inputs), catalogs, and semantic
+shards. This lane does not copy or upload TeX Live package bytes and therefore does
+not require the full-mirror package-review state. Before `--catalog-only --upload`,
+the reconciler streams every selected object from `TEXLIVE_DEPLOYED_URL` and verifies
+its byte count and SHA-256. Expected deployment-only removals or hotfixes must match
+the year-pinned `texlive-completion-deployment-<year>.json`; unexpected drift fails.
+Differing basename collisions still require an exact deployed-byte decision;
+unrelated mirror collisions do not block metadata output.
+
+The production TeX Live 2025
 CDN is operated separately as a mirror of the full official distribution, so this
 helper's package-review state is not part of the engine `LICENSE-MANIFEST.json` and
 does not decide whether engine artifacts are release-cleared.
@@ -323,6 +345,23 @@ fetch to the right format dir by extension (XeTeX's `createFont` always resolves
 > **Verified:** `\setmainfont{Latin Modern Roman}` and a Korean
 > `\setCJKmainfont{Harano Aji Gothic}` document each compile to a PDF by name
 > against the live CDN.
+
+## Runtime completion observation
+
+The pdfTeX build exports an authored, read-only post-pass hook. After the normal TeX
+process has finished, it scans the in-memory control-sequence hash and documented LaTeX
+registry names for public commands, environments, counters, colors, and key families.
+It also reuses the existing recorder input list. The worker returns this data separately;
+it does not alter TeX state, outputs, logs, or rerun decisions, and completion never calls
+the hook directly.
+
+Both engine and TypeScript boundaries are bounded. Names containing protocol control
+characters or exceeding the name limit are ignored; commands and each registry category
+have record ceilings; dropped counts make affected snapshot fields incomplete; and the
+retained serialized snapshot is capped at 2 MiB. Older pdfTeX assets that lack completeness
+metadata are accepted only as unproven coverage. XeTeX/LuaTeX currently expose the same
+snapshot schema but mark command and registry observations unsupported. Rebuild and deploy
+the pdfTeX controller/module/WASM set together before relying on this capability.
 
 ## TexLive & CDN
 

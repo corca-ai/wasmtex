@@ -18,6 +18,7 @@ const failures = checkMirror({
   manifest,
   mirrorRoot: resolve(mirrorRoot),
   requireLicenseReview: process.argv.includes('--release'),
+  allowCompletionMetadata: process.argv.includes('--completion-metadata'),
 })
 if (failures.length > 0) {
   console.error('TeX Live provenance check failed:')
