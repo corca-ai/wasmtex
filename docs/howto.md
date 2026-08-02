@@ -219,10 +219,18 @@ Use the LSP entrypoints when you want LaTeX diagnostics/outline/rename without
 using the built-in editor/viewer.
 
 ```typescript
-import { createLatexLanguageService } from 'wasmtex/lsp'
+import {
+  createLatexLanguageService,
+  HttpTexResourceCatalogProvider,
+} from 'wasmtex/lsp'
 import { ensureLanguagesRegistered, registerLatexMonacoProviders } from 'wasmtex/lsp/monaco'
 
-const lsp = createLatexLanguageService({ files })
+const resourceCatalog = new HttpTexResourceCatalogProvider({
+  baseUrl: compileProfile.texliveUrl,
+  identity: compileProfile.completionCatalog,
+  store: catalogStore, // optional host-owned offline cache
+})
+const lsp = createLatexLanguageService({ files, resourceCatalog })
 
 ensureLanguagesRegistered()
 const disposables = registerLatexMonacoProviders(lsp, {
@@ -233,6 +241,12 @@ const disposables = registerLatexMonacoProviders(lsp, {
 
 const diagnostics = lsp.getDiagnostics()
 ```
+
+The catalog identity must come from the same compile profile that selects the
+engine and TeX Live mirror. If a custom mirror has no matching catalog, omit the
+provider: project-local resources still complete, but WasmTex deliberately does
+not guess which mirror classes or packages exist. The first request for a lazy
+shard returns `isIncomplete`; Monaco and JSON-RPC preserve that signal.
 
 ### BibTeX Support
 The editor automatically handles `.bib` and `.bst` files.

@@ -29,7 +29,7 @@ import {
 import { type LintConfig, lintSource } from './lsp/linter'
 import {
   createDefaultCompletionRegistry,
-  provideCompletions,
+  provideCompletionResult,
   provideDefinition,
   provideHover,
   provideReferences,
@@ -37,10 +37,16 @@ import {
 import { ProjectIndex } from './lsp/project-index'
 import type {
   NeutralCompletionItem,
+  NeutralCompletionList,
   NeutralDocument,
   NeutralHover,
   NeutralLocation,
 } from './lsp/protocol'
+import type {
+  TexResourceCatalogProvider,
+  TexResourceCatalogState,
+  TexResourceKind,
+} from './lsp/resource-catalog'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
 
@@ -60,6 +66,7 @@ export {
   type CompletionResolver,
   type CompletionResolverEnvironment,
   CompletionResolverRegistry,
+  type CompletionResolverResult,
 } from './lsp/completion-registry'
 // Editor-neutral language feature types.
 export type {
@@ -95,12 +102,26 @@ export {
 export type {
   CompletionKind,
   NeutralCompletionItem,
+  NeutralCompletionList,
   NeutralDocument,
   NeutralHover,
   NeutralLocation,
   NeutralPosition,
   NeutralRange,
 } from './lsp/protocol'
+export {
+  HttpTexResourceCatalogProvider,
+  type HttpTexResourceCatalogProviderOptions,
+  InMemoryTexResourceCatalogProvider,
+  TEX_RESOURCE_CATALOG_SCHEMA_VERSION,
+  type TexResourceCatalogIdentity,
+  type TexResourceCatalogProvider,
+  type TexResourceCatalogShard,
+  type TexResourceCatalogState,
+  type TexResourceCatalogStore,
+  type TexResourceKind,
+  type TexResourceRecord,
+} from './lsp/resource-catalog'
 
 export interface LatexLanguageServiceOptions {
   files?: Record<string, string | Uint8Array>
@@ -109,6 +130,8 @@ export interface LatexLanguageServiceOptions {
   semanticTrace?: string | SemanticTrace
   /** Isolated typed completion registry. Defaults to WasmTex's built-in registry. */
   completionRegistry?: CompletionResolverRegistry
+  /** Exact, profile-bound TeX Live resource catalog. No catalog means no core network access. */
+  resourceCatalog?: TexResourceCatalogProvider
   /** Static linter (ChkTeX-style). `false` disables it; an object overrides
    *  per-rule enabled/severity. Defaults to on with the default rule set. */
   lint?: boolean | Partial<LintConfig>
@@ -133,11 +156,17 @@ export class LatexLanguageService {
   private lint: boolean | Partial<LintConfig>
   private linter: IncrementalLinter
   private completionRegistry: CompletionResolverRegistry
+  private resourceCatalog: TexResourceCatalogProvider | undefined
 
   constructor(options: LatexLanguageServiceOptions = {}) {
     this.lint = options.lint ?? true
     this.linter = new IncrementalLinter(this.lint)
-    this.completionRegistry = options.completionRegistry ?? createDefaultCompletionRegistry()
+    this.resourceCatalog = options.resourceCatalog
+    this.completionRegistry =
+      options.completionRegistry ??
+      createDefaultCompletionRegistry(
+        options.resourceCatalog ? { resourceCatalog: options.resourceCatalog } : {},
+      )
     this.loadProject(options.files ?? {})
     if (options.aux) this.updateAux(options.aux)
     if (options.engineCommands) this.updateEngineCommands(options.engineCommands)
@@ -265,7 +294,16 @@ export class LatexLanguageService {
     column: number,
     cancellationToken?: CompletionCancellationToken,
   ): NeutralCompletionItem[] {
-    return provideCompletions(this.docFor(path), { line, column }, this.index, this.fs, {
+    return this.getCompletionResult(path, line, column, cancellationToken).items
+  }
+
+  getCompletionResult(
+    path: string,
+    line: number,
+    column: number,
+    cancellationToken?: CompletionCancellationToken,
+  ): NeutralCompletionList {
+    return provideCompletionResult(this.docFor(path), { line, column }, this.index, this.fs, {
       registry: this.completionRegistry,
       ...(cancellationToken ? { cancellationToken } : {}),
     })
@@ -314,6 +352,17 @@ export class LatexLanguageService {
 
   getCompletionRegistry(): CompletionResolverRegistry {
     return this.completionRegistry
+  }
+
+  getResourceCatalogState(kind: TexResourceKind): TexResourceCatalogState | null {
+    return this.resourceCatalog?.getState(kind) ?? null
+  }
+
+  loadResourceCatalog(
+    kind: TexResourceKind,
+    cancellationToken?: CompletionCancellationToken,
+  ): Promise<TexResourceCatalogState> | null {
+    return this.resourceCatalog?.load(kind, cancellationToken) ?? null
   }
 
   private updateBibIndex(): void {

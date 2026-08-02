@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import {
+  InMemoryTexResourceCatalogProvider,
+  type TexResourceCatalogIdentity,
+} from './lsp/resource-catalog'
 import { type JsonRpcMessage, LatexLspServer, pathFromUri, uriFromPath } from './lsp-server'
+import type { LatexLanguageServiceOptions } from './lsp-service'
 
-function makeServer() {
+function makeServer(options?: LatexLanguageServiceOptions) {
   const sent: JsonRpcMessage[] = []
-  const server = new LatexLspServer((m) => sent.push(m))
+  const server = new LatexLspServer((m) => sent.push(m), options)
   return { server, sent }
 }
 
@@ -150,6 +155,55 @@ describe('LatexLspServer', () => {
     expect(frac.textEdit.range.start).toEqual({ line: 0, character: 1 })
     expect(frac.textEdit.range.end).toEqual({ line: 0, character: 4 })
     expect(frac.textEdit.newText).toContain('frac')
+  })
+
+  it('returns exact catalog resources over JSON-RPC', () => {
+    const identity: TexResourceCatalogIdentity = {
+      schemaVersion: 1,
+      texliveYear: '2025',
+      mirrorRevision: '2025-0123456789abcdef',
+    }
+    const resourceCatalog = new InMemoryTexResourceCatalogProvider(identity, [
+      {
+        ...identity,
+        kind: 'tex-class',
+        resources: [
+          {
+            name: 'book',
+            fileName: 'book.cls',
+            extension: 'cls',
+            key: 'pdftex/26/book.cls',
+            format: 26,
+            bytes: 10,
+            sha256: 'a'.repeat(64),
+            texliveYear: identity.texliveYear,
+            mirrorRevision: identity.mirrorRevision,
+            sourcePath: 'texmf-dist/tex/latex/base/book.cls',
+            texlivePackage: 'latex',
+            packageRevision: '42',
+            catalogue: 'latex',
+          },
+        ],
+      },
+    ])
+    const { server, sent } = makeServer({ resourceCatalog })
+    const uri = 'file:///m.tex'
+    const line = '\\documentclass{bo}'
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text: line } },
+    })
+    server.handle({
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri }, position: { line: 0, character: line.indexOf('}') } },
+    })
+
+    expect(result(sent, 12)).toMatchObject({
+      isIncomplete: false,
+      items: [{ label: 'book' }],
+    })
   })
 
   it('preserves the neutral replacement range for a list item with a suffix', () => {

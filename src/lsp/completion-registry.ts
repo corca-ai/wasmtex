@@ -7,7 +7,12 @@ import type {
 import type { CommandArg } from './package-db'
 import { getCommandSignature } from './package-db'
 import type { ProjectIndex } from './project-index'
-import type { NeutralCompletionItem, NeutralDocument, NeutralPosition } from './protocol'
+import type {
+  NeutralCompletionItem,
+  NeutralCompletionList,
+  NeutralDocument,
+  NeutralPosition,
+} from './protocol'
 
 /** Minimal cancellation shape shared by Monaco, headless hosts, and resolver implementations. */
 export interface CompletionCancellationToken {
@@ -22,10 +27,12 @@ export interface CompletionResolverEnvironment {
   cancellationToken?: CompletionCancellationToken
 }
 
+export type CompletionResolverResult = NeutralCompletionItem[] | NeutralCompletionList
+
 export type CompletionResolver = (
   context: CompletionContext,
   environment: CompletionResolverEnvironment,
-) => NeutralCompletionItem[]
+) => CompletionResolverResult
 
 /**
  * Host-neutral command metadata and value-domain resolver registry.
@@ -58,13 +65,28 @@ export class CompletionResolverRegistry implements CompletionCommandMetadataProv
     context: CompletionContext,
     environment: CompletionResolverEnvironment,
   ): NeutralCompletionItem[] {
-    if (environment.cancellationToken?.isCancellationRequested) return []
+    return this.resolveResult(context, environment).items
+  }
+
+  resolveResult(
+    context: CompletionContext,
+    environment: CompletionResolverEnvironment,
+  ): NeutralCompletionList {
+    if (environment.cancellationToken?.isCancellationRequested) {
+      return { items: [], isIncomplete: false }
+    }
     const resolver = this.resolvers.get(context.domain)
-    if (!resolver) return []
-    const items = resolver(context, environment)
-    if (environment.cancellationToken?.isCancellationRequested) return []
-    return items.map((item) =>
-      item.replacementRange ? item : { ...item, replacementRange: context.replacementRange },
-    )
+    if (!resolver) return { items: [], isIncomplete: false }
+    const resolved = resolver(context, environment)
+    if (environment.cancellationToken?.isCancellationRequested) {
+      return { items: [], isIncomplete: false }
+    }
+    const result = Array.isArray(resolved) ? { items: resolved, isIncomplete: false } : resolved
+    return {
+      items: result.items.map((item) =>
+        item.replacementRange ? item : { ...item, replacementRange: context.replacementRange },
+      ),
+      isIncomplete: result.isIncomplete,
+    }
   }
 }

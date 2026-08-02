@@ -1,7 +1,8 @@
 import { VirtualFS } from '../fs/virtual-fs';
 import { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry';
 import { ProjectIndex } from './project-index';
-import { NeutralCompletionItem, NeutralDocument, NeutralHover, NeutralLocation, NeutralPosition } from './protocol';
+import { NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralHover, NeutralLocation, NeutralPosition } from './protocol';
+import { TexResourceCatalogProvider } from './resource-catalog';
 type LegacyCompletionContextType = 'command' | 'ref' | 'cite' | 'begin' | 'end' | 'usepackage' | 'include';
 interface LegacyCompletionContext {
     type: LegacyCompletionContextType;
@@ -16,10 +17,15 @@ export interface ProvideCompletionOptions {
     registry?: CompletionResolverRegistry;
     cancellationToken?: CompletionCancellationToken;
 }
+export interface DefaultCompletionRegistryOptions {
+    resourceCatalog?: TexResourceCatalogProvider;
+}
 /** Create an isolated registry with WasmTex's built-in completion domains. */
-export declare function createDefaultCompletionRegistry(): CompletionResolverRegistry;
+export declare function createDefaultCompletionRegistry(options?: DefaultCompletionRegistryOptions): CompletionResolverRegistry;
 /** Compute completions at a position (editor-neutral). */
 export declare function provideCompletions(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex, fs: VirtualFS, options?: ProvideCompletionOptions): NeutralCompletionItem[];
+/** Compute completions plus lazy-loading state at a position (editor-neutral). */
+export declare function provideCompletionResult(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex, fs: VirtualFS, options?: ProvideCompletionOptions): NeutralCompletionList;
 /** Hover info at a position (editor-neutral). */
 export declare function provideHover(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex): NeutralHover | null;
 /** Go-to-definition target at a position (editor-neutral). */

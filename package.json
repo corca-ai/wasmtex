@@ -87,6 +87,8 @@
     "gen-link-inventory": "node scripts/gen-link-inventory.mjs",
     "build:corresponding-source": "node scripts/build-corresponding-source.mjs",
     "gen-texlive-provenance": "node scripts/gen-texlive-provenance.mjs",
+    "gen:texlive-catalog": "node scripts/gen-texlive-catalog.mjs",
+    "check:texlive-catalog": "node scripts/check-texlive-catalog.mjs",
     "build:lib": "BUILD_MODE=lib vite build && node scripts/check-dts-exports.mjs",
     "prepare": "npm run build:lib"
   },

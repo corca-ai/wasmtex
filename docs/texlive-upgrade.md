@@ -131,10 +131,12 @@ that distribution. Record the release year and CDN base URL used by the engine. 
 CDN operation is independent of the WasmTex engine release checklist; the engine
 manifest does not wait for a package-by-package override review.
 
-The repository's `sync-texlive-s3.sh` and `texlive-provenance` tools remain available
-for anyone intentionally constructing a transformed or flattened subset. That is a
-separate distribution workflow with its own conservative checks, not the production
-full-mirror procedure documented here.
+The repository's `sync-texlive-s3.sh`, `texlive-provenance`, and catalog tools remain
+available for anyone intentionally constructing a transformed or flattened subset.
+That workflow generates `catalog/<mirrorRevision>/` from the final selected inventory
+and checks it before upload. For a separately operated full mirror, produce the same
+final-inventory manifest and immutable catalog as part of that deployment rather than
+deriving completion from an upstream or pre-transform file list.
 
 After provisioning, run the read-only runtime coverage audit. It flags formats
 expected but absent, such as OpenType/TrueType fonts required by XeLaTeX and
@@ -143,6 +145,14 @@ LuaLaTeX:
 ```bash
 AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket <bucket> --year <year>
 ```
+
+Before enabling exact resource completion for the new profile:
+
+1. publish `texlive-provenance.json` and the matching immutable catalog shards;
+2. run `npm run check:texlive-catalog -- <manifest> <catalog-dir>` on the bytes to publish;
+3. put `{ schemaVersion, texliveYear, mirrorRevision }` into the compile profile; and
+4. verify a class/package/style/font sample through that profile, including an offline
+   cache return and a deliberate revision-mismatch rejection.
 
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.

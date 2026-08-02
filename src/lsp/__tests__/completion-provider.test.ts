@@ -53,6 +53,8 @@ describe('createCompletionProvider', () => {
   const fs = new VirtualFS({ empty: true })
   fs.writeFile('main.tex', '')
   fs.writeFile('chapters/intro.tex', '')
+  fs.writeFile('amsmath.sty', '')
+  fs.writeFile('amssymb.sty', '')
   const provider = createCompletionProvider(index, fs)
 
   it('provides command completions after backslash', () => {
@@ -123,7 +125,7 @@ describe('createCompletionProvider', () => {
     expect(result.suggestions.some((s) => s.label === 'equation')).toBe(true)
   })
 
-  it('provides package completions after \\usepackage{', () => {
+  it('provides project package completions after \\usepackage{', () => {
     const result = complete(provider, mockModel(['\\usepackage{ams']), 1, 16)
     expect(result.suggestions.some((s) => s.label === 'amsmath')).toBe(true)
     expect(result.suggestions.some((s) => s.label === 'amssymb')).toBe(true)

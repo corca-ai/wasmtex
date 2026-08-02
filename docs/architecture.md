@@ -158,4 +158,24 @@ results with the current project-index diagnostics.
 
 `src/lsp/package-db.ts` derives argument signatures (required vs optional, with placeholders) from the bundled command snippets and reports each command's source package. Structural commands and package shards may additionally type arguments as class/package resources, labels, citations, files, colors, key/value families, and other semantic domains. Completion is **package-aware**: commands from packages loaded via `\usepackage` (and the LaTeX kernel) rank first, while commands from packages not loaded are still offered but ranked lower and annotated with the `\usepackage{X}` they need. Hover shows the argument signature plus the source package; `getCommandSignature()` feeds signature help and completion context analysis.
 
+### Exact TeX Live resource catalogs
+
+`scripts/lib/texlive-catalog.mjs` deterministically derives class (`.cls`), package
+(`.sty`), BibTeX (`.bst`), biblatex (`.bbx`/`.cbx`/`.lbx`), and supported font-file
+shards from the final flattened mirror provenance manifest. The manifest's file
+inventory determines an immutable `mirrorRevision`; catalogs are published under
+`catalog/<mirrorRevision>/` and carry the TeX Live year, source package, selected
+source path, hashes, collision decision, and known engine constraint for every
+record. The checker regenerates the expected bytes and rejects missing, extra,
+reordered, or altered records.
+
+`src/lsp/resource-catalog.ts` keeps transport outside the completion core. A host
+injects a profile-bound provider; the HTTP implementation lazily fetches hashed
+shards, accepts a pluggable offline store, deduplicates concurrent loads, and rejects
+schema or profile mismatches. Until a shard is ready the neutral result explicitly
+sets `isIncomplete`. Without a matching provider, only project-local resources are
+offered—there is no guessed mirror fallback. Project files are ranked first and
+shadow same-named mirror entries. The same registry feeds Monaco, the neutral API,
+and JSON-RPC LSP.
+
 **Data & licensing.** The command database is wasmtex-authored (the snippet DB in `src/lsp/latex-commands.ts`); we intentionally do **not** bundle the GPL-licensed CWL corpus, so there are no redistribution constraints. Signatures are computed deterministically from those snippets (`parseSignature`), so the dataset is reproducible from source — no opaque generated blob. For the long tail beyond the bundled core, `src/lsp/package-shard-loader.ts` can fetch a small per-package JSON shard on demand (keyed on the project's `\usepackage`s), cache it via a pluggable store so it works offline afterward, and register it with the DB. This is opt-in (a host supplies the shard `baseUrl`); no public shard registry ships yet, so it is off by default — the bundled core plus the engine hash dump cover the common case with zero network.

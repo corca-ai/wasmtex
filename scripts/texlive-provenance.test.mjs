@@ -90,6 +90,7 @@ test('generates and verifies a provenance-bound mirror', () => {
     metadataArchivePath: value.metadataArchive,
   })
   assert.equal(manifest.files[0].key, 'pdftex/26/example.sty')
+  assert.match(manifest.mirrorRevision, /^2025-[a-f0-9]{16}$/)
   assert.equal(manifest.files[0].source.package, 'example')
   assert.equal(manifest.files[0].source.license.source, 'texlive-tlpdb-catalogue-license')
   assert.deepEqual(checkMirror({ manifest, mirrorRoot: outputDir }), [])
@@ -237,6 +238,12 @@ test('checker rejects unsafe keys and modified mirror bytes', () => {
   const unsafe = structuredClone(manifest)
   unsafe.files[0].key = '../../outside'
   assert.match(checkMirror({ manifest: unsafe, mirrorRoot: outputDir }).join('\n'), /unsafe mirror key/)
+  const staleRevision = structuredClone(manifest)
+  staleRevision.mirrorRevision = '2025-0000000000000000'
+  assert.match(
+    checkMirror({ manifest: staleRevision, mirrorRoot: outputDir }).join('\n'),
+    /mirrorRevision does not match/,
+  )
 })
 
 test('fails closed when a package has no declared or reviewed license', () => {

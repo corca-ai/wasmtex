@@ -48,6 +48,12 @@ export interface NeutralCompletionItem {
   replacementRange?: NeutralRange
 }
 
+export interface NeutralCompletionList {
+  items: NeutralCompletionItem[]
+  /** More candidates may become available after lazy metadata finishes loading. */
+  isIncomplete: boolean
+}
+
 export interface NeutralHover {
   contents: string[]
   range: NeutralRange

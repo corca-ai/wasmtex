@@ -162,11 +162,10 @@ export class LatexLspServer {
 
   private completion(params: DocPositionParams): { isIncomplete: boolean; items: object[] } {
     const { path, line, column } = locate(params)
+    const result = this.service.getCompletionResult(path, line, column)
     return {
-      isIncomplete: false,
-      items: this.service
-        .getCompletions(path, line, column)
-        .map((it) => toLspCompletionItem(it, params.position)),
+      isIncomplete: result.isIncomplete,
+      items: result.items.map((it) => toLspCompletionItem(it, params.position)),
     }
   }
 

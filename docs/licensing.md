@@ -274,6 +274,7 @@ and hashes. Changing any Dockerfile to a different base makes
 | Standalone demo | The same files, plus notices for bundled Monaco Editor, PDF.js, and pdf-lib when present. |
 | Engine asset host | Per-version notices and complete corresponding source for every distributed binary, including WasmTex glue and build scripts. |
 | Full TeX Live mirror | Retain the official distribution's copying and package license material. It is operated separately from the engine release gate described here. |
+| Generated completion catalogs | WasmTex-authored metadata derived from the exact mirror inventory; preserve each record's upstream package/source provenance and do not treat the catalog as relicensing the referenced TeX Live file. |
 | ICU data | Retain the ICU 68.2 license bundle and exact source/version evidence. |
 
 Serving JavaScript, WebAssembly, formats, packages, fonts, or data to a browser
@@ -296,6 +297,12 @@ determine whether engine artifacts are `release-cleared`. If a future
 deployment selects, modifies, or repackages TeX Live files instead of mirroring
 the full distribution, review that distribution as a separate project before
 publishing it.
+
+Completion catalogs are generated only from that deployment's final provenance
+manifest. They contain file/package identity, hashes, selected source paths,
+collision decisions, and optional CTAN documentation links; CTAN is enrichment,
+not a runtime availability or licensing authority. Do not import third-party
+completion corpora into these shards without a separate source and license review.
 
 This scope decision does not remove TeX Live source used to compile the engines
 from the complete corresponding source. It also does not remove generated

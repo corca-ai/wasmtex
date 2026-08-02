@@ -2,7 +2,7 @@ import { VirtualFS } from '../fs/virtual-fs';
 import { CompletionCommandMetadataProvider, CompletionContext, CompletionDomain } from './completion-context';
 import { CommandArg } from './package-db';
 import { ProjectIndex } from './project-index';
-import { NeutralCompletionItem, NeutralDocument, NeutralPosition } from './protocol';
+import { NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralPosition } from './protocol';
 /** Minimal cancellation shape shared by Monaco, headless hosts, and resolver implementations. */
 export interface CompletionCancellationToken {
     readonly isCancellationRequested: boolean;
@@ -14,7 +14,8 @@ export interface CompletionResolverEnvironment {
     fs: VirtualFS;
     cancellationToken?: CompletionCancellationToken;
 }
-export type CompletionResolver = (context: CompletionContext, environment: CompletionResolverEnvironment) => NeutralCompletionItem[];
+export type CompletionResolverResult = NeutralCompletionItem[] | NeutralCompletionList;
+export type CompletionResolver = (context: CompletionContext, environment: CompletionResolverEnvironment) => CompletionResolverResult;
 /**
  * Host-neutral command metadata and value-domain resolver registry.
  *
@@ -30,4 +31,5 @@ export declare class CompletionResolverRegistry implements CompletionCommandMeta
     registerResolver(domain: CompletionDomain, resolver: CompletionResolver): void;
     hasResolver(domain: CompletionDomain): boolean;
     resolve(context: CompletionContext, environment: CompletionResolverEnvironment): NeutralCompletionItem[];
+    resolveResult(context: CompletionContext, environment: CompletionResolverEnvironment): NeutralCompletionList;
 }

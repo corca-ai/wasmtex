@@ -70,6 +70,25 @@ function validateHex(value, pattern, label) {
   }
 }
 
+/** Immutable identity of the flattened mirror bytes and their selected provenance. */
+export function mirrorRevisionFor(texliveYear, files) {
+  if (!/^\d{4}$/.test(texliveYear ?? '')) throw new Error('mirror revision requires a year')
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('mirror revision requires a non-empty file inventory')
+  }
+  const inventory = [...files]
+    .map((file) => ({
+      key: file.key,
+      sha256: file.sha256,
+      sourcePath: file.source?.path,
+      package: file.source?.package,
+      packageRevision: file.source?.packageRevision,
+    }))
+    .sort((a, b) => String(a.key).localeCompare(String(b.key)))
+  const digest = createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
+  return `${texliveYear}-${digest.slice(0, 16)}`
+}
+
 function parseFileEntry(line) {
   const value = line.trim()
   if (value.length === 0) return null
@@ -721,6 +740,7 @@ export function generateMirror({
   const manifest = {
     schemaVersion: 1,
     texliveYear: config.texliveYear,
+    mirrorRevision: mirrorRevisionFor(config.texliveYear, files),
     releaseStatus:
       unreviewedPackages.length === 0 && packagesWithoutNoticeEvidence.length === 0
         ? 'provenance-reviewed'
@@ -760,6 +780,11 @@ export function checkMirror({
   const fail = (message) => failures.push(message)
   if (manifest.schemaVersion !== 1) fail('manifest schemaVersion must be 1')
   if (!/^\d{4}$/.test(manifest.texliveYear ?? '')) fail('manifest texliveYear must be a year')
+  if (!/^\d{4}-[a-f0-9]{16}$/.test(manifest.mirrorRevision ?? '')) {
+    fail('manifest mirrorRevision is invalid')
+  } else if (manifest.mirrorRevision !== mirrorRevisionFor(manifest.texliveYear, manifest.files)) {
+    fail('manifest mirrorRevision does not match its file inventory')
+  }
   if (manifest.layout?.root !== 'pdftex') fail('manifest layout.root must be pdftex')
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     fail('manifest files must be non-empty')

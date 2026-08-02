@@ -34,6 +34,9 @@ npm run dev               # Start dev server
 | `npm run test:golden` / `npm run update:golden` | Golden-output tests (write/refresh `e2e/goldens/*.json`) |
 | `npm run lint` / `npm run lint:fix` | Lint (Biome) — check / apply fixes |
 | `npm run format` | Format code (Biome) |
+| `npm run gen:texlive-catalog -- --manifest <manifest> --output <dir>` | Generate immutable completion shards from a final `texlive-provenance.json` inventory |
+| `npm run check:texlive-catalog -- <manifest> <dir>` | Verify exact catalog coverage, deterministic bytes, hashes, and provenance |
+| `npm run test:license-tools` | Test provenance, catalog, release, and licensing scripts with Node's test runner |
 | `npm run sync-engine-assets -- --from <baseUrl>` | Download and SHA-256-verify a complete versioned engine set into `public/wasmtex/<version>/` |
 | `npm run compat` | Compatibility harness — compile a corpus and bucket failures (`node scripts/compat/run.mjs`; writes `compat/report.{json,md}`) |
 | `node scripts/gen-bloom-filter.mjs` | Generate bloom filter for CDN file existence checks (requires AWS CLI) |

@@ -48,6 +48,7 @@ or a CSS selector string.
 | `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine. `'auto'` detects it from the main file — a `% !TEX program = …` magic comment, or `fontspec`/`unicode-math`/CJK (`xeCJK`)/`\directlua` in the preamble — falling back to pdfLaTeX. See [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex). |
 | `texliveVersion` | `'2025'` | `'2025'` | TeX Live engine/assets version. The option remains versioned for future TeX Live releases. |
 | `texliveUrl` | `string` | Public CDN | TexLive server endpoint. Defaults to `https://d1jectpaw0dlvl.cloudfront.net/{version}/` |
+| `resourceCatalog` | `TexResourceCatalogProvider` | - | Exact completion catalog for the selected compile profile. Custom `texliveUrl` hosts should inject their matching provider; without one, resource completion is project-local only. |
 | `mainFile` | `string` | `'main.tex'` | Main TeX file name |
 | `files` | `Record<string, string \| Uint8Array>` | `{}` | Initial project files (path → content) |
 | `serviceWorker`| `boolean`| `true` | Cache texlive packages via SW |
@@ -331,7 +332,8 @@ const outline = lsp.getOutline('main.tex')
 
 Construct it with `createLatexLanguageService(options?)` or `new LatexLanguageService(options?)`;
 `options` (`LatexLanguageServiceOptions`) seeds `files`, `aux`, `engineCommands`,
-`semanticTrace`, `lint`, and an optional isolated `completionRegistry`. The editor-neutral result types — `SemanticToken`, `InlayHint`,
+`semanticTrace`, `lint`, an optional isolated `completionRegistry`, and an optional
+profile-bound `resourceCatalog`. The editor-neutral result types — `SemanticToken`, `InlayHint`,
 `CodeAction`, `DocumentLink`, `FoldingRange`, `SignatureHelp`, `WorkspaceSymbol`,
 `Diagnostic`, `FileSymbols`, `SectionDef` — are exported from `wasmtex/lsp` for typing
 your own UI.
@@ -354,6 +356,7 @@ your own UI.
 - `getOutline(path): SectionDef[]`
 - `getCompletionContext(path, line, column): CompletionContext | null`
 - `getCompletions(path, line, column, cancellationToken?): NeutralCompletionItem[]`
+- `getCompletionResult(path, line, column, cancellationToken?): NeutralCompletionList` — includes `isIncomplete` while a lazy resource shard is loading.
 - `getHover(path, line, column): NeutralHover | null`
 - `getDefinition(path, line, column): NeutralLocation | null`
 - `getReferences(path, line, column): NeutralLocation[]`
@@ -371,6 +374,39 @@ your own UI.
 - `getProjectIndex(): ProjectIndex`
 - `getVirtualFileSystem(): VirtualFS`
 - `getCompletionRegistry(): CompletionResolverRegistry`
+- `getResourceCatalogState(kind): TexResourceCatalogState | null`
+- `loadResourceCatalog(kind, cancellationToken?): Promise<TexResourceCatalogState> | null`
+
+### Exact TeX Live resource completion
+
+The host chooses the catalog identity as part of the compile profile; the LSP does
+not discover it by querying CTAN or by compiling on completion:
+
+```ts
+import {
+  createLatexLanguageService,
+  HttpTexResourceCatalogProvider,
+} from 'wasmtex/lsp'
+
+const resourceCatalog = new HttpTexResourceCatalogProvider({
+  baseUrl: 'https://cdn.example/2025/',
+  identity: {
+    schemaVersion: 1,
+    texliveYear: '2025',
+    mirrorRevision: '2025-0123456789abcdef',
+  },
+  store: catalogStore, // optional async get/set store, e.g. IndexedDB-backed
+})
+
+const lsp = createLatexLanguageService({ files, resourceCatalog })
+```
+
+The provider loads immutable `catalog/<mirrorRevision>/index.json` and only the
+requested class/package/bibliography/font shard. It verifies the shard hash and
+fails closed on schema, year, or mirror-revision mismatch. `WasmTexOptions` accepts
+the same provider for the built-in Monaco integration. Project-local `.cls`, `.sty`,
+`.bst`, biblatex, and supported font files remain available without a catalog and
+take precedence over matching mirror records.
 
 ### Static linter (ChkTeX-style)
 

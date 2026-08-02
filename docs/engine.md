@@ -228,7 +228,14 @@ The release path therefore has no externally downloaded engine or worker artifac
 
 `scripts/sync-texlive-s3.sh` is a conservative helper for constructing and auditing a
 transformed, flattened TeX Live mirror from pinned archives. It verifies archive
-hashes and records flattened-name collision decisions. The production TeX Live 2025
+hashes, records flattened-name collision decisions, derives an immutable
+`mirrorRevision`, and generates exact resource-completion shards under
+`catalog/<mirrorRevision>/`. Generation and the pre-upload release gate check class,
+package, bibliography, biblatex, and supported font resources against every relevant
+file in the final manifest; catalog upload precedes publication of the manifest. A
+custom host must expose the matching catalog identity in its compile profile.
+
+The production TeX Live 2025
 CDN is operated separately as a mirror of the full official distribution, so this
 helper's package-review state is not part of the engine `LICENSE-MANIFEST.json` and
 does not decide whether engine artifacts are release-cleared.

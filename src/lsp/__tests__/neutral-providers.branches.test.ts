@@ -330,11 +330,15 @@ describe('provideCompletions: environments', () => {
   })
 })
 
-// --- completePackages + completeIncludes -------------------------------------
+// --- project resources + completeIncludes -----------------------------------
 
 describe('provideCompletions: packages and includes', () => {
-  it('filters common packages by prefix', () => {
-    const items = completionsAt('\\usepackage{ams', new ProjectIndex())
+  it('filters project packages by prefix', () => {
+    const fs = emptyFs()
+    fs.writeFile('amsmath.sty', '')
+    fs.writeFile('amssymb.sty', '')
+    fs.writeFile('geometry.sty', '')
+    const items = completionsAt('\\usepackage{ams', new ProjectIndex(), fs)
     const labels = items.map((i) => i.label)
     expect(labels).toContain('amsmath')
     expect(labels).toContain('amssymb')

@@ -16,7 +16,6 @@ import {
   CompletionResolverRegistry,
 } from './completion-registry'
 import {
-  COMMON_PACKAGES,
   getCommandByName,
   getEnvironmentByName,
   LATEX_COMMANDS,
@@ -27,11 +26,17 @@ import { formatSignature, getShardEnvironments, parseSignature } from './package
 import type { EngineCommandInfo, Occurrence, ProjectIndex } from './project-index'
 import type {
   NeutralCompletionItem,
+  NeutralCompletionList,
   NeutralDocument,
   NeutralHover,
   NeutralLocation,
   NeutralPosition,
 } from './protocol'
+import type {
+  TexResourceCatalogProvider,
+  TexResourceKind,
+  TexResourceRecord,
+} from './resource-catalog'
 import { buildLineStarts, offsetToLineCol } from './source-position'
 
 // --- Completion context ------------------------------------------------------
@@ -91,8 +96,14 @@ export interface ProvideCompletionOptions {
   cancellationToken?: CompletionCancellationToken
 }
 
+export interface DefaultCompletionRegistryOptions {
+  resourceCatalog?: TexResourceCatalogProvider
+}
+
 /** Create an isolated registry with WasmTex's built-in completion domains. */
-export function createDefaultCompletionRegistry(): CompletionResolverRegistry {
+export function createDefaultCompletionRegistry(
+  options: DefaultCompletionRegistryOptions = {},
+): CompletionResolverRegistry {
   const registry = new CompletionResolverRegistry()
   registry.registerResolver('command', (context, env) =>
     completeCommands(context.prefix, context.prefix.length, env.index),
@@ -111,9 +122,14 @@ export function createDefaultCompletionRegistry(): CompletionResolverRegistry {
       context.type === 'argument' && context.command === 'begin',
     ),
   )
-  registry.registerResolver('tex-package', (context) =>
-    completePackages(context.prefix, context.prefix.length),
+  registry.registerResolver('tex-class', resourceResolver('tex-class', options.resourceCatalog))
+  registry.registerResolver('tex-package', resourceResolver('tex-package', options.resourceCatalog))
+  registry.registerResolver('bib-style', resourceResolver('bib-style', options.resourceCatalog))
+  registry.registerResolver(
+    'biblatex-style',
+    resourceResolver('biblatex-style', options.resourceCatalog),
   )
+  registry.registerResolver('font-family', resourceResolver('font-file', options.resourceCatalog))
   const files = (context: CompletionContext, env: CompletionResolverEnvironment) =>
     completeIncludes(context.prefix, context.prefix.length, env.fs)
   registry.registerResolver('project-tex', files)
@@ -133,11 +149,24 @@ export function provideCompletions(
   fs: VirtualFS,
   options: ProvideCompletionOptions = {},
 ): NeutralCompletionItem[] {
+  return provideCompletionResult(doc, pos, index, fs, options).items
+}
+
+/** Compute completions plus lazy-loading state at a position (editor-neutral). */
+export function provideCompletionResult(
+  doc: NeutralDocument,
+  pos: NeutralPosition,
+  index: ProjectIndex,
+  fs: VirtualFS,
+  options: ProvideCompletionOptions = {},
+): NeutralCompletionList {
   const registry = options.registry ?? defaultCompletionRegistry
-  if (options.cancellationToken?.isCancellationRequested) return []
+  if (options.cancellationToken?.isCancellationRequested) {
+    return { items: [], isIncomplete: false }
+  }
   const context = analyzeCompletionContext(doc, pos, registry)
-  if (!context) return []
-  return registry.resolve(context, {
+  if (!context) return { items: [], isIncomplete: false }
+  return registry.resolveResult(context, {
     document: doc,
     position: pos,
     index,
@@ -340,13 +369,97 @@ function appendEngineEnvironments(
   }
 }
 
-function completePackages(prefix: string, len: number): NeutralCompletionItem[] {
-  return COMMON_PACKAGES.filter((pkg) => pkg.startsWith(prefix)).map((pkg) => ({
-    label: pkg,
-    kind: 'module',
-    insertText: pkg,
+const PROJECT_RESOURCE_EXTENSIONS: Record<TexResourceKind, ReadonlySet<string>> = {
+  'tex-class': new Set(['cls']),
+  'tex-package': new Set(['sty']),
+  'bib-style': new Set(['bst']),
+  'biblatex-style': new Set(['bbx', 'cbx', 'lbx']),
+  'font-file': new Set(['otf', 'ttf', 'ttc']),
+}
+
+function projectResourceName(path: string, kind: TexResourceKind): string | null {
+  const dot = path.lastIndexOf('.')
+  if (dot < 0 || !PROJECT_RESOURCE_EXTENSIONS[kind].has(path.slice(dot + 1).toLowerCase())) {
+    return null
+  }
+  return path.slice(0, dot)
+}
+
+function projectResourceCompletions(
+  prefix: string,
+  len: number,
+  kind: TexResourceKind,
+  fs: VirtualFS,
+): NeutralCompletionItem[] {
+  return fs
+    .listFiles()
+    .map((path) => ({ path, name: projectResourceName(path, kind) }))
+    .filter(
+      (item): item is { path: string; name: string } => item.name?.startsWith(prefix) === true,
+    )
+    .map(({ path, name }) => ({
+      label: name,
+      kind: kind === 'font-file' ? ('file' as const) : ('module' as const),
+      insertText: name,
+      detail: `Project resource: ${path}`,
+      sortText: `0_${name}`,
+      replaceLength: len,
+    }))
+}
+
+function catalogResourceItem(
+  resource: TexResourceRecord,
+  prefix: string,
+  len: number,
+  kind: TexResourceKind,
+): NeutralCompletionItem | null {
+  const insertText = kind === 'font-file' ? resource.fileName : resource.name
+  if (!insertText.startsWith(prefix)) return null
+  const item: NeutralCompletionItem = {
+    label: insertText,
+    kind: kind === 'font-file' ? 'file' : 'module',
+    insertText,
+    detail: `TeX Live ${resource.texliveYear}: ${resource.texlivePackage} (${resource.fileName})`,
+    sortText: `1_${insertText}`,
     replaceLength: len,
-  }))
+  }
+  if (resource.documentationUrl) {
+    item.documentation = `[Package documentation](${resource.documentationUrl})\n\nSource: \`${resource.sourcePath}\``
+  }
+  return item
+}
+
+function resourceResolver(
+  kind: TexResourceKind,
+  provider: TexResourceCatalogProvider | undefined,
+): Parameters<CompletionResolverRegistry['registerResolver']>[1] {
+  return (context, env) => {
+    const project = projectResourceCompletions(context.prefix, context.prefix.length, kind, env.fs)
+    if (!provider) return project
+    const state = provider.getState(kind)
+    if (state.status === 'idle' || state.status === 'error') {
+      void provider.load(kind, env.cancellationToken)
+    }
+    if (state.status !== 'ready') {
+      return {
+        items: project,
+        isIncomplete: state.status !== 'mismatch',
+      }
+    }
+    const mirror = state.shard.resources
+      .map((resource) => catalogResourceItem(resource, context.prefix, context.prefix.length, kind))
+      .filter((item): item is NeutralCompletionItem => item !== null)
+    return { items: dedupeResources([...project, ...mirror]), isIncomplete: false }
+  }
+}
+
+function dedupeResources(items: NeutralCompletionItem[]): NeutralCompletionItem[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    if (seen.has(item.insertText)) return false
+    seen.add(item.insertText)
+    return true
+  })
 }
 
 function completeIncludes(prefix: string, len: number, fs: VirtualFS): NeutralCompletionItem[] {

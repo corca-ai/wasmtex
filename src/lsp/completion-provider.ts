@@ -2,7 +2,7 @@ import * as monaco from 'monaco-editor'
 import type { VirtualFS } from '../fs/virtual-fs'
 import type { CompletionResolverRegistry } from './completion-registry'
 import { modelToDoc } from './monaco-doc'
-import { provideCompletions } from './neutral-providers'
+import { provideCompletionResult } from './neutral-providers'
 import type { ProjectIndex } from './project-index'
 import type { CompletionKind, NeutralCompletionItem } from './protocol'
 
@@ -18,7 +18,7 @@ const KIND_MAP: Record<CompletionKind, monaco.languages.CompletionItemKind> = {
   variable: Kind.Variable,
 }
 
-/** Monaco completion adapter over the editor-neutral {@link provideCompletions}. */
+/** Monaco completion adapter over the editor-neutral completion result. */
 export function createCompletionProvider(
   index: ProjectIndex,
   fs: VirtualFS,
@@ -28,7 +28,7 @@ export function createCompletionProvider(
     triggerCharacters: ['\\', '{', '[', ',', '='],
     provideCompletionItems(model, position, _context, cancellationToken) {
       if (cancellationToken?.isCancellationRequested) return { suggestions: [] }
-      const items = provideCompletions(
+      const result = provideCompletionResult(
         modelToDoc(model),
         { line: position.lineNumber, column: position.column },
         index,
@@ -38,7 +38,10 @@ export function createCompletionProvider(
           ...(registry ? { registry } : {}),
         },
       )
-      return { suggestions: items.map((item) => toMonacoItem(item, position)) }
+      return {
+        suggestions: result.items.map((item) => toMonacoItem(item, position)),
+        incomplete: result.isIncomplete,
+      }
     },
   }
 }

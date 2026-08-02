@@ -176,6 +176,27 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
   ['bibliography', [required('files', 'project-bib', { list: true })]],
   ['bibliographystyle', [required('style', 'bib-style')]],
   [
+    'setmainfont',
+    [
+      optional('options', 'key-value', { keyFamily: 'fontspec/font', list: true }),
+      required('font', 'font-family'),
+    ],
+  ],
+  [
+    'setsansfont',
+    [
+      optional('options', 'key-value', { keyFamily: 'fontspec/font', list: true }),
+      required('font', 'font-family'),
+    ],
+  ],
+  [
+    'setmonofont',
+    [
+      optional('options', 'key-value', { keyFamily: 'fontspec/font', list: true }),
+      required('font', 'font-family'),
+    ],
+  ],
+  [
     'includegraphics',
     [
       optional('options', 'key-value', { keyFamily: 'graphicx/includegraphics', list: true }),

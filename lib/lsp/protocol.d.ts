@@ -35,6 +35,11 @@ export interface NeutralCompletionItem {
     /** Exact replacement range. New adapters prefer this over the legacy same-line length. */
     replacementRange?: NeutralRange;
 }
+export interface NeutralCompletionList {
+    items: NeutralCompletionItem[];
+    /** More candidates may become available after lazy metadata finishes loading. */
+    isIncomplete: boolean;
+}
 export interface NeutralHover {
     contents: string[];
     range: NeutralRange;

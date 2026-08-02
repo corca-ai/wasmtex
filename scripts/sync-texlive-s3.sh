@@ -179,6 +179,19 @@ node "$SCRIPT_DIR/check-texlive-provenance.mjs" \
   "$STAGING_ROOT/texlive-provenance.json" \
   "$STAGING_ROOT"
 
+MIRROR_REVISION=$(node -e '
+  const value = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))
+  if (!/^\d{4}-[a-f0-9]{16}$/.test(value.mirrorRevision ?? "")) process.exit(1)
+  process.stdout.write(value.mirrorRevision)
+' "$STAGING_ROOT/texlive-provenance.json")
+CATALOG_ROOT="$STAGING_ROOT/catalog/$MIRROR_REVISION"
+node "$SCRIPT_DIR/gen-texlive-catalog.mjs" \
+  --manifest "$STAGING_ROOT/texlive-provenance.json" \
+  --output "$CATALOG_ROOT"
+node "$SCRIPT_DIR/check-texlive-catalog.mjs" \
+  "$STAGING_ROOT/texlive-provenance.json" \
+  "$CATALOG_ROOT"
+
 if [ -e "$RELEASE_ROOT" ]; then
   PREVIOUS_ROOT="$WORK_DIR/release.previous"
   if [ -e "$PREVIOUS_ROOT" ]; then
@@ -203,6 +216,9 @@ if [ "$DO_UPLOAD" = true ]; then
     "$RELEASE_ROOT/texlive-provenance.json" \
     "$RELEASE_ROOT" \
     --release
+  node "$SCRIPT_DIR/check-texlive-catalog.mjs" \
+    "$RELEASE_ROOT/texlive-provenance.json" \
+    "$RELEASE_ROOT/catalog/$MIRROR_REVISION"
 
   existing=$(aws s3 ls "$S3_YEAR_ROOT/pdftex/" | sed -n '1p')
   if [ -n "$existing" ] && [ "$REPLACE_EXISTING" != true ]; then
@@ -216,6 +232,7 @@ if [ "$DO_UPLOAD" = true ]; then
   else
     aws s3 sync "$RELEASE_ROOT/pdftex/" "$S3_YEAR_ROOT/pdftex/"
   fi
+  aws s3 sync "$RELEASE_ROOT/catalog/" "$S3_YEAR_ROOT/catalog/"
   aws s3 cp "$RELEASE_ROOT/texlive-provenance.json" "$S3_YEAR_ROOT/texlive-provenance.json"
   echo "Uploaded provenance-bound mirror to $S3_YEAR_ROOT/"
 else

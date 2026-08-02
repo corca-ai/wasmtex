@@ -22,6 +22,7 @@ import { parseAuxFile } from './lsp/aux-parser'
 import { rebuildBibIndex } from './lsp/bib-parser'
 import { computeDiagnostics } from './lsp/diagnostic-provider'
 import { type LintConfig, lintSource } from './lsp/linter'
+import { createDefaultCompletionRegistry } from './lsp/neutral-providers'
 import { ProjectIndex } from './lsp/project-index'
 import { registerLatexProviders } from './lsp/register-providers'
 import { parseTraceFile } from './lsp/trace-parser'
@@ -694,8 +695,14 @@ export class WasmTex {
   }
 
   private initRuntimeServices(): void {
-    this.lspDisposables = registerLatexProviders(this.projectIndex, this.fs, (info) =>
-      this.emit('workspaceEdit', info),
+    this.lspDisposables = registerLatexProviders(
+      this.projectIndex,
+      this.fs,
+      (info) => this.emit('workspaceEdit', info),
+      'latex',
+      createDefaultCompletionRegistry(
+        this.opts.resourceCatalog ? { resourceCatalog: this.opts.resourceCatalog } : {},
+      ),
     )
 
     this.perfOverlayDispose = initPerfOverlay()

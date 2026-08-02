@@ -7,6 +7,9 @@ export interface WasmTexOptions {
     texliveVersion?: TexliveVersion;
     /** TexLive server endpoint URL. Defaults to auto-detected from BASE_URL. */
     texliveUrl?: string;
+    /** Exact completion catalog for the selected TeX Live compile profile.
+     *  Custom `texliveUrl` hosts should inject their matching provider. */
+    resourceCatalog?: import('./lsp/resource-catalog').TexResourceCatalogProvider;
     /** Main TeX file name. Defaults to 'main.tex'. */
     mainFile?: string;
     /** Initial project files. Keys are file paths, values are content. */
