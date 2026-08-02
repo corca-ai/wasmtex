@@ -129,7 +129,7 @@ function splitTopLevel(value, separator = ',') {
 function literalName(value) {
   const name = value.trim().replace(/^\/+|\/+$/g, '')
   if (!name || /[\\#{}]/.test(name)) return null
-  return name.replaceAll(/\s+/g, ' ')
+  return name.replaceAll(/\s+/g, ' ').replaceAll(/\s*\/\s*/g, '/')
 }
 
 function familyName(scopeName, raw) {
@@ -141,6 +141,26 @@ function familyName(scopeName, raw) {
 
 function commandName(value) {
   return value.trim().match(/^\\([A-Za-z@]+)$/)?.[1] ?? null
+}
+
+function clistVariables(source) {
+  const text = maskComments(source)
+  const variables = new Map()
+  const declaration = /\\clist_(?:const|g?set):Nn(?![A-Za-z@:_])/g
+  for (const match of text.matchAll(declaration)) {
+    let cursor = skipSpace(text, match.index + match[0].length)
+    if (text[cursor] !== '\\') continue
+    cursor++
+    const start = cursor
+    while (/[A-Za-z@:_]/.test(text[cursor] ?? '')) cursor++
+    const name = text.slice(start, cursor)
+    cursor = skipSpace(text, cursor)
+    const group = text[cursor] === '{' ? readGroup(text, cursor) : null
+    if (!name || !group) continue
+    const values = splitTopLevel(group.value).map(literalName).filter(Boolean)
+    if (values.length > 0) variables.set(name, values)
+  }
+  return variables
 }
 
 function provenance(sourcePath, line, extractor, evidence = 'declared') {
@@ -237,12 +257,15 @@ function parseKeyDefinitions({
   line,
   extractor,
   unsupported,
+  clists,
 }) {
   const statements = splitTopLevel(definitions)
   for (const rawStatement of statements) {
     const statement = rawStatement.trim()
     if (!statement) continue
-    const match = statement.match(/^(.+?)\s*\.([A-Za-z_ ]+)(?::[A-Za-z]*)?\s*(?:=\s*([\s\S]*))?$/)
+    const match = statement.match(
+      /^(.+?)\s*\.([A-Za-z_ ]+)(?::([A-Za-z]*))?\s*(?:=\s*([\s\S]*))?$/,
+    )
     if (!match) {
       unsupported.push({ line, construct: extractor, reason: 'unsupported key declaration' })
       continue
@@ -253,7 +276,8 @@ function parseKeyDefinitions({
       continue
     }
     const property = match[2].trim()
-    const rhs = match[3]?.trim()
+    const signature = match[3] ?? ''
+    const rhs = match[4]?.trim()
 
     const slash = rawKey.lastIndexOf('/')
     if (slash > 0 && /^(?:code|meta)/.test(property)) {
@@ -277,7 +301,10 @@ function parseKeyDefinitions({
     if (/^choice/.test(property)) type = 'enum'
     if (/^choices/.test(property)) {
       type = 'enum'
-      values = splitTopLevel(firstBraced(rhs ?? '') ?? '').map(literalName).filter(Boolean)
+      const variable = rhs?.match(/^\\([A-Za-z@:_]+)/)?.[1]
+      values = signature.startsWith('V') && variable
+        ? clists.get(variable)
+        : splitTopLevel(firstBraced(rhs ?? '') ?? '').map(literalName).filter(Boolean)
     }
     addKey(
       families,
@@ -429,6 +456,7 @@ function extractColorCall(call, required, colors, sourcePath) {
 
 export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }) {
   const calls = scanTexCalls(source)
+  const clists = clistVariables(source)
   const families = new Map()
   const commands = new Map()
   const environments = new Map()
@@ -555,6 +583,7 @@ export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }
         line: call.line,
         extractor: call.name,
         unsupported,
+        clists,
       })
       continue
     }
@@ -615,6 +644,26 @@ export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }
         args: xparseArguments(required[1]?.value ?? ''),
         confidence: 'exact',
         provenance: provenance(sourcePath, call.line, call.name),
+      })
+    }
+  }
+
+  for (const [family, keys] of families) {
+    for (const key of keys.values()) {
+      if (key.value.type !== 'enum' || (key.value.values?.length ?? 0) > 0) continue
+      key.value = { type: 'free-text' }
+      key.confidence = 'inferred'
+      const declaration = key.provenance[0]
+      key.provenance.push({
+        evidence: 'inferred',
+        sourcePath,
+        line: declaration?.line ?? 1,
+        extractor: 'unresolved-choice-values',
+      })
+      unsupported.push({
+        line: declaration?.line ?? 1,
+        construct: `${family}/${key.name}`,
+        reason: 'choice values were not statically resolved',
       })
     }
   }

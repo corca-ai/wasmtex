@@ -106,6 +106,33 @@ test('extracts define@key, l3keys, modern keys, and ProcessKeyOptions', () => {
   )
 })
 
+test('resolves LaTeX3 choice lists held in declared clist variables', () => {
+  const result = extractTexSemantics({
+    sourcePath: 'texmf-dist/tex/latex/example/example.cls',
+    scopeKind: 'class',
+    scopeName: 'example',
+    source: String.raw`
+\clist_const:Nn \c__example_modes_clist { bachelor, master, doctor }
+\keys_define:nn { example / option } {
+  type .choice:,
+  type .value_required:n = true,
+  type .choices:Vn = \c__example_modes_clist { },
+  type .initial:n = bachelor
+}
+\keys_define:nn { example / legacy } { mode .code:n = {#1}, mode .choice: }`,
+  })
+
+  const type = family(result, 'example/option').keys.find((key) => key.name === 'type')
+  assert.deepEqual(type.value, { type: 'enum', values: ['bachelor', 'doctor', 'master'] })
+  assert.equal(type.default, 'bachelor')
+  assert.equal(type.confidence, 'exact')
+  assert.ok(type.provenance.every((entry) => entry.extractor === 'keys_define:nn'))
+  const legacyMode = family(result, 'example/legacy').keys.find((key) => key.name === 'mode')
+  assert.equal(legacyMode.value.type, 'free-text')
+  assert.equal(legacyMode.confidence, 'inferred')
+  assert.match(result.unsupported[0].reason, /not statically resolved/)
+})
+
 test('extracts pgf choice values and xparse command/environment signatures', () => {
   const result = extractTexSemantics({
     sourcePath: 'texmf-dist/tex/latex/example/example.sty',
