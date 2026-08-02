@@ -369,6 +369,7 @@ your own UI.
 - `getCompletionContext(path, line, column): CompletionContext | null`
 - `getCompletions(path, line, column, cancellationToken?): NeutralCompletionItem[]`
 - `getCompletionResult(path, line, column, cancellationToken?): NeutralCompletionList` — includes `isIncomplete` while a lazy resource shard is loading.
+- `getCompletionResultAsync(path, line, column, cancellationToken?): Promise<NeutralCompletionList>` — waits once for the lazy resource/semantic catalog work started by this request, then recomputes the result. Monaco and JSON-RPC use this form so a trigger such as the opening `{` in `\documentclass{` can return the cold catalog without another keystroke.
 - `getHover(path, line, column): NeutralHover | null`
 - `getDefinition(path, line, column): NeutralLocation | null`
 - `getReferences(path, line, column): NeutralLocation[]`
@@ -438,6 +439,12 @@ fails closed on schema, year, or mirror-revision mismatch. `WasmTexOptions` acce
 the same provider for the built-in Monaco integration. Project-local `.cls`, `.sty`,
 `.bst`, biblatex, and supported font files remain available without a catalog and
 take precedence over matching mirror records.
+
+`getCompletionResult()` remains the non-blocking synchronous primitive and reports
+`isIncomplete` while a requested shard loads. `getCompletionResultAsync()` collects
+only the catalog work started by that cursor context, waits for it once, and recomputes
+the neutral result. The built-in Monaco and JSON-RPC adapters use the asynchronous form;
+catalog errors still degrade to project-local candidates instead of holding the request.
 
 Semantic shards are selected as `class/<name>` or `package/<name>`. They expose
 `TexSemanticKeyFamily`, `TexSemanticKey`, `TexSemanticCommand`, `TexSemanticColor`, provenance,

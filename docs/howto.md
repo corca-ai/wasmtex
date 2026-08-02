@@ -251,8 +251,12 @@ const diagnostics = lsp.getDiagnostics()
 The catalog identity must come from the same compile profile that selects the
 engine and TeX Live mirror. If a custom mirror has no matching catalog, omit the
 provider: project-local resources still complete, but WasmTex deliberately does
-not guess which mirror classes or packages exist. The first request for a lazy
-shard returns `isIncomplete`; Monaco and JSON-RPC preserve that signal.
+not guess which mirror classes or packages exist. The synchronous
+`getCompletionResult()` call returns `isIncomplete` on the first request for a lazy
+shard. The Monaco and JSON-RPC adapters use `getCompletionResultAsync()`, which waits
+for the request's shard once and returns its candidates on the original trigger—for
+example, immediately after the opening `{` in `\documentclass{`—without requiring a
+second keystroke.
 Use the same identity for the semantic provider. It supplies class/package load
 options, key families, typed values, and package command/environment signatures;
 exact color definitions and option-gated xcolor palettes use the same profile-bound

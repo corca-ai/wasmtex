@@ -194,6 +194,31 @@ describe('HttpTexResourceCatalogProvider', () => {
     })
   })
 
+  it('settles the cold resource shard in one asynchronous completion request', async () => {
+    const remote = remoteFixture('tex-class', [
+      resource('article', 'cls', 'tex-class'),
+      resource('book', 'cls', 'tex-class'),
+    ])
+    const fetchImpl = vi.fn(
+      async (url: string | URL) =>
+        new Response(String(url).endsWith('/index.json') ? remote.indexText : remote.shardText),
+    )
+    const service = new LatexLanguageService({
+      files: { 'main.tex': '\\documentclass{' },
+      resourceCatalog: new HttpTexResourceCatalogProvider({
+        baseUrl: 'https://cdn.example/2025/',
+        identity,
+        fetchImpl: fetchImpl as typeof fetch,
+      }),
+    })
+
+    await expect(service.getCompletionResultAsync('main.tex', 1, 16)).resolves.toMatchObject({
+      isIncomplete: false,
+      items: [{ label: 'article' }, { label: 'book' }],
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
   it('serves a verified catalog from the pluggable store while offline', async () => {
     const remote = remoteFixture('tex-class', [resource('book', 'cls', 'tex-class')])
     const store = memoryStore()

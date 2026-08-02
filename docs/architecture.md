@@ -184,8 +184,11 @@ reordered, or altered records.
 `src/lsp/resource-catalog.ts` keeps transport outside the completion core. A host
 injects a profile-bound provider; the HTTP implementation lazily fetches hashed
 shards, accepts a pluggable offline store, deduplicates concurrent loads, and rejects
-schema or profile mismatches. Until a shard is ready the neutral result explicitly
-sets `isIncomplete`. Without a matching provider, only project-local resources are
+schema or profile mismatches. The synchronous neutral result explicitly sets
+`isIncomplete` until a shard is ready; the async neutral API and the Monaco/JSON-RPC
+adapters collect the exact lazy work started by a request, await it once, and recompute
+the same cursor context so an opening-brace trigger can show a cold catalog without a
+second edit. Without a matching provider, only project-local resources are
 offered—there is no guessed mirror fallback. Project files are ranked first and
 shadow same-named mirror entries. The same registry feeds Monaco, the neutral API,
 and JSON-RPC LSP.
