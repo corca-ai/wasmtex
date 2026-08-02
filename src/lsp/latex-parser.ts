@@ -277,13 +277,35 @@ const DEF_RE = /\\def\\(\w+)/g
 const DECLARE_MATH_RE = /\\DeclareMathOperator\*?\{\\(\w+)\}/g
 const BIBITEM_RE = /\\bibitem(?:\[[^\]]*\])?\{/g
 const BEGIN_RE = /\\begin\{/g
-const NEWENV_RE = /\\(?:newenvironment|renewenvironment)\{([^}]+)\}/g
+const NEWENV_RE =
+  /\\(?:newenvironment|renewenvironment|NewDocumentEnvironment|RenewDocumentEnvironment|ProvideDocumentEnvironment|DeclareDocumentEnvironment|newtheorem)\*?\{([^}]+)\}/g
 const INPUT_RE = new RegExp(`\\\\(${INPUT_CMDS})\\{`, 'g')
 const USEPACKAGE_RE = new RegExp(`\\\\(?:${USEPACKAGE_CMDS})(?:\\[([^\\]]*)\\])?\\{`, 'g')
 const CLASS_RE = /\\(?:(?:documentclass|LoadClass)(?:\[([^\]]*)\])?|LoadClassWithOptions)\{/g
 const COLOR_DECL_RE =
   /\\(definecolorset|providecolorset|preparecolorset|DefineNamedColor|definecolor|xdefinecolor|providecolor|colorlet)\*?(?![A-Za-z@:_])/g
 const COLOR_ACTIVATION_RE = /\\(definecolors|providecolors)(?!et)\*?\s*\{/g
+const BIB_RESOURCE_RE =
+  /\\(bibliography|addbibresource|addglobalbib|addsectionbib)(?:\[[^\]]*\])?\s*\{/g
+const COUNTER_RE =
+  /\\(newcounter|providecounter|newaliascnt|setcounter|addtocounter|stepcounter|refstepcounter|value|counterwithin|counterwithout)\*?\s*\{/g
+const LENGTH_USE_RE =
+  /\\(setlength|addtolength|settowidth|settoheight|settodepth)\*?\s*\{\s*(\\[A-Za-z@]+)\s*\}/g
+const LENGTH_DEF_RE =
+  /\\(newlength|newdimen|newskip)\s*(?:\{\s*(\\[A-Za-z@]+)\s*\}|(\\[A-Za-z@]+))/g
+const GLOSSARY_DEF_RE = /\\(longnewglossaryentry|newglossaryentry)\*?(?:\[[^\]]*\])?\s*\{/g
+const GLOSSARY_USE_RE =
+  /\\(?:[Gg]ls(?:pl|disp|link|entry(?:name|text|plural|desc|descplural|symbol|symbolplural))?|glsadd|glslink)\*?(?:\[[^\]]*\])*\s*\{/g
+const ACRONYM_DEF_RE = /\\newacronym\*?(?:\[[^\]]*\])?\s*\{/g
+const ACRONYM_USE_RE =
+  /\\(?:acrshort|Acrshort|ACRshort|acrlong|Acrlong|ACRlong|acrfull|Acrfull|ACRfull|ac|Ac|acf|Acf|acl|Acl|acs|Acs|acp|Acp)\*?(?:\[[^\]]*\])*\s*\{/g
+const FONT_USE_RE = /\\(setmainfont|setsansfont|setmonofont|fontspec)\*?(?:\[[^\]]*\])?\s*\{/g
+const FONT_ALIAS_RE =
+  /\\(newfontfamily|newfontface)\*?\s*(?:\{\s*)?(\\[A-Za-z@]+)\s*\}?(?:\[[^\]]*\])?\s*\{/g
+const FONT_FAMILY_RE = /\\DeclareFontFamily\s*\{[^}]*\}\s*\{/g
+const XKEYVAL_DECL_RE = /\\(define@?key|defineboolkey|define@?choicekey)\*?(?:\[[^\]]*\])?/g
+const DECLARE_KEYS_RE = /\\DeclareKeys\*?(?:\[([^\]]+)\])?\s*\{/g
+const PGF_KEYS_RE = /\\pgfkeys\s*\{/g
 
 interface Ctx {
   masked: string
@@ -464,6 +486,129 @@ function extractClasses(ctx: Ctx, symbols: FileSymbols): void {
   }
 }
 
+function pushProjectValue(
+  values: import('./types').ProjectValue[],
+  ctx: Ctx,
+  name: string,
+  offset: number,
+  role: import('./types').ProjectValueRole,
+  target?: string,
+): void {
+  const trimmed = name.trim()
+  if (!trimmed || /[#{}]/.test(trimmed)) return
+  values.push({
+    name: trimmed,
+    role,
+    location: locAt(ctx, offset),
+    ...(target ? { target } : {}),
+  })
+}
+
+function extractBibliographies(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(BIB_RESOURCE_RE)) {
+    const brace = match.index + match[0].length - 1
+    const value = extractBraceContent(ctx.masked, brace)
+    if (value === null) continue
+    let cursor = brace + 1
+    for (const raw of match[1] === 'bibliography' ? value.split(',') : [value]) {
+      const path = raw.trim()
+      if (path && !/[\\#{}]/.test(path)) {
+        symbols.bibliographies.push({
+          path,
+          location: locAt(ctx, cursor + raw.indexOf(path)),
+        })
+      }
+      cursor += raw.length + 1
+    }
+  }
+}
+
+function extractCounters(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(COUNTER_RE)) {
+    const brace = match.index + match[0].length - 1
+    const name = extractBraceContent(ctx.masked, brace)
+    if (name === null) continue
+    pushProjectValue(
+      symbols.counters,
+      ctx,
+      name,
+      nameStartOffset(brace, name),
+      match[1] === 'newcounter' || match[1] === 'providecounter' || match[1] === 'newaliascnt'
+        ? 'definition'
+        : 'usage',
+    )
+  }
+}
+
+function extractLengths(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(LENGTH_DEF_RE)) {
+    const name = match[2] ?? match[3]
+    if (name)
+      pushProjectValue(
+        symbols.lengths,
+        ctx,
+        name,
+        match.index + match[0].indexOf(name),
+        'definition',
+      )
+  }
+  for (const match of ctx.masked.matchAll(LENGTH_USE_RE)) {
+    const name = match[2]
+    if (name)
+      pushProjectValue(symbols.lengths, ctx, name, match.index + match[0].indexOf(name), 'usage')
+  }
+}
+
+function extractNamedBracedValues(
+  ctx: Ctx,
+  re: RegExp,
+  values: import('./types').ProjectValue[],
+  role: import('./types').ProjectValueRole,
+): void {
+  for (const match of ctx.masked.matchAll(re)) {
+    const brace = match.index + match[0].length - 1
+    const name = extractBraceContent(ctx.masked, brace)
+    if (name !== null) pushProjectValue(values, ctx, name, nameStartOffset(brace, name), role)
+  }
+}
+
+function extractGlossaryEntries(ctx: Ctx, symbols: FileSymbols): void {
+  extractNamedBracedValues(ctx, GLOSSARY_DEF_RE, symbols.glossaryEntries, 'definition')
+  extractNamedBracedValues(ctx, GLOSSARY_USE_RE, symbols.glossaryEntries, 'usage')
+  extractNamedBracedValues(ctx, ACRONYM_DEF_RE, symbols.acronymEntries, 'definition')
+  extractNamedBracedValues(ctx, ACRONYM_USE_RE, symbols.acronymEntries, 'usage')
+}
+
+function extractFontFamilies(ctx: Ctx, symbols: FileSymbols): void {
+  extractNamedBracedValues(ctx, FONT_USE_RE, symbols.fontFamilies, 'usage')
+  for (const match of ctx.masked.matchAll(FONT_ALIAS_RE)) {
+    const brace = match.index + match[0].length - 1
+    const family = extractBraceContent(ctx.masked, brace)
+    if (family === null) continue
+    pushProjectValue(
+      symbols.fontFamilies,
+      ctx,
+      family,
+      nameStartOffset(brace, family),
+      'alias',
+      match[2],
+    )
+  }
+  for (const match of ctx.masked.matchAll(FONT_FAMILY_RE)) {
+    const brace = match.index + match[0].length - 1
+    const family = extractBraceContent(ctx.masked, brace)
+    if (family !== null) {
+      pushProjectValue(
+        symbols.fontFamilies,
+        ctx,
+        family,
+        nameStartOffset(brace, family),
+        'definition',
+      )
+    }
+  }
+}
+
 interface ParsedInvocationGroup {
   delimiter: 'required' | 'optional'
   value: string
@@ -516,6 +661,25 @@ function splitColorSet(value: string): string[] {
     else if (value[cursor] === '{') depth++
     else if (value[cursor] === '}') depth = Math.max(0, depth - 1)
     else if (value[cursor] === ';' && depth === 0) {
+      result.push(value.slice(start, cursor))
+      start = cursor + 1
+    }
+  }
+  result.push(value.slice(start))
+  return result
+}
+
+function splitTopLevel(value: string, separator = ','): string[] {
+  const result: string[] = []
+  const stack: string[] = []
+  let start = 0
+  for (let cursor = 0; cursor < value.length; cursor++) {
+    const ch = value[cursor]!
+    if (ch === '\\') cursor++
+    else if (ch === '{') stack.push('}')
+    else if (ch === '[') stack.push(']')
+    else if (ch === stack[stack.length - 1]) stack.pop()
+    else if (stack.length === 0 && ch === separator) {
       result.push(value.slice(start, cursor))
       start = cursor + 1
     }
@@ -643,6 +807,217 @@ function extractColorActivations(ctx: Ctx, symbols: FileSymbols): void {
       })
     }
   }
+}
+
+function normalizeKeyFamily(value: string): string {
+  return value.trim().replace(/^\/+|\/+$/g, '') || 'document'
+}
+
+function pushProjectKey(
+  symbols: FileSymbols,
+  ctx: Ctx,
+  family: string,
+  name: string,
+  valueType: import('./types').ProjectKeyValueType,
+  offset: number,
+  values?: string[],
+): void {
+  const normalizedName = name.trim().replace(/^\/+|\/+$/g, '')
+  if (!normalizedName || /[\\#{}]/.test(normalizedName)) return
+  symbols.keys.push({
+    family: normalizeKeyFamily(family),
+    name: normalizedName,
+    valueType,
+    location: locAt(ctx, offset),
+    ...(values?.length ? { values: [...new Set(values)] } : {}),
+  })
+}
+
+function extractXkeyvalKeys(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(XKEYVAL_DECL_RE)) {
+    const command = match[1]!
+    const groups = invocationGroups(ctx.masked, match.index + match[0].length)
+    const required = groups.filter((group) => group.delimiter === 'required')
+    if (required.length < 2) continue
+    const family = required[0]!.value
+    const key = required[1]!.value
+    const type = command.includes('choice')
+      ? 'enum'
+      : command === 'defineboolkey'
+        ? 'boolean'
+        : 'free-text'
+    const values =
+      type === 'enum'
+        ? required
+            .slice(2)
+            .map((group) =>
+              splitTopLevel(group.value)
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
+            .find((candidate) => candidate.length > 0)
+        : undefined
+    pushProjectKey(symbols, ctx, family, key, type, required[1]!.contentStart, values)
+  }
+}
+
+function declaredKeyType(property: string): import('./types').ProjectKeyValueType {
+  if (/choice|choices/.test(property)) return 'enum'
+  if (/bool/.test(property)) return 'boolean'
+  if (/(?:int|fp)_set/.test(property)) return 'number'
+  if (/dim_set/.test(property)) return 'dimension'
+  if (/code|meta|store|tl_set|initial/.test(property)) return 'free-text'
+  return 'flag'
+}
+
+interface KeyDeclaration {
+  family: string
+  name: string
+  type: import('./types').ProjectKeyValueType
+  offset: number
+}
+
+function declarationHead(segment: string): { name: string; property: string } | null {
+  const equals = segment.indexOf('=')
+  const lhs = segment.slice(0, equals < 0 ? segment.length : equals).trim()
+  const match = lhs.match(/^(.+?)\s+\.([A-Za-z0-9_:]+)\s*$/)
+  return match ? { name: match[1]!.trim(), property: match[2]! } : null
+}
+
+function collectDeclareKey(
+  declarations: KeyDeclaration[],
+  choices: Map<string, string[]>,
+  segment: string,
+  family: string,
+  offset: number,
+): void {
+  const head = declarationHead(segment)
+  if (!head) return
+  declarations.push({ family, name: head.name, type: declaredKeyType(head.property), offset })
+  const slash = head.name.lastIndexOf('/')
+  if (slash <= 0) return
+  const parent = head.name.slice(0, slash).trim()
+  const values = choices.get(parent) ?? []
+  values.push(head.name.slice(slash + 1).trim())
+  choices.set(parent, values)
+}
+
+function indexKeyDeclarations(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  declarations: KeyDeclaration[],
+  choices: Map<string, string[]>,
+): void {
+  for (const declaration of declarations) {
+    pushProjectKey(
+      symbols,
+      ctx,
+      declaration.family,
+      declaration.name,
+      declaration.type,
+      declaration.offset,
+      declaration.type === 'enum'
+        ? (choices.get(`${declaration.family}\u0000${declaration.name}`) ??
+            choices.get(declaration.name))
+        : undefined,
+    )
+  }
+}
+
+function extractDeclareKeys(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(DECLARE_KEYS_RE)) {
+    const brace = match.index + match[0].length - 1
+    const content = extractBraceContent(ctx.masked, brace)
+    if (content === null) continue
+    const family = normalizeKeyFamily(match[1] ?? 'document')
+    const declarations: KeyDeclaration[] = []
+    const choices = new Map<string, string[]>()
+    let cursor = 0
+    for (const segment of splitTopLevel(content)) {
+      collectDeclareKey(declarations, choices, segment, family, brace + 1 + cursor)
+      cursor += segment.length + 1
+    }
+    indexKeyDeclarations(ctx, symbols, declarations, choices)
+  }
+}
+
+interface PgfKeyState {
+  family: string
+  declarations: KeyDeclaration[]
+  choices: Map<string, string[]>
+  enumKeys: Set<string>
+}
+
+function pgfKeyId(family: string, name: string): string {
+  return `${normalizeKeyFamily(family)}\u0000${name}`
+}
+
+function addPgfChoiceValue(state: PgfKeyState, family: string, name: string): boolean {
+  const slash = family.lastIndexOf('/')
+  if (slash < 0) return false
+  const parentFamily = family.slice(0, slash)
+  const parentName = family.slice(slash + 1)
+  const id = pgfKeyId(parentFamily, parentName)
+  if (!state.enumKeys.has(id)) return false
+  const values = state.choices.get(id) ?? []
+  values.push(name)
+  state.choices.set(id, values)
+  return true
+}
+
+function collectPgfKey(state: PgfKeyState, segment: string, offset: number): void {
+  const equals = segment.indexOf('=')
+  const lhs = segment.slice(0, equals < 0 ? segment.length : equals).trim()
+  const property = lhs.lastIndexOf('/.')
+  if (property < 0) return
+  const rawPathWithRoot = lhs.slice(0, property)
+  const absolute = rawPathWithRoot.startsWith('/')
+  const rawPath = rawPathWithRoot.replace(/^\/+/, '')
+  const prop = lhs.slice(property + 2)
+  if (prop === 'cd' || prop === 'is family') {
+    state.family = normalizeKeyFamily(rawPath)
+    return
+  }
+  const slash = rawPath.lastIndexOf('/')
+  const nestedFamily = slash < 0 ? '' : normalizeKeyFamily(rawPath.slice(0, slash))
+  const family =
+    slash < 0
+      ? state.family
+      : normalizeKeyFamily(absolute ? nestedFamily : `${state.family}/${nestedFamily}`)
+  const name = slash < 0 ? rawPath : rawPath.slice(slash + 1)
+  if (!name) return
+  if (/is choice/.test(prop)) {
+    state.enumKeys.add(pgfKeyId(family, name))
+    state.declarations.push({ family, name, type: 'enum', offset })
+  } else if (!addPgfChoiceValue(state, family, name)) {
+    state.declarations.push({ family, name, type: declaredKeyType(prop), offset })
+  }
+}
+
+function extractPgfKeys(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(PGF_KEYS_RE)) {
+    const brace = match.index + match[0].length - 1
+    const content = extractBraceContent(ctx.masked, brace)
+    if (content === null) continue
+    const state: PgfKeyState = {
+      family: 'pgfkeys',
+      declarations: [],
+      choices: new Map(),
+      enumKeys: new Set(),
+    }
+    let cursor = 0
+    for (const segment of splitTopLevel(content)) {
+      collectPgfKey(state, segment.trim(), brace + 1 + cursor)
+      cursor += segment.length + 1
+    }
+    indexKeyDeclarations(ctx, symbols, state.declarations, state.choices)
+  }
+}
+
+function extractProjectKeys(ctx: Ctx, symbols: FileSymbols): void {
+  extractXkeyvalKeys(ctx, symbols)
+  extractDeclareKeys(ctx, symbols)
+  extractPgfKeys(ctx, symbols)
 }
 
 // --- Macro shallow expansion -------------------------------------------------
@@ -915,6 +1290,13 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
     packages: [],
     colors: [],
     colorActivations: [],
+    counters: [],
+    lengths: [],
+    glossaryEntries: [],
+    acronymEntries: [],
+    fontFamilies: [],
+    keys: [],
+    bibliographies: [],
     bibItems: [],
   }
 
@@ -943,6 +1325,12 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
   extractPackages(ctx, symbols)
   extractColors(ctx, symbols)
   extractColorActivations(ctx, symbols)
+  extractCounters(ctx, symbols)
+  extractLengths(ctx, symbols)
+  extractGlossaryEntries(ctx, symbols)
+  extractFontFamilies(ctx, symbols)
+  extractProjectKeys(ctx, symbols)
+  extractBibliographies(ctx, symbols)
   extractMacroExpansions(ctx, symbols)
 
   return symbols

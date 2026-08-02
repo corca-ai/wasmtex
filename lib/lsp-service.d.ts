@@ -11,6 +11,7 @@ import { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/seman
 import { SemanticTrace } from './lsp/trace-parser';
 import { FileSymbols, SectionDef } from './lsp/types';
 export { lintSource, type LintConfig };
+export type { BibCompletionContext, BibCompletionDomain } from './lsp/bib-completion-context';
 export { analyzeCompletionContext, type CommandArgumentCompletionContext, type CommandNameCompletionContext, type CompletionCommandMetadataProvider, type CompletionContext, type CompletionDomain, type RelatedCompletionArgument, } from './lsp/completion-context';
 export { type CompletionCancellationToken, type CompletionResolver, type CompletionResolverEnvironment, CompletionResolverRegistry, type CompletionResolverResult, } from './lsp/completion-registry';
 export type { CodeAction, DocumentLink, FoldingRange, InlayHint, LFRange, SemanticToken, SignatureHelp, WorkspaceSymbol, } from './lsp/language-features';
@@ -93,7 +94,8 @@ export declare class LatexLanguageService {
     loadResourceCatalog(kind: TexResourceKind, cancellationToken?: CompletionCancellationToken): Promise<TexResourceCatalogState> | null;
     getSemanticCatalogState(scopeId: string): TexSemanticCatalogState | null;
     loadSemanticCatalog(scopeId: string, cancellationToken?: CompletionCancellationToken): Promise<TexSemanticCatalogState> | null;
-    private updateBibIndex;
 }
 export declare function createLatexLanguageService(options?: LatexLanguageServiceOptions): LatexLanguageService;
+export type { ProjectIndexStats } from './lsp/project-index';
+export type { BibEntry, BibStringDef, ParsedBibFile, ProjectKeyDefinition, ProjectKeyValueType, ProjectValue, ProjectValueRole, } from './lsp/types';
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace };

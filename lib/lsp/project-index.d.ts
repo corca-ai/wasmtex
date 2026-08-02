@@ -1,19 +1,32 @@
 import { SemanticTrace } from './trace-parser';
-import { AuxData, BibEntry, BibitemDef, ColorDefinition, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef } from './types';
+import { AuxData, BibEntry, BibitemDef, BibStringDef, ColorDefinition, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef, ParsedBibFile, ProjectKeyDefinition, ProjectValue } from './types';
 export interface EngineCommandInfo {
     name: string;
     eqType: number;
     argCount: number;
     category: 'macro' | 'primitive' | 'unknown';
 }
+export interface ProjectIndexStats {
+    sourceFiles: number;
+    bibliographyFiles: number;
+    latexSymbols: number;
+    bibliographyEntries: number;
+    bibliographyStrings: number;
+    /** Deterministic UTF-16 payload estimate for retained semantic index records. */
+    estimatedBytes: number;
+}
 export declare class ProjectIndex {
     private files;
     private auxData;
     private bibEntries;
+    private bibStrings;
+    private bibFiles;
+    private legacyBibEntries;
     private engineCommands;
     private engineEnvironments;
     private semanticTrace;
     private activeFilesCache;
+    private activeBibFilesCache;
     private labelDefIndex;
     private labelRefIndex;
     private citationIndex;
@@ -29,10 +42,14 @@ export declare class ProjectIndex {
     private removeFromIndexes;
     updateAux(content: string): void;
     updateBib(entries: BibEntry[]): void;
+    updateBibFile(filePath: string, data: ParsedBibFile): void;
+    removeBibFile(filePath: string): void;
+    replaceBibFiles(files: ReadonlyMap<string, ParsedBibFile>): void;
+    private rebuildBibIndexes;
     updateAuxData(data: AuxData): void;
     getFiles(): string[];
     hasFile(filePath: string): boolean;
-    getAllLabels(): LabelDef[];
+    getAllLabels(filePath?: string): LabelDef[];
     getAllLabelRefs(name: string): LabelRef[];
     getFileSymbols(filePath: string): FileSymbols | undefined;
     /** Files in the deterministic include component that compiles the requested document. */
@@ -43,13 +60,25 @@ export declare class ProjectIndex {
     getLoadedClasses(filePath?: string): Set<string>;
     getClassOptions(filePath?: string): Set<string>;
     getPackageOptions(name: string, filePath?: string): Set<string>;
-    getCommandDefs(): CommandDef[];
-    getAllEnvironments(): string[];
+    getCommandDefs(filePath?: string): CommandDef[];
+    getAllEnvironments(filePath?: string): string[];
+    getEnvironmentDefinitions(filePath?: string): EnvironmentUse[];
     /** Names of all packages loaded via `\usepackage`/`\RequirePackage` in the project. */
     getLoadedPackages(filePath?: string): Set<string>;
     private symbolsInScope;
     private resolveInclude;
-    getBibEntries(): BibEntry[];
+    private resolveLoadedResource;
+    private resolveProjectPath;
+    private bibliographyPathsFromTex;
+    private resolveBibliographyRef;
+    getActiveBibFiles(filePath?: string): string[];
+    getBibEntries(filePath?: string): BibEntry[];
+    getBibStrings(filePath?: string): BibStringDef[];
+    getProjectValues(kind: 'counter' | 'length' | 'glossary' | 'acronym' | 'font-family', filePath?: string): ProjectValue[];
+    getProjectKeys(filePath?: string, families?: ReadonlySet<string>): ProjectKeyDefinition[];
+    private itemsInScope;
+    private loadEvents;
+    getStats(): ProjectIndexStats;
     getAuxLabels(): Map<string, string>;
     getAuxCitations(): Set<string>;
     resolveLabel(name: string): string | undefined;

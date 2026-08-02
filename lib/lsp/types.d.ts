@@ -64,6 +64,28 @@ export interface ColorActivation {
     kind: 'define' | 'provide';
     location: SourceLocation;
 }
+export type ProjectValueRole = 'definition' | 'usage' | 'alias';
+/** A statically recoverable named value contributed by project source. */
+export interface ProjectValue {
+    name: string;
+    role: ProjectValueRole;
+    location: SourceLocation;
+    /** Optional declaration target, for example the font behind a command alias. */
+    target?: string;
+}
+export type ProjectKeyValueType = 'flag' | 'boolean' | 'enum' | 'number' | 'dimension' | 'color' | 'file' | 'command' | 'free-text';
+/** A key declared in the project through xkeyval, pgfkeys, or LaTeX3 keys. */
+export interface ProjectKeyDefinition {
+    family: string;
+    name: string;
+    valueType: ProjectKeyValueType;
+    values?: string[];
+    location: SourceLocation;
+}
+export interface BibliographyRef {
+    path: string;
+    location: SourceLocation;
+}
 export interface FileSymbols {
     labels: LabelDef[];
     labelRefs: LabelRef[];
@@ -78,6 +100,13 @@ export interface FileSymbols {
     packages: PackageRef[];
     colors: ColorDefinition[];
     colorActivations: ColorActivation[];
+    counters: ProjectValue[];
+    lengths: ProjectValue[];
+    glossaryEntries: ProjectValue[];
+    acronymEntries: ProjectValue[];
+    fontFamilies: ProjectValue[];
+    keys: ProjectKeyDefinition[];
+    bibliographies: BibliographyRef[];
     bibItems: BibitemDef[];
 }
 export interface AuxData {
@@ -100,4 +129,13 @@ export interface BibEntry {
     journal?: string;
     /** All parsed fields (lowercased names → cleaned values). */
     fields?: Record<string, string>;
+}
+export interface BibStringDef {
+    name: string;
+    value: string;
+    location: SourceLocation;
+}
+export interface ParsedBibFile {
+    entries: BibEntry[];
+    strings: BibStringDef[];
 }

@@ -1,6 +1,6 @@
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
-import { rebuildBibIndex } from './lsp/bib-parser'
+import { parseBibFileData } from './lsp/bib-parser'
 import { analyzeCompletionContext, type CompletionContext } from './lsp/completion-context'
 import type {
   CompletionCancellationToken,
@@ -54,6 +54,7 @@ import type { FileSymbols, SectionDef } from './lsp/types'
 
 // Public linter API on the `wasmtex/lsp` entrypoint.
 export { lintSource, type LintConfig }
+export type { BibCompletionContext, BibCompletionDomain } from './lsp/bib-completion-context'
 export {
   analyzeCompletionContext,
   type CommandArgumentCompletionContext,
@@ -178,6 +179,10 @@ export interface LatexWorkspaceEdit {
   }>
 }
 
+function isLatexSource(path: string): boolean {
+  return /\.(?:tex|sty|cls|ltx)$/i.test(path)
+}
+
 export class LatexLanguageService {
   private fs = new VirtualFS({ empty: true })
   private index = new ProjectIndex()
@@ -220,22 +225,24 @@ export class LatexLanguageService {
     this.fs.writeFile(path, content)
     this.linter.updateFile(path, content)
     if (typeof content !== 'string') {
-      if (path.endsWith('.tex')) this.index.removeFile(path)
-      if (path.endsWith('.bib')) this.updateBibIndex()
+      if (isLatexSource(path)) this.index.removeFile(path)
+      if (path.toLowerCase().endsWith('.bib')) this.index.removeBibFile(path)
       return
     }
-    if (path.endsWith('.tex')) {
+    if (isLatexSource(path)) {
       this.index.updateFile(path, content)
       preloadSemanticCatalog(this.completionRegistry, this.index)
     }
-    if (path.endsWith('.bib')) this.updateBibIndex()
+    if (path.toLowerCase().endsWith('.bib')) {
+      this.index.updateBibFile(path, parseBibFileData(content, path))
+    }
   }
 
   removeFile(path: string): boolean {
     const removed = this.fs.deleteFile(path)
     this.linter.removeFile(path)
-    if (path.endsWith('.tex')) this.index.removeFile(path)
-    if (path.endsWith('.bib')) this.updateBibIndex()
+    if (isLatexSource(path)) this.index.removeFile(path)
+    if (path.toLowerCase().endsWith('.bib')) this.index.removeBibFile(path)
     return removed
   }
 
@@ -409,10 +416,6 @@ export class LatexLanguageService {
   ): Promise<TexSemanticCatalogState> | null {
     return this.semanticCatalog?.load(scopeId, cancellationToken) ?? null
   }
-
-  private updateBibIndex(): void {
-    rebuildBibIndex(this.fs, this.index)
-  }
 }
 
 export function createLatexLanguageService(
@@ -421,4 +424,14 @@ export function createLatexLanguageService(
   return new LatexLanguageService(options)
 }
 
+export type { ProjectIndexStats } from './lsp/project-index'
+export type {
+  BibEntry,
+  BibStringDef,
+  ParsedBibFile,
+  ProjectKeyDefinition,
+  ProjectKeyValueType,
+  ProjectValue,
+  ProjectValueRole,
+} from './lsp/types'
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace }

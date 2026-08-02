@@ -1,5 +1,5 @@
 /** Semantic value domains understood by the completion resolver registry. */
-export type CompletionValueKind = 'tex-class' | 'tex-package' | 'bib-style' | 'biblatex-style' | 'project-tex' | 'project-bib' | 'project-image' | 'project-file' | 'font-family' | 'color' | 'label' | 'citation' | 'environment' | 'counter' | 'length' | 'glossary-key' | 'acronym-key' | 'boolean' | 'enum' | 'number' | 'dimension' | 'command' | 'key-value' | 'free-text';
+export type CompletionValueKind = 'tex-class' | 'tex-package' | 'bib-style' | 'biblatex-style' | 'project-tex' | 'project-bib' | 'project-image' | 'project-listing' | 'project-data' | 'project-file' | 'font-family' | 'color' | 'label' | 'citation' | 'environment' | 'counter' | 'length' | 'glossary-key' | 'acronym-key' | 'key-family' | 'bib-entry-type' | 'bib-field' | 'bib-entry-key' | 'bib-string' | 'boolean' | 'enum' | 'number' | 'dimension' | 'command' | 'key-value' | 'free-text';
 export interface CommandArg {
     kind: 'required' | 'optional';
     /** The snippet placeholder text, e.g. `text` from `${1:text}` (may be empty). */
@@ -15,6 +15,8 @@ export interface CommandArg {
      * For example, document-class options point at the following class-name argument.
      */
     selectorArgumentIndex?: number;
+    /** Signature index of an argument that selects a project-defined key family. */
+    keyFamilySelectorArgumentIndex?: number;
 }
 /** Parse a snippet (`\name{$1}[$2]…`) into its argument signature. */
 export declare function parseSignature(snippet: string): CommandArg[];

@@ -1,4 +1,5 @@
 /** Shared offset ↔ line/column helpers for source analysis. */
+import type { NeutralPosition, NeutralRange } from './protocol'
 
 /** Offsets at which each line begins (`lineStarts[0] === 0`). */
 export function buildLineStarts(text: string): number[] {
@@ -25,4 +26,28 @@ export function offsetToLineCol(
     else hi = mid - 1
   }
   return { line: lo + 1, column: offset - lineStarts[lo]! + 1 }
+}
+
+/** Convert a clamped 1-based document position to an absolute offset. */
+export function positionToOffset(
+  text: string,
+  lineStarts: number[],
+  position: NeutralPosition,
+): number {
+  const lineIndex = Math.min(Math.max(position.line - 1, 0), lineStarts.length - 1)
+  const lineStart = lineStarts[lineIndex]!
+  const lineEnd = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1]! - 1 : text.length
+  return Math.min(Math.max(lineStart + position.column - 1, lineStart), lineEnd)
+}
+
+/** Convert absolute start/end offsets to a 1-based, end-exclusive neutral range. */
+export function rangeFromOffsets(lineStarts: number[], start: number, end: number): NeutralRange {
+  const first = offsetToLineCol(lineStarts, start)
+  const last = offsetToLineCol(lineStarts, end)
+  return {
+    startLine: first.line,
+    startColumn: first.column,
+    endLine: last.line,
+    endColumn: last.column,
+  }
 }

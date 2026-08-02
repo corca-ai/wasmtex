@@ -25,7 +25,7 @@ export function createCompletionProvider(
   registry?: CompletionResolverRegistry,
 ): monaco.languages.CompletionItemProvider {
   return {
-    triggerCharacters: ['\\', '{', '[', ',', '='],
+    triggerCharacters: ['\\', '{', '[', ',', '=', '@'],
     provideCompletionItems(model, position, _context, cancellationToken) {
       if (cancellationToken?.isCancellationRequested) return { suggestions: [] }
       const result = provideCompletionResult(

@@ -252,6 +252,31 @@ describe('typed semantic completion', () => {
       complete(service, '\\usepackage{hyperref}\n\\begin{hyper¦}').items.map((item) => item.label),
     ).toContain('hyperbox')
   })
+
+  it('preserves richer builtin typing when a shard also declares the command', () => {
+    const provenance = key('x', 'flag').provenance
+    const xkeyval = shard(
+      'package/xkeyval',
+      [],
+      [
+        {
+          name: 'setkeys',
+          args: [{ kind: 'required' }],
+          confidence: 'exact',
+          provenance,
+        },
+      ],
+    )
+    const service = new LatexLanguageService({
+      semanticCatalog: new InMemoryTexSemanticCatalogProvider(identity, [xkeyval]),
+    })
+    expect(
+      complete(
+        service,
+        '\\usepackage{xkeyval}\n\\definechoicekey{layout}{mode}{draft,final}{}\n\\setkeys{layout}{mo¦}',
+      ).items.map((item) => item.label),
+    ).toContain('mode')
+  })
 })
 
 describe('color completion', () => {

@@ -307,7 +307,7 @@ function toLspDiagnostic(d: Diagnostic): object {
 function serverCapabilities(): object {
   return {
     textDocumentSync: 1, // full
-    completionProvider: { triggerCharacters: ['\\', '{', '[', ',', '='] },
+    completionProvider: { triggerCharacters: ['\\', '{', '[', ',', '=', '@'] },
     hoverProvider: true,
     definitionProvider: true,
     referencesProvider: true,

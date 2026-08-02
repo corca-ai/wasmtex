@@ -5,11 +5,13 @@
  * for every syntax position. It is deliberately error-tolerant: an unfinished group is
  * treated as extending to the end of the document, and malformed input never throws.
  */
+
+import { analyzeBibCompletionContext, type BibCompletionContext } from './bib-completion-context'
 import { maskSpansFromTokens } from './latex-parser'
 import { type Token, tokenize } from './latex-tokenizer'
 import { type CommandArg, type CompletionValueKind, getCommandSignature } from './package-db'
 import type { NeutralDocument, NeutralPosition, NeutralRange } from './protocol'
-import { buildLineStarts, offsetToLineCol } from './source-position'
+import { buildLineStarts, positionToOffset, rangeFromOffsets } from './source-position'
 
 export type CompletionDomain = 'command' | CompletionValueKind
 
@@ -61,9 +63,14 @@ export interface CommandArgumentCompletionContext extends CompletionContextBase 
   relatedArguments: RelatedCompletionArgument[]
   /** Resource argument selected by this argument's metadata, when present. */
   selector?: RelatedCompletionArgument
+  /** Project key family selected by a sibling argument, when present. */
+  keyFamilySelector?: RelatedCompletionArgument
 }
 
-export type CompletionContext = CommandNameCompletionContext | CommandArgumentCompletionContext
+export type CompletionContext =
+  | CommandNameCompletionContext
+  | CommandArgumentCompletionContext
+  | BibCompletionContext
 
 interface ParsedGroup {
   delimiter: 'required' | 'optional'
@@ -87,24 +94,6 @@ const defaultArg = (delimiter: 'required' | 'optional'): CommandArg => ({
   kind: delimiter,
   valueKind: 'free-text',
 })
-
-function positionToOffset(text: string, lineStarts: number[], pos: NeutralPosition): number {
-  const lineIndex = Math.min(Math.max(pos.line - 1, 0), lineStarts.length - 1)
-  const lineStart = lineStarts[lineIndex]!
-  const lineEnd = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1]! - 1 : text.length
-  return Math.min(Math.max(lineStart + pos.column - 1, lineStart), lineEnd)
-}
-
-function rangeFromOffsets(lineStarts: number[], start: number, end: number): NeutralRange {
-  const a = offsetToLineCol(lineStarts, start)
-  const b = offsetToLineCol(lineStarts, end)
-  return {
-    startLine: a.line,
-    startColumn: a.column,
-    endLine: b.line,
-    endColumn: b.column,
-  }
-}
 
 function blankMaskedSpans(text: string, spans: Array<[number, number]>): string {
   if (spans.length === 0) return text
@@ -411,6 +400,10 @@ function buildArgumentContext(
     group.spec.selectorArgumentIndex === undefined
       ? undefined
       : related.find((item) => item.signatureIndex === group.spec.selectorArgumentIndex)
+  const keyFamilySelector =
+    group.spec.keyFamilySelectorArgumentIndex === undefined
+      ? undefined
+      : related.find((item) => item.signatureIndex === group.spec.keyFamilySelectorArgumentIndex)
   return {
     type: 'argument',
     domain: valueKind,
@@ -431,6 +424,7 @@ function buildArgumentContext(
     ...(segment.keyValuePosition ? { keyValuePosition: segment.keyValuePosition } : {}),
     ...(segment.key ? { key: segment.key } : {}),
     ...(selector ? { selector } : {}),
+    ...(keyFamilySelector ? { keyFamilySelector } : {}),
   }
 }
 
@@ -463,6 +457,9 @@ export function analyzeCompletionContext(
   metadata?: CompletionCommandMetadataProvider,
 ): CompletionContext | null {
   try {
+    if (document.path.toLowerCase().endsWith('.bib')) {
+      return analyzeBibCompletionContext(document, position)
+    }
     const text = document.getText()
     const lineStarts = buildLineStarts(text)
     const cursor = positionToOffset(text, lineStarts, position)
@@ -470,10 +467,9 @@ export function analyzeCompletionContext(
     const spans = maskSpansFromTokens(tokens)
     if (cursorIsMasked(tokens, spans, cursor)) return null
     const masked = blankMaskedSpans(text, spans)
-    return (
-      commandNameContext(masked, tokens, cursor, lineStarts, document.path) ??
-      argumentContext(masked, tokens, cursor, lineStarts, document.path, metadata)
-    )
+    const argument = argumentContext(masked, tokens, cursor, lineStarts, document.path, metadata)
+    if (argument && argument.valueKind !== 'free-text') return argument
+    return commandNameContext(masked, tokens, cursor, lineStarts, document.path) ?? argument
   } catch {
     return null
   }

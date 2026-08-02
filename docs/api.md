@@ -154,10 +154,10 @@ For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
 | `getCommandPackage` | The source `\usepackage` a command belongs to. |
 | `registerShard` | Register an extra package-command shard with the DB. |
 | `PackageShardLoader` / `ShardStore` / `PackageShardLoaderOptions` / `PackageShard` | On-demand per-package shard fetching + pluggable cache store. |
-| `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, and selector relationships. |
+| `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, resource-selector, and project-key-family selector relationships. |
 | `HttpTexResourceCatalogProvider` / `TexResourceCatalogProvider` | Profile-bound exact class/package/bibliography/font availability. |
 | `HttpTexSemanticCatalogProvider` / `TexSemanticCatalogProvider` | Profile-bound typed options, key/value families, commands, environments, colors, provenance, and coverage. |
-| `analyzeCompletionContext` / `CompletionContext` | Parse the active command invocation at a cursor, including multiline/nested groups, list or key/value position, sibling resource selectors, and an exact replacement range. |
+| `analyzeCompletionContext` / `CompletionContext` | Parse a LaTeX command invocation or `.bib` entry at a cursor, including unfinished input, list/key-value position, selectors, BibTeX entry metadata, and an exact replacement range. |
 | `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
 | `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
 
@@ -338,7 +338,8 @@ Construct it with `createLatexLanguageService(options?)` or `new LatexLanguageSe
 `semanticTrace`, `lint`, an optional isolated `completionRegistry`, and optional
 profile-bound `resourceCatalog` and `semanticCatalog` providers. The editor-neutral result types — `SemanticToken`, `InlayHint`,
 `CodeAction`, `DocumentLink`, `FoldingRange`, `SignatureHelp`, `WorkspaceSymbol`,
-`Diagnostic`, `FileSymbols`, `SectionDef` — are exported from `wasmtex/lsp` for typing
+`Diagnostic`, `FileSymbols`, `SectionDef`, `BibCompletionContext`, `ParsedBibFile`,
+`ProjectValue`, and `ProjectKeyDefinition` — are exported from `wasmtex/lsp` for typing
 your own UI.
 
 ### `LatexLanguageService` Methods
@@ -381,6 +382,10 @@ your own UI.
 - `loadResourceCatalog(kind, cancellationToken?): Promise<TexResourceCatalogState> | null`
 - `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
 - `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
+
+`ProjectIndex.getStats()` returns `ProjectIndexStats`, including deterministic counts and
+an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
+than as a JavaScript heap profiler.
 
 ### Exact TeX Live resource completion
 
@@ -427,6 +432,14 @@ confidence, dependencies, engine constraints, and coverage. A key with value typ
 values complete directly, while color/file/command/bibliography/font values reuse
 the corresponding typed resolver. Already-used keys disappear only when the shard
 marks them non-repeatable; unknown values are never rejected.
+
+Project-local completion does not require either catalog. The active include/load graph
+contributes counters, lengths, custom/theorem environments, glossary/acronym keys, font
+families/aliases, and recoverable key families/enums. Typed file domains cover TeX,
+bibliography, graphics, listings/verbatim, data, and generic files. `.bib` documents add
+entry-type, type-ranked field, `crossref`/`xdata`, and `@string` domains. Literal prose,
+braced/quoted bibliography values, dimensions/numbers, and dynamic declarations remain
+free-form unless a host registers more metadata.
 
 The `color` domain is include-graph and package aware. Base `color`/`xcolor` names,
 option-gated `dvipsnames`/`svgnames`/`x11names` palettes, and project declarations

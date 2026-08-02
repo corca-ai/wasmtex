@@ -19,6 +19,8 @@ export type CompletionValueKind =
   | 'project-tex'
   | 'project-bib'
   | 'project-image'
+  | 'project-listing'
+  | 'project-data'
   | 'project-file'
   | 'font-family'
   | 'color'
@@ -29,6 +31,11 @@ export type CompletionValueKind =
   | 'length'
   | 'glossary-key'
   | 'acronym-key'
+  | 'key-family'
+  | 'bib-entry-type'
+  | 'bib-field'
+  | 'bib-entry-key'
+  | 'bib-string'
   | 'boolean'
   | 'enum'
   | 'number'
@@ -52,18 +59,26 @@ export interface CommandArg {
    * For example, document-class options point at the following class-name argument.
    */
   selectorArgumentIndex?: number
+  /** Signature index of an argument that selects a project-defined key family. */
+  keyFamilySelectorArgumentIndex?: number
 }
 
 const optional = (
   placeholder: string,
   valueKind: CompletionValueKind,
-  extra: Pick<CommandArg, 'keyFamily' | 'list' | 'selectorArgumentIndex'> = {},
+  extra: Pick<
+    CommandArg,
+    'keyFamily' | 'keyFamilySelectorArgumentIndex' | 'list' | 'selectorArgumentIndex'
+  > = {},
 ): CommandArg => ({ kind: 'optional', placeholder, valueKind, ...extra })
 
 const required = (
   placeholder: string,
   valueKind: CompletionValueKind,
-  extra: Pick<CommandArg, 'keyFamily' | 'list' | 'selectorArgumentIndex'> = {},
+  extra: Pick<
+    CommandArg,
+    'keyFamily' | 'keyFamilySelectorArgumentIndex' | 'list' | 'selectorArgumentIndex'
+  > = {},
 ): CommandArg => ({ kind: 'required', placeholder, valueKind, ...extra })
 
 /**
@@ -195,6 +210,9 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
   ['include', [required('file', 'project-tex')]],
   ['subfile', [required('file', 'project-tex')]],
   ['bibliography', [required('files', 'project-bib', { list: true })]],
+  ['addbibresource', [optional('options', 'key-value'), required('file', 'project-bib')]],
+  ['addglobalbib', [optional('options', 'key-value'), required('file', 'project-bib')]],
+  ['addsectionbib', [optional('options', 'key-value'), required('file', 'project-bib')]],
   ['bibliographystyle', [required('style', 'bib-style')]],
   [
     'setmainfont',
@@ -222,6 +240,35 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
     [
       optional('options', 'key-value', { keyFamily: 'graphicx/includegraphics', list: true }),
       required('image', 'project-image'),
+    ],
+  ],
+  ['includesvg', [optional('options', 'key-value'), required('image', 'project-image')]],
+  ['lstinputlisting', [optional('options', 'key-value'), required('file', 'project-listing')]],
+  [
+    'inputminted',
+    [
+      optional('options', 'key-value'),
+      required('language', 'free-text'),
+      required('file', 'project-listing'),
+    ],
+  ],
+  ['VerbatimInput', [optional('options', 'key-value'), required('file', 'project-listing')]],
+  ['verbatiminput', [required('file', 'project-listing')]],
+  [
+    'csvreader',
+    [
+      optional('options', 'key-value'),
+      required('file', 'project-data'),
+      required('assignments', 'free-text'),
+      required('command', 'free-text'),
+    ],
+  ],
+  [
+    'DTLloaddb',
+    [
+      optional('options', 'key-value'),
+      required('database', 'free-text'),
+      required('file', 'project-data'),
     ],
   ],
   [
@@ -254,13 +301,68 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
   [
     'newglossaryentry',
     [
-      required('key', 'glossary-key'),
+      required('key', 'free-text'),
       required('fields', 'key-value', {
         keyFamily: 'glossaries/newglossaryentry',
         list: true,
       }),
     ],
   ],
+  [
+    'longnewglossaryentry',
+    [
+      required('key', 'free-text'),
+      required('fields', 'key-value'),
+      required('description', 'free-text'),
+    ],
+  ],
+  [
+    'newacronym',
+    [
+      optional('options', 'key-value'),
+      required('key', 'free-text'),
+      required('abbreviation', 'free-text'),
+      required('long form', 'free-text'),
+    ],
+  ],
+  ['gls', [required('key', 'glossary-key')]],
+  ['Gls', [required('key', 'glossary-key')]],
+  ['glspl', [required('key', 'glossary-key')]],
+  ['Glspl', [required('key', 'glossary-key')]],
+  ['glsadd', [required('key', 'glossary-key')]],
+  ['acrshort', [required('key', 'acronym-key')]],
+  ['acrlong', [required('key', 'acronym-key')]],
+  ['acrfull', [required('key', 'acronym-key')]],
+  ['ac', [required('key', 'acronym-key')]],
+  ['setcounter', [required('counter', 'counter'), required('value', 'number')]],
+  ['addtocounter', [required('counter', 'counter'), required('value', 'number')]],
+  ['stepcounter', [required('counter', 'counter')]],
+  ['refstepcounter', [required('counter', 'counter')]],
+  ['value', [required('counter', 'counter')]],
+  ['counterwithin', [required('counter', 'counter'), required('within', 'counter')]],
+  ['counterwithout', [required('counter', 'counter'), required('within', 'counter')]],
+  ['setlength', [required('length', 'length'), required('value', 'dimension')]],
+  ['addtolength', [required('length', 'length'), required('value', 'dimension')]],
+  ['settowidth', [required('length', 'length'), required('text', 'free-text')]],
+  ['settoheight', [required('length', 'length'), required('text', 'free-text')]],
+  ['settodepth', [required('length', 'length'), required('text', 'free-text')]],
+  ['fontspec', [optional('options', 'key-value'), required('font', 'font-family')]],
+  ['fontfamily', [required('font', 'font-family')]],
+  [
+    'setkeys',
+    [
+      required('family', 'key-family'),
+      required('options', 'key-value', { keyFamilySelectorArgumentIndex: 0, list: true }),
+    ],
+  ],
+  [
+    'SetKeys',
+    [
+      optional('family', 'key-family'),
+      required('options', 'key-value', { keyFamilySelectorArgumentIndex: 0, list: true }),
+    ],
+  ],
+  ['pgfkeys', [required('options', 'key-value', { keyFamily: 'pgfkeys', list: true })]],
 ])
 
 /** Parse a snippet (`\name{$1}[$2]…`) into its argument signature. */

@@ -260,6 +260,20 @@ shards. Project color declarations remain local and are scoped through the activ
 include graph. Schema/year/revision mismatch is isolated rather than mixed with the
 active profile.
 
+The same neutral completion path also indexes project-local semantic values. It completes
+counters and lengths, theorem/custom environments, glossary and acronym keys, declared
+font families/aliases, and statically recoverable xkeyval/pgfkeys/LaTeX3 key families and
+enum values. Typed file arguments filter compatible TeX, `.bib`, graphics, source-listing,
+verbatim, CSV/data, or generic project files while preserving the path style already being
+typed (`/`, `./`, or `../`). `.sty` and `.cls` files participate when reached through a
+project-local package/class load edge.
+
+Inside `.bib` files, completion offers BibTeX/biblatex entry types, fields ranked for the
+current entry type, `crossref`/`xdata` targets, and bare `@string` macros. The analyzer is
+safe on unfinished entries and supplies exact replacement ranges to both Monaco and
+JSON-RPC. Arbitrary titles, author text, literal braced/quoted values, dimensions, numbers,
+and package constructs that cannot be recovered statically remain free-form.
+
 ### BibTeX Support
 The editor automatically handles `.bib` and `.bst` files.
 

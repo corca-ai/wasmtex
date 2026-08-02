@@ -145,6 +145,7 @@ describe('createCompletionProvider', () => {
 
   it('provides user-defined command completions', () => {
     index.updateFile('macros.tex', '\\newcommand{\\myop}{\\operatorname{myop}}')
+    index.updateFile('main.tex', '\\input{macros}')
     const result = complete(provider, mockModel(['\\my']), 1, 4)
     expect(result.suggestions.some((s) => s.label === '\\myop')).toBe(true)
   })

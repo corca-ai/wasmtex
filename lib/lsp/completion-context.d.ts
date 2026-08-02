@@ -1,3 +1,4 @@
+import { BibCompletionContext } from './bib-completion-context';
 import { CommandArg, CompletionValueKind } from './package-db';
 import { NeutralDocument, NeutralPosition, NeutralRange } from './protocol';
 export type CompletionDomain = 'command' | CompletionValueKind;
@@ -45,8 +46,10 @@ export interface CommandArgumentCompletionContext extends CompletionContextBase 
     relatedArguments: RelatedCompletionArgument[];
     /** Resource argument selected by this argument's metadata, when present. */
     selector?: RelatedCompletionArgument;
+    /** Project key family selected by a sibling argument, when present. */
+    keyFamilySelector?: RelatedCompletionArgument;
 }
-export type CompletionContext = CommandNameCompletionContext | CommandArgumentCompletionContext;
+export type CompletionContext = CommandNameCompletionContext | CommandArgumentCompletionContext | BibCompletionContext;
 /** Analyze a completion position using the full active document. Never throws. */
 export declare function analyzeCompletionContext(document: NeutralDocument, position: NeutralPosition, metadata?: CompletionCommandMetadataProvider): CompletionContext | null;
 export {};

@@ -5,6 +5,7 @@ import type {
   AuxData,
   BibEntry,
   BibitemDef,
+  BibStringDef,
   CitationRef,
   ColorDefinition,
   CommandDef,
@@ -13,6 +14,9 @@ import type {
   FileSymbols,
   LabelDef,
   LabelRef,
+  ParsedBibFile,
+  ProjectKeyDefinition,
+  ProjectValue,
   SourceLocation,
 } from './types'
 
@@ -21,6 +25,16 @@ export interface EngineCommandInfo {
   eqType: number // -1 = unknown (old WASM), 0+ = pdfTeX eq_type
   argCount: number // -1 = unknown/not-macro, 0-9 = argument count
   category: 'macro' | 'primitive' | 'unknown'
+}
+
+export interface ProjectIndexStats {
+  sourceFiles: number
+  bibliographyFiles: number
+  latexSymbols: number
+  bibliographyEntries: number
+  bibliographyStrings: number
+  /** Deterministic UTF-16 payload estimate for retained semantic index records. */
+  estimatedBytes: number
 }
 
 /** Suffixes that match `end<X>` but are NOT real environments */
@@ -103,10 +117,14 @@ export class ProjectIndex {
   private files = new Map<string, FileSymbols>()
   private auxData: AuxData = { labels: new Map(), citations: new Set(), includes: [] }
   private bibEntries: BibEntry[] = []
+  private bibStrings: BibStringDef[] = []
+  private bibFiles = new Map<string, ParsedBibFile>()
+  private legacyBibEntries: BibEntry[] = []
   private engineCommands = new Map<string, EngineCommandInfo>()
   private engineEnvironments = new Set<string>()
   private semanticTrace: SemanticTrace | null = null
   private activeFilesCache = new Map<string, string[]>()
+  private activeBibFilesCache = new Map<string, string[]>()
 
   // Inverted indexes (symbol name → definitions/uses) for O(result) lookups,
   // maintained incrementally so a query never rescans the whole project.
@@ -130,6 +148,7 @@ export class ProjectIndex {
     this.addToIndexes(symbols)
     this.allLabelsCache = null
     this.activeFilesCache.clear()
+    this.activeBibFilesCache.clear()
   }
 
   removeFile(filePath: string): void {
@@ -138,6 +157,7 @@ export class ProjectIndex {
     this.files.delete(filePath)
     this.allLabelsCache = null
     this.activeFilesCache.clear()
+    this.activeBibFilesCache.clear()
   }
 
   private addToIndexes(symbols: FileSymbols): void {
@@ -165,9 +185,37 @@ export class ProjectIndex {
   }
 
   updateBib(entries: BibEntry[]): void {
-    this.bibEntries = entries
+    this.bibFiles.clear()
+    this.legacyBibEntries = entries
+    this.rebuildBibIndexes()
+  }
+
+  updateBibFile(filePath: string, data: ParsedBibFile): void {
+    this.legacyBibEntries = []
+    this.bibFiles.set(filePath, data)
+    this.rebuildBibIndexes()
+  }
+
+  removeBibFile(filePath: string): void {
+    if (!this.bibFiles.delete(filePath)) return
+    this.rebuildBibIndexes()
+  }
+
+  replaceBibFiles(files: ReadonlyMap<string, ParsedBibFile>): void {
+    this.legacyBibEntries = []
+    this.bibFiles = new Map(files)
+    this.rebuildBibIndexes()
+  }
+
+  private rebuildBibIndexes(): void {
+    this.bibEntries = [
+      ...this.legacyBibEntries,
+      ...[...this.bibFiles.values()].flatMap((file) => file.entries),
+    ]
+    this.bibStrings = [...this.bibFiles.values()].flatMap((file) => file.strings)
     this.bibEntryIndex = new Map()
-    pushAll(this.bibEntryIndex, entries, (e) => e.key)
+    pushAll(this.bibEntryIndex, this.bibEntries, (e) => e.key)
+    this.activeBibFilesCache.clear()
   }
 
   updateAuxData(data: AuxData): void {
@@ -184,7 +232,8 @@ export class ProjectIndex {
     return this.files.has(filePath)
   }
 
-  getAllLabels(): LabelDef[] {
+  getAllLabels(filePath?: string): LabelDef[] {
+    if (filePath) return this.symbolsInScope(filePath).flatMap((symbols) => symbols.labels)
     if (!this.allLabelsCache) {
       this.allLabelsCache = [...this.files.values()].flatMap((s) => s.labels)
     }
@@ -237,8 +286,22 @@ export class ProjectIndex {
     const edges = new Map<string, string[]>()
     const reverse = new Map<string, Set<string>>()
     for (const [source, symbols] of this.files) {
-      const targets = symbols.includes
-        .map((include) => this.resolveInclude(source, include.path))
+      const targets = [
+        ...symbols.includes.map((include) => ({
+          target: this.resolveInclude(source, include.path),
+          location: include.location,
+        })),
+        ...symbols.packages.map((pkg) => ({
+          target: this.resolveLoadedResource(source, pkg.name, 'sty'),
+          location: pkg.location,
+        })),
+        ...symbols.classes.map((cls) => ({
+          target: this.resolveLoadedResource(source, cls.name, 'cls'),
+          location: cls.location,
+        })),
+      ]
+        .sort((a, b) => a.location.line - b.location.line || a.location.column - b.location.column)
+        .map((entry) => entry.target)
         .filter((target): target is string => target !== null)
       edges.set(source, targets)
       for (const target of targets) {
@@ -277,6 +340,20 @@ export class ProjectIndex {
           column: include.location.column,
           order,
           target: this.resolveInclude(path, include.path),
+        })),
+        ...symbols.packages.map((pkg, order) => ({
+          type: 'load' as const,
+          line: pkg.location.line,
+          column: pkg.location.column,
+          order,
+          target: this.resolveLoadedResource(path, pkg.name, 'sty'),
+        })),
+        ...symbols.classes.map((cls, order) => ({
+          type: 'load' as const,
+          line: cls.location.line,
+          column: cls.location.column,
+          order,
+          target: this.resolveLoadedResource(path, cls.name, 'cls'),
         })),
       ].sort(
         (a, b) =>
@@ -331,18 +408,23 @@ export class ProjectIndex {
     return options
   }
 
-  getCommandDefs(): CommandDef[] {
-    return [...this.files.values()].flatMap((s) => s.commands)
+  getCommandDefs(filePath?: string): CommandDef[] {
+    return this.itemsInScope(filePath, (symbols) => symbols.commands)
   }
 
-  getAllEnvironments(): string[] {
+  getAllEnvironments(filePath?: string): string[] {
     const names = new Set<string>()
-    for (const symbols of this.files.values()) {
+    for (const symbols of this.symbolsInScope(filePath)) {
+      for (const env of symbols.environmentDefs) names.add(env.name)
       for (const env of symbols.environments) {
         names.add(env.name)
       }
     }
     return [...names]
+  }
+
+  getEnvironmentDefinitions(filePath?: string): EnvironmentUse[] {
+    return this.itemsInScope(filePath, (symbols) => symbols.environmentDefs)
   }
 
   /** Names of all packages loaded via `\usepackage`/`\RequirePackage` in the project. */
@@ -355,7 +437,7 @@ export class ProjectIndex {
   }
 
   private symbolsInScope(filePath?: string): FileSymbols[] {
-    return filePath
+    return filePath && this.files.has(filePath)
       ? this.getActiveFiles(filePath).flatMap((path) => {
           const symbols = this.files.get(path)
           return symbols ? [symbols] : []
@@ -364,6 +446,30 @@ export class ProjectIndex {
   }
 
   private resolveInclude(source: string, target: string): string | null {
+    const path = this.resolveProjectPath(source, target)
+    if (!path) return null
+    for (const candidate of /\.[A-Za-z0-9]+$/.test(path) ? [path] : [path, `${path}.tex`]) {
+      if (this.files.has(candidate)) return candidate
+    }
+    return null
+  }
+
+  private resolveLoadedResource(
+    source: string,
+    target: string,
+    extension: 'cls' | 'sty',
+  ): string | null {
+    const relative = this.resolveProjectPath(source, target)
+    const root = this.resolveProjectPath('', target)
+    for (const base of [relative, root]) {
+      if (!base) continue
+      const candidate = base.endsWith(`.${extension}`) ? base : `${base}.${extension}`
+      if (this.files.has(candidate)) return candidate
+    }
+    return null
+  }
+
+  private resolveProjectPath(source: string, target: string): string | null {
     const trimmed = target.trim().replaceAll('\\\\', '/')
     if (!trimmed || /[\\#{}]/.test(trimmed)) return null
     const sourceParts = source.split('/').slice(0, -1)
@@ -376,15 +482,170 @@ export class ProjectIndex {
       if (part === '..') normalized.pop()
       else normalized.push(part)
     }
-    const path = normalized.join('/')
-    for (const candidate of /\.[A-Za-z0-9]+$/.test(path) ? [path] : [path, `${path}.tex`]) {
-      if (this.files.has(candidate)) return candidate
-    }
-    return null
+    return normalized.join('/')
   }
 
-  getBibEntries(): BibEntry[] {
-    return this.bibEntries
+  private bibliographyPathsFromTex(filePath: string): string[] {
+    const paths = new Set<string>()
+    for (const symbols of this.symbolsInScope(filePath)) {
+      for (const ref of symbols.bibliographies) {
+        for (const path of this.resolveBibliographyRef(ref.location.file, ref.path)) paths.add(path)
+      }
+    }
+    return [...paths]
+  }
+
+  private resolveBibliographyRef(source: string, target: string): string[] {
+    const path = this.resolveProjectPath(source, target)
+    if (!path) return []
+    const candidates = /\.[A-Za-z0-9]+$/.test(path) ? [path] : [path, `${path}.bib`]
+    return candidates.filter((candidate) => this.bibFiles.has(candidate))
+  }
+
+  getActiveBibFiles(filePath?: string): string[] {
+    if (!filePath || this.bibFiles.size === 0) return [...this.bibFiles.keys()]
+    const cached = this.activeBibFilesCache.get(filePath)
+    if (cached) return [...cached]
+    if (/\.(?:tex|sty|cls|ltx)$/i.test(filePath)) {
+      const selected = this.bibliographyPathsFromTex(filePath)
+      const result = selected.length > 0 ? selected : [...this.bibFiles.keys()]
+      this.activeBibFilesCache.set(filePath, result)
+      return [...result]
+    }
+    if (!filePath.toLowerCase().endsWith('.bib')) return [...this.bibFiles.keys()]
+    const selected = new Set<string>()
+    const sources = [...this.files].filter(([source, symbols]) =>
+      symbols.bibliographies.some((ref) =>
+        this.resolveBibliographyRef(source, ref.path).includes(filePath),
+      ),
+    )
+    for (const [source] of sources) {
+      const paths = this.bibliographyPathsFromTex(source)
+      for (const path of paths) selected.add(path)
+    }
+    const result = selected.size > 0 ? [...selected] : [...this.bibFiles.keys()]
+    this.activeBibFilesCache.set(filePath, result)
+    return [...result]
+  }
+
+  getBibEntries(filePath?: string): BibEntry[] {
+    if (!filePath || this.bibFiles.size === 0) return [...this.bibEntries]
+    return this.getActiveBibFiles(filePath).flatMap(
+      (path) => this.bibFiles.get(path)?.entries ?? [],
+    )
+  }
+
+  getBibStrings(filePath?: string): BibStringDef[] {
+    if (!filePath) return [...this.bibStrings]
+    return this.getActiveBibFiles(filePath).flatMap(
+      (path) => this.bibFiles.get(path)?.strings ?? [],
+    )
+  }
+
+  getProjectValues(
+    kind: 'counter' | 'length' | 'glossary' | 'acronym' | 'font-family',
+    filePath?: string,
+  ): ProjectValue[] {
+    return this.itemsInScope(filePath, (symbols) => {
+      if (kind === 'counter') return symbols.counters
+      if (kind === 'length') return symbols.lengths
+      if (kind === 'glossary') return symbols.glossaryEntries
+      if (kind === 'acronym') return symbols.acronymEntries
+      return symbols.fontFamilies
+    })
+  }
+
+  getProjectKeys(filePath?: string, families?: ReadonlySet<string>): ProjectKeyDefinition[] {
+    return this.itemsInScope(filePath, (symbols) => symbols.keys).filter(
+      (key) => !families || families.has(key.family),
+    )
+  }
+
+  private itemsInScope<T extends { location: SourceLocation }>(
+    filePath: string | undefined,
+    select: (symbols: FileSymbols) => T[],
+  ): T[] {
+    if (!filePath || !this.files.has(filePath)) {
+      return [...this.files.values()].flatMap(select)
+    }
+    const active = new Set(this.getActiveFiles(filePath))
+    const { reverse } = this.includeGraph()
+    const roots = [...active]
+      .filter((path) => ![...(reverse.get(path) ?? [])].some((parent) => active.has(parent)))
+      .sort()
+    const result: T[] = []
+    const visit = (path: string, stack: Set<string>) => {
+      if (stack.has(path)) return
+      const symbols = this.files.get(path)
+      if (!symbols) return
+      const nested = new Set(stack).add(path)
+      const items = select(symbols)
+      const events = [
+        ...items.map((item, order) => ({
+          type: 'item' as const,
+          location: item.location,
+          order,
+          item,
+        })),
+        ...this.loadEvents(path, symbols),
+      ].sort(
+        (a, b) =>
+          a.location.line - b.location.line ||
+          a.location.column - b.location.column ||
+          a.type.localeCompare(b.type) ||
+          a.order - b.order,
+      )
+      for (const event of events) {
+        if (event.type === 'item') result.push(event.item)
+        else if (event.target && active.has(event.target)) visit(event.target, nested)
+      }
+    }
+    for (const root of roots.length > 0 ? roots : [filePath]) visit(root, new Set())
+    return result
+  }
+
+  private loadEvents(path: string, symbols: FileSymbols) {
+    return [
+      ...symbols.includes.map((include, order) => ({
+        type: 'load' as const,
+        location: include.location,
+        order,
+        target: this.resolveInclude(path, include.path),
+      })),
+      ...symbols.packages.map((pkg, order) => ({
+        type: 'load' as const,
+        location: pkg.location,
+        order,
+        target: this.resolveLoadedResource(path, pkg.name, 'sty'),
+      })),
+      ...symbols.classes.map((cls, order) => ({
+        type: 'load' as const,
+        location: cls.location,
+        order,
+        target: this.resolveLoadedResource(path, cls.name, 'cls'),
+      })),
+    ]
+  }
+
+  getStats(): ProjectIndexStats {
+    let latexSymbols = 0
+    let estimatedCodeUnits = 0
+    for (const [path, symbols] of this.files) {
+      estimatedCodeUnits += path.length + JSON.stringify(symbols).length
+      for (const values of Object.values(symbols)) latexSymbols += values.length
+    }
+    for (const [path, data] of this.bibFiles) {
+      estimatedCodeUnits += path.length + JSON.stringify(data).length
+    }
+    estimatedCodeUnits += JSON.stringify(this.legacyBibEntries).length
+    return {
+      sourceFiles: this.files.size,
+      bibliographyFiles: this.bibFiles.size,
+      latexSymbols,
+      bibliographyEntries: this.bibEntries.length,
+      bibliographyStrings: this.bibStrings.length,
+      estimatedBytes: estimatedCodeUnits * 2,
+    }
   }
 
   getAuxLabels(): Map<string, string> {

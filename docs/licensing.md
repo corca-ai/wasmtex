@@ -315,6 +315,12 @@ document only as review evidence. The release gate verifies that the override fi
 records MIT and that the required high-value scopes are present. CWL or another
 third-party completion dataset must not be blended into this file.
 
+The checked-in BibTeX/biblatex entry-type and field-ranking vocabulary, typed command
+signatures, project-file extension groups, and common kernel counter/length names are
+original WasmTex metadata. They do not embed package documentation or a third-party
+completion corpus. Project declarations and `@string` values are parsed at runtime from
+host-owned files and are not distributed by WasmTex.
+
 This scope decision does not remove TeX Live source used to compile the engines
 from the complete corresponding source. It also does not remove generated
 `.fmt` inputs or ICU 68.2 data from the exact engine-release inventory.

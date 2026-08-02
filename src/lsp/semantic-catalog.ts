@@ -5,7 +5,7 @@ import {
   validCatalogIdentity,
 } from './catalog-transport'
 import type { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry'
-import type { CommandArg } from './package-db'
+import { type CommandArg, getCommandSignature } from './package-db'
 
 export const TEX_SEMANTIC_CATALOG_SCHEMA_VERSION = 1
 
@@ -348,5 +348,11 @@ export function registerTexSemanticShard(
   registry: CompletionResolverRegistry,
   shard: TexSemanticShard,
 ): void {
-  for (const command of shard.commands) registry.registerCommand(command.name, command.args)
+  for (const command of shard.commands) {
+    const builtin = getCommandSignature(command.name)
+    registry.registerCommand(
+      command.name,
+      builtin?.some((argument) => argument.valueKind) ? builtin : command.args,
+    )
+  }
 }

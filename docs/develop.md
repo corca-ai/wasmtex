@@ -73,6 +73,11 @@ We use **Vitest**. Tests are located in `*.test.ts` files alongside the source c
 npm run test
 ```
 
+`src/lsp/__tests__/completion-performance.test.ts` enforces the semantic-index budget on
+a 600-file active graph: indexing under 3,000 ms, warmed completion under 150 ms, a single
+file update under 100 ms, and retained semantic metadata under 8 MiB. These are CI guardrails,
+not end-user timing claims; change a threshold only with benchmark evidence in the PR.
+
 ### E2E Tests
 We use **Playwright**. These verify the full compilation loop, SyncTeX, and BibTeX integration.
 ```bash

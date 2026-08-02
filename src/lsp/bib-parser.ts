@@ -1,6 +1,6 @@
 import type { ProjectIndex } from './project-index'
 import { buildLineStarts, offsetToLineCol } from './source-position'
-import type { BibEntry } from './types'
+import type { BibEntry, BibStringDef, ParsedBibFile } from './types'
 
 /** Minimal file source: enough of a VirtualFS to find and read `.bib` files. */
 export interface BibFileReader {
@@ -11,13 +11,13 @@ export interface BibFileReader {
 /** Re-parse every `.bib` file in `fs` and load the entries into `index`. Shared by
  *  the headless core and the standalone language service so the wiring lives once. */
 export function rebuildBibIndex(fs: BibFileReader, index: ProjectIndex): void {
-  const entries: BibEntry[] = []
+  const files = new Map<string, ParsedBibFile>()
   for (const path of fs.listFiles()) {
     if (!path.endsWith('.bib')) continue
     const content = fs.readFile(path)
-    if (typeof content === 'string') entries.push(...parseBibFile(content, path))
+    if (typeof content === 'string') files.set(path, parseBibFileData(content, path))
   }
-  index.updateBib(entries)
+  index.replaceBibFiles(files)
 }
 
 /**
@@ -34,6 +34,12 @@ interface RawEntry {
   key: string
   keyOffset: number
   fields: Record<string, string>
+}
+
+interface RawString {
+  name: string
+  value: string
+  nameOffset: number
 }
 
 const isLetter = (ch: string): boolean => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
@@ -53,6 +59,7 @@ const isNameChar = (ch: string): boolean =>
 class BibScanner {
   private pos = 0
   private strings = new Map<string, string>()
+  private stringDefinitions: RawString[] = []
   private entries: RawEntry[] = []
 
   constructor(private src: string) {}
@@ -63,6 +70,10 @@ class BibScanner {
       this.readEntryOrCommand()
     }
     return this.entries
+  }
+
+  getStrings(): RawString[] {
+    return this.stringDefinitions
   }
 
   /** Advance to the next `@`; returns false at end of input. */
@@ -97,11 +108,14 @@ class BibScanner {
 
   private readString(): void {
     this.skipWs()
+    const nameOffset = this.pos
     const name = this.readName().toLowerCase()
     this.skipWs()
     if (this.src[this.pos] === '=') {
       this.pos++
-      this.strings.set(name, this.readValue())
+      const value = this.readValue()
+      this.strings.set(name, value)
+      if (name) this.stringDefinitions.push({ name, value, nameOffset })
     }
     this.skipBalanced()
   }
@@ -226,12 +240,13 @@ function cleanValue(value: string): string {
   return value.replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
 }
 
-export function parseBibFile(content: string, filePath: string): BibEntry[] {
-  const raw = new BibScanner(content).parse()
+export function parseBibFileData(content: string, filePath: string): ParsedBibFile {
+  const scanner = new BibScanner(content)
+  const raw = scanner.parse()
   resolveInheritance(raw)
   const lineStarts = buildLineStarts(content)
 
-  return raw
+  const entries = raw
     .filter((e) => e.type !== 'string' && e.type !== 'preamble' && e.type !== 'comment')
     .map((e) => {
       const { line, column } = offsetToLineCol(lineStarts, e.keyOffset)
@@ -250,6 +265,19 @@ export function parseBibFile(content: string, filePath: string): BibEntry[] {
       if (venue) entry.journal = venue
       return entry
     })
+  const strings: BibStringDef[] = scanner.getStrings().map((definition) => {
+    const { line, column } = offsetToLineCol(lineStarts, definition.nameOffset)
+    return {
+      name: definition.name,
+      value: cleanValue(definition.value),
+      location: { file: filePath, line, column },
+    }
+  })
+  return { entries, strings }
+}
+
+export function parseBibFile(content: string, filePath: string): BibEntry[] {
+  return parseBibFileData(content, filePath).entries
 }
 
 /** Render a formatted reference preview (author, year, title, venue) for hover. */

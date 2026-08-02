@@ -129,7 +129,14 @@ Language features are backed by a small, error-tolerant LaTeX parser:
   generate are indexed at their call sites.
 
 ### Project Index
-`ProjectIndex` maintains a global state of symbols (labels, citations, commands) across all files in the `VirtualFS`. It is updated on every keystroke (debounced). Updates are **incremental** — only the edited file is re-parsed — and per-name lookups (`findLabelDef`, `getAllLabelRefs`, `findAllOccurrences`, …) are backed by **inverted indexes**, so a query is O(result) rather than a full-project scan.
+`ProjectIndex` maintains symbols across all host-owned files in the `VirtualFS`. Besides
+labels, citations, and commands, it records active classes/packages, counters, lengths,
+custom/theorem environments, glossary/acronym keys, font declarations, project key
+families, colors, and bibliography resources. `.tex`, `.sty`, and `.cls` edits re-parse
+only the edited file; `.bib` entries and strings are likewise stored and replaced per
+file. The cached active graph follows `input`/`include`/`subfile` plus project-local
+class/package load edges. Queries for completion use that graph, while per-name navigation
+lookups remain backed by inverted indexes.
 
 ### Rename (F2)
 Rename functionality uses `ProjectIndex.findAllOccurrences()` to find symbols in both `.tex` and `.bib` files. It handles:
@@ -151,12 +158,17 @@ only changed source bytes, while `getDiagnostics()` combines those cached
 results with the current project-index diagnostics.
 
 ### BibTeX / `.bib` parsing
-`src/lsp/bib-parser.ts` is a robust BibTeX/biblatex parser: all entry types, brace- and quote-delimited values with nested braces, multi-line values, `#` string concatenation, `@string` macro expansion, `@preamble`/`@comment`, and `crossref`/`xdata` field inheritance. Parsed entries expose `title`, `author`, `year`, `journal` (venue), and a full `fields` map. `formatReference()` renders the citation hover preview; the `unused-bib-entry` diagnostic (for any entry never cited) is emitted by `computeDiagnostics()` in `src/lsp/diagnostic-provider.ts`.
+`src/lsp/bib-parser.ts` is a robust BibTeX/biblatex parser: all entry types, brace- and quote-delimited values with nested braces, multi-line values, `#` string concatenation, `@string` macro expansion, `@preamble`/`@comment`, and `crossref`/`xdata` field inheritance. Parsed entries expose `title`, `author`, `year`, `journal` (venue), and a full `fields` map. `bib-completion-context.ts` separately performs error-tolerant cursor analysis, so incomplete databases get entry-type, type-ranked field, `crossref`/`xdata` target, and bare `@string` macro completion with exact edit ranges. Bibliography declarations select the active `.bib` component; an unreferenced database falls back to the host's full project set. `formatReference()` renders the citation hover preview; the `unused-bib-entry` diagnostic (for any entry never cited) is emitted by `computeDiagnostics()` in `src/lsp/diagnostic-provider.ts`.
 
 ### Package-aware command intelligence
 `src/lsp/completion-context.ts` parses the complete active command invocation at the cursor instead of matching one line with a command-specific regular expression. It tolerates unfinished input, masks comments and verbatim regions through the shared tokenizer, understands multiline/nested required and optional groups, comma lists, and key/value positions, and returns an exact edit range plus sibling resource selectors. `src/lsp/completion-registry.ts` dispatches that context to typed, host-neutral value-domain resolvers; a service owns an isolated registry and adapters forward cancellation. Monaco and JSON-RPC therefore share the same analysis and candidates.
 
-`src/lsp/package-db.ts` derives argument signatures (required vs optional, with placeholders) from the bundled command snippets and reports each command's source package. Structural commands and package shards may additionally type arguments as class/package resources, labels, citations, files, colors, key/value families, and other semantic domains. Completion is **package-aware**: commands from packages loaded via `\usepackage` (and the LaTeX kernel) rank first, while commands from packages not loaded are still offered but ranked lower and annotated with the `\usepackage{X}` they need. Hover shows the argument signature plus the source package; `getCommandSignature()` feeds signature help and completion context analysis.
+`src/lsp/package-db.ts` derives argument signatures (required vs optional, with placeholders) from the bundled command snippets and reports each command's source package. Structural commands and package shards may additionally type arguments as class/package resources, labels, citations, compatible project files, colors, counters, lengths, glossary/acronym keys, font families, key/value families, and other semantic domains. File resolvers retain `/`-, `./`-, or `../`-style input and filter TeX, bibliography, graphics, listing/verbatim, and data assets by the typed argument. Project key declarations recover enum values from common xkeyval, pgfkeys, and LaTeX3 forms. Completion is **package-aware**: commands from packages loaded via `\usepackage` (and the LaTeX kernel) rank first, while commands from packages not loaded are still offered but ranked lower and annotated with the `\usepackage{X}` they need. Hover shows the argument signature plus the source package; `getCommandSignature()` feeds signature help and completion context analysis.
+
+Arguments left as `free-text`, and dynamic TeX constructs that static parsing cannot
+recover, intentionally receive no guessed values. Hosts can extend these positions with
+an isolated `CompletionResolverRegistry`; compile-observed runtime semantics are a
+separate evidence source rather than an excuse to treat arbitrary text as an enum.
 
 ### Exact TeX Live resource catalogs
 
