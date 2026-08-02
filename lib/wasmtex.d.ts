@@ -17,6 +17,7 @@ export declare class WasmTex {
     private editor;
     private projectIndex;
     private lspDisposables;
+    private completionRegistry;
     private models;
     private modelDisposables;
     private currentFile;
@@ -103,6 +104,7 @@ export declare class WasmTex {
     private initEditorState;
     private initBinaryPreview;
     private initEditorInteraction;
+    private updateProjectIndex;
     private initRuntimeServices;
     init(): Promise<void>;
     /** Load a complete project state. */

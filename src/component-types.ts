@@ -18,6 +18,8 @@ export interface WasmTexOptions {
   /** Exact completion catalog for the selected TeX Live compile profile.
    *  Custom `texliveUrl` hosts should inject their matching provider. */
   resourceCatalog?: import('./lsp/resource-catalog').TexResourceCatalogProvider
+  /** Versioned class/package option and key metadata for the selected compile profile. */
+  semanticCatalog?: import('./lsp/semantic-catalog').TexSemanticCatalogProvider
   /** Main TeX file name. Defaults to 'main.tex'. */
   mainFile?: string
   /** Initial project files. Keys are file paths, values are content. */

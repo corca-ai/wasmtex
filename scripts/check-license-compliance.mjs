@@ -83,12 +83,14 @@ for (const path of [
   'scripts/audit-texlive-provenance.mjs',
   'scripts/build-corresponding-source.mjs',
   'scripts/check-corresponding-source.mjs',
+  'scripts/check-tex-semantic-catalog.mjs',
   'scripts/check-texlive-catalog.mjs',
   'scripts/check-texlive-provenance.mjs',
   'scripts/corresponding-source-2025.json',
   'scripts/gen-engine-build-receipt.mjs',
   'scripts/gen-link-inventory.mjs',
   'scripts/gen-engine-sbom.mjs',
+  'scripts/gen-tex-semantic-catalog.mjs',
   'scripts/check-engine-license-inventory.mjs',
   'scripts/check-release-notices.mjs',
   'scripts/engine-components-2025.json',
@@ -100,8 +102,13 @@ for (const path of [
   'scripts/lib/link-inventory.mjs',
   'scripts/lib/corresponding-source.mjs',
   'scripts/lib/release-assets.mjs',
+  'scripts/lib/tex-semantic-catalog.mjs',
+  'scripts/lib/tex-semantic-extractor.mjs',
+  'scripts/lib/tex-semantic-probe.mjs',
   'scripts/lib/texlive-catalog.mjs',
   'scripts/lib/texlive-provenance.mjs',
+  'scripts/run-tex-semantic-probes.mjs',
+  'scripts/tex-semantic-overrides-2025.json',
   'scripts/texlive-mirror-2025.json',
   'scripts/texlive-mirror-overrides-2025.json',
   'wasm-build/texlive-source.ref',
@@ -114,9 +121,39 @@ const manifestRelativePath = `public/wasmtex/${version}/LICENSE-MANIFEST.json`
 const manifest = readJson(manifestRelativePath)
 const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
 const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
+const semanticOverrides = readJson(`scripts/tex-semantic-overrides-${version}.json`)
 const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
 const linkInventory = readJson('docs/license-evidence/link-inventory-9f7c7d4.json')
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
+
+if (semanticOverrides) {
+  if (semanticOverrides.schemaVersion !== 1) fail('semantic overrides schemaVersion must be 1')
+  if (semanticOverrides.texliveYear !== version) fail('semantic overrides TeX Live year mismatch')
+  if (semanticOverrides.license !== 'MIT') fail('semantic overrides must record their MIT source license')
+  const scopes = new Set(Object.keys(semanticOverrides.scopes ?? {}))
+  for (const requiredScope of [
+    'class/book',
+    'class/beamer',
+    'package/amsmath',
+    'package/graphicx',
+    'package/xcolor',
+    'package/hyperref',
+    'package/geometry',
+    'package/babel',
+    'package/polyglossia',
+    'package/fontspec',
+    'package/biblatex',
+    'package/tikz',
+    'package/pgfplots',
+    'package/siunitx',
+    'package/listings',
+    'package/minted',
+    'package/cleveref',
+    'package/glossaries',
+  ]) {
+    if (!scopes.has(requiredScope)) fail(`semantic overrides omit verified scope: ${requiredScope}`)
+  }
+}
 
 if (sourceConfig) {
   try {
@@ -497,6 +534,8 @@ if (existsSync(mirrorSync)) {
     'check-texlive-provenance.mjs',
     'gen-texlive-catalog.mjs',
     'check-texlive-catalog.mjs',
+    'gen-tex-semantic-catalog.mjs',
+    'check-tex-semantic-catalog.mjs',
     'TEXMF_ARCHIVE',
     'TEXLIVE_METADATA_ARCHIVE',
     'npm run check:licenses -- --release',

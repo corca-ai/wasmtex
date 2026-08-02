@@ -76,6 +76,7 @@ describe('analyzeCompletionContext', () => {
       keyValuePosition: 'value',
       key: 'bar',
       prefix: 'tr',
+      usedKeys: ['foo'],
       selector: {
         signatureIndex: 1,
         valueKind: 'tex-package',
@@ -145,6 +146,7 @@ describe('analyzeCompletionContext', () => {
       valueKind: 'key-value',
       keyValuePosition: 'value',
       key: 'bar',
+      usedKeys: ['foo'],
     })
   })
 

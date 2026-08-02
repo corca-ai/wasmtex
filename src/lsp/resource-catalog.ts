@@ -1,3 +1,9 @@
+import {
+  CatalogIdentityError,
+  readCatalogText,
+  sameCatalogIdentity,
+  validCatalogIdentity,
+} from './catalog-transport'
 import type { CompletionCancellationToken } from './completion-registry'
 
 export const TEX_RESOURCE_CATALOG_SCHEMA_VERSION = 1
@@ -79,24 +85,12 @@ export interface HttpTexResourceCatalogProviderOptions {
   store?: TexResourceCatalogStore
 }
 
-class CatalogIdentityError extends Error {}
-
 function validIdentity(value: unknown): value is TexResourceCatalogIdentity {
-  if (!value || typeof value !== 'object') return false
-  const identity = value as Partial<TexResourceCatalogIdentity>
-  return (
-    identity.schemaVersion === TEX_RESOURCE_CATALOG_SCHEMA_VERSION &&
-    /^\d{4}$/.test(identity.texliveYear ?? '') &&
-    /^\d{4}-[a-f0-9]{16}$/.test(identity.mirrorRevision ?? '')
-  )
+  return validCatalogIdentity(value, TEX_RESOURCE_CATALOG_SCHEMA_VERSION)
 }
 
 function sameIdentity(a: TexResourceCatalogIdentity, b: TexResourceCatalogIdentity): boolean {
-  return (
-    a.schemaVersion === b.schemaVersion &&
-    a.texliveYear === b.texliveYear &&
-    a.mirrorRevision === b.mirrorRevision
-  )
+  return sameCatalogIdentity(a, b)
 }
 
 function asIndex(value: unknown, expected: TexResourceCatalogIdentity): CatalogIndex {
@@ -153,12 +147,6 @@ function asShard(
     }
   }
   return value as TexResourceCatalogShard
-}
-
-async function sha256(text: string): Promise<string> {
-  const bytes = new TextEncoder().encode(text)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 export class HttpTexResourceCatalogProvider implements TexResourceCatalogProvider {
@@ -237,17 +225,16 @@ export class HttpTexResourceCatalogProvider implements TexResourceCatalogProvide
   }
 
   private async read(path: string, expectedSha256?: string): Promise<string> {
-    const key = `texcatalog:${this.identity.schemaVersion}:${this.identity.texliveYear}:${this.identity.mirrorRevision}:${path}`
-    const cached = await this.store?.get(key).catch(() => null)
-    if (cached && (!expectedSha256 || (await sha256(cached)) === expectedSha256)) return cached
-    const response = await this.fetchImpl(`${this.baseUrl}/${path}`)
-    if (!response.ok) throw new Error(`catalog fetch failed (${response.status}) for ${path}`)
-    const text = await response.text()
-    if (expectedSha256 && (await sha256(text)) !== expectedSha256) {
-      throw new Error(`${path} failed SHA-256 verification`)
-    }
-    await this.store?.set(key, text).catch(() => {})
-    return text
+    return readCatalogText({
+      baseUrl: this.baseUrl,
+      cacheNamespace: 'texcatalog',
+      identity: this.identity,
+      path,
+      fetchImpl: this.fetchImpl,
+      ...(this.store ? { store: this.store } : {}),
+      ...(expectedSha256 ? { expectedSha256 } : {}),
+      errorLabel: 'catalog',
+    })
   }
 }
 

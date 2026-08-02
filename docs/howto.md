@@ -222,6 +222,7 @@ using the built-in editor/viewer.
 import {
   createLatexLanguageService,
   HttpTexResourceCatalogProvider,
+  HttpTexSemanticCatalogProvider,
 } from 'wasmtex/lsp'
 import { ensureLanguagesRegistered, registerLatexMonacoProviders } from 'wasmtex/lsp/monaco'
 
@@ -230,7 +231,12 @@ const resourceCatalog = new HttpTexResourceCatalogProvider({
   identity: compileProfile.completionCatalog,
   store: catalogStore, // optional host-owned offline cache
 })
-const lsp = createLatexLanguageService({ files, resourceCatalog })
+const semanticCatalog = new HttpTexSemanticCatalogProvider({
+  baseUrl: compileProfile.texliveUrl,
+  identity: compileProfile.completionCatalog,
+  store: semanticStore,
+})
+const lsp = createLatexLanguageService({ files, resourceCatalog, semanticCatalog })
 
 ensureLanguagesRegistered()
 const disposables = registerLatexMonacoProviders(lsp, {
@@ -247,6 +253,9 @@ engine and TeX Live mirror. If a custom mirror has no matching catalog, omit the
 provider: project-local resources still complete, but WasmTex deliberately does
 not guess which mirror classes or packages exist. The first request for a lazy
 shard returns `isIncomplete`; Monaco and JSON-RPC preserve that signal.
+Use the same identity for the semantic provider. It supplies class/package load
+options, key families, typed values, and package command/environment signatures;
+schema/year/revision mismatch is isolated rather than mixed with the active profile.
 
 ### BibTeX Support
 The editor automatically handles `.bib` and `.bst` files.

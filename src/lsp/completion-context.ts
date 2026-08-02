@@ -55,6 +55,8 @@ export interface CommandArgumentCompletionContext extends CompletionContextBase 
   keyFamily?: string
   keyValuePosition?: 'key' | 'value'
   key?: string
+  /** Keys used by sibling list items, excluding the item currently being edited. */
+  usedKeys: string[]
   /** Semantic sibling arguments, including resource selectors after the cursor. */
   relatedArguments: RelatedCompletionArgument[]
   /** Resource argument selected by this argument's metadata, when present. */
@@ -378,6 +380,22 @@ function segmentAtCursor(text: string, group: ParsedGroup, cursor: number): Segm
   return info
 }
 
+function usedKeys(text: string, group: ParsedGroup, currentListIndex: number): string[] {
+  if (group.spec.valueKind !== 'key-value') return []
+  const separators = topLevelSeparators(text, group.contentStart, group.contentEnd, ',')
+  const keys = new Set<string>()
+  let start = group.contentStart
+  for (const [index, end] of [...separators, group.contentEnd].entries()) {
+    if (index !== currentListIndex) {
+      const equals = topLevelSeparators(text, start, end, '=')[0] ?? end
+      const key = text.slice(trimStart(text, start, equals), trimEnd(text, start, equals))
+      if (key) keys.add(key)
+    }
+    start = end + 1
+  }
+  return [...keys].sort()
+}
+
 function buildArgumentContext(
   text: string,
   cursor: number,
@@ -404,6 +422,7 @@ function buildArgumentContext(
     valueKind,
     list: group.spec.list ?? false,
     listIndex: segment.listIndex,
+    usedKeys: usedKeys(text, group, segment.listIndex),
     prefix: segment.prefix,
     replacementRange: rangeFromOffsets(lineStarts, segment.start, segment.end),
     relatedArguments: related,

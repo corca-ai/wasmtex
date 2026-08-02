@@ -39,6 +39,8 @@ export interface CommandArgumentCompletionContext extends CompletionContextBase 
     keyFamily?: string;
     keyValuePosition?: 'key' | 'value';
     key?: string;
+    /** Keys used by sibling list items, excluding the item currently being edited. */
+    usedKeys: string[];
     /** Semantic sibling arguments, including resource selectors after the cursor. */
     relatedArguments: RelatedCompletionArgument[];
     /** Resource argument selected by this argument's metadata, when present. */

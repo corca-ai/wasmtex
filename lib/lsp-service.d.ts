@@ -7,6 +7,7 @@ import { LintConfig, lintSource } from './lsp/linter';
 import { ProjectIndex } from './lsp/project-index';
 import { NeutralCompletionItem, NeutralCompletionList, NeutralHover, NeutralLocation } from './lsp/protocol';
 import { TexResourceCatalogProvider, TexResourceCatalogState, TexResourceKind } from './lsp/resource-catalog';
+import { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog';
 import { SemanticTrace } from './lsp/trace-parser';
 import { FileSymbols, SectionDef } from './lsp/types';
 export { lintSource, type LintConfig };
@@ -15,11 +16,12 @@ export { type CompletionCancellationToken, type CompletionResolver, type Complet
 export type { CodeAction, DocumentLink, FoldingRange, InlayHint, LFRange, SemanticToken, SignatureHelp, WorkspaceSymbol, } from './lsp/language-features';
 export type { LintRuleConfig, LintRuleId } from './lsp/linter';
 export { DEFAULT_LINT_CONFIG } from './lsp/linter';
-export { createDefaultCompletionRegistry } from './lsp/neutral-providers';
+export { createDefaultCompletionRegistry, preloadSemanticCatalog } from './lsp/neutral-providers';
 export { type CommandArg, type CompletionValueKind, formatSignature, getCommandPackage, getCommandSignature, getEnvironmentSignature, parseSignature, registerShard, } from './lsp/package-db';
 export { type PackageShard, PackageShardLoader, type PackageShardLoaderOptions, type ShardStore, } from './lsp/package-shard-loader';
 export type { CompletionKind, NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralHover, NeutralLocation, NeutralPosition, NeutralRange, } from './lsp/protocol';
 export { HttpTexResourceCatalogProvider, type HttpTexResourceCatalogProviderOptions, InMemoryTexResourceCatalogProvider, TEX_RESOURCE_CATALOG_SCHEMA_VERSION, type TexResourceCatalogIdentity, type TexResourceCatalogProvider, type TexResourceCatalogShard, type TexResourceCatalogState, type TexResourceCatalogStore, type TexResourceKind, type TexResourceRecord, } from './lsp/resource-catalog';
+export { HttpTexSemanticCatalogProvider, type HttpTexSemanticCatalogProviderOptions, InMemoryTexSemanticCatalogProvider, registerTexSemanticShard, TEX_SEMANTIC_CATALOG_SCHEMA_VERSION, type TexSemanticCatalogIdentity, type TexSemanticCatalogProvider, type TexSemanticCatalogState, type TexSemanticCatalogStore, type TexSemanticCommand, type TexSemanticConfidence, type TexSemanticCoverage, type TexSemanticEvidence, type TexSemanticKey, type TexSemanticKeyFamily, type TexSemanticProvenance, type TexSemanticScope, type TexSemanticScopeKind, type TexSemanticShard, type TexSemanticValue, type TexSemanticValueType, } from './lsp/semantic-catalog';
 export interface LatexLanguageServiceOptions {
     files?: Record<string, string | Uint8Array>;
     aux?: string;
@@ -29,6 +31,8 @@ export interface LatexLanguageServiceOptions {
     completionRegistry?: CompletionResolverRegistry;
     /** Exact, profile-bound TeX Live resource catalog. No catalog means no core network access. */
     resourceCatalog?: TexResourceCatalogProvider;
+    /** Typed class/package semantic shards bound to the same exact compile profile. */
+    semanticCatalog?: TexSemanticCatalogProvider;
     /** Static linter (ChkTeX-style). `false` disables it; an object overrides
      *  per-rule enabled/severity. Defaults to on with the default rule set. */
     lint?: boolean | Partial<LintConfig>;
@@ -52,6 +56,7 @@ export declare class LatexLanguageService {
     private linter;
     private completionRegistry;
     private resourceCatalog;
+    private semanticCatalog;
     constructor(options?: LatexLanguageServiceOptions);
     loadProject(files: Record<string, string | Uint8Array>): void;
     updateFile(path: string, content: string | Uint8Array): void;
@@ -86,6 +91,8 @@ export declare class LatexLanguageService {
     getCompletionRegistry(): CompletionResolverRegistry;
     getResourceCatalogState(kind: TexResourceKind): TexResourceCatalogState | null;
     loadResourceCatalog(kind: TexResourceKind, cancellationToken?: CompletionCancellationToken): Promise<TexResourceCatalogState> | null;
+    getSemanticCatalogState(scopeId: string): TexSemanticCatalogState | null;
+    loadSemanticCatalog(scopeId: string, cancellationToken?: CompletionCancellationToken): Promise<TexSemanticCatalogState> | null;
     private updateBibIndex;
 }
 export declare function createLatexLanguageService(options?: LatexLanguageServiceOptions): LatexLanguageService;

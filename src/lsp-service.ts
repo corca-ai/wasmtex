@@ -29,6 +29,7 @@ import {
 import { type LintConfig, lintSource } from './lsp/linter'
 import {
   createDefaultCompletionRegistry,
+  preloadSemanticCatalog,
   provideCompletionResult,
   provideDefinition,
   provideHover,
@@ -47,6 +48,7 @@ import type {
   TexResourceCatalogState,
   TexResourceKind,
 } from './lsp/resource-catalog'
+import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
 
@@ -81,7 +83,7 @@ export type {
 } from './lsp/language-features'
 export type { LintRuleConfig, LintRuleId } from './lsp/linter'
 export { DEFAULT_LINT_CONFIG } from './lsp/linter'
-export { createDefaultCompletionRegistry } from './lsp/neutral-providers'
+export { createDefaultCompletionRegistry, preloadSemanticCatalog } from './lsp/neutral-providers'
 // Package-aware command intelligence.
 export {
   type CommandArg,
@@ -122,6 +124,29 @@ export {
   type TexResourceKind,
   type TexResourceRecord,
 } from './lsp/resource-catalog'
+export {
+  HttpTexSemanticCatalogProvider,
+  type HttpTexSemanticCatalogProviderOptions,
+  InMemoryTexSemanticCatalogProvider,
+  registerTexSemanticShard,
+  TEX_SEMANTIC_CATALOG_SCHEMA_VERSION,
+  type TexSemanticCatalogIdentity,
+  type TexSemanticCatalogProvider,
+  type TexSemanticCatalogState,
+  type TexSemanticCatalogStore,
+  type TexSemanticCommand,
+  type TexSemanticConfidence,
+  type TexSemanticCoverage,
+  type TexSemanticEvidence,
+  type TexSemanticKey,
+  type TexSemanticKeyFamily,
+  type TexSemanticProvenance,
+  type TexSemanticScope,
+  type TexSemanticScopeKind,
+  type TexSemanticShard,
+  type TexSemanticValue,
+  type TexSemanticValueType,
+} from './lsp/semantic-catalog'
 
 export interface LatexLanguageServiceOptions {
   files?: Record<string, string | Uint8Array>
@@ -132,6 +157,8 @@ export interface LatexLanguageServiceOptions {
   completionRegistry?: CompletionResolverRegistry
   /** Exact, profile-bound TeX Live resource catalog. No catalog means no core network access. */
   resourceCatalog?: TexResourceCatalogProvider
+  /** Typed class/package semantic shards bound to the same exact compile profile. */
+  semanticCatalog?: TexSemanticCatalogProvider
   /** Static linter (ChkTeX-style). `false` disables it; an object overrides
    *  per-rule enabled/severity. Defaults to on with the default rule set. */
   lint?: boolean | Partial<LintConfig>
@@ -157,16 +184,19 @@ export class LatexLanguageService {
   private linter: IncrementalLinter
   private completionRegistry: CompletionResolverRegistry
   private resourceCatalog: TexResourceCatalogProvider | undefined
+  private semanticCatalog: TexSemanticCatalogProvider | undefined
 
   constructor(options: LatexLanguageServiceOptions = {}) {
     this.lint = options.lint ?? true
     this.linter = new IncrementalLinter(this.lint)
     this.resourceCatalog = options.resourceCatalog
+    this.semanticCatalog = options.semanticCatalog
     this.completionRegistry =
       options.completionRegistry ??
-      createDefaultCompletionRegistry(
-        options.resourceCatalog ? { resourceCatalog: options.resourceCatalog } : {},
-      )
+      createDefaultCompletionRegistry({
+        ...(options.resourceCatalog ? { resourceCatalog: options.resourceCatalog } : {}),
+        ...(options.semanticCatalog ? { semanticCatalog: options.semanticCatalog } : {}),
+      })
     this.loadProject(options.files ?? {})
     if (options.aux) this.updateAux(options.aux)
     if (options.engineCommands) this.updateEngineCommands(options.engineCommands)
@@ -193,7 +223,10 @@ export class LatexLanguageService {
       if (path.endsWith('.bib')) this.updateBibIndex()
       return
     }
-    if (path.endsWith('.tex')) this.index.updateFile(path, content)
+    if (path.endsWith('.tex')) {
+      this.index.updateFile(path, content)
+      preloadSemanticCatalog(this.completionRegistry, this.index)
+    }
     if (path.endsWith('.bib')) this.updateBibIndex()
   }
 
@@ -363,6 +396,17 @@ export class LatexLanguageService {
     cancellationToken?: CompletionCancellationToken,
   ): Promise<TexResourceCatalogState> | null {
     return this.resourceCatalog?.load(kind, cancellationToken) ?? null
+  }
+
+  getSemanticCatalogState(scopeId: string): TexSemanticCatalogState | null {
+    return this.semanticCatalog?.getState(scopeId) ?? null
+  }
+
+  loadSemanticCatalog(
+    scopeId: string,
+    cancellationToken?: CompletionCancellationToken,
+  ): Promise<TexSemanticCatalogState> | null {
+    return this.semanticCatalog?.load(scopeId, cancellationToken) ?? null
   }
 
   private updateBibIndex(): void {

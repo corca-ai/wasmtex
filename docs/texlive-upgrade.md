@@ -133,10 +133,11 @@ manifest does not wait for a package-by-package override review.
 
 The repository's `sync-texlive-s3.sh`, `texlive-provenance`, and catalog tools remain
 available for anyone intentionally constructing a transformed or flattened subset.
-That workflow generates `catalog/<mirrorRevision>/` from the final selected inventory
-and checks it before upload. For a separately operated full mirror, produce the same
-final-inventory manifest and immutable catalog as part of that deployment rather than
-deriving completion from an upstream or pre-transform file list.
+That workflow generates `catalog/<mirrorRevision>/` from the final selected inventory,
+then extracts and checks `semantic/<mirrorRevision>/` from those exact `.cls`/`.sty`
+bytes and the year-specific override file. For a separately operated full mirror,
+produce the same final-inventory manifest and immutable catalogs as part of that
+deployment rather than deriving completion from an upstream or pre-transform file list.
 
 After provisioning, run the read-only runtime coverage audit. It flags formats
 expected but absent, such as OpenType/TrueType fonts required by XeLaTeX and
@@ -150,8 +151,12 @@ Before enabling exact resource completion for the new profile:
 
 1. publish `texlive-provenance.json` and the matching immutable catalog shards;
 2. run `npm run check:texlive-catalog -- <manifest> <catalog-dir>` on the bytes to publish;
-3. put `{ schemaVersion, texliveYear, mirrorRevision }` into the compile profile; and
-4. verify a class/package/style/font sample through that profile, including an offline
+3. update `tex-semantic-overrides-<year>.json`, inspect `coverage.json`, run the
+   semantic golden/checker, and explicitly review every unresolved high-value scope;
+4. run any needed dynamic probe through `probe:tex-semantics`—never without its OS
+   network sandbox and time/memory limits—and merge the identity-matched report;
+5. put `{ schemaVersion, texliveYear, mirrorRevision }` into the compile profile; and
+6. verify a class/package option/key/value and resource sample through that profile, including an offline
    cache return and a deliberate revision-mismatch rejection.
 
 ### Step 2: Build New WASM Engine

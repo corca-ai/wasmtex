@@ -29,7 +29,11 @@ export type CompletionValueKind =
   | 'length'
   | 'glossary-key'
   | 'acronym-key'
+  | 'boolean'
   | 'enum'
+  | 'number'
+  | 'dimension'
+  | 'command'
   | 'key-value'
   | 'free-text'
 
@@ -201,6 +205,43 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
     [
       optional('options', 'key-value', { keyFamily: 'graphicx/includegraphics', list: true }),
       required('image', 'project-image'),
+    ],
+  ],
+  [
+    'hypersetup',
+    [required('options', 'key-value', { keyFamily: 'hyperref/hypersetup', list: true })],
+  ],
+  ['geometry', [required('options', 'key-value', { keyFamily: 'geometry/geometry', list: true })]],
+  ['tikzset', [required('options', 'key-value', { keyFamily: 'tikz/tikzset', list: true })]],
+  [
+    'pgfplotsset',
+    [required('options', 'key-value', { keyFamily: 'pgfplots/pgfplotsset', list: true })],
+  ],
+  ['sisetup', [required('options', 'key-value', { keyFamily: 'siunitx/sisetup', list: true })]],
+  ['lstset', [required('options', 'key-value', { keyFamily: 'listings/lstset', list: true })]],
+  ['setminted', [required('options', 'key-value', { keyFamily: 'minted/setminted', list: true })]],
+  [
+    'printbibliography',
+    [optional('options', 'key-value', { keyFamily: 'biblatex/printbibliography', list: true })],
+  ],
+  [
+    'setdefaultlanguage',
+    [
+      optional('options', 'key-value', {
+        keyFamily: 'polyglossia/setdefaultlanguage',
+        list: true,
+      }),
+      required('language', 'free-text'),
+    ],
+  ],
+  [
+    'newglossaryentry',
+    [
+      required('key', 'glossary-key'),
+      required('fields', 'key-value', {
+        keyFamily: 'glossaries/newglossaryentry',
+        list: true,
+      }),
     ],
   ],
 ])

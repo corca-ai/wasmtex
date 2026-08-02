@@ -178,4 +178,30 @@ offered—there is no guessed mirror fallback. Project files are ranked first an
 shadow same-named mirror entries. The same registry feeds Monaco, the neutral API,
 and JSON-RPC LSP.
 
-**Data & licensing.** The command database is wasmtex-authored (the snippet DB in `src/lsp/latex-commands.ts`); we intentionally do **not** bundle the GPL-licensed CWL corpus, so there are no redistribution constraints. Signatures are computed deterministically from those snippets (`parseSignature`), so the dataset is reproducible from source — no opaque generated blob. For the long tail beyond the bundled core, `src/lsp/package-shard-loader.ts` can fetch a small per-package JSON shard on demand (keyed on the project's `\usepackage`s), cache it via a pluggable store so it works offline afterward, and register it with the DB. This is opt-in (a host supplies the shard `baseUrl`); no public shard registry ships yet, so it is off by default — the bundled core plus the engine hash dump cover the common case with zero network.
+### Typed class/package semantic shards
+
+Resource existence and resource semantics are separate immutable layers.
+`scripts/lib/tex-semantic-extractor.mjs` reads the exact mirrored `.cls`/`.sty`
+bytes and extracts legacy `DeclareOption`, kvoptions, `define@key`, l3/modern key
+declarations, pgfkeys, and xparse command/environment signatures with balanced-group
+parsing. Dynamic catch-alls are reported as unsupported instead of silently treated
+as complete. An optional observed report comes from the bounded, network-isolated
+probe contract; `scripts/tex-semantic-overrides-<year>.json` supplies MIT,
+WasmTex-authored high-value corrections. Every record retains declared, observed,
+inferred, or override provenance plus confidence.
+
+The deterministic generator emits `semantic/<mirrorRevision>/{classes,packages}/`
+shards, an index, and a coverage report that separates exact, declared, observed,
+inferred, overridden, and unresolved metadata. Overrides are applied only when the
+matching resource exists in the final mirror. Golden and regeneration checks reject
+source, schema, provenance, or output drift.
+
+At runtime `src/lsp/semantic-catalog.ts` lazily loads profile-matched shards. The
+key/value resolver uses the class or package selector—even when it follows the
+optional argument—merges multiple selected package scopes, removes already-used
+non-repeatable keys, inserts either a flag or `key=` snippet, and dispatches value
+positions to enum, boolean, color, file, command, bibliography, font, and other typed
+domains. Free-form/unknown values stay editable; this metadata is completion evidence,
+not a validator.
+
+**Data & licensing.** The command database is wasmtex-authored (the snippet DB in `src/lsp/latex-commands.ts`); we intentionally do **not** bundle the GPL-licensed CWL corpus, so there are no redistribution constraints. Signatures are computed deterministically from those snippets (`parseSignature`), so the dataset is reproducible from source — no opaque generated blob. For the long tail beyond the bundled core, `src/lsp/package-shard-loader.ts` remains a backward-compatible host-supplied command-shard loader. Exact release semantics use the profile-bound semantic catalog above; neither path imports an external completion corpus.

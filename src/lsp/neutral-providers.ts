@@ -22,7 +22,12 @@ import {
   LATEX_ENVIRONMENTS,
 } from './latex-commands'
 import { CITE_CMDS, COMMAND_TOKEN, REF_CMDS } from './latex-patterns'
-import { formatSignature, getShardEnvironments, parseSignature } from './package-db'
+import {
+  type CompletionValueKind,
+  formatSignature,
+  getShardEnvironments,
+  parseSignature,
+} from './package-db'
 import type { EngineCommandInfo, Occurrence, ProjectIndex } from './project-index'
 import type {
   NeutralCompletionItem,
@@ -37,6 +42,13 @@ import type {
   TexResourceKind,
   TexResourceRecord,
 } from './resource-catalog'
+import {
+  registerTexSemanticShard,
+  type TexSemanticCatalogProvider,
+  type TexSemanticKey,
+  type TexSemanticShard,
+  type TexSemanticValueType,
+} from './semantic-catalog'
 import { buildLineStarts, offsetToLineCol } from './source-position'
 
 // --- Completion context ------------------------------------------------------
@@ -98,30 +110,101 @@ export interface ProvideCompletionOptions {
 
 export interface DefaultCompletionRegistryOptions {
   resourceCatalog?: TexResourceCatalogProvider
+  semanticCatalog?: TexSemanticCatalogProvider
 }
+
+interface SemanticSyncResult {
+  shards: TexSemanticShard[]
+  isIncomplete: boolean
+}
+
+class SemanticCompletionBinding {
+  private registeredScopes = new Set<string>()
+
+  constructor(
+    private provider: TexSemanticCatalogProvider,
+    private registry: CompletionResolverRegistry,
+  ) {}
+
+  syncProject(
+    index: ProjectIndex,
+    cancellationToken?: CompletionCancellationToken,
+  ): SemanticSyncResult {
+    return this.syncScopes(
+      [...index.getLoadedPackages()].map((name) => `package/${name}`),
+      cancellationToken,
+    )
+  }
+
+  syncScopes(
+    scopeIds: Iterable<string>,
+    cancellationToken?: CompletionCancellationToken,
+  ): SemanticSyncResult {
+    const shards: TexSemanticShard[] = []
+    let isIncomplete = false
+    for (const scopeId of new Set(scopeIds)) {
+      const state = this.provider.getState(scopeId)
+      if (state.status === 'ready') {
+        this.register(state.shard)
+        shards.push(state.shard)
+      } else if (
+        state.status === 'idle' ||
+        state.status === 'loading' ||
+        state.status === 'error'
+      ) {
+        isIncomplete = true
+        if (state.status !== 'loading') {
+          void this.provider.load(scopeId, cancellationToken).then((loaded) => {
+            if (loaded.status === 'ready') this.register(loaded.shard)
+          })
+        }
+      }
+    }
+    return { shards, isIncomplete }
+  }
+
+  private register(shard: TexSemanticShard): void {
+    if (this.registeredScopes.has(shard.scope.id)) return
+    registerTexSemanticShard(this.registry, shard)
+    this.registeredScopes.add(shard.scope.id)
+  }
+}
+
+const semanticBindings = new WeakMap<CompletionResolverRegistry, SemanticCompletionBinding>()
 
 /** Create an isolated registry with WasmTex's built-in completion domains. */
 export function createDefaultCompletionRegistry(
   options: DefaultCompletionRegistryOptions = {},
 ): CompletionResolverRegistry {
   const registry = new CompletionResolverRegistry()
-  registry.registerResolver('command', (context, env) =>
-    completeCommands(context.prefix, context.prefix.length, env.index),
-  )
+  const semanticBinding = options.semanticCatalog
+    ? new SemanticCompletionBinding(options.semanticCatalog, registry)
+    : undefined
+  if (semanticBinding) semanticBindings.set(registry, semanticBinding)
+  registry.registerResolver('command', (context, env) => {
+    const semantic = semanticBinding?.syncProject(env.index, env.cancellationToken)
+    return {
+      items: completeCommands(context.prefix, context.prefix.length, env.index),
+      isIncomplete: semantic?.isIncomplete ?? false,
+    }
+  })
   registry.registerResolver('label', (context, env) =>
     completeRefs(context.prefix, context.prefix.length, env.index),
   )
   registry.registerResolver('citation', (context, env) =>
     completeCites(context.prefix, context.prefix.length, env.index),
   )
-  registry.registerResolver('environment', (context, env) =>
-    completeEnvironments(
+  registry.registerResolver('environment', (context, env) => {
+    const semantic = semanticBinding?.syncProject(env.index, env.cancellationToken)
+    const items = completeEnvironments(
       context.prefix,
       context.prefix.length,
       env.index,
       context.type === 'argument' && context.command === 'begin',
-    ),
-  )
+    )
+    appendSemanticEnvironments(items, context.prefix, context.prefix.length, semantic?.shards ?? [])
+    return { items, isIncomplete: semantic?.isIncomplete ?? false }
+  })
   registry.registerResolver('tex-class', resourceResolver('tex-class', options.resourceCatalog))
   registry.registerResolver('tex-package', resourceResolver('tex-package', options.resourceCatalog))
   registry.registerResolver('bib-style', resourceResolver('bib-style', options.resourceCatalog))
@@ -130,6 +213,21 @@ export function createDefaultCompletionRegistry(
     resourceResolver('biblatex-style', options.resourceCatalog),
   )
   registry.registerResolver('font-family', resourceResolver('font-file', options.resourceCatalog))
+  registry.registerResolver('boolean', (context) =>
+    ['true', 'false']
+      .filter((value) => value.startsWith(context.prefix))
+      .map((value) => ({
+        label: value,
+        kind: 'keyword',
+        insertText: value,
+        replaceLength: context.prefix.length,
+      })),
+  )
+  registry.registerResolver('key-value', (context, env) =>
+    context.type === 'argument' && semanticBinding
+      ? resolveSemanticKeyValue(context, env, semanticBinding, registry)
+      : [],
+  )
   const files = (context: CompletionContext, env: CompletionResolverEnvironment) =>
     completeIncludes(context.prefix, context.prefix.length, env.fs)
   registry.registerResolver('project-tex', files)
@@ -137,6 +235,15 @@ export function createDefaultCompletionRegistry(
   registry.registerResolver('project-image', files)
   registry.registerResolver('project-file', files)
   return registry
+}
+
+/** Start loading semantic shards for packages already present in the project. */
+export function preloadSemanticCatalog(
+  registry: CompletionResolverRegistry,
+  index: ProjectIndex,
+  cancellationToken?: CompletionCancellationToken,
+): void {
+  semanticBindings.get(registry)?.syncProject(index, cancellationToken)
 }
 
 const defaultCompletionRegistry = createDefaultCompletionRegistry()
@@ -367,6 +474,186 @@ function appendEngineEnvironments(
       replaceLength: len,
     })
   }
+}
+
+function appendSemanticEnvironments(
+  items: NeutralCompletionItem[],
+  prefix: string,
+  len: number,
+  shards: TexSemanticShard[],
+): void {
+  const seen = new Set(items.map((item) => item.insertText))
+  for (const shard of shards) {
+    for (const environment of shard.environments) {
+      if (!environment.name.startsWith(prefix) || seen.has(environment.name)) continue
+      seen.add(environment.name)
+      const item: NeutralCompletionItem = {
+        label: environment.name,
+        kind: 'module',
+        insertText: environment.name,
+        detail: `TeX Live ${shard.texliveYear}: ${shard.scope.name} environment`,
+        sortText: `2_${environment.name}`,
+        replaceLength: len,
+      }
+      if (environment.doc) item.documentation = environment.doc
+      items.push(item)
+    }
+  }
+}
+
+function semanticScopeIds(context: CommandArgumentCompletionContext): string[] {
+  if (context.keyFamily === 'class-options' || context.keyFamily === 'package-options') {
+    const kind = context.keyFamily === 'class-options' ? 'class' : 'package'
+    return (context.selector?.values ?? [])
+      .map((name) => name.trim().replace(/\.(?:cls|sty)$/i, ''))
+      .filter(Boolean)
+      .map((name) => `${kind}/${name}`)
+  }
+  const owner = context.keyFamily?.split('/')[0]?.trim()
+  return owner ? [`package/${owner}`] : []
+}
+
+function semanticFamilies(
+  context: CommandArgumentCompletionContext,
+  shards: TexSemanticShard[],
+): Array<{ shard: TexSemanticShard; keys: TexSemanticKey[] }> {
+  if (!context.keyFamily) return []
+  return shards.flatMap((shard) => {
+    const family = shard.keyFamilies.find((candidate) => candidate.name === context.keyFamily)
+    return family ? [{ shard, keys: family.keys }] : []
+  })
+}
+
+function semanticKeyDocumentation(key: TexSemanticKey, scopes: string[]): string {
+  const provenance = key.provenance
+    .map(
+      (entry) => `${entry.evidence}: \`${entry.sourcePath}\`${entry.line ? `:${entry.line}` : ''}`,
+    )
+    .join('\n\n')
+  return [
+    key.documentation,
+    `Scopes: ${scopes.map((scope) => `\`${scope}\``).join(', ')}`,
+    `Confidence: ${key.confidence}`,
+    provenance,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function keySnippet(key: TexSemanticKey): { insertText: string; snippet?: true } {
+  if (key.value.type === 'flag') return { insertText: key.name }
+  return { insertText: `${key.name}=\${1}`, snippet: true }
+}
+
+function completeSemanticKeys(
+  context: CommandArgumentCompletionContext,
+  families: Array<{ shard: TexSemanticShard; keys: TexSemanticKey[] }>,
+): NeutralCompletionItem[] {
+  const byName = new Map<string, { key: TexSemanticKey; scopes: string[] }>()
+  for (const { shard, keys } of families) {
+    for (const key of keys) {
+      const current = byName.get(key.name)
+      if (current) {
+        current.scopes.push(shard.scope.id)
+        current.key.repeatable &&= key.repeatable
+      } else byName.set(key.name, { key: { ...key }, scopes: [shard.scope.id] })
+    }
+  }
+  return [...byName.values()]
+    .filter(
+      ({ key }) =>
+        key.name.startsWith(context.prefix) &&
+        (key.repeatable || !context.usedKeys.includes(key.name)),
+    )
+    .map(({ key, scopes }) => ({
+      label: key.name,
+      kind: 'keyword',
+      ...keySnippet(key),
+      detail: `${key.value.type} key · ${scopes.join(', ')}`,
+      documentation: semanticKeyDocumentation(key, scopes),
+      sortText: `0_${key.name}`,
+      replaceLength: context.prefix.length,
+    }))
+}
+
+function semanticValueDomain(type: TexSemanticValueType): CompletionValueKind | null {
+  const domains: Partial<Record<TexSemanticValueType, CompletionValueKind>> = {
+    boolean: 'boolean',
+    color: 'color',
+    file: 'project-file',
+    command: 'command',
+    'tex-class': 'tex-class',
+    'tex-package': 'tex-package',
+    'bib-style': 'bib-style',
+    'biblatex-style': 'biblatex-style',
+    'font-family': 'font-family',
+  }
+  return domains[type] ?? null
+}
+
+function completeEnumValues(
+  context: CommandArgumentCompletionContext,
+  keys: TexSemanticKey[],
+): NeutralCompletionItem[] {
+  const values = new Set(
+    keys.flatMap((key) => (key.value.type === 'enum' ? (key.value.values ?? []) : [])),
+  )
+  return [...values]
+    .filter((value) => value.startsWith(context.prefix))
+    .sort()
+    .map((value) => ({
+      label: value,
+      kind: 'keyword',
+      insertText: value,
+      replaceLength: context.prefix.length,
+    }))
+}
+
+function completeCommandValues(
+  context: CommandArgumentCompletionContext,
+  index: ProjectIndex,
+): NeutralCompletionItem[] {
+  const hasSlash = context.prefix.startsWith('\\')
+  const prefix = hasSlash ? context.prefix.slice(1) : context.prefix
+  return completeCommands(prefix, prefix.length, index).map((item) => ({
+    ...item,
+    insertText: hasSlash ? `\\${item.insertText}` : item.insertText,
+    replaceLength: context.prefix.length,
+  }))
+}
+
+function resolveSemanticValues(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+  registry: CompletionResolverRegistry,
+  keys: TexSemanticKey[],
+): NeutralCompletionList {
+  if (keys.some((key) => key.value.type === 'enum')) {
+    return { items: completeEnumValues(context, keys), isIncomplete: false }
+  }
+  if (keys.some((key) => key.value.type === 'command')) {
+    return { items: completeCommandValues(context, environment.index), isIncomplete: false }
+  }
+  const domain = keys.map((key) => semanticValueDomain(key.value.type)).find(Boolean)
+  if (!domain) return { items: [], isIncomplete: false }
+  return registry.resolveResult({ ...context, domain, valueKind: domain }, environment)
+}
+
+function resolveSemanticKeyValue(
+  context: CommandArgumentCompletionContext,
+  environment: CompletionResolverEnvironment,
+  binding: SemanticCompletionBinding,
+  registry: CompletionResolverRegistry,
+): NeutralCompletionList {
+  const semantic = binding.syncScopes(semanticScopeIds(context), environment.cancellationToken)
+  const families = semanticFamilies(context, semantic.shards)
+  if (context.keyValuePosition !== 'value') {
+    return { items: completeSemanticKeys(context, families), isIncomplete: semantic.isIncomplete }
+  }
+  if (!context.key) return { items: [], isIncomplete: semantic.isIncomplete }
+  const keys = families.flatMap((family) => family.keys.filter((key) => key.name === context.key))
+  const values = resolveSemanticValues(context, environment, registry, keys)
+  return { items: values.items, isIncomplete: semantic.isIncomplete || values.isIncomplete }
 }
 
 const PROJECT_RESOURCE_EXTENSIONS: Record<TexResourceKind, ReadonlySet<string>> = {

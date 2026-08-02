@@ -191,6 +191,18 @@ node "$SCRIPT_DIR/gen-texlive-catalog.mjs" \
 node "$SCRIPT_DIR/check-texlive-catalog.mjs" \
   "$STAGING_ROOT/texlive-provenance.json" \
   "$CATALOG_ROOT"
+SEMANTIC_ROOT="$STAGING_ROOT/semantic/$MIRROR_REVISION"
+SEMANTIC_OVERRIDES="$SCRIPT_DIR/tex-semantic-overrides-$TEXLIVE_YEAR.json"
+node "$SCRIPT_DIR/gen-tex-semantic-catalog.mjs" \
+  --manifest "$STAGING_ROOT/texlive-provenance.json" \
+  --mirror-root "$STAGING_ROOT" \
+  --overrides "$SEMANTIC_OVERRIDES" \
+  --output "$SEMANTIC_ROOT"
+node "$SCRIPT_DIR/check-tex-semantic-catalog.mjs" \
+  --manifest "$STAGING_ROOT/texlive-provenance.json" \
+  --mirror-root "$STAGING_ROOT" \
+  --overrides "$SEMANTIC_OVERRIDES" \
+  --catalog "$SEMANTIC_ROOT"
 
 if [ -e "$RELEASE_ROOT" ]; then
   PREVIOUS_ROOT="$WORK_DIR/release.previous"
@@ -219,6 +231,11 @@ if [ "$DO_UPLOAD" = true ]; then
   node "$SCRIPT_DIR/check-texlive-catalog.mjs" \
     "$RELEASE_ROOT/texlive-provenance.json" \
     "$RELEASE_ROOT/catalog/$MIRROR_REVISION"
+  node "$SCRIPT_DIR/check-tex-semantic-catalog.mjs" \
+    --manifest "$RELEASE_ROOT/texlive-provenance.json" \
+    --mirror-root "$RELEASE_ROOT" \
+    --overrides "$SEMANTIC_OVERRIDES" \
+    --catalog "$RELEASE_ROOT/semantic/$MIRROR_REVISION"
 
   existing=$(aws s3 ls "$S3_YEAR_ROOT/pdftex/" | sed -n '1p')
   if [ -n "$existing" ] && [ "$REPLACE_EXISTING" != true ]; then
@@ -233,6 +250,7 @@ if [ "$DO_UPLOAD" = true ]; then
     aws s3 sync "$RELEASE_ROOT/pdftex/" "$S3_YEAR_ROOT/pdftex/"
   fi
   aws s3 sync "$RELEASE_ROOT/catalog/" "$S3_YEAR_ROOT/catalog/"
+  aws s3 sync "$RELEASE_ROOT/semantic/" "$S3_YEAR_ROOT/semantic/"
   aws s3 cp "$RELEASE_ROOT/texlive-provenance.json" "$S3_YEAR_ROOT/texlive-provenance.json"
   echo "Uploaded provenance-bound mirror to $S3_YEAR_ROOT/"
 else

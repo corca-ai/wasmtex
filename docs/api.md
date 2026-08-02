@@ -49,6 +49,7 @@ or a CSS selector string.
 | `texliveVersion` | `'2025'` | `'2025'` | TeX Live engine/assets version. The option remains versioned for future TeX Live releases. |
 | `texliveUrl` | `string` | Public CDN | TexLive server endpoint. Defaults to `https://d1jectpaw0dlvl.cloudfront.net/{version}/` |
 | `resourceCatalog` | `TexResourceCatalogProvider` | - | Exact completion catalog for the selected compile profile. Custom `texliveUrl` hosts should inject their matching provider; without one, resource completion is project-local only. |
+| `semanticCatalog` | `TexSemanticCatalogProvider` | - | Versioned class/package options, key families, and typed command/environment metadata for the same compile profile. |
 | `mainFile` | `string` | `'main.tex'` | Main TeX file name |
 | `files` | `Record<string, string \| Uint8Array>` | `{}` | Initial project files (path → content) |
 | `serviceWorker`| `boolean`| `true` | Cache texlive packages via SW |
@@ -154,6 +155,8 @@ For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
 | `registerShard` | Register an extra package-command shard with the DB. |
 | `PackageShardLoader` / `ShardStore` / `PackageShardLoaderOptions` / `PackageShard` | On-demand per-package shard fetching + pluggable cache store. |
 | `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, and selector relationships. |
+| `HttpTexResourceCatalogProvider` / `TexResourceCatalogProvider` | Profile-bound exact class/package/bibliography/font availability. |
+| `HttpTexSemanticCatalogProvider` / `TexSemanticCatalogProvider` | Profile-bound typed options, key/value families, commands, environments, provenance, and coverage. |
 | `analyzeCompletionContext` / `CompletionContext` | Parse the active command invocation at a cursor, including multiline/nested groups, list or key/value position, sibling resource selectors, and an exact replacement range. |
 | `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
 | `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
@@ -332,8 +335,8 @@ const outline = lsp.getOutline('main.tex')
 
 Construct it with `createLatexLanguageService(options?)` or `new LatexLanguageService(options?)`;
 `options` (`LatexLanguageServiceOptions`) seeds `files`, `aux`, `engineCommands`,
-`semanticTrace`, `lint`, an optional isolated `completionRegistry`, and an optional
-profile-bound `resourceCatalog`. The editor-neutral result types — `SemanticToken`, `InlayHint`,
+`semanticTrace`, `lint`, an optional isolated `completionRegistry`, and optional
+profile-bound `resourceCatalog` and `semanticCatalog` providers. The editor-neutral result types — `SemanticToken`, `InlayHint`,
 `CodeAction`, `DocumentLink`, `FoldingRange`, `SignatureHelp`, `WorkspaceSymbol`,
 `Diagnostic`, `FileSymbols`, `SectionDef` — are exported from `wasmtex/lsp` for typing
 your own UI.
@@ -376,6 +379,8 @@ your own UI.
 - `getCompletionRegistry(): CompletionResolverRegistry`
 - `getResourceCatalogState(kind): TexResourceCatalogState | null`
 - `loadResourceCatalog(kind, cancellationToken?): Promise<TexResourceCatalogState> | null`
+- `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
+- `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
 
 ### Exact TeX Live resource completion
 
@@ -386,19 +391,26 @@ not discover it by querying CTAN or by compiling on completion:
 import {
   createLatexLanguageService,
   HttpTexResourceCatalogProvider,
+  HttpTexSemanticCatalogProvider,
 } from 'wasmtex/lsp'
 
+const identity = {
+  schemaVersion: 1,
+  texliveYear: '2025',
+  mirrorRevision: '2025-0123456789abcdef',
+} as const
 const resourceCatalog = new HttpTexResourceCatalogProvider({
   baseUrl: 'https://cdn.example/2025/',
-  identity: {
-    schemaVersion: 1,
-    texliveYear: '2025',
-    mirrorRevision: '2025-0123456789abcdef',
-  },
+  identity,
   store: catalogStore, // optional async get/set store, e.g. IndexedDB-backed
 })
+const semanticCatalog = new HttpTexSemanticCatalogProvider({
+  baseUrl: 'https://cdn.example/2025/',
+  identity,
+  store: semanticStore,
+})
 
-const lsp = createLatexLanguageService({ files, resourceCatalog })
+const lsp = createLatexLanguageService({ files, resourceCatalog, semanticCatalog })
 ```
 
 The provider loads immutable `catalog/<mirrorRevision>/index.json` and only the
@@ -407,6 +419,14 @@ fails closed on schema, year, or mirror-revision mismatch. `WasmTexOptions` acce
 the same provider for the built-in Monaco integration. Project-local `.cls`, `.sty`,
 `.bst`, biblatex, and supported font files remain available without a catalog and
 take precedence over matching mirror records.
+
+Semantic shards are selected as `class/<name>` or `package/<name>`. They expose
+`TexSemanticKeyFamily`, `TexSemanticKey`, `TexSemanticCommand`, provenance,
+confidence, dependencies, engine constraints, and coverage. A key with value type
+`flag` inserts only its name; other keys insert a `key=` snippet. Enum and boolean
+values complete directly, while color/file/command/bibliography/font values reuse
+the corresponding typed resolver. Already-used keys disappear only when the shard
+marks them non-repeatable; unknown values are never rejected.
 
 ### Static linter (ChkTeX-style)
 

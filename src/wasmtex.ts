@@ -20,9 +20,10 @@ import { saveOutgoingFile } from './fs/save-outgoing'
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
 import { rebuildBibIndex } from './lsp/bib-parser'
+import type { CompletionResolverRegistry } from './lsp/completion-registry'
 import { computeDiagnostics } from './lsp/diagnostic-provider'
 import { type LintConfig, lintSource } from './lsp/linter'
-import { createDefaultCompletionRegistry } from './lsp/neutral-providers'
+import { createDefaultCompletionRegistry, preloadSemanticCatalog } from './lsp/neutral-providers'
 import { ProjectIndex } from './lsp/project-index'
 import { registerLatexProviders } from './lsp/register-providers'
 import { parseTraceFile } from './lsp/trace-parser'
@@ -148,6 +149,8 @@ export class WasmTex {
   private projectIndex = new ProjectIndex()
 
   private lspDisposables: { dispose(): void }[] = []
+
+  private completionRegistry: CompletionResolverRegistry | undefined
 
   // --- Models (one per project file, kept alive for cross-file diagnostics) ---
 
@@ -541,7 +544,7 @@ export class WasmTex {
         this.ensureModel(path, file.content)
 
         if (path.endsWith('.tex')) {
-          this.projectIndex.updateFile(path, file.content)
+          this.updateProjectIndex(path, file.content)
         }
       }
     }
@@ -694,15 +697,25 @@ export class WasmTex {
     this.pdfViewer?.setDownloadHandler(() => this.downloadPdf())
   }
 
+  private updateProjectIndex(path: string, content: string): void {
+    this.projectIndex.updateFile(path, content)
+    if (this.completionRegistry) {
+      preloadSemanticCatalog(this.completionRegistry, this.projectIndex)
+    }
+  }
+
   private initRuntimeServices(): void {
+    this.completionRegistry = createDefaultCompletionRegistry({
+      ...(this.opts.resourceCatalog ? { resourceCatalog: this.opts.resourceCatalog } : {}),
+      ...(this.opts.semanticCatalog ? { semanticCatalog: this.opts.semanticCatalog } : {}),
+    })
+    preloadSemanticCatalog(this.completionRegistry, this.projectIndex)
     this.lspDisposables = registerLatexProviders(
       this.projectIndex,
       this.fs,
       (info) => this.emit('workspaceEdit', info),
       'latex',
-      createDefaultCompletionRegistry(
-        this.opts.resourceCatalog ? { resourceCatalog: this.opts.resourceCatalog } : {},
-      ),
+      this.completionRegistry,
     )
 
     this.perfOverlayDispose = initPerfOverlay()
@@ -840,7 +853,7 @@ export class WasmTex {
 
       if (typeof content === 'string') {
         if (path.endsWith('.tex')) {
-          this.projectIndex.updateFile(path, content)
+          this.updateProjectIndex(path, content)
         }
 
         const existing = this.models.get(path)
@@ -901,7 +914,7 @@ export class WasmTex {
 
     if (typeof content === 'string') {
       if (path.endsWith('.tex')) {
-        this.projectIndex.updateFile(path, content)
+        this.updateProjectIndex(path, content)
       }
 
       if (path.endsWith('.bib')) {
@@ -1112,6 +1125,7 @@ export class WasmTex {
     for (const d of this.lspDisposables) d.dispose()
 
     this.lspDisposables = []
+    this.completionRegistry = undefined
 
     for (const d of this.interactionDisposables) d.dispose()
 
@@ -1308,7 +1322,7 @@ export class WasmTex {
     this.fs.writeFile(path, content)
 
     if (path.endsWith('.tex')) {
-      this.projectIndex.updateFile(path, content)
+      this.updateProjectIndex(path, content)
     }
 
     if (path.endsWith('.bib')) {
@@ -1345,7 +1359,7 @@ export class WasmTex {
       // still the deleted path) would resurrect it in the VFS with stale content.
       if (saveOutgoingFile(this.fs, this.currentFile, value)) {
         if (this.currentFile.endsWith('.tex')) {
-          this.projectIndex.updateFile(this.currentFile, value)
+          this.updateProjectIndex(this.currentFile, value)
         }
       }
     }
@@ -1477,7 +1491,7 @@ export class WasmTex {
       if (!path || this.projectIndex.getFileSymbols(path)) continue
       const file = this.fs.getFile(path)
       if (!file || typeof file.content !== 'string') continue
-      this.projectIndex.updateFile(path, file.content)
+      this.updateProjectIndex(path, file.content)
       this.ensureModel(path, file.content)
     }
   }
