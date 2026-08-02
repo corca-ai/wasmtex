@@ -58,7 +58,7 @@ export class PackageShardLoader {
 
   constructor(options: PackageShardLoaderOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '')
-    this.fetchImpl = options.fetchImpl ?? fetch
+    this.fetchImpl = (options.fetchImpl ?? globalThis.fetch).bind(globalThis)
     this.store = options.store
   }
 

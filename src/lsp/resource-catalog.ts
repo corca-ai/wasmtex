@@ -163,7 +163,7 @@ export class HttpTexResourceCatalogProvider implements TexResourceCatalogProvide
     if (!validIdentity(options.identity)) throw new Error('invalid expected catalog identity')
     this.identity = options.identity
     this.baseUrl = `${options.baseUrl.replace(/\/$/, '')}/catalog/${this.identity.mirrorRevision}`
-    this.fetchImpl = options.fetchImpl ?? fetch
+    this.fetchImpl = (options.fetchImpl ?? globalThis.fetch).bind(globalThis)
     this.store = options.store
   }
 

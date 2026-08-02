@@ -574,6 +574,22 @@ function remoteFixture(value: TexSemanticShard) {
 describe('HttpTexSemanticCatalogProvider', () => {
   const book = shard('class/book', [{ name: 'class-options', keys: [key('draft', 'flag')] }])
 
+  it('binds browser-style fetch implementations to the global object', async () => {
+    const remote = remoteFixture(book)
+    const browserFetch = vi.fn(async function (this: unknown, url: string | URL) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation')
+      return new Response(String(url).endsWith('/index.json') ? remote.indexText : remote.shardText)
+    })
+    const provider = new HttpTexSemanticCatalogProvider({
+      baseUrl: 'https://cdn.example/2025/',
+      identity,
+      fetchImpl: browserFetch as typeof fetch,
+    })
+
+    await expect(provider.load('class/book')).resolves.toMatchObject({ status: 'ready' })
+    expect(browserFetch).toHaveBeenCalledTimes(2)
+  })
+
   it('represents lazy partial loading and deduplicates verified fetches', async () => {
     const remote = remoteFixture(book)
     const fetchImpl = vi.fn(

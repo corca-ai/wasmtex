@@ -148,6 +148,22 @@ function remoteFixture(kind: TexResourceKind, resources: TexResourceRecord[]) {
 }
 
 describe('HttpTexResourceCatalogProvider', () => {
+  it('binds browser-style fetch implementations to the global object', async () => {
+    const remote = remoteFixture('tex-class', [resource('book', 'cls', 'tex-class')])
+    const browserFetch = vi.fn(async function (this: unknown, url: string | URL) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation')
+      return new Response(String(url).endsWith('/index.json') ? remote.indexText : remote.shardText)
+    })
+    const provider = new HttpTexResourceCatalogProvider({
+      baseUrl: 'https://cdn.example/2025/',
+      identity,
+      fetchImpl: browserFetch as typeof fetch,
+    })
+
+    await expect(provider.load('tex-class')).resolves.toMatchObject({ status: 'ready' })
+    expect(browserFetch).toHaveBeenCalledTimes(2)
+  })
+
   it('reports lazy completion as incomplete, shares concurrent loads, and verifies the shard', async () => {
     const remote = remoteFixture('tex-class', [resource('book', 'cls', 'tex-class')])
     const fetchImpl = vi.fn(async (url: string | URL) => {

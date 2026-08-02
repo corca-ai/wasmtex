@@ -255,6 +255,20 @@ describe('PackageShardLoader', () => {
     await expect(loader.load('nope')).resolves.toBeNull()
   })
 
+  it('binds browser-style fetch implementations to the global object', async () => {
+    const browserFetch = vi.fn(async function (this: unknown) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation')
+      return shardResponse('browserpkg')
+    })
+    const loader = new PackageShardLoader({
+      baseUrl: 'https://cdn/x',
+      fetchImpl: browserFetch as typeof fetch,
+    })
+
+    await expect(loader.load('browserpkg')).resolves.toMatchObject({ package: 'browserpkg' })
+    expect(browserFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('treats a valid-JSON but malformed shard as a failure (does not reject loadAll)', async () => {
     // A shard with no `commands` array used to throw inside registerShard and reject the
     // whole best-effort batch. It must resolve to null and leave the valid sibling intact.
