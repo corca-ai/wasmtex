@@ -232,7 +232,8 @@ hashes, records flattened-name collision decisions, derives an immutable
 `mirrorRevision`, and generates exact resource-completion shards under
 `catalog/<mirrorRevision>/`. Generation and the pre-upload release gate check class,
 package, bibliography, biblatex, and supported font resources against every relevant
-file in the final manifest. The same run extracts typed `.cls`/`.sty` declarations,
+file in the final manifest. The same run extracts typed `.cls`/`.sty` declarations
+and exact color sets from the selected xcolor `.def` files,
 merges the year-pinned WasmTex overrides, and publishes semantic shards plus their
 coverage report under `semantic/<mirrorRevision>/`. Both immutable trees upload
 before publication of the manifest. A

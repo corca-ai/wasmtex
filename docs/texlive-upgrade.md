@@ -135,7 +135,7 @@ The repository's `sync-texlive-s3.sh`, `texlive-provenance`, and catalog tools r
 available for anyone intentionally constructing a transformed or flattened subset.
 That workflow generates `catalog/<mirrorRevision>/` from the final selected inventory,
 then extracts and checks `semantic/<mirrorRevision>/` from those exact `.cls`/`.sty`
-bytes and the year-specific override file. For a separately operated full mirror,
+bytes, the option-gated xcolor `.def` sources, and the year-specific override file. For a separately operated full mirror,
 produce the same final-inventory manifest and immutable catalogs as part of that
 deployment rather than deriving completion from an upstream or pre-transform file list.
 
@@ -152,12 +152,14 @@ Before enabling exact resource completion for the new profile:
 1. publish `texlive-provenance.json` and the matching immutable catalog shards;
 2. run `npm run check:texlive-catalog -- <manifest> <catalog-dir>` on the bytes to publish;
 3. update `tex-semantic-overrides-<year>.json`, inspect `coverage.json`, run the
-   semantic golden/checker, and explicitly review every unresolved high-value scope;
+   semantic golden/checker, verify the exact `dvipsnam.def`/`svgnam.def`/`x11nam.def`
+   sources, reviewed expected counts, and activation options, and explicitly review every unresolved high-value scope;
 4. run any needed dynamic probe through `probe:tex-semantics`—never without its OS
    network sandbox and time/memory limits—and merge the identity-matched report;
 5. put `{ schemaVersion, texliveYear, mirrorRevision }` into the compile profile; and
-6. verify a class/package option/key/value and resource sample through that profile, including an offline
-   cache return and a deliberate revision-mismatch rejection.
+6. verify a class/package option/key/value, conditional color palette, and resource
+   sample through that profile, including an offline cache return and a deliberate
+   revision-mismatch rejection.
 
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.

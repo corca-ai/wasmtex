@@ -1,5 +1,5 @@
 import { SemanticTrace } from './trace-parser';
-import { AuxData, BibEntry, BibitemDef, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef } from './types';
+import { AuxData, BibEntry, BibitemDef, ColorDefinition, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef } from './types';
 export interface EngineCommandInfo {
     name: string;
     eqType: number;
@@ -13,6 +13,7 @@ export declare class ProjectIndex {
     private engineCommands;
     private engineEnvironments;
     private semanticTrace;
+    private activeFilesCache;
     private labelDefIndex;
     private labelRefIndex;
     private citationIndex;
@@ -34,10 +35,20 @@ export declare class ProjectIndex {
     getAllLabels(): LabelDef[];
     getAllLabelRefs(name: string): LabelRef[];
     getFileSymbols(filePath: string): FileSymbols | undefined;
+    /** Files in the deterministic include component that compiles the requested document. */
+    getActiveFiles(filePath: string): string[];
+    private includeGraph;
+    getActiveColors(filePath: string): ColorDefinition[];
+    getActiveColorNames(filePath: string): Set<string>;
+    getLoadedClasses(filePath?: string): Set<string>;
+    getClassOptions(filePath?: string): Set<string>;
+    getPackageOptions(name: string, filePath?: string): Set<string>;
     getCommandDefs(): CommandDef[];
     getAllEnvironments(): string[];
     /** Names of all packages loaded via `\usepackage`/`\RequirePackage` in the project. */
-    getLoadedPackages(): Set<string>;
+    getLoadedPackages(filePath?: string): Set<string>;
+    private symbolsInScope;
+    private resolveInclude;
     getBibEntries(): BibEntry[];
     getAuxLabels(): Map<string, string>;
     getAuxCitations(): Set<string>;

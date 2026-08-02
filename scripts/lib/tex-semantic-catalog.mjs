@@ -79,6 +79,24 @@ function validateSupplement(value, label, manifest, requireIdentity) {
     throw new Error(`${label} mirror revision mismatch`)
   }
   if (!value.scopes || typeof value.scopes !== 'object') throw new Error(`${label} has no scopes`)
+  for (const [scopeId, scope] of Object.entries(value.scopes)) {
+    for (const source of scope.colorSources ?? []) {
+      if (
+        !/^[A-Za-z0-9._+-]+\.def$/.test(source.fileName ?? '') ||
+        !Array.isArray(source.anyOptions) ||
+        !Array.isArray(source.deferredOptions) ||
+        source.anyOptions.length + source.deferredOptions.length === 0 ||
+        [...source.anyOptions, ...source.deferredOptions].some(
+          (option) => typeof option !== 'string' || option.length === 0,
+        ) ||
+        (source.priority !== undefined && !Number.isSafeInteger(source.priority)) ||
+        !Number.isSafeInteger(source.expectedCount) ||
+        source.expectedCount <= 0
+      ) {
+        throw new Error(`${label} ${scopeId} has an invalid color source`)
+      }
+    }
+  }
 }
 
 function validateMetadata(metadata, scopeId) {
@@ -96,11 +114,19 @@ function validateMetadata(metadata, scopeId) {
       }
     }
   }
+  for (const color of metadata.colors ?? []) {
+    if (!color.name || !['define', 'provide', 'alias'].includes(color.kind)) {
+      throw new Error(`${scopeId}: invalid semantic color`)
+    }
+    if (!Array.isArray(color.provenance) || color.provenance.length === 0) {
+      throw new Error(`${scopeId}/${color.name}: missing color provenance`)
+    }
+  }
 }
 
 function metadataCoverage(metadata) {
   const keys = metadata.keyFamilies.flatMap((family) => family.keys)
-  const records = [...keys, ...metadata.commands, ...metadata.environments]
+  const records = [...keys, ...metadata.commands, ...metadata.environments, ...(metadata.colors ?? [])]
   const hasEvidence = (record, evidence) =>
     record.provenance?.some((entry) => entry.evidence === evidence) ?? false
   const unresolved = metadata.unsupported.length + (records.length === 0 ? 1 : 0)
@@ -108,6 +134,7 @@ function metadataCoverage(metadata) {
     keys: keys.length,
     commands: metadata.commands.length,
     environments: metadata.environments.length,
+    colors: metadata.colors?.length ?? 0,
     exact: records.filter((record) => record.confidence === 'exact').length,
     declared: records.filter((record) => hasEvidence(record, 'declared')).length,
     observed: records.filter((record) => hasEvidence(record, 'observed')).length,
@@ -122,6 +149,7 @@ function sumCoverage(shards) {
     'keys',
     'commands',
     'environments',
+    'colors',
     'exact',
     'declared',
     'observed',
@@ -186,9 +214,13 @@ export function buildTexSemanticCatalog({
   const descriptors = {}
   const builtShards = []
   const presentScopes = new Set()
+  const filesByName = new Map(
+    manifest.files.filter((file) => file.format === 26).map((file) => [basename(file.key), file]),
+  )
   for (const file of manifest.files) {
     const scope = resourceScope(file)
     if (!scope) continue
+    const override = overrides?.scopes?.[scope.id]
     presentScopes.add(scope.id)
     const source = verifyMirrorFile(mirrorRoot, file)
     let metadata = extractTexSemantics({
@@ -219,9 +251,36 @@ export function buildTexSemanticCatalog({
         'override',
       ),
     )
+    for (const [priority, colorSource] of (override?.colorSources ?? []).entries()) {
+      const colorFile = filesByName.get(colorSource.fileName)
+      if (!colorFile) {
+        throw new Error(`${scope.id}: required color source is absent: ${colorSource.fileName}`)
+      }
+      const extracted = extractTexSemantics({
+        source: verifyMirrorFile(mirrorRoot, colorFile),
+        sourcePath: colorFile.source.path,
+        scopeKind: scope.kind,
+        scopeName: scope.name,
+      })
+      if (extracted.colors.length !== colorSource.expectedCount) {
+        throw new Error(
+          `${scope.id}/${colorSource.fileName}: expected ${colorSource.expectedCount} colors, extracted ${extracted.colors.length}`,
+        )
+      }
+      metadata = mergeSemanticMetadata(metadata, {
+        ...extracted,
+        colors: extracted.colors.map((color) => ({
+          ...color,
+          availability: {
+            anyOptions: colorSource.anyOptions,
+            deferredOptions: colorSource.deferredOptions,
+          },
+          priority: colorSource.priority ?? priority + 1,
+        })),
+      })
+    }
     validateMetadata(metadata, scope.id)
     const coverage = metadataCoverage(metadata)
-    const override = overrides?.scopes?.[scope.id]
     const engines = [
       ...new Set([...engineConstraints(file.source.path), ...(override?.engines ?? [])]),
     ].sort()
@@ -244,6 +303,7 @@ export function buildTexSemanticCatalog({
       keyFamilies: metadata.keyFamilies,
       commands: metadata.commands,
       environments: metadata.environments,
+      colors: metadata.colors,
       dependencies: metadata.dependencies,
       unsupported: metadata.unsupported,
       coverage,
@@ -272,7 +332,12 @@ export function buildTexSemanticCatalog({
     summary: {
       scopes: builtShards.length,
       scopesWithMetadata: builtShards.filter(
-        (shard) => shard.coverage.keys + shard.coverage.commands + shard.coverage.environments > 0,
+        (shard) =>
+          shard.coverage.keys +
+            shard.coverage.commands +
+            shard.coverage.environments +
+            shard.coverage.colors >
+          0,
       ).length,
       ...coverage,
       overrideScopesAbsent,

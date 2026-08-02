@@ -255,7 +255,10 @@ not guess which mirror classes or packages exist. The first request for a lazy
 shard returns `isIncomplete`; Monaco and JSON-RPC preserve that signal.
 Use the same identity for the semantic provider. It supplies class/package load
 options, key families, typed values, and package command/environment signatures;
-schema/year/revision mismatch is isolated rather than mixed with the active profile.
+exact color definitions and option-gated xcolor palettes use the same profile-bound
+shards. Project color declarations remain local and are scoped through the active
+include graph. Schema/year/revision mismatch is isolated rather than mixed with the
+active profile.
 
 ### BibTeX Support
 The editor automatically handles `.bib` and `.bst` files.

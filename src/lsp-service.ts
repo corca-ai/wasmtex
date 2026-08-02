@@ -134,6 +134,7 @@ export {
   type TexSemanticCatalogProvider,
   type TexSemanticCatalogState,
   type TexSemanticCatalogStore,
+  type TexSemanticColor,
   type TexSemanticCommand,
   type TexSemanticConfidence,
   type TexSemanticCoverage,

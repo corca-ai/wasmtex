@@ -6,6 +6,7 @@ import type {
   BibEntry,
   BibitemDef,
   CitationRef,
+  ColorDefinition,
   CommandDef,
   CommandUse,
   EnvironmentUse,
@@ -105,6 +106,7 @@ export class ProjectIndex {
   private engineCommands = new Map<string, EngineCommandInfo>()
   private engineEnvironments = new Set<string>()
   private semanticTrace: SemanticTrace | null = null
+  private activeFilesCache = new Map<string, string[]>()
 
   // Inverted indexes (symbol name → definitions/uses) for O(result) lookups,
   // maintained incrementally so a query never rescans the whole project.
@@ -127,6 +129,7 @@ export class ProjectIndex {
     this.files.set(filePath, symbols)
     this.addToIndexes(symbols)
     this.allLabelsCache = null
+    this.activeFilesCache.clear()
   }
 
   removeFile(filePath: string): void {
@@ -134,6 +137,7 @@ export class ProjectIndex {
     if (previous) this.removeFromIndexes(filePath, previous)
     this.files.delete(filePath)
     this.allLabelsCache = null
+    this.activeFilesCache.clear()
   }
 
   private addToIndexes(symbols: FileSymbols): void {
@@ -195,6 +199,138 @@ export class ProjectIndex {
     return this.files.get(filePath)
   }
 
+  /** Files in the deterministic include component that compiles the requested document. */
+  getActiveFiles(filePath: string): string[] {
+    if (!this.files.has(filePath)) return []
+    const cached = this.activeFilesCache.get(filePath)
+    if (cached) return [...cached]
+    const { edges, reverse } = this.includeGraph()
+    const ancestors = new Set([filePath])
+    const pending = [filePath]
+    while (pending.length > 0) {
+      for (const parent of reverse.get(pending.pop()!) ?? []) {
+        if (ancestors.has(parent)) continue
+        ancestors.add(parent)
+        pending.push(parent)
+      }
+    }
+    const roots = [...ancestors]
+      .filter((path) => ![...(reverse.get(path) ?? [])].some((parent) => ancestors.has(parent)))
+      .sort()
+    const ordered: string[] = []
+    const seen = new Set<string>()
+    const visit = (path: string) => {
+      if (seen.has(path)) return
+      seen.add(path)
+      ordered.push(path)
+      for (const target of edges.get(path) ?? []) visit(target)
+    }
+    for (const root of roots.length > 0 ? roots : [filePath]) visit(root)
+    this.activeFilesCache.set(filePath, ordered)
+    return [...ordered]
+  }
+
+  private includeGraph(): {
+    edges: Map<string, string[]>
+    reverse: Map<string, Set<string>>
+  } {
+    const edges = new Map<string, string[]>()
+    const reverse = new Map<string, Set<string>>()
+    for (const [source, symbols] of this.files) {
+      const targets = symbols.includes
+        .map((include) => this.resolveInclude(source, include.path))
+        .filter((target): target is string => target !== null)
+      edges.set(source, targets)
+      for (const target of targets) {
+        const parents = reverse.get(target) ?? new Set<string>()
+        parents.add(source)
+        reverse.set(target, parents)
+      }
+    }
+    return { edges, reverse }
+  }
+
+  getActiveColors(filePath: string): ColorDefinition[] {
+    const active = new Set(this.getActiveFiles(filePath))
+    if (active.size === 0) return []
+    const { reverse } = this.includeGraph()
+    const roots = [...active]
+      .filter((path) => ![...(reverse.get(path) ?? [])].some((parent) => active.has(parent)))
+      .sort()
+    const colors: ColorDefinition[] = []
+    const visit = (path: string, stack: Set<string>) => {
+      if (stack.has(path)) return
+      const symbols = this.files.get(path)
+      if (!symbols) return
+      const nested = new Set(stack).add(path)
+      const events = [
+        ...symbols.colors.map((color, order) => ({
+          type: 'color' as const,
+          line: color.location.line,
+          column: color.location.column,
+          order,
+          color,
+        })),
+        ...symbols.includes.map((include, order) => ({
+          type: 'include' as const,
+          line: include.location.line,
+          column: include.location.column,
+          order,
+          target: this.resolveInclude(path, include.path),
+        })),
+      ].sort(
+        (a, b) =>
+          a.line - b.line ||
+          a.column - b.column ||
+          a.type.localeCompare(b.type) ||
+          a.order - b.order,
+      )
+      for (const event of events) {
+        if (event.type === 'color') colors.push(event.color)
+        else if (event.target && active.has(event.target)) visit(event.target, nested)
+      }
+    }
+    for (const root of roots.length > 0 ? roots : [filePath]) visit(root, new Set())
+    return colors
+  }
+
+  getActiveColorNames(filePath: string): Set<string> {
+    return new Set(
+      this.getActiveFiles(filePath).flatMap(
+        (path) => this.files.get(path)?.colorActivations.flatMap((entry) => entry.names) ?? [],
+      ),
+    )
+  }
+
+  getLoadedClasses(filePath?: string): Set<string> {
+    const names = new Set<string>()
+    for (const symbols of this.symbolsInScope(filePath)) {
+      for (const cls of symbols.classes) names.add(cls.name)
+    }
+    return names
+  }
+
+  getClassOptions(filePath?: string): Set<string> {
+    const options = new Set<string>()
+    for (const symbols of this.symbolsInScope(filePath)) {
+      for (const cls of symbols.classes) {
+        for (const option of cls.options.split(',')) if (option.trim()) options.add(option.trim())
+      }
+    }
+    return options
+  }
+
+  getPackageOptions(name: string, filePath?: string): Set<string> {
+    const options = new Set<string>()
+    for (const symbols of this.symbolsInScope(filePath)) {
+      for (const pkg of symbols.packages) {
+        if (pkg.name !== name) continue
+        for (const option of pkg.options.split(',')) if (option.trim()) options.add(option.trim())
+      }
+    }
+    return options
+  }
+
   getCommandDefs(): CommandDef[] {
     return [...this.files.values()].flatMap((s) => s.commands)
   }
@@ -210,12 +346,41 @@ export class ProjectIndex {
   }
 
   /** Names of all packages loaded via `\usepackage`/`\RequirePackage` in the project. */
-  getLoadedPackages(): Set<string> {
+  getLoadedPackages(filePath?: string): Set<string> {
     const names = new Set<string>()
-    for (const symbols of this.files.values()) {
+    for (const symbols of this.symbolsInScope(filePath)) {
       for (const pkg of symbols.packages) names.add(pkg.name)
     }
     return names
+  }
+
+  private symbolsInScope(filePath?: string): FileSymbols[] {
+    return filePath
+      ? this.getActiveFiles(filePath).flatMap((path) => {
+          const symbols = this.files.get(path)
+          return symbols ? [symbols] : []
+        })
+      : [...this.files.values()]
+  }
+
+  private resolveInclude(source: string, target: string): string | null {
+    const trimmed = target.trim().replaceAll('\\\\', '/')
+    if (!trimmed || /[\\#{}]/.test(trimmed)) return null
+    const sourceParts = source.split('/').slice(0, -1)
+    const targetParts = trimmed.startsWith('/')
+      ? trimmed.slice(1).split('/')
+      : [...sourceParts, ...trimmed.split('/')]
+    const normalized: string[] = []
+    for (const part of targetParts) {
+      if (!part || part === '.') continue
+      if (part === '..') normalized.pop()
+      else normalized.push(part)
+    }
+    const path = normalized.join('/')
+    for (const candidate of /\.[A-Za-z0-9]+$/.test(path) ? [path] : [path, `${path}.tex`]) {
+      if (this.files.has(candidate)) return candidate
+    }
+    return null
   }
 
   getBibEntries(): BibEntry[] {

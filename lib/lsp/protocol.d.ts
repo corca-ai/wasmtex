@@ -34,6 +34,8 @@ export interface NeutralCompletionItem {
     replaceLength: number;
     /** Exact replacement range. New adapters prefer this over the legacy same-line length. */
     replacementRange?: NeutralRange;
+    /** Host-neutral structured metadata that adapters preserve verbatim. */
+    data?: Record<string, unknown>;
 }
 export interface NeutralCompletionList {
     items: NeutralCompletionItem[];

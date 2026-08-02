@@ -16,6 +16,13 @@ interface Suggestion {
   insertText?: string
   insertTextRules?: number
   sortText?: string
+  data?: Record<string, unknown>
+  range?: {
+    startLineNumber: number
+    startColumn: number
+    endLineNumber: number
+    endColumn: number
+  }
 }
 
 interface CompletionResult {
@@ -218,5 +225,29 @@ describe('createCompletionProvider', () => {
     const equations = result.suggestions.filter((s) => s.label === 'equation')
     // Should only appear once (from static DB, not duplicated by engine)
     expect(equations).toHaveLength(1)
+  })
+
+  it('preserves neutral color metadata and expression ranges for Monaco hosts', () => {
+    const source = '\\usepackage{xcolor}\n\\definecolor{blueish}{RGB}{1,2,3}\n\\color{red!50!blX}'
+    const idx = new ProjectIndex()
+    idx.updateFile('main.tex', source)
+    const colorFs = new VirtualFS({ empty: true })
+    colorFs.writeFile('main.tex', source)
+    const result = complete(
+      createCompletionProvider(idx, colorFs),
+      mockModel(source.split('\n')),
+      3,
+      17,
+    )
+    const blueish = result.suggestions.find((suggestion) => suggestion.label === 'blueish')
+    expect(blueish?.range).toEqual({
+      startLineNumber: 3,
+      startColumn: 15,
+      endLineNumber: 3,
+      endColumn: 18,
+    })
+    expect(blueish?.data).toMatchObject({
+      wasmtex: { domain: 'color', color: { css: '#010203' } },
+    })
   })
 })

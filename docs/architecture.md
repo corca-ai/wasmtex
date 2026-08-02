@@ -184,7 +184,10 @@ Resource existence and resource semantics are separate immutable layers.
 `scripts/lib/tex-semantic-extractor.mjs` reads the exact mirrored `.cls`/`.sty`
 bytes and extracts legacy `DeclareOption`, kvoptions, `define@key`, l3/modern key
 declarations, pgfkeys, and xparse command/environment signatures with balanced-group
-parsing. Dynamic catch-alls are reported as unsupported instead of silently treated
+parsing. It also extracts package/project color declarations; the xcolor shard reads
+the selected mirror's `dvipsnam.def`, `svgnam.def`, and `x11nam.def` bytes and records
+their activating package/class options. Starred palette options remain deferred until
+the project activates individual names with `definecolors` or `providecolors`. Dynamic catch-alls are reported as unsupported instead of silently treated
 as complete. An optional observed report comes from the bounded, network-isolated
 probe contract; `scripts/tex-semantic-overrides-<year>.json` supplies MIT,
 WasmTex-authored high-value corrections. Every record retains declared, observed,
@@ -203,5 +206,13 @@ non-repeatable keys, inserts either a flag or `key=` snippet, and dispatches val
 positions to enum, boolean, color, file, command, bibliography, font, and other typed
 domains. Free-form/unknown values stay editable; this metadata is completion evidence,
 not a validator.
+
+The first-class color resolver combines active semantic shards, class/package options,
+and `definecolor`/`providecolor`/`colorlet`/`definecolorset` declarations from the
+current include graph. Later definitions deterministically replace earlier ones while
+`providecolor` never clobbers an existing name. Direct color commands and color-valued
+keys share the resolver. In an xcolor mix such as `red!50!blue`, only the color-name
+segment at the cursor is replaced. Neutral candidates carry optional structured color
+preview and provenance data that JSON-RPC and Monaco adapters preserve.
 
 **Data & licensing.** The command database is wasmtex-authored (the snippet DB in `src/lsp/latex-commands.ts`); we intentionally do **not** bundle the GPL-licensed CWL corpus, so there are no redistribution constraints. Signatures are computed deterministically from those snippets (`parseSignature`), so the dataset is reproducible from source — no opaque generated blob. For the long tail beyond the bundled core, `src/lsp/package-shard-loader.ts` remains a backward-compatible host-supplied command-shard loader. Exact release semantics use the profile-bound semantic catalog above; neither path imports an external completion corpus.

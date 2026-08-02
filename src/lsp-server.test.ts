@@ -234,6 +234,40 @@ describe('LatexLspServer', () => {
     })
   })
 
+  it('preserves color expression edits and metadata over JSON-RPC', () => {
+    const { server, sent } = makeServer()
+    const uri = 'file:///colors.tex'
+    const lines = [
+      '\\usepackage{xcolor}',
+      '\\definecolor{blueish}{RGB}{1,2,3}',
+      '\\color{red!50!blX}',
+    ]
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text: lines.join('\n') } },
+    })
+    server.handle({
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri }, position: { line: 2, character: 16 } },
+    })
+
+    const blueish = result(sent, 13).items.find(
+      (candidate: { label: string }) => candidate.label === 'blueish',
+    )
+    expect(blueish.textEdit).toEqual({
+      range: {
+        start: { line: 2, character: 14 },
+        end: { line: 2, character: 17 },
+      },
+      newText: 'blueish',
+    })
+    expect(blueish.data).toMatchObject({
+      wasmtex: { domain: 'color', color: { css: '#010203' } },
+    })
+  })
+
   it('does not erase the document when didChange carries no contentChanges', () => {
     const { server, sent } = makeServer()
     const uri = 'file:///m.tex'

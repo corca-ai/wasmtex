@@ -156,7 +156,7 @@ For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
 | `PackageShardLoader` / `ShardStore` / `PackageShardLoaderOptions` / `PackageShard` | On-demand per-package shard fetching + pluggable cache store. |
 | `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, and selector relationships. |
 | `HttpTexResourceCatalogProvider` / `TexResourceCatalogProvider` | Profile-bound exact class/package/bibliography/font availability. |
-| `HttpTexSemanticCatalogProvider` / `TexSemanticCatalogProvider` | Profile-bound typed options, key/value families, commands, environments, provenance, and coverage. |
+| `HttpTexSemanticCatalogProvider` / `TexSemanticCatalogProvider` | Profile-bound typed options, key/value families, commands, environments, colors, provenance, and coverage. |
 | `analyzeCompletionContext` / `CompletionContext` | Parse the active command invocation at a cursor, including multiline/nested groups, list or key/value position, sibling resource selectors, and an exact replacement range. |
 | `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
 | `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
@@ -421,12 +421,21 @@ the same provider for the built-in Monaco integration. Project-local `.cls`, `.s
 take precedence over matching mirror records.
 
 Semantic shards are selected as `class/<name>` or `package/<name>`. They expose
-`TexSemanticKeyFamily`, `TexSemanticKey`, `TexSemanticCommand`, provenance,
+`TexSemanticKeyFamily`, `TexSemanticKey`, `TexSemanticCommand`, `TexSemanticColor`, provenance,
 confidence, dependencies, engine constraints, and coverage. A key with value type
 `flag` inserts only its name; other keys insert a `key=` snippet. Enum and boolean
 values complete directly, while color/file/command/bibliography/font values reuse
 the corresponding typed resolver. Already-used keys disappear only when the shard
 marks them non-repeatable; unknown values are never rejected.
+
+The `color` domain is include-graph and package aware. Base `color`/`xcolor` names,
+option-gated `dvipsnames`/`svgnames`/`x11names` palettes, and project declarations
+from `definecolor`, `providecolor`, `colorlet`, and `definecolorset` feed the same
+resolver used by `color`, `textcolor`, `colorbox`, `fcolorbox`, and typed keys such
+as `linkcolor`. Completion inside an xcolor expression replaces only its active name
+segment. Starred palette options such as `svgnames*` expose only names subsequently
+activated by `definecolors` or `providecolors`. A color candidate may include `NeutralCompletionItem.data.wasmtex.color.css`
+and provenance metadata; both the Monaco and JSON-RPC adapters preserve that object.
 
 ### Static linter (ChkTeX-style)
 

@@ -63,6 +63,27 @@ export interface PackageRef {
   location: SourceLocation
 }
 
+export interface ClassRef {
+  name: string
+  options: string
+  location: SourceLocation
+}
+
+export interface ColorDefinition {
+  name: string
+  kind: 'define' | 'provide' | 'alias'
+  model?: string
+  value?: string
+  alias?: string
+  location: SourceLocation
+}
+
+export interface ColorActivation {
+  names: string[]
+  kind: 'define' | 'provide'
+  location: SourceLocation
+}
+
 export interface FileSymbols {
   labels: LabelDef[]
   labelRefs: LabelRef[]
@@ -73,7 +94,10 @@ export interface FileSymbols {
   environments: EnvironmentUse[]
   environmentDefs: EnvironmentUse[] // Reuse EnvironmentUse for definitions
   includes: IncludeDef[]
+  classes: ClassRef[]
   packages: PackageRef[]
+  colors: ColorDefinition[]
+  colorActivations: ColorActivation[]
   bibItems: BibitemDef[]
 }
 

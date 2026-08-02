@@ -118,6 +118,23 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
   ],
   ['begin', [required('environment', 'environment')]],
   ['end', [required('environment', 'environment')]],
+  ['color', [optional('model', 'free-text'), required('color', 'color')]],
+  [
+    'textcolor',
+    [optional('model', 'free-text'), required('color', 'color'), required('text', 'free-text')],
+  ],
+  [
+    'colorbox',
+    [optional('model', 'free-text'), required('color', 'color'), required('text', 'free-text')],
+  ],
+  [
+    'fcolorbox',
+    [
+      required('frame color', 'color'),
+      required('background color', 'color'),
+      required('text', 'free-text'),
+    ],
+  ],
   ['ref', [required('label', 'label', { list: true })]],
   ['eqref', [required('label', 'label', { list: true })]],
   ['pageref', [required('label', 'label', { list: true })]],

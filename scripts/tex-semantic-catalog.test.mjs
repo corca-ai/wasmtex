@@ -31,8 +31,8 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'wasmtex-semantic-'))
   temporary.push(root)
   const mirrorRoot = join(root, 'mirror')
-  const overridesPath = join(process.cwd(), 'scripts/tex-semantic-overrides-2025.json')
-  const overrides = JSON.parse(readFileSync(overridesPath, 'utf8'))
+  const sourceOverridesPath = join(process.cwd(), 'scripts/tex-semantic-overrides-2025.json')
+  const overrides = JSON.parse(readFileSync(sourceOverridesPath, 'utf8'))
   const scopeIds = [...Object.keys(overrides.scopes), 'package/example']
   const files = scopeIds.map((scopeId) => {
     const [kind, name] = scopeId.split('/')
@@ -61,6 +61,36 @@ function fixture() {
       },
     }
   })
+  for (const [fileName, source] of [
+    ['dvipsnam.def', String.raw`\DefineNamedColor{named}{Apricot}{cmyk}{0,0.32,0.52,0}`],
+    ['svgnam.def', String.raw`\preparecolorset{rgb}{}{}{AliceBlue,.94,.972,1;Fuchsia,1,0,1}`],
+    ['x11nam.def', String.raw`\preparecolorset{rgb}{}{}{AntiqueWhite1,1,.94,.86}`],
+  ]) {
+    const key = `pdftex/26/${fileName}`
+    const bytes = Buffer.from(source)
+    const path = join(mirrorRoot, key)
+    writeFileSync(path, bytes)
+    files.push({
+      key,
+      format: 26,
+      bytes: bytes.length,
+      sha256: sha256(bytes),
+      source: {
+        path: `texmf-dist/tex/latex/xcolor/${fileName}`,
+        package: 'xcolor',
+        packageRevision: '42',
+        catalogue: 'xcolor',
+        license: { ids: ['lppl1.3c'], references: [], source: 'test', reviewed: true },
+        noticePaths: ['texmf-dist/doc/latex/xcolor/README'],
+      },
+    })
+  }
+  const fixtureCounts = { 'dvipsnam.def': 1, 'svgnam.def': 2, 'x11nam.def': 1 }
+  for (const source of overrides.scopes['package/xcolor'].colorSources) {
+    source.expectedCount = fixtureCounts[source.fileName]
+  }
+  const overridesPath = join(root, 'tex-semantic-overrides-2025.json')
+  writeFileSync(overridesPath, `${JSON.stringify(overrides, null, 2)}\n`)
   const manifest = {
     schemaVersion: 1,
     texliveYear: '2025',
@@ -125,6 +155,7 @@ test('builds all verified high-value scopes only when resources exist in the mir
   assert.ok(result.index.summary.declared > 0)
   assert.ok(result.index.summary.inferred > 0)
   assert.ok(result.index.summary.overridden > 0)
+  assert.equal(result.index.summary.colors, 4)
 })
 
 test('writes deterministic shards, coverage, source hashes, and observed provenance', () => {
@@ -162,6 +193,21 @@ test('writes deterministic shards, coverage, source hashes, and observed provena
   assert.ok(book.keyFamilies.find((family) => family.name === 'class-options').keys.length > 5)
   const hyperref = JSON.parse(readFileSync(join(outputDir, 'packages/hyperref.json'), 'utf8'))
   assert.equal(hyperref.commands[0].name, 'hypersetup')
+  const xcolor = JSON.parse(readFileSync(join(outputDir, 'packages/xcolor.json'), 'utf8'))
+  assert.deepEqual(
+    xcolor.colors.map((color) => [
+      color.name,
+      color.availability.anyOptions,
+      color.availability.deferredOptions,
+      color.priority,
+    ]),
+    [
+      ['AliceBlue', ['svgnames'], ['svgnames*'], 20],
+      ['AntiqueWhite1', ['x11names'], ['x11names*'], 30],
+      ['Apricot', ['dvipsnames'], ['dvipsnames*'], 10],
+      ['Fuchsia', ['svgnames'], ['svgnames*'], 20],
+    ],
+  )
   const fontspec = JSON.parse(readFileSync(join(outputDir, 'packages/fontspec.json'), 'utf8'))
   assert.deepEqual(fontspec.scope.engines, ['luatex', 'xetex'])
   const polyglossia = JSON.parse(readFileSync(join(outputDir, 'packages/polyglossia.json'), 'utf8'))
@@ -206,6 +252,21 @@ test('detects semantic shard and provenance drift', () => {
   )
 })
 
+test('fails closed when an exact conditional color source is absent', () => {
+  const value = fixture()
+  const source = value.manifest.files.find((file) => file.key.endsWith('/svgnam.def'))
+  rmSync(join(value.mirrorRoot, source.key))
+  assert.throws(
+    () =>
+      buildTexSemanticCatalog({
+        manifest: value.manifest,
+        mirrorRoot: value.mirrorRoot,
+        overrides: value.overrides,
+      }),
+    /required color source is absent|mirror file is missing/,
+  )
+})
+
 test('locks the semantic catalog bytes as a TeX Live upgrade golden', () => {
   const value = fixture()
   const result = buildTexSemanticCatalog({
@@ -219,5 +280,5 @@ test('locks the semantic catalog bytes as a TeX Live upgrade golden', () => {
       .map(([path, bytes]) => `${path}\0${bytes}`)
       .join('\0'),
   )
-  assert.equal(digest, 'aafabdf4bf359dedd3818dc3d4c7e66e33460cdde99c27bf1e9eaae7fefee3e6')
+  assert.equal(digest, '19a4262401035da365019cebe6ddbb3eedafdb97fd2f901c512912f2ef1a53fb')
 })

@@ -70,6 +70,18 @@ export interface TexSemanticCommand {
   provenance: TexSemanticProvenance[]
 }
 
+export interface TexSemanticColor {
+  name: string
+  kind: 'define' | 'provide' | 'alias'
+  model?: string
+  value?: string
+  alias?: string
+  availability?: { anyOptions?: string[]; deferredOptions?: string[] }
+  priority?: number
+  confidence: TexSemanticConfidence
+  provenance: TexSemanticProvenance[]
+}
+
 export interface TexSemanticScope {
   id: string
   kind: TexSemanticScopeKind
@@ -88,6 +100,7 @@ export interface TexSemanticCoverage {
   keys: number
   commands: number
   environments: number
+  colors: number
   exact: number
   declared: number
   observed: number
@@ -101,6 +114,7 @@ export interface TexSemanticShard extends TexSemanticCatalogIdentity {
   keyFamilies: TexSemanticKeyFamily[]
   commands: TexSemanticCommand[]
   environments: TexSemanticCommand[]
+  colors: TexSemanticColor[]
   dependencies: string[]
   unsupported: Array<{ line?: number; construct: string; reason: string }>
   coverage: TexSemanticCoverage
@@ -194,6 +208,7 @@ function asShard(
     !Array.isArray(shard.keyFamilies) ||
     !Array.isArray(shard.commands) ||
     !Array.isArray(shard.environments) ||
+    !Array.isArray(shard.colors) ||
     !Array.isArray(shard.dependencies)
   ) {
     throw new Error(`${scopeId} semantic shard has an invalid shape`)

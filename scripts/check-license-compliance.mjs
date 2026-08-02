@@ -153,6 +153,23 @@ if (semanticOverrides) {
   ]) {
     if (!scopes.has(requiredScope)) fail(`semantic overrides omit verified scope: ${requiredScope}`)
   }
+  const colorSources = semanticOverrides.scopes?.['package/xcolor']?.colorSources ?? []
+  const colorFiles = new Set(colorSources.map((source) => source.fileName))
+  for (const requiredFile of ['dvipsnam.def', 'svgnam.def', 'x11nam.def']) {
+    if (!colorFiles.has(requiredFile)) fail(`xcolor semantic metadata omits ${requiredFile}`)
+  }
+  for (const source of colorSources) {
+    if (
+      !Array.isArray(source.anyOptions) ||
+      !Array.isArray(source.deferredOptions) ||
+      source.anyOptions.length + source.deferredOptions.length === 0
+    ) {
+      fail(`${String(source.fileName)} color source has no activating options`)
+    }
+    if (!Number.isSafeInteger(source.expectedCount) || source.expectedCount <= 0) {
+      fail(`${String(source.fileName)} color source has no reviewed expected count`)
+    }
+  }
 }
 
 if (sourceConfig) {

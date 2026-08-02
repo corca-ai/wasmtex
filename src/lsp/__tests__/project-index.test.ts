@@ -49,6 +49,58 @@ describe('ProjectIndex', () => {
     expect(index.getAllLabels()).toHaveLength(2)
   })
 
+  it('scopes packages, class options, and colors to the active include graph', () => {
+    const index = new ProjectIndex()
+    index.updateFile(
+      'main.tex',
+      '\\documentclass[dvipsnames]{book}\n\\usepackage[svgnames]{xcolor}\n\\definecolor{root}{rgb}{1,0,0}\n\\input{chapters/a}',
+    )
+    index.updateFile('chapters/a.tex', '\\providecolor{chapter}{rgb}{0,1,0}\n\\input{../shared}')
+    index.updateFile('shared.tex', '\\colorlet{alias}{root}')
+    index.updateFile('unrelated.tex', '\\definecolor{hidden}{rgb}{0,0,1}')
+
+    expect(index.getActiveFiles('chapters/a.tex')).toEqual([
+      'main.tex',
+      'chapters/a.tex',
+      'shared.tex',
+    ])
+    expect(index.getLoadedClasses('chapters/a.tex')).toEqual(new Set(['book']))
+    expect(index.getClassOptions('chapters/a.tex')).toEqual(new Set(['dvipsnames']))
+    expect(index.getPackageOptions('xcolor', 'chapters/a.tex')).toEqual(new Set(['svgnames']))
+    expect(index.getActiveColors('chapters/a.tex').map((color) => color.name)).toEqual([
+      'root',
+      'chapter',
+      'alias',
+    ])
+  })
+
+  it('updates active colors after edits and deletion without leaking another root', () => {
+    const index = new ProjectIndex()
+    index.updateFile('main.tex', '\\input{colors}\n\\input{chapter}')
+    index.updateFile('colors.tex', '\\definecolor{old}{rgb}{1,0,0}')
+    index.updateFile('chapter.tex', '')
+    index.updateFile('other.tex', '\\definecolor{other}{rgb}{0,0,0}')
+    expect(index.getActiveColors('chapter.tex').map((color) => color.name)).toEqual(['old'])
+    index.updateFile('colors.tex', '\\definecolor{new}{rgb}{0,1,0}')
+    expect(index.getActiveColors('chapter.tex').map((color) => color.name)).toEqual(['new'])
+    index.removeFile('colors.tex')
+    expect(index.getActiveColors('chapter.tex')).toEqual([])
+  })
+
+  it('orders project color precedence around includes like TeX execution', () => {
+    const index = new ProjectIndex()
+    index.updateFile(
+      'main.tex',
+      '\\definecolor{brand}{HTML}{111111}\n\\input{child}\n\\definecolor{brand}{HTML}{333333}',
+    )
+    index.updateFile('child.tex', '\\definecolor{brand}{HTML}{222222}')
+    expect(index.getActiveColors('child.tex').map((color) => color.value)).toEqual([
+      '111111',
+      '222222',
+      '333333',
+    ])
+  })
+
   it('keeps getAllLabels consistent after mutation (cache invalidation)', () => {
     const index = new ProjectIndex()
     index.updateFile('a.tex', '\\label{a}')

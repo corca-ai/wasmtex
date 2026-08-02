@@ -297,6 +297,46 @@ describe('parseLatexFile', () => {
     })
   })
 
+  describe('classes and colors', () => {
+    it('extracts class options and common color declaration forms', () => {
+      const result = parseLatexFile(
+        [
+          '\\documentclass[dvipsnames]{book}',
+          '\\definecolor{brand}{HTML}{1A2B3C}',
+          '\\providecolor{fallback}{rgb}{.1,.2,.3}',
+          '\\colorlet{accent}{brand!50!white}',
+          '\\definecolorset{RGB}{pre-}{-suf}{one,1,2,3;two,4,5,6}',
+          '\\definecolors{AliceBlue,AntiqueWhite}',
+        ].join('\n'),
+        'main.tex',
+      )
+
+      expect(result.classes).toMatchObject([{ name: 'book', options: 'dvipsnames' }])
+      expect(
+        result.colors.map((color) => [color.name, color.kind, color.model, color.alias]),
+      ).toEqual([
+        ['brand', 'define', 'HTML', undefined],
+        ['fallback', 'provide', 'rgb', undefined],
+        ['accent', 'alias', undefined, 'brand!50!white'],
+        ['pre-one-suf', 'define', 'RGB', undefined],
+        ['pre-two-suf', 'define', 'RGB', undefined],
+      ])
+      expect(result.colorActivations).toMatchObject([
+        { names: ['AliceBlue', 'AntiqueWhite'], kind: 'define' },
+      ])
+    })
+
+    it('ignores malformed, commented, and verbatim color declarations', () => {
+      const source = [
+        '% \\definecolor{commented}{rgb}{1,0,0}',
+        '\\definecolor{unfinished}{rgb}',
+        '\\begin{verbatim}\\definecolor{raw}{rgb}{1,0,0}\\end{verbatim}',
+      ].join('\n')
+      expect(() => parseLatexFile(source, 'main.tex')).not.toThrow()
+      expect(parseLatexFile(source, 'main.tex').colors).toEqual([])
+    })
+  })
+
   // --- Comments ---
   describe('comment handling', () => {
     it('ignores content after %', () => {

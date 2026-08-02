@@ -141,6 +141,33 @@ test('extracts pgf choice values and xparse command/environment signatures', () 
   ])
 })
 
+test('extracts direct colors, aliases, named colors, and color sets', () => {
+  const result = extractTexSemantics({
+    sourcePath: 'texmf-dist/tex/latex/xcolor/xcolor.sty',
+    scopeKind: 'package',
+    scopeName: 'xcolor',
+    source: String.raw`
+\definecolor{brand}{HTML}{1A2B3C}
+\providecolor{fallback}{rgb}{.1,.2,.3}
+\colorlet{accent}{brand!50!white}
+\DefineNamedColor{named}{NamedBlue}{RGB}{1,2,3}
+\preparecolorset{rgb}{}{}{AliceBlue,.94,.972,1;AntiqueWhite,.98,.92,.844}
+`,
+  })
+
+  assert.deepEqual(
+    result.colors.map((color) => [color.name, color.kind, color.model ?? null, color.alias ?? null]),
+    [
+      ['accent', 'alias', null, 'brand!50!white'],
+      ['AliceBlue', 'define', 'rgb', null],
+      ['AntiqueWhite', 'define', 'rgb', null],
+      ['brand', 'define', 'HTML', null],
+      ['fallback', 'provide', 'rgb', null],
+      ['NamedBlue', 'define', 'RGB', null],
+    ],
+  )
+})
+
 test('merges curated metadata with explicit provenance and deterministic ordering', () => {
   const base = extractTexSemantics({
     source: String.raw`\DeclareOption{draft}{x}`,

@@ -280,6 +280,10 @@ const BEGIN_RE = /\\begin\{/g
 const NEWENV_RE = /\\(?:newenvironment|renewenvironment)\{([^}]+)\}/g
 const INPUT_RE = new RegExp(`\\\\(${INPUT_CMDS})\\{`, 'g')
 const USEPACKAGE_RE = new RegExp(`\\\\(?:${USEPACKAGE_CMDS})(?:\\[([^\\]]*)\\])?\\{`, 'g')
+const CLASS_RE = /\\(?:(?:documentclass|LoadClass)(?:\[([^\]]*)\])?|LoadClassWithOptions)\{/g
+const COLOR_DECL_RE =
+  /\\(definecolorset|providecolorset|preparecolorset|DefineNamedColor|definecolor|xdefinecolor|providecolor|colorlet)\*?(?![A-Za-z@:_])/g
+const COLOR_ACTIVATION_RE = /\\(definecolors|providecolors)(?!et)\*?\s*\{/g
 
 interface Ctx {
   masked: string
@@ -447,6 +451,196 @@ function extractPackages(ctx: Ctx, symbols: FileSymbols): void {
     for (const pkg of names.split(',')) {
       const trimmed = pkg.trim()
       if (trimmed) symbols.packages.push({ name: trimmed, options: m[1] ?? '', location })
+    }
+  }
+}
+
+function extractClasses(ctx: Ctx, symbols: FileSymbols): void {
+  for (const m of ctx.masked.matchAll(CLASS_RE)) {
+    const braceIdx = ctx.masked.indexOf('{', m.index + m[0].length - 1)
+    if (braceIdx < 0) continue
+    const name = extractBraceContent(ctx.masked, braceIdx)?.trim()
+    if (name) symbols.classes.push({ name, options: m[1] ?? '', location: locAt(ctx, m.index) })
+  }
+}
+
+interface ParsedInvocationGroup {
+  delimiter: 'required' | 'optional'
+  value: string
+  contentStart: number
+  end: number
+}
+
+function readInvocationGroup(text: string, start: number): ParsedInvocationGroup | null {
+  const open = text[start]
+  const close = open === '{' ? '}' : open === '[' ? ']' : null
+  if (!close) return null
+  let depth = 1
+  for (let cursor = start + 1; cursor < text.length; cursor++) {
+    if (text[cursor] === '\\') {
+      cursor++
+      continue
+    }
+    if (text[cursor] === open) depth++
+    else if (text[cursor] === close && --depth === 0) {
+      return {
+        delimiter: open === '{' ? 'required' : 'optional',
+        value: text.slice(start + 1, cursor),
+        contentStart: start + 1,
+        end: cursor + 1,
+      }
+    }
+  }
+  return null
+}
+
+function invocationGroups(text: string, start: number): ParsedInvocationGroup[] {
+  const groups: ParsedInvocationGroup[] = []
+  let cursor = start
+  while (groups.length < 6) {
+    cursor = skipSpace(text, cursor)
+    const group = readInvocationGroup(text, cursor)
+    if (!group) break
+    groups.push(group)
+    cursor = group.end
+  }
+  return groups
+}
+
+function splitColorSet(value: string): string[] {
+  const result: string[] = []
+  let depth = 0
+  let start = 0
+  for (let cursor = 0; cursor < value.length; cursor++) {
+    if (value[cursor] === '\\') cursor++
+    else if (value[cursor] === '{') depth++
+    else if (value[cursor] === '}') depth = Math.max(0, depth - 1)
+    else if (value[cursor] === ';' && depth === 0) {
+      result.push(value.slice(start, cursor))
+      start = cursor + 1
+    }
+  }
+  result.push(value.slice(start))
+  return result
+}
+
+function pushColor(
+  symbols: FileSymbols,
+  ctx: Ctx,
+  name: string,
+  offset: number,
+  definition: Omit<import('./types').ColorDefinition, 'name' | 'location'>,
+): void {
+  const trimmed = name.trim()
+  if (!trimmed || /[\\#{}]/.test(trimmed)) return
+  symbols.colors.push({ name: trimmed, location: locAt(ctx, offset), ...definition })
+}
+
+function extractColorSet(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  groups: ParsedInvocationGroup[],
+  kind: 'define' | 'provide',
+): void {
+  const required = groups.filter((group) => group.delimiter === 'required')
+  if (required.length < 4) return
+  const models = required[0]!.value.split('/')
+  const prefix = required[1]!.value
+  const suffix = required[2]!.value
+  for (const entry of splitColorSet(required[3]!.value)) {
+    const comma = entry.indexOf(',')
+    if (comma < 0) continue
+    const specs = entry
+      .slice(comma + 1)
+      .trim()
+      .split('/')
+    const model = models[0]?.trim()
+    const colorValue = specs[0]?.trim()
+    pushColor(
+      symbols,
+      ctx,
+      `${prefix}${entry.slice(0, comma).trim()}${suffix}`,
+      required[3]!.contentStart,
+      {
+        kind,
+        ...(model ? { model } : {}),
+        ...(colorValue ? { value: colorValue } : {}),
+      },
+    )
+  }
+}
+
+function extractNamedColor(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  required: ParsedInvocationGroup[],
+): void {
+  if (required.length < 4) return
+  pushColor(symbols, ctx, required[1]!.value, required[1]!.contentStart, {
+    kind: 'define',
+    model: required[2]!.value.trim(),
+    value: required[3]!.value.trim(),
+  })
+}
+
+function extractColorAlias(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  required: ParsedInvocationGroup[],
+): void {
+  if (required.length < 2) return
+  pushColor(symbols, ctx, required[0]!.value, required[0]!.contentStart, {
+    kind: 'alias',
+    alias: required[1]!.value.trim(),
+  })
+}
+
+function extractDirectColor(
+  ctx: Ctx,
+  symbols: FileSymbols,
+  command: string,
+  required: ParsedInvocationGroup[],
+): void {
+  if (required.length < 3) return
+  pushColor(symbols, ctx, required[0]!.value, required[0]!.contentStart, {
+    kind: command === 'providecolor' ? 'provide' : 'define',
+    model: required[1]!.value.trim(),
+    value: required[2]!.value.trim(),
+  })
+}
+
+function extractColors(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(COLOR_DECL_RE)) {
+    const command = match[1]!
+    const groups = invocationGroups(ctx.masked, match.index + match[0].length)
+    const required = groups.filter((group) => group.delimiter === 'required')
+    if (command.endsWith('colorset')) {
+      extractColorSet(ctx, symbols, groups, command === 'providecolorset' ? 'provide' : 'define')
+    } else if (command === 'DefineNamedColor') {
+      extractNamedColor(ctx, symbols, required)
+    } else if (command === 'colorlet') {
+      extractColorAlias(ctx, symbols, required)
+    } else {
+      extractDirectColor(ctx, symbols, command, required)
+    }
+  }
+}
+
+function extractColorActivations(ctx: Ctx, symbols: FileSymbols): void {
+  for (const match of ctx.masked.matchAll(COLOR_ACTIVATION_RE)) {
+    const brace = match.index + match[0].length - 1
+    const value = extractBraceContent(ctx.masked, brace)
+    if (value === null) continue
+    const names = value
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0 && !/[\\#{}]/.test(name))
+    if (names.length > 0) {
+      symbols.colorActivations.push({
+        names,
+        kind: match[1] === 'providecolors' ? 'provide' : 'define',
+        location: locAt(ctx, match.index),
+      })
     }
   }
 }
@@ -717,7 +911,10 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
     environments: [],
     environmentDefs: [],
     includes: [],
+    classes: [],
     packages: [],
+    colors: [],
+    colorActivations: [],
     bibItems: [],
   }
 
@@ -742,7 +939,10 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
   extractEnvironments(ctx, symbols)
   extractEnvironmentDefs(ctx, symbols)
   extractIncludes(ctx, symbols)
+  extractClasses(ctx, symbols)
   extractPackages(ctx, symbols)
+  extractColors(ctx, symbols)
+  extractColorActivations(ctx, symbols)
   extractMacroExpansions(ctx, symbols)
 
   return symbols

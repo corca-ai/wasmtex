@@ -5,6 +5,7 @@
  */
 import type { VirtualFS } from '../fs/virtual-fs'
 import { formatReference } from './bib-parser'
+import { completeColors } from './color-completion'
 import {
   analyzeCompletionContext,
   type CommandArgumentCompletionContext,
@@ -129,9 +130,13 @@ class SemanticCompletionBinding {
   syncProject(
     index: ProjectIndex,
     cancellationToken?: CompletionCancellationToken,
+    documentPath?: string,
   ): SemanticSyncResult {
     return this.syncScopes(
-      [...index.getLoadedPackages()].map((name) => `package/${name}`),
+      [
+        ...[...index.getLoadedPackages(documentPath)].map((name) => `package/${name}`),
+        ...[...index.getLoadedClasses(documentPath)].map((name) => `class/${name}`),
+      ],
       cancellationToken,
     )
   }
@@ -142,11 +147,19 @@ class SemanticCompletionBinding {
   ): SemanticSyncResult {
     const shards: TexSemanticShard[] = []
     let isIncomplete = false
-    for (const scopeId of new Set(scopeIds)) {
+    const pending = [...new Set(scopeIds)]
+    const visited = new Set<string>()
+    while (pending.length > 0) {
+      const scopeId = pending.shift()!
+      if (visited.has(scopeId)) continue
+      visited.add(scopeId)
       const state = this.provider.getState(scopeId)
       if (state.status === 'ready') {
         this.register(state.shard)
         shards.push(state.shard)
+        for (const dependency of state.shard.dependencies) {
+          pending.push(`package/${dependency}`)
+        }
       } else if (
         state.status === 'idle' ||
         state.status === 'loading' ||
@@ -182,7 +195,11 @@ export function createDefaultCompletionRegistry(
     : undefined
   if (semanticBinding) semanticBindings.set(registry, semanticBinding)
   registry.registerResolver('command', (context, env) => {
-    const semantic = semanticBinding?.syncProject(env.index, env.cancellationToken)
+    const semantic = semanticBinding?.syncProject(
+      env.index,
+      env.cancellationToken,
+      env.document.path,
+    )
     return {
       items: completeCommands(context.prefix, context.prefix.length, env.index),
       isIncomplete: semantic?.isIncomplete ?? false,
@@ -195,7 +212,11 @@ export function createDefaultCompletionRegistry(
     completeCites(context.prefix, context.prefix.length, env.index),
   )
   registry.registerResolver('environment', (context, env) => {
-    const semantic = semanticBinding?.syncProject(env.index, env.cancellationToken)
+    const semantic = semanticBinding?.syncProject(
+      env.index,
+      env.cancellationToken,
+      env.document.path,
+    )
     const items = completeEnvironments(
       context.prefix,
       context.prefix.length,
@@ -223,6 +244,26 @@ export function createDefaultCompletionRegistry(
         replaceLength: context.prefix.length,
       })),
   )
+  registry.registerResolver('color', (context, env) => {
+    if (context.type !== 'argument') return []
+    if (
+      context.argumentIndex > 0 &&
+      (context.command === 'color' ||
+        context.command === 'textcolor' ||
+        context.command === 'colorbox')
+    ) {
+      return []
+    }
+    const semantic = semanticBinding?.syncProject(
+      env.index,
+      env.cancellationToken,
+      env.document.path,
+    )
+    return {
+      items: completeColors(env, semantic?.shards ?? []),
+      isIncomplete: semantic?.isIncomplete ?? false,
+    }
+  })
   registry.registerResolver('key-value', (context, env) =>
     context.type === 'argument' && semanticBinding
       ? resolveSemanticKeyValue(context, env, semanticBinding, registry)

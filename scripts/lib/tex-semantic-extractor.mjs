@@ -22,6 +22,14 @@ const CALL_NAMES = new Set([
   'usepackage',
   'LoadClass',
   'LoadClassWithOptions',
+  'definecolor',
+  'xdefinecolor',
+  'providecolor',
+  'colorlet',
+  'definecolorset',
+  'providecolorset',
+  'preparecolorset',
+  'DefineNamedColor',
 ])
 
 function maskComments(source) {
@@ -148,6 +156,35 @@ function semanticKey(name, type, sourcePath, line, extractor, extra = {}) {
     confidence: extra.confidence ?? 'exact',
     provenance: provenance(sourcePath, line, extractor, extra.evidence),
   }
+}
+
+function semanticColor(name, sourcePath, line, extractor, extra = {}) {
+  return {
+    name,
+    kind: extra.kind ?? 'define',
+    ...(extra.model ? { model: extra.model } : {}),
+    ...(extra.value ? { value: extra.value } : {}),
+    ...(extra.alias ? { alias: extra.alias } : {}),
+    ...(extra.availability ? { availability: extra.availability } : {}),
+    ...(extra.priority !== undefined ? { priority: extra.priority } : {}),
+    confidence: extra.confidence ?? 'exact',
+    provenance: provenance(sourcePath, line, extractor, extra.evidence),
+  }
+}
+
+function addColor(colors, color) {
+  if (!color) return
+  const identity = `${color.name}\0${JSON.stringify(color.availability ?? null)}`
+  const current = colors.get(identity)
+  if (!current) {
+    colors.set(identity, color)
+    return
+  }
+  colors.set(identity, {
+    ...current,
+    ...color,
+    provenance: [...current.provenance, ...color.provenance],
+  })
 }
 
 function mergeKey(target, incoming) {
@@ -328,11 +365,74 @@ function callGroups(call, delimiter) {
   return call.groups.filter((group) => group.delimiter === delimiter)
 }
 
+function extractColorCall(call, required, colors, sourcePath) {
+  if (call.name.endsWith('colorset')) {
+    if (required.length < 4) return false
+    const model = required[0].value.split('/')[0]?.trim()
+    const prefix = required[1].value
+    const suffix = required[2].value
+    for (const entry of splitTopLevel(required[3].value, ';')) {
+      const comma = entry.indexOf(',')
+      if (comma < 0) continue
+      const name = literalName(`${prefix}${entry.slice(0, comma).trim()}${suffix}`)
+      const value = entry.slice(comma + 1).trim().split('/')[0]?.trim()
+      if (name) {
+        addColor(
+          colors,
+          semanticColor(name, sourcePath, call.line, call.name, {
+            kind: call.name === 'providecolorset' ? 'provide' : 'define',
+            model,
+            value,
+          }),
+        )
+      }
+    }
+    return true
+  }
+  if (call.name === 'DefineNamedColor') {
+    const name = literalName(required[1]?.value ?? '')
+    if (name && required.length >= 4) {
+      addColor(
+        colors,
+        semanticColor(name, sourcePath, call.line, call.name, {
+          model: required[2].value.trim(),
+          value: required[3].value.trim(),
+        }),
+      )
+    }
+    return true
+  }
+  if (call.name === 'colorlet') {
+    const name = literalName(required[0]?.value ?? '')
+    const alias = required[1]?.value.trim()
+    if (name && alias) {
+      addColor(colors, semanticColor(name, sourcePath, call.line, call.name, { kind: 'alias', alias }))
+    }
+    return true
+  }
+  if (['definecolor', 'xdefinecolor', 'providecolor'].includes(call.name)) {
+    const name = literalName(required[0]?.value ?? '')
+    if (name && required.length >= 3) {
+      addColor(
+        colors,
+        semanticColor(name, sourcePath, call.line, call.name, {
+          kind: call.name === 'providecolor' ? 'provide' : 'define',
+          model: required[1].value.trim(),
+          value: required[2].value.trim(),
+        }),
+      )
+    }
+    return true
+  }
+  return false
+}
+
 export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }) {
   const calls = scanTexCalls(source)
   const families = new Map()
   const commands = new Map()
   const environments = new Map()
+  const colors = new Map()
   const dependencies = new Set()
   const unsupported = []
   const loadFamily = `${scopeKind}-options`
@@ -343,6 +443,7 @@ export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }
   for (const call of calls) {
     const required = callGroups(call, 'required')
     const optional = callGroups(call, 'optional')
+    if (extractColorCall(call, required, colors, sourcePath)) continue
     if (
       call.name === 'RequirePackage' ||
       call.name === 'RequirePackageWithOptions' ||
@@ -525,6 +626,9 @@ export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }
       .sort((a, b) => a.name.localeCompare(b.name)),
     commands: [...commands.values()].sort((a, b) => a.name.localeCompare(b.name)),
     environments: [...environments.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    colors: [...colors.values()].sort(
+      (a, b) => a.name.localeCompare(b.name) || (a.priority ?? 0) - (b.priority ?? 0),
+    ),
     dependencies: [...dependencies].sort(),
     unsupported,
   }
@@ -575,12 +679,35 @@ export function mergeSemanticMetadata(base, addition, provenanceDefaults = null)
     return [...values.values()].sort((a, b) => a.name.localeCompare(b.name))
   }
 
+  const colors = new Map(
+    (base.colors ?? []).map((color) => [
+      `${color.name}\0${JSON.stringify(color.availability ?? null)}`,
+      structuredClone(color),
+    ]),
+  )
+  for (const raw of addition?.colors ?? []) {
+    const name = literalName(raw.name)
+    if (!name) continue
+    const color = structuredClone(raw)
+    color.name = name
+    color.kind ??= 'define'
+    color.confidence ??= provenanceDefaults?.confidence ?? 'overridden'
+    color.provenance = [
+      ...(color.provenance ?? []),
+      ...(provenanceDefaults ? [provenanceDefaults.provenance] : []),
+    ]
+    addColor(colors, color)
+  }
+
   return {
     keyFamilies: [...families]
       .map(([name, keys]) => ({ name, keys: [...keys.values()].sort((a, b) => a.name.localeCompare(b.name)) }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     commands: mergeNamed(base.commands, addition?.commands),
     environments: mergeNamed(base.environments, addition?.environments),
+    colors: [...colors.values()].sort(
+      (a, b) => a.name.localeCompare(b.name) || (a.priority ?? 0) - (b.priority ?? 0),
+    ),
     dependencies: [...new Set([...(base.dependencies ?? []), ...(addition?.dependencies ?? [])])].sort(),
     unsupported: [...base.unsupported, ...(addition?.unsupported ?? [])],
   }

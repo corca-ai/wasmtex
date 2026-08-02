@@ -130,6 +130,11 @@
     },
     "package/xcolor": {
       "sourceId": "xcolor package documentation",
+      "colorSources": [
+        { "fileName": "dvipsnam.def", "anyOptions": ["dvipsnames"], "deferredOptions": ["dvipsnames*"], "priority": 10, "expectedCount": 68 },
+        { "fileName": "svgnam.def", "anyOptions": ["svgnames"], "deferredOptions": ["svgnames*"], "priority": 20, "expectedCount": 151 },
+        { "fileName": "x11nam.def", "anyOptions": ["x11names"], "deferredOptions": ["x11names*"], "priority": 30, "expectedCount": 317 }
+      ],
       "keyFamilies": [{
         "name": "package-options",
         "keys": [
@@ -137,8 +142,11 @@
           { "name": "natural", "value": { "type": "flag" }, "repeatable": false },
           { "name": "table", "value": { "type": "flag" }, "repeatable": false },
           { "name": "dvipsnames", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "dvipsnames*", "value": { "type": "flag" }, "repeatable": false },
           { "name": "svgnames", "value": { "type": "flag" }, "repeatable": false },
-          { "name": "x11names", "value": { "type": "flag" }, "repeatable": false }
+          { "name": "svgnames*", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "x11names", "value": { "type": "flag" }, "repeatable": false },
+          { "name": "x11names*", "value": { "type": "flag" }, "repeatable": false }
         ]
       }]
     },
