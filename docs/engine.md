@@ -244,9 +244,11 @@ When the TeX Live files are already deployed, `scripts/sync-texlive-s3.sh
 bibliography styles, fonts, and the configured xcolor `.def` inputs), catalogs, and semantic
 shards. This lane does not copy or upload TeX Live package bytes and therefore does
 not require the full-mirror package-review state. Before `--catalog-only --upload`,
-the checker streams every selected object from `TEXLIVE_DEPLOYED_URL` and verifies
-its byte count and SHA-256. Differing basename collisions still require an exact
-deployed-byte decision; unrelated mirror collisions do not block metadata output.
+the reconciler streams every selected object from `TEXLIVE_DEPLOYED_URL` and verifies
+its byte count and SHA-256. Expected deployment-only removals or hotfixes must match
+the year-pinned `texlive-completion-deployment-<year>.json`; unexpected drift fails.
+Differing basename collisions still require an exact deployed-byte decision;
+unrelated mirror collisions do not block metadata output.
 
 The production TeX Live 2025
 CDN is operated separately as a mirror of the full official distribution, so this

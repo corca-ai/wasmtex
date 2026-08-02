@@ -15,6 +15,7 @@
 #   TEXLIVE_TLPDB             Existing texlive.tlpdb (optional)
 #   TEXLIVE_METADATA_ARCHIVE  Exact extra archive containing TEXLIVE_TLPDB
 #   S3_BUCKET                 Bucket served by the runtime CDN
+#   TEXLIVE_DEPLOYED_URL      Existing CDN base URL checked by --catalog-only
 #   WORK_DIR                  Working directory (default: /tmp/texlive-s3)
 
 set -euo pipefail
@@ -23,6 +24,7 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
 CONFIG="$SCRIPT_DIR/texlive-mirror-2025.json"
 OVERRIDES="$SCRIPT_DIR/texlive-mirror-overrides-2025.json"
+COMPLETION_DEPLOYMENT="$SCRIPT_DIR/texlive-completion-deployment-2025.json"
 
 json_value() {
   node -e '
@@ -191,6 +193,11 @@ node "$SCRIPT_DIR/gen-texlive-provenance.mjs" \
   --scope "$PROVENANCE_SCOPE"
 
 if [ "$CATALOG_ONLY" = true ]; then
+  node "$SCRIPT_DIR/reconcile-deployed-completion.mjs" \
+    --manifest "$STAGING_ROOT/texlive-provenance.json" \
+    --mirror-root "$STAGING_ROOT" \
+    --base-url "$DEPLOYED_TEXLIVE_URL" \
+    --policy "$COMPLETION_DEPLOYMENT"
   node "$SCRIPT_DIR/check-texlive-provenance.mjs" \
     "$STAGING_ROOT/texlive-provenance.json" \
     "$STAGING_ROOT" \
@@ -250,9 +257,6 @@ if [ "$DO_UPLOAD" = true ]; then
       "$RELEASE_ROOT/texlive-provenance.json" \
       "$RELEASE_ROOT" \
       --completion-metadata
-    node "$SCRIPT_DIR/check-deployed-completion.mjs" \
-      --manifest "$RELEASE_ROOT/texlive-provenance.json" \
-      --base-url "$DEPLOYED_TEXLIVE_URL"
   else
     npm run check:licenses -- --release
     node "$SCRIPT_DIR/check-texlive-provenance.mjs" \

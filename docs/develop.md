@@ -37,6 +37,7 @@ npm run dev               # Start dev server
 | `npm run gen:texlive-catalog -- --manifest <manifest> --output <dir>` | Generate immutable completion shards from a final `texlive-provenance.json` inventory |
 | `npm run check:texlive-catalog -- <manifest> <dir>` | Verify exact catalog coverage, deterministic bytes, hashes, and provenance |
 | `npm run check:deployed-completion -- --manifest <manifest> --base-url <url>` | Stream and hash every catalog/semantic source against the deployed TeX Live endpoint |
+| `npm run reconcile:deployed-completion -- --manifest <manifest> --mirror-root <dir> --base-url <url> --policy <json>` | Apply only reviewed, hash-pinned CDN absences/hotfixes before immutable catalog generation |
 | `npm run gen:tex-semantic-catalog -- --manifest <manifest> --mirror-root <root> --overrides <json> --output <dir>` | Extract and merge versioned class/package semantic shards, including exact option-gated color definitions, plus a coverage report |
 | `npm run check:tex-semantic-catalog -- --manifest <manifest> --mirror-root <root> --overrides <json> --catalog <dir>` | Regenerate and reject semantic schema, provenance, source-byte, or golden drift |
 | `npm run probe:tex-semantics -- --input <json> --command <probe> --output <json>` | Run an exact-profile probe with fail-closed OS network isolation and bounded time/memory |
