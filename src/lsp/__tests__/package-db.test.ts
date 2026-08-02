@@ -3,6 +3,7 @@ import {
   formatSignature,
   getCommandPackage,
   getCommandSignature,
+  getEnvironmentSignature,
   getShardEnvironments,
   parseSignature,
   registerShard,
@@ -63,6 +64,20 @@ describe('formatSignature', () => {
 })
 
 describe('bundled command DB lookups', () => {
+  it('exposes typed resource and option domains for structural commands', () => {
+    expect(getCommandSignature('documentclass')).toEqual([
+      {
+        kind: 'optional',
+        placeholder: 'options',
+        valueKind: 'key-value',
+        keyFamily: 'class-options',
+        list: true,
+        selectorArgumentIndex: 1,
+      },
+      { kind: 'required', placeholder: 'class', valueKind: 'tex-class' },
+    ])
+  })
+
   it('returns a signature for a bundled command', () => {
     expect(getCommandSignature('frac')).toEqual([
       { kind: 'required', placeholder: '' },
@@ -116,8 +131,15 @@ describe('registerShard', () => {
   it('registers shard-contributed environments so they are queryable', () => {
     // PackageShard.environments is part of the public shard contract; it used to be parsed
     // and then silently dropped (no registry, no getter, no consumer).
-    registerShard({ package: 'envpkg', commands: [], environments: [{ name: 'myshardenv' }] })
+    registerShard({
+      package: 'envpkg',
+      commands: [],
+      environments: [{ name: 'myshardenv', args: [{ kind: 'optional', valueKind: 'key-value' }] }],
+    })
     expect(getShardEnvironments().has('myshardenv')).toBe(true)
+    expect(getEnvironmentSignature('myshardenv')).toEqual([
+      { kind: 'optional', valueKind: 'key-value' },
+    ])
   })
 
   it('does not throw on a malformed shard (non-array commands)', () => {

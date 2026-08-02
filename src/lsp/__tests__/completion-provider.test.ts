@@ -5,6 +5,7 @@ import { createCompletionProvider } from '../completion-provider'
 import { ProjectIndex } from '../project-index'
 
 interface MockModel {
+  getValue(): string
   getLineContent(lineNumber: number): string
   uri: { path: string }
 }
@@ -23,6 +24,9 @@ interface CompletionResult {
 
 function mockModel(lines: string[]): MockModel {
   return {
+    getValue() {
+      return lines.join('\n')
+    },
     getLineContent(lineNumber: number) {
       return lines[lineNumber - 1] ?? ''
     },

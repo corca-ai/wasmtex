@@ -152,7 +152,10 @@ For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
 | `getCommandPackage` | The source `\usepackage` a command belongs to. |
 | `registerShard` | Register an extra package-command shard with the DB. |
 | `PackageShardLoader` / `ShardStore` / `PackageShardLoaderOptions` / `PackageShard` | On-demand per-package shard fetching + pluggable cache store. |
-| `CommandArg` | Argument descriptor type. |
+| `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, and selector relationships. |
+| `analyzeCompletionContext` / `CompletionContext` | Parse the active command invocation at a cursor, including multiline/nested groups, list or key/value position, sibling resource selectors, and an exact replacement range. |
+| `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
+| `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
 
 ### Linter
 
@@ -328,7 +331,7 @@ const outline = lsp.getOutline('main.tex')
 
 Construct it with `createLatexLanguageService(options?)` or `new LatexLanguageService(options?)`;
 `options` (`LatexLanguageServiceOptions`) seeds `files`, `aux`, `engineCommands`,
-`semanticTrace`, and `lint`. The editor-neutral result types — `SemanticToken`, `InlayHint`,
+`semanticTrace`, `lint`, and an optional isolated `completionRegistry`. The editor-neutral result types — `SemanticToken`, `InlayHint`,
 `CodeAction`, `DocumentLink`, `FoldingRange`, `SignatureHelp`, `WorkspaceSymbol`,
 `Diagnostic`, `FileSymbols`, `SectionDef` — are exported from `wasmtex/lsp` for typing
 your own UI.
@@ -349,7 +352,8 @@ your own UI.
 - `getDiagnostics(): Diagnostic[]`
 - `getFileSymbols(path): FileSymbols | undefined`
 - `getOutline(path): SectionDef[]`
-- `getCompletions(path, line, column): NeutralCompletionItem[]`
+- `getCompletionContext(path, line, column): CompletionContext | null`
+- `getCompletions(path, line, column, cancellationToken?): NeutralCompletionItem[]`
 - `getHover(path, line, column): NeutralHover | null`
 - `getDefinition(path, line, column): NeutralLocation | null`
 - `getReferences(path, line, column): NeutralLocation[]`
@@ -366,6 +370,7 @@ your own UI.
 **Escape hatches**
 - `getProjectIndex(): ProjectIndex`
 - `getVirtualFileSystem(): VirtualFS`
+- `getCompletionRegistry(): CompletionResolverRegistry`
 
 ### Static linter (ChkTeX-style)
 

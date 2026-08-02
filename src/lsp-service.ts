@@ -1,6 +1,11 @@
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
 import { rebuildBibIndex } from './lsp/bib-parser'
+import { analyzeCompletionContext, type CompletionContext } from './lsp/completion-context'
+import type {
+  CompletionCancellationToken,
+  CompletionResolverRegistry,
+} from './lsp/completion-registry'
 import { computeDiagnostics, type Diagnostic } from './lsp/diagnostic-provider'
 import { IncrementalLinter } from './lsp/incremental-linter'
 import {
@@ -23,6 +28,7 @@ import {
 } from './lsp/language-features'
 import { type LintConfig, lintSource } from './lsp/linter'
 import {
+  createDefaultCompletionRegistry,
   provideCompletions,
   provideDefinition,
   provideHover,
@@ -40,6 +46,21 @@ import type { FileSymbols, SectionDef } from './lsp/types'
 
 // Public linter API on the `wasmtex/lsp` entrypoint.
 export { lintSource, type LintConfig }
+export {
+  analyzeCompletionContext,
+  type CommandArgumentCompletionContext,
+  type CommandNameCompletionContext,
+  type CompletionCommandMetadataProvider,
+  type CompletionContext,
+  type CompletionDomain,
+  type RelatedCompletionArgument,
+} from './lsp/completion-context'
+export {
+  type CompletionCancellationToken,
+  type CompletionResolver,
+  type CompletionResolverEnvironment,
+  CompletionResolverRegistry,
+} from './lsp/completion-registry'
 // Editor-neutral language feature types.
 export type {
   CodeAction,
@@ -53,12 +74,15 @@ export type {
 } from './lsp/language-features'
 export type { LintRuleConfig, LintRuleId } from './lsp/linter'
 export { DEFAULT_LINT_CONFIG } from './lsp/linter'
+export { createDefaultCompletionRegistry } from './lsp/neutral-providers'
 // Package-aware command intelligence.
 export {
   type CommandArg,
+  type CompletionValueKind,
   formatSignature,
   getCommandPackage,
   getCommandSignature,
+  getEnvironmentSignature,
   parseSignature,
   registerShard,
 } from './lsp/package-db'
@@ -68,12 +92,23 @@ export {
   type PackageShardLoaderOptions,
   type ShardStore,
 } from './lsp/package-shard-loader'
+export type {
+  CompletionKind,
+  NeutralCompletionItem,
+  NeutralDocument,
+  NeutralHover,
+  NeutralLocation,
+  NeutralPosition,
+  NeutralRange,
+} from './lsp/protocol'
 
 export interface LatexLanguageServiceOptions {
   files?: Record<string, string | Uint8Array>
   aux?: string
   engineCommands?: string[]
   semanticTrace?: string | SemanticTrace
+  /** Isolated typed completion registry. Defaults to WasmTex's built-in registry. */
+  completionRegistry?: CompletionResolverRegistry
   /** Static linter (ChkTeX-style). `false` disables it; an object overrides
    *  per-rule enabled/severity. Defaults to on with the default rule set. */
   lint?: boolean | Partial<LintConfig>
@@ -97,10 +132,12 @@ export class LatexLanguageService {
   private index = new ProjectIndex()
   private lint: boolean | Partial<LintConfig>
   private linter: IncrementalLinter
+  private completionRegistry: CompletionResolverRegistry
 
   constructor(options: LatexLanguageServiceOptions = {}) {
     this.lint = options.lint ?? true
     this.linter = new IncrementalLinter(this.lint)
+    this.completionRegistry = options.completionRegistry ?? createDefaultCompletionRegistry()
     this.loadProject(options.files ?? {})
     if (options.aux) this.updateAux(options.aux)
     if (options.engineCommands) this.updateEngineCommands(options.engineCommands)
@@ -218,8 +255,20 @@ export class LatexLanguageService {
     return { path, getText: () => text, lineAt: (line) => lines[line - 1] ?? '' }
   }
 
-  getCompletions(path: string, line: number, column: number): NeutralCompletionItem[] {
-    return provideCompletions(this.docFor(path), { line, column }, this.index, this.fs)
+  getCompletionContext(path: string, line: number, column: number): CompletionContext | null {
+    return analyzeCompletionContext(this.docFor(path), { line, column }, this.completionRegistry)
+  }
+
+  getCompletions(
+    path: string,
+    line: number,
+    column: number,
+    cancellationToken?: CompletionCancellationToken,
+  ): NeutralCompletionItem[] {
+    return provideCompletions(this.docFor(path), { line, column }, this.index, this.fs, {
+      registry: this.completionRegistry,
+      ...(cancellationToken ? { cancellationToken } : {}),
+    })
   }
 
   getHover(path: string, line: number, column: number): NeutralHover | null {
@@ -261,6 +310,10 @@ export class LatexLanguageService {
 
   getVirtualFileSystem(): VirtualFS {
     return this.fs
+  }
+
+  getCompletionRegistry(): CompletionResolverRegistry {
+    return this.completionRegistry
   }
 
   private updateBibIndex(): void {

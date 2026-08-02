@@ -21,6 +21,7 @@ export function registerLatexMonacoProviders(
     service.getVirtualFileSystem(),
     options.onWorkspaceEdit,
     options.languageId ?? 'latex',
+    service.getCompletionRegistry(),
   )
 }
 

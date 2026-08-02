@@ -6,13 +6,23 @@
 import type { VirtualFS } from '../fs/virtual-fs'
 import { formatReference } from './bib-parser'
 import {
+  analyzeCompletionContext,
+  type CommandArgumentCompletionContext,
+  type CompletionContext,
+} from './completion-context'
+import {
+  type CompletionCancellationToken,
+  type CompletionResolverEnvironment,
+  CompletionResolverRegistry,
+} from './completion-registry'
+import {
   COMMON_PACKAGES,
   getCommandByName,
   getEnvironmentByName,
   LATEX_COMMANDS,
   LATEX_ENVIRONMENTS,
 } from './latex-commands'
-import { CITE_CMDS, COMMAND_TOKEN, INPUT_CMDS, REF_CMDS, USEPACKAGE_CMDS } from './latex-patterns'
+import { CITE_CMDS, COMMAND_TOKEN, REF_CMDS } from './latex-patterns'
 import { formatSignature, getShardEnvironments, parseSignature } from './package-db'
 import type { EngineCommandInfo, Occurrence, ProjectIndex } from './project-index'
 import type {
@@ -26,64 +36,94 @@ import { buildLineStarts, offsetToLineCol } from './source-position'
 
 // --- Completion context ------------------------------------------------------
 
-type CompletionContextType = 'command' | 'ref' | 'cite' | 'begin' | 'end' | 'usepackage' | 'include'
+type LegacyCompletionContextType =
+  | 'command'
+  | 'ref'
+  | 'cite'
+  | 'begin'
+  | 'end'
+  | 'usepackage'
+  | 'include'
 
-interface CompletionContext {
-  type: CompletionContextType
+interface LegacyCompletionContext {
+  type: LegacyCompletionContextType
   prefix: string
 }
 
-/** Detect what kind of completion the cursor is in (editor-neutral). */
+/**
+ * Compatibility wrapper for the former line-only context API. New integrations should use
+ * {@link analyzeCompletionContext}, which handles multiline invocations and exact ranges.
+ */
 export function detectCompletionContext(
   lineContent: string,
   column: number,
-): CompletionContext | null {
-  const before = lineContent.slice(0, column - 1)
-  // Trim leading whitespace from each braced argument: consumers filter with
-  // name.startsWith(prefix), so a stray space after the `{` (e.g. "\ref{ fig") would
-  // otherwise yield zero suggestions and an inflated replace range.
-  const refMatch = before.match(new RegExp(`\\\\(?:${REF_CMDS})\\{([^}]*)$`))
-  if (refMatch) {
-    // \cref/\Cref take a comma-separated label list; complete only the segment under the
-    // cursor (mirrors the cite/usepackage branches), else "fig:a,fig:" matches no label.
-    const inner = refMatch[1]!
-    const lastComma = inner.lastIndexOf(',')
-    return {
-      type: 'ref',
-      prefix: lastComma >= 0 ? inner.slice(lastComma + 1).trim() : inner.trimStart(),
-    }
-  }
+): LegacyCompletionContext | null {
+  const context = analyzeCompletionContext(
+    { path: '', getText: () => lineContent, lineAt: () => lineContent },
+    { line: 1, column },
+  )
+  if (!context) return null
+  if (context.type === 'command') return { type: 'command', prefix: context.prefix }
+  const type = legacyContextType(context)
+  return type ? { type, prefix: context.prefix } : null
+}
 
-  const citeMatch = before.match(new RegExp(`\\\\(?:${CITE_CMDS})(?:\\[.*?\\])?\\{([^}]*)$`))
-  if (citeMatch) {
-    const inner = citeMatch[1]!
-    const lastComma = inner.lastIndexOf(',')
-    return {
-      type: 'cite',
-      prefix: lastComma >= 0 ? inner.slice(lastComma + 1).trim() : inner.trimStart(),
-    }
+function legacyContextType(
+  context: CommandArgumentCompletionContext,
+): LegacyCompletionContextType | null {
+  if (context.valueKind === 'label') return 'ref'
+  if (context.valueKind === 'citation') return 'cite'
+  if (context.valueKind === 'environment') return context.command === 'end' ? 'end' : 'begin'
+  if (context.valueKind === 'tex-package') return 'usepackage'
+  if (
+    context.valueKind === 'project-tex' ||
+    context.valueKind === 'project-bib' ||
+    context.valueKind === 'project-image' ||
+    context.valueKind === 'project-file'
+  ) {
+    return 'include'
   }
-  const beginMatch = before.match(/\\begin\{([^}]*)$/)
-  if (beginMatch) return { type: 'begin', prefix: beginMatch[1]!.trimStart() }
-  const endMatch = before.match(/\\end\{([^}]*)$/)
-  if (endMatch) return { type: 'end', prefix: endMatch[1]!.trimStart() }
-  const pkgMatch = before.match(new RegExp(`\\\\(?:${USEPACKAGE_CMDS})(?:\\[.*?\\])?\\{([^}]*)$`))
-  if (pkgMatch) {
-    // \usepackage takes a comma-separated list; complete only the segment under the cursor
-    // (mirrors the cite branch), else "amsmath,amss" matches no package and clobbers the first.
-    const inner = pkgMatch[1]!
-    const lastComma = inner.lastIndexOf(',')
-    return {
-      type: 'usepackage',
-      prefix: lastComma >= 0 ? inner.slice(lastComma + 1).trim() : inner.trimStart(),
-    }
-  }
-  const includeMatch = before.match(new RegExp(`\\\\(?:${INPUT_CMDS})\\{([^}]*)$`))
-  if (includeMatch) return { type: 'include', prefix: includeMatch[1]!.trimStart() }
-  const cmdMatch = before.match(/\\(\w*)$/)
-  if (cmdMatch) return { type: 'command', prefix: cmdMatch[1]! }
   return null
 }
+
+export interface ProvideCompletionOptions {
+  registry?: CompletionResolverRegistry
+  cancellationToken?: CompletionCancellationToken
+}
+
+/** Create an isolated registry with WasmTex's built-in completion domains. */
+export function createDefaultCompletionRegistry(): CompletionResolverRegistry {
+  const registry = new CompletionResolverRegistry()
+  registry.registerResolver('command', (context, env) =>
+    completeCommands(context.prefix, context.prefix.length, env.index),
+  )
+  registry.registerResolver('label', (context, env) =>
+    completeRefs(context.prefix, context.prefix.length, env.index),
+  )
+  registry.registerResolver('citation', (context, env) =>
+    completeCites(context.prefix, context.prefix.length, env.index),
+  )
+  registry.registerResolver('environment', (context, env) =>
+    completeEnvironments(
+      context.prefix,
+      context.prefix.length,
+      env.index,
+      context.type === 'argument' && context.command === 'begin',
+    ),
+  )
+  registry.registerResolver('tex-package', (context) =>
+    completePackages(context.prefix, context.prefix.length),
+  )
+  const files = (context: CompletionContext, env: CompletionResolverEnvironment) =>
+    completeIncludes(context.prefix, context.prefix.length, env.fs)
+  registry.registerResolver('project-tex', files)
+  registry.registerResolver('project-bib', files)
+  registry.registerResolver('project-image', files)
+  registry.registerResolver('project-file', files)
+  return registry
+}
+
+const defaultCompletionRegistry = createDefaultCompletionRegistry()
 
 /** Compute completions at a position (editor-neutral). */
 export function provideCompletions(
@@ -91,25 +131,19 @@ export function provideCompletions(
   pos: NeutralPosition,
   index: ProjectIndex,
   fs: VirtualFS,
+  options: ProvideCompletionOptions = {},
 ): NeutralCompletionItem[] {
-  const ctx = detectCompletionContext(doc.lineAt(pos.line), pos.column)
-  if (!ctx) return []
-  const len = ctx.prefix.length
-  switch (ctx.type) {
-    case 'command':
-      return completeCommands(ctx.prefix, len, index)
-    case 'ref':
-      return completeRefs(ctx.prefix, len, index)
-    case 'cite':
-      return completeCites(ctx.prefix, len, index)
-    case 'begin':
-    case 'end':
-      return completeEnvironments(ctx.prefix, len, index, ctx.type === 'begin')
-    case 'usepackage':
-      return completePackages(ctx.prefix, len)
-    case 'include':
-      return completeIncludes(ctx.prefix, len, fs)
-  }
+  const registry = options.registry ?? defaultCompletionRegistry
+  if (options.cancellationToken?.isCancellationRequested) return []
+  const context = analyzeCompletionContext(doc, pos, registry)
+  if (!context) return []
+  return registry.resolve(context, {
+    document: doc,
+    position: pos,
+    index,
+    fs,
+    ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
+  })
 }
 
 function argSuffix(argCount: number): string {

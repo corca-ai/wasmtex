@@ -152,6 +152,34 @@ describe('LatexLspServer', () => {
     expect(frac.textEdit.newText).toContain('frac')
   })
 
+  it('preserves the neutral replacement range for a list item with a suffix', () => {
+    const { server, sent } = makeServer()
+    const uri = 'file:///m.tex'
+    const line = '\\cref{fig:a, fiX:b}'
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri, text: `\\label{fig:b}\n${line}` } },
+    })
+    const start = line.indexOf('fiX:b')
+    server.handle({
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri }, position: { line: 1, character: start + 2 } },
+    })
+
+    const item = result(sent, 11).items.find(
+      (candidate: { label: string }) => candidate.label === 'fig:b',
+    )
+    expect(item.textEdit).toEqual({
+      range: {
+        start: { line: 1, character: start },
+        end: { line: 1, character: start + 'fiX:b'.length },
+      },
+      newText: 'fig:b',
+    })
+  })
+
   it('does not erase the document when didChange carries no contentChanges', () => {
     const { server, sent } = makeServer()
     const uri = 'file:///m.tex'

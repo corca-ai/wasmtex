@@ -259,15 +259,18 @@ function toLspCompletionItem(it: NeutralCompletionItem, pos: LspPosition): objec
   // Emit an explicit textEdit so the replaced range is exact. Command items
   // strip the leading backslash from insertText, so without this the client's
   // own word pattern could delete the `\`.
+  const range = it.replacementRange
+    ? toLspRange(it.replacementRange)
+    : {
+        start: { line: pos.line, character: Math.max(0, pos.character - it.replaceLength) },
+        end: pos,
+      }
   const item: Record<string, unknown> = {
     label: it.label,
     kind: LSP_COMPLETION_KIND[it.kind],
     insertTextFormat: it.snippet ? 2 : 1, // 2 = snippet
     textEdit: {
-      range: {
-        start: { line: pos.line, character: Math.max(0, pos.character - it.replaceLength) },
-        end: pos,
-      },
+      range,
       newText: it.insertText,
     },
   }
@@ -304,7 +307,7 @@ function toLspDiagnostic(d: Diagnostic): object {
 function serverCapabilities(): object {
   return {
     textDocumentSync: 1, // full
-    completionProvider: { triggerCharacters: ['\\', '{'] },
+    completionProvider: { triggerCharacters: ['\\', '{', '[', ',', '='] },
     hoverProvider: true,
     definitionProvider: true,
     referencesProvider: true,

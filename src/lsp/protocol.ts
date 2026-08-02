@@ -44,6 +44,8 @@ export interface NeutralCompletionItem {
   sortText?: string
   /** Prefix length to replace (so adapters can compute the edit range). */
   replaceLength: number
+  /** Exact replacement range. New adapters prefer this over the legacy same-line length. */
+  replacementRange?: NeutralRange
 }
 
 export interface NeutralHover {
