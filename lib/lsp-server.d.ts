@@ -18,8 +18,9 @@ export declare class LatexLspServer {
     private service;
     constructor(send: SendMessage, options?: LatexLanguageServiceOptions);
     /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
-    handle(message: JsonRpcMessage): void;
+    handle(message: JsonRpcMessage): void | Promise<void>;
     private dispatch;
+    private respondDispatchError;
     private respond;
     private respondError;
     private didOpen;

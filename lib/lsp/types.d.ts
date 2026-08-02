@@ -58,13 +58,14 @@ export interface ColorDefinition {
     value?: string;
     alias?: string;
     location: SourceLocation;
+    provenance?: 'project' | 'runtime-observed';
 }
 export interface ColorActivation {
     names: string[];
     kind: 'define' | 'provide';
     location: SourceLocation;
 }
-export type ProjectValueRole = 'definition' | 'usage' | 'alias';
+export type ProjectValueRole = 'definition' | 'usage' | 'alias' | 'runtime-observed';
 /** A statically recoverable named value contributed by project source. */
 export interface ProjectValue {
     name: string;
@@ -81,6 +82,7 @@ export interface ProjectKeyDefinition {
     valueType: ProjectKeyValueType;
     values?: string[];
     location: SourceLocation;
+    provenance?: 'project' | 'runtime-observed';
 }
 export interface BibliographyRef {
     path: string;

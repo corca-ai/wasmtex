@@ -19,6 +19,7 @@ import type {
   NeutralRange,
 } from './lsp/protocol'
 import { LatexLanguageService, type LatexLanguageServiceOptions } from './lsp-service'
+import type { CompletionSnapshot } from './types'
 
 export interface JsonRpcMessage {
   jsonrpc?: '2.0'
@@ -84,22 +85,19 @@ export class LatexLspServer {
   }
 
   /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
-  handle(message: JsonRpcMessage): void {
+  handle(message: JsonRpcMessage): void | Promise<void> {
     if (!message.method) return
     try {
-      this.dispatch(message)
-    } catch (err) {
-      // A malformed request must not crash the dispatch loop — and neither may
-      // building the error reply, so read the message defensively (dispatch
-      // could throw a non-Error like null/undefined).
-      if (message.id != null) {
-        const detail = err instanceof Error ? err.message : String(err)
-        this.respondError(message.id, -32603, `Internal error: ${detail}`)
+      const pending = this.dispatch(message)
+      if (pending) {
+        return pending.catch((err) => this.respondDispatchError(message, err))
       }
+    } catch (err) {
+      this.respondDispatchError(message, err)
     }
   }
 
-  private dispatch(message: JsonRpcMessage): void {
+  private dispatch(message: JsonRpcMessage): void | Promise<void> {
     const { id, method, params } = message
     const pos = params as unknown as DocPositionParams
     switch (method) {
@@ -131,9 +129,28 @@ export class LatexLspServer {
       case 'textDocument/rename':
         this.respond(id, this.rename(params))
         break
+      case 'wasmtex/updateCompletionSnapshot':
+        return this.service
+          .updateCompletionSnapshot(params?.snapshot as unknown as CompletionSnapshot)
+          .then((state) => this.respond(id, state))
+      case 'wasmtex/setMainFile':
+        this.service.setMainFile(String(params?.path ?? ''))
+        this.respond(id, null)
+        break
+      case 'wasmtex/completionSnapshotState':
+        this.respond(id, this.service.getCompletionSnapshotState())
+        break
       default:
         if (id != null) this.respondError(id, -32601, `Unknown method: ${method}`)
     }
+  }
+
+  private respondDispatchError(message: JsonRpcMessage, err: unknown): void {
+    // A malformed request must not crash the dispatch loop — and neither may
+    // building the error reply, so read the failure defensively.
+    if (message.id == null) return
+    const detail = err instanceof Error ? err.message : String(err)
+    this.respondError(message.id, -32603, `Internal error: ${detail}`)
   }
 
   private respond(id: JsonRpcMessage['id'], result: unknown): void {

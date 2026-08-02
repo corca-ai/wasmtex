@@ -335,6 +335,23 @@ fetch to the right format dir by extension (XeTeX's `createFont` always resolves
 > `\setCJKmainfont{Harano Aji Gothic}` document each compile to a PDF by name
 > against the live CDN.
 
+## Runtime completion observation
+
+The pdfTeX build exports an authored, read-only post-pass hook. After the normal TeX
+process has finished, it scans the in-memory control-sequence hash and documented LaTeX
+registry names for public commands, environments, counters, colors, and key families.
+It also reuses the existing recorder input list. The worker returns this data separately;
+it does not alter TeX state, outputs, logs, or rerun decisions, and completion never calls
+the hook directly.
+
+Both engine and TypeScript boundaries are bounded. Names containing protocol control
+characters or exceeding the name limit are ignored; commands and each registry category
+have record ceilings; dropped counts make affected snapshot fields incomplete; and the
+retained serialized snapshot is capped at 2 MiB. Older pdfTeX assets that lack completeness
+metadata are accepted only as unproven coverage. XeTeX/LuaTeX currently expose the same
+snapshot schema but mark command and registry observations unsupported. Rebuild and deploy
+the pdfTeX controller/module/WASM set together before relying on this capability.
+
 ## TexLive & CDN
 
 Packages are fetched via synchronous XHR inside the WASM worker.

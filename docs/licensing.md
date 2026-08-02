@@ -321,6 +321,13 @@ original WasmTex metadata. They do not embed package documentation or a third-pa
 completion corpus. Project declarations and `@string` values are parsed at runtime from
 host-owned files and are not distributed by WasmTex.
 
+Runtime completion snapshots are likewise not a bundled completion corpus. They are
+ephemeral observations of the host's own compile, produced by WasmTex-authored C/worker
+glue and retained only in bounded structured form. Registry naming conventions identify
+records but do not copy package documentation or source. The engine hook remains part of
+the corresponding source and engine-unit release audit; observation does not change the
+license of TeX Live files loaded by that compile.
+
 This scope decision does not remove TeX Live source used to compile the engines
 from the complete corresponding source. It also does not remove generated
 `.fmt` inputs or ICU 68.2 data from the exact engine-release inventory.

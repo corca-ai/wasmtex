@@ -1,3 +1,4 @@
+import { boundCompletionSnapshot, completionProjectRevision } from './engine/completion-snapshot'
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
 import { parseBibFileData } from './lsp/bib-parser'
@@ -51,9 +52,18 @@ import type {
 import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
+import type {
+  CompletionSnapshot,
+  CompletionSnapshotProfile,
+  CompletionSnapshotState,
+} from './types'
 
 // Public linter API on the `wasmtex/lsp` entrypoint.
 export { lintSource, type LintConfig }
+export {
+  COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
+  COMPLETION_SNAPSHOT_SCHEMA_VERSION,
+} from './engine/completion-snapshot'
 export type { BibCompletionContext, BibCompletionDomain } from './lsp/bib-completion-context'
 export {
   analyzeCompletionContext,
@@ -152,6 +162,10 @@ export {
 
 export interface LatexLanguageServiceOptions {
   files?: Record<string, string | Uint8Array>
+  /** Root whose normal compile produced runtime completion evidence. Defaults to `main.tex`. */
+  mainFile?: string
+  /** Exact runtime completion profile expected from a separate compiler host. */
+  completionProfile?: CompletionSnapshotProfile
   aux?: string
   engineCommands?: string[]
   semanticTrace?: string | SemanticTrace
@@ -191,12 +205,18 @@ export class LatexLanguageService {
   private completionRegistry: CompletionResolverRegistry
   private resourceCatalog: TexResourceCatalogProvider | undefined
   private semanticCatalog: TexSemanticCatalogProvider | undefined
+  private mainFile: string
+  private completionProfile: CompletionSnapshotProfile | undefined
+  private projectRevisionEpoch = 0
+  private completionSnapshotUpdate = 0
 
   constructor(options: LatexLanguageServiceOptions = {}) {
     this.lint = options.lint ?? true
     this.linter = new IncrementalLinter(this.lint)
     this.resourceCatalog = options.resourceCatalog
     this.semanticCatalog = options.semanticCatalog
+    this.mainFile = options.mainFile ?? 'main.tex'
+    this.completionProfile = options.completionProfile
     this.completionRegistry =
       options.completionRegistry ??
       createDefaultCompletionRegistry({
@@ -210,6 +230,7 @@ export class LatexLanguageService {
   }
 
   loadProject(files: Record<string, string | Uint8Array>): void {
+    this.projectRevisionEpoch++
     this.fs = new VirtualFS({ empty: true })
     this.index = new ProjectIndex()
     this.linter = new IncrementalLinter(this.lint)
@@ -222,6 +243,8 @@ export class LatexLanguageService {
     const previous = this.fs.readFile(path)
     if (previous === content) return
 
+    this.projectRevisionEpoch++
+    this.index.invalidateCompletionSnapshot()
     this.fs.writeFile(path, content)
     this.linter.updateFile(path, content)
     if (typeof content !== 'string') {
@@ -240,6 +263,9 @@ export class LatexLanguageService {
 
   removeFile(path: string): boolean {
     const removed = this.fs.deleteFile(path)
+    if (!removed) return false
+    this.projectRevisionEpoch++
+    this.index.invalidateCompletionSnapshot()
     this.linter.removeFile(path)
     if (isLatexSource(path)) this.index.removeFile(path)
     if (path.toLowerCase().endsWith('.bib')) this.index.removeBibFile(path)
@@ -254,6 +280,14 @@ export class LatexLanguageService {
     return this.fs.listFiles()
   }
 
+  setMainFile(path: string): void {
+    if (!path.trim()) throw new Error('main file path must not be empty')
+    if (path === this.mainFile) return
+    this.mainFile = path
+    this.projectRevisionEpoch++
+    this.index.invalidateCompletionSnapshot()
+  }
+
   updateAux(content: string): void {
     this.index.updateAuxData(parseAuxFile(content))
   }
@@ -264,6 +298,55 @@ export class LatexLanguageService {
 
   updateSemanticTrace(trace: string | SemanticTrace): void {
     this.index.updateSemanticTrace(typeof trace === 'string' ? parseTraceFile(trace) : trace)
+  }
+
+  async updateCompletionSnapshot(snapshot: CompletionSnapshot): Promise<CompletionSnapshotState> {
+    const bounded = boundCompletionSnapshot(snapshot)
+    this.assertCompletionProfile(bounded)
+    const update = ++this.completionSnapshotUpdate
+    const epoch = this.projectRevisionEpoch
+    const projectFiles = this.fs.listFiles().flatMap((path) => {
+      const content = this.fs.readFile(path)
+      if (content === null) return []
+      return [{ path, content: typeof content === 'string' ? content : Uint8Array.from(content) }]
+    })
+    const revision = await completionProjectRevision(projectFiles)
+    const matches =
+      epoch === this.projectRevisionEpoch &&
+      bounded.identity.projectRevision === revision &&
+      bounded.identity.root === this.mainFile &&
+      this.fs.readFile(this.mainFile) !== null
+
+    if (update !== this.completionSnapshotUpdate) return this.index.getCompletionSnapshotState()
+    this.index.updateCompletionSnapshot(bounded)
+    if (!matches) this.index.invalidateCompletionSnapshot()
+    return this.index.getCompletionSnapshotState()
+  }
+
+  getCompletionSnapshotState(): CompletionSnapshotState {
+    return this.index.getCompletionSnapshotState()
+  }
+
+  private assertCompletionProfile(snapshot: CompletionSnapshot): void {
+    const actual = snapshot.identity.profile
+    const selected = this.completionProfile
+    if (
+      selected &&
+      (selected.id !== actual.id ||
+        selected.texliveYear !== actual.texliveYear ||
+        selected.mirrorRevision !== actual.mirrorRevision)
+    ) {
+      throw new Error('completion snapshot does not match the selected completion profile')
+    }
+    for (const expected of [this.resourceCatalog?.identity, this.semanticCatalog?.identity]) {
+      if (!expected) continue
+      if (
+        expected.texliveYear !== actual.texliveYear ||
+        expected.mirrorRevision !== actual.mirrorRevision
+      ) {
+        throw new Error('completion snapshot does not match the selected catalog profile')
+      }
+    }
   }
 
   getDiagnostics(): Diagnostic[] {
@@ -434,4 +517,20 @@ export type {
   ProjectValue,
   ProjectValueRole,
 } from './lsp/types'
+export type {
+  CompletionSnapshot,
+  CompletionSnapshotCollection,
+  CompletionSnapshotCommand,
+  CompletionSnapshotEngine,
+  CompletionSnapshotEvidence,
+  CompletionSnapshotFieldName,
+  CompletionSnapshotFields,
+  CompletionSnapshotIdentity,
+  CompletionSnapshotKey,
+  CompletionSnapshotKeyFamily,
+  CompletionSnapshotProfile,
+  CompletionSnapshotResource,
+  CompletionSnapshotState,
+  CompletionSnapshotValue,
+} from './types'
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace }

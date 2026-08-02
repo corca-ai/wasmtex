@@ -57,6 +57,9 @@ boundary to help you calibrate reports:
   SHA-256 verification, cache-poisoning the persistent asset cache).
 - XSS, prototype pollution, or code injection reachable through document content, SyncTeX
   data, LSP messages, or SDK options when used as documented.
+- Bypasses of runtime-completion record/size limits, profile/revision checks, or stale
+  invalidation that let hostile TeX or JSON-RPC retain unbounded data or consume
+  cross-project evidence.
 - Denial of service that meaningfully exceeds "a pathological document is slow to compile."
 
 **Generally out of scope:**
@@ -75,6 +78,9 @@ If you embed WasmTex to compile untrusted, user-supplied LaTeX:
 
 - Run compilation in an isolated worker/origin and apply a strict Content-Security-Policy.
 - Bound compute (timeouts, memory) and treat compiler output as untrusted data.
+- Treat completion snapshots as untrusted compiler output. Use the public update API,
+  which validates schema, record/byte ceilings, compile profile, and project revision;
+  do not inject snapshot fields directly into an index.
 - Pin and verify engine assets via the generated asset manifest rather than trusting an
   arbitrary CDN origin (see [docs/warmup.md](docs/warmup.md) and
   [docs/engine.md](docs/engine.md)).

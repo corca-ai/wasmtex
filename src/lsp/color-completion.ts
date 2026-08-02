@@ -69,6 +69,7 @@ function semanticCandidate(shard: TexSemanticShard, color: TexSemanticColor): Co
 }
 
 function projectCandidate(color: ColorDefinition): ColorCandidate {
+  const runtime = color.provenance === 'runtime-observed'
   return {
     name: color.name,
     kind: color.kind,
@@ -76,8 +77,8 @@ function projectCandidate(color: ColorDefinition): ColorCandidate {
     ...(color.value ? { value: color.value } : {}),
     ...(color.alias ? { alias: color.alias } : {}),
     source: `${color.location.file}:${color.location.line}`,
-    confidence: 'project',
-    priority: 100,
+    confidence: runtime ? 'runtime-observed' : 'project',
+    priority: runtime ? 50 : 100,
   }
 }
 

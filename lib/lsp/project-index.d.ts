@@ -1,3 +1,4 @@
+import { CompletionSnapshot, CompletionSnapshotState } from '../types';
 import { SemanticTrace } from './trace-parser';
 import { AuxData, BibEntry, BibitemDef, BibStringDef, ColorDefinition, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef, ParsedBibFile, ProjectKeyDefinition, ProjectValue } from './types';
 export interface EngineCommandInfo {
@@ -25,6 +26,11 @@ export declare class ProjectIndex {
     private engineCommands;
     private engineEnvironments;
     private semanticTrace;
+    private completionSnapshot;
+    private completionSnapshotStale;
+    private runtimeColors;
+    private runtimeValues;
+    private runtimeKeys;
     private activeFilesCache;
     private activeBibFilesCache;
     private labelDefIndex;
@@ -85,6 +91,14 @@ export declare class ProjectIndex {
     /** Find the LabelDef for a given label name */
     findLabelDef(name: string): LabelDef | undefined;
     updateEngineCommands(commands: string[]): void;
+    private parseEngineCommands;
+    /** Atomically replace every runtime-observed completion field. */
+    updateCompletionSnapshot(snapshot: CompletionSnapshot): void;
+    /** Mark observations stale on any project/source topology change. Static/project
+     *  declarations stay available, but runtime values are no longer consumed. */
+    invalidateCompletionSnapshot(): void;
+    getCompletionSnapshotState(): CompletionSnapshotState;
+    getCompletionSnapshotStatus(): CompletionSnapshotState['status'];
     getEngineCommands(): ReadonlyMap<string, EngineCommandInfo>;
     getEngineEnvironments(): ReadonlySet<string>;
     updateSemanticTrace(trace: SemanticTrace): void;

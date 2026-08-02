@@ -10,7 +10,9 @@ import { TexResourceCatalogProvider, TexResourceCatalogState, TexResourceKind } 
 import { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog';
 import { SemanticTrace } from './lsp/trace-parser';
 import { FileSymbols, SectionDef } from './lsp/types';
+import { CompletionSnapshot, CompletionSnapshotProfile, CompletionSnapshotState } from './types';
 export { lintSource, type LintConfig };
+export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
 export type { BibCompletionContext, BibCompletionDomain } from './lsp/bib-completion-context';
 export { analyzeCompletionContext, type CommandArgumentCompletionContext, type CommandNameCompletionContext, type CompletionCommandMetadataProvider, type CompletionContext, type CompletionDomain, type RelatedCompletionArgument, } from './lsp/completion-context';
 export { type CompletionCancellationToken, type CompletionResolver, type CompletionResolverEnvironment, CompletionResolverRegistry, type CompletionResolverResult, } from './lsp/completion-registry';
@@ -25,6 +27,10 @@ export { HttpTexResourceCatalogProvider, type HttpTexResourceCatalogProviderOpti
 export { HttpTexSemanticCatalogProvider, type HttpTexSemanticCatalogProviderOptions, InMemoryTexSemanticCatalogProvider, registerTexSemanticShard, TEX_SEMANTIC_CATALOG_SCHEMA_VERSION, type TexSemanticCatalogIdentity, type TexSemanticCatalogProvider, type TexSemanticCatalogState, type TexSemanticCatalogStore, type TexSemanticColor, type TexSemanticCommand, type TexSemanticConfidence, type TexSemanticCoverage, type TexSemanticEvidence, type TexSemanticKey, type TexSemanticKeyFamily, type TexSemanticProvenance, type TexSemanticScope, type TexSemanticScopeKind, type TexSemanticShard, type TexSemanticValue, type TexSemanticValueType, } from './lsp/semantic-catalog';
 export interface LatexLanguageServiceOptions {
     files?: Record<string, string | Uint8Array>;
+    /** Root whose normal compile produced runtime completion evidence. Defaults to `main.tex`. */
+    mainFile?: string;
+    /** Exact runtime completion profile expected from a separate compiler host. */
+    completionProfile?: CompletionSnapshotProfile;
     aux?: string;
     engineCommands?: string[];
     semanticTrace?: string | SemanticTrace;
@@ -58,15 +64,23 @@ export declare class LatexLanguageService {
     private completionRegistry;
     private resourceCatalog;
     private semanticCatalog;
+    private mainFile;
+    private completionProfile;
+    private projectRevisionEpoch;
+    private completionSnapshotUpdate;
     constructor(options?: LatexLanguageServiceOptions);
     loadProject(files: Record<string, string | Uint8Array>): void;
     updateFile(path: string, content: string | Uint8Array): void;
     removeFile(path: string): boolean;
     getFile(path: string): string | Uint8Array | null;
     listFiles(): string[];
+    setMainFile(path: string): void;
     updateAux(content: string): void;
     updateEngineCommands(commands: string[]): void;
     updateSemanticTrace(trace: string | SemanticTrace): void;
+    updateCompletionSnapshot(snapshot: CompletionSnapshot): Promise<CompletionSnapshotState>;
+    getCompletionSnapshotState(): CompletionSnapshotState;
+    private assertCompletionProfile;
     getDiagnostics(): Diagnostic[];
     getFileSymbols(path: string): FileSymbols | undefined;
     getOutline(path: string): SectionDef[];
@@ -98,4 +112,5 @@ export declare class LatexLanguageService {
 export declare function createLatexLanguageService(options?: LatexLanguageServiceOptions): LatexLanguageService;
 export type { ProjectIndexStats } from './lsp/project-index';
 export type { BibEntry, BibStringDef, ParsedBibFile, ProjectKeyDefinition, ProjectKeyValueType, ProjectValue, ProjectValueRole, } from './lsp/types';
+export type { CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, } from './types';
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace };

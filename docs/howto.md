@@ -260,6 +260,23 @@ shards. Project color declarations remain local and are scoped through the activ
 include graph. Schema/year/revision mismatch is isolated rather than mixed with the
 active profile.
 
+If compilation and LSP run in separate processes, forward the snapshot from the
+latest stabilized full compile and await revision validation:
+
+```typescript
+const result = await compiler.compile()
+const snapshot = result.telemetry?.completionSnapshot
+if (snapshot) {
+  lsp.setMainFile(snapshot.identity.root)
+  await lsp.updateCompletionSnapshot(snapshot)
+}
+```
+
+Completion itself never compiles. Editing, adding, or removing any project file makes
+the prior runtime evidence stale immediately. The next matching full compile refreshes
+it. Keep the LSP's host-owned file set aligned with the files used to build the snapshot;
+generated auxiliary files are not part of the project revision.
+
 The same neutral completion path also indexes project-local semantic values. It completes
 counters and lengths, theorem/custom environments, glossary and acronym keys, declared
 font families/aliases, and statically recoverable xkeyval/pgfkeys/LaTeX3 key families and

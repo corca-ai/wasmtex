@@ -219,6 +219,23 @@ positions to enum, boolean, color, file, command, bibliography, font, and other 
 domains. Free-form/unknown values stay editable; this metadata is completion evidence,
 not a validator.
 
+### Revision-bound runtime completion evidence
+
+Static source extraction cannot fully model TeX execution. After a normal pdfTeX pass,
+the authored controller performs a read-only, bounded scan of the existing hash table
+and standard LaTeX registries. It never runs TeX on behalf of completion and writes its
+observations to a separate worker response field, so PDF, log, and auxiliary convergence
+are unchanged. `src/engine/completion-snapshot.ts` combines those observations with the
+engine recorder into the versioned `CompletionSnapshot` contract.
+
+The snapshot identity covers the project-content revision, root, engine, TeX Live year,
+and integrator-selected mirror/profile. `ProjectIndex` atomically replaces all runtime
+fields. A source or topology mutation immediately marks them stale and removes their
+candidates; the standalone LSP recomputes the project revision before accepting a new
+snapshot. Project declarations have the highest precedence, fresh runtime observations
+come next, and inferred static metadata comes last. XeLaTeX/LuaLaTeX return the same
+schema with unsupported observation fields rather than pretending coverage.
+
 The first-class color resolver combines active semantic shards, class/package options,
 and `definecolor`/`providecolor`/`colorlet`/`definecolorset` declarations from the
 current include graph. Later definitions deterministically replace earlier ones while

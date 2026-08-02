@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { createCompletionSnapshot } from '../../engine/completion-snapshot'
 import { LatexLanguageService } from '../../lsp-service'
 import { InMemoryTexResourceCatalogProvider, type TexResourceRecord } from '../resource-catalog'
 import {
@@ -469,6 +470,75 @@ describe('color completion', () => {
       complete(service, '\\usepackage{xcolor}\n\\definecolor{brand}{HTML}{00ff00}\n\\color{bra¦}')
         .items[0]?.data,
     ).toMatchObject({ wasmtex: { color: { css: '#00ff00' } } })
+  })
+
+  it('lets fresh runtime observations override inferred metadata without hiding project declarations', async () => {
+    const inferredXcolor = shard(
+      'package/xcolor',
+      [],
+      [],
+      [],
+      [color('brand', { model: 'HTML', value: 'ff0000', confidence: 'inferred' })],
+    )
+    const runtimeSource = marked('\\usepackage{xcolor}\n\\color{bra¦}')
+    const runtimeService = new LatexLanguageService({
+      files: { 'main.tex': runtimeSource.text },
+      semanticCatalog: new InMemoryTexSemanticCatalogProvider(identity, [inferredXcolor]),
+    })
+    const runtimeSnapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root: 'main.tex',
+      profile: {
+        id: 'semantic-test',
+        texliveYear: '2025',
+        mirrorRevision: identity.mirrorRevision,
+      },
+      projectFiles: [{ path: 'main.tex', content: runtimeSource.text }],
+      engineObservation: {
+        counters: [],
+        colors: ['brand'],
+        keyFamilies: [],
+        complete: true,
+      },
+    })
+    await runtimeService.updateCompletionSnapshot(runtimeSnapshot)
+
+    const runtimeBrand = runtimeService
+      .getCompletionResult('main.tex', runtimeSource.line, runtimeSource.column)
+      .items.find((item) => item.label === 'brand')
+    expect(runtimeBrand?.data).toMatchObject({
+      wasmtex: { provenance: { confidence: 'runtime-observed' } },
+    })
+    expect(runtimeBrand?.data).not.toMatchObject({ wasmtex: { color: { css: '#ff0000' } } })
+
+    const projectSource = marked(
+      '\\usepackage{xcolor}\n\\definecolor{brand}{HTML}{00ff00}\n\\color{bra¦}',
+    )
+    const projectService = new LatexLanguageService({
+      files: { 'main.tex': projectSource.text },
+      semanticCatalog: new InMemoryTexSemanticCatalogProvider(identity, [inferredXcolor]),
+    })
+    const projectSnapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root: 'main.tex',
+      profile: runtimeSnapshot.identity.profile,
+      projectFiles: [{ path: 'main.tex', content: projectSource.text }],
+      engineObservation: {
+        counters: [],
+        colors: ['brand'],
+        keyFamilies: [],
+        complete: true,
+      },
+    })
+    await projectService.updateCompletionSnapshot(projectSnapshot)
+
+    expect(
+      projectService
+        .getCompletionResult('main.tex', projectSource.line, projectSource.column)
+        .items.find((item) => item.label === 'brand')?.data,
+    ).toMatchObject({
+      wasmtex: { color: { css: '#00ff00' }, provenance: { confidence: 'project' } },
+    })
   })
 })
 

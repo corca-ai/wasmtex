@@ -1,3 +1,5 @@
+import { boundCompletionSnapshot } from '../engine/completion-snapshot'
+import type { CompletionSnapshot, CompletionSnapshotState } from '../types'
 import { parseAuxFile } from './aux-parser'
 import { parseLatexFile } from './latex-parser'
 import type { SemanticTrace } from './trace-parser'
@@ -123,6 +125,11 @@ export class ProjectIndex {
   private engineCommands = new Map<string, EngineCommandInfo>()
   private engineEnvironments = new Set<string>()
   private semanticTrace: SemanticTrace | null = null
+  private completionSnapshot: CompletionSnapshot | null = null
+  private completionSnapshotStale = false
+  private runtimeColors: ColorDefinition[] = []
+  private runtimeValues = new Map<'counter' | 'length', ProjectValue[]>()
+  private runtimeKeys: ProjectKeyDefinition[] = []
   private activeFilesCache = new Map<string, string[]>()
   private activeBibFilesCache = new Map<string, string[]>()
 
@@ -141,6 +148,7 @@ export class ProjectIndex {
   private allLabelsCache: LabelDef[] | null = null
 
   updateFile(filePath: string, content: string): void {
+    this.invalidateCompletionSnapshot()
     const previous = this.files.get(filePath)
     if (previous) this.removeFromIndexes(filePath, previous)
     const symbols = parseLatexFile(content, filePath)
@@ -152,6 +160,7 @@ export class ProjectIndex {
   }
 
   removeFile(filePath: string): void {
+    this.invalidateCompletionSnapshot()
     const previous = this.files.get(filePath)
     if (previous) this.removeFromIndexes(filePath, previous)
     this.files.delete(filePath)
@@ -185,12 +194,14 @@ export class ProjectIndex {
   }
 
   updateBib(entries: BibEntry[]): void {
+    this.invalidateCompletionSnapshot()
     this.bibFiles.clear()
     this.legacyBibEntries = entries
     this.rebuildBibIndexes()
   }
 
   updateBibFile(filePath: string, data: ParsedBibFile): void {
+    this.invalidateCompletionSnapshot()
     this.legacyBibEntries = []
     this.bibFiles.set(filePath, data)
     this.rebuildBibIndexes()
@@ -198,10 +209,12 @@ export class ProjectIndex {
 
   removeBibFile(filePath: string): void {
     if (!this.bibFiles.delete(filePath)) return
+    this.invalidateCompletionSnapshot()
     this.rebuildBibIndexes()
   }
 
   replaceBibFiles(files: ReadonlyMap<string, ParsedBibFile>): void {
+    this.invalidateCompletionSnapshot()
     this.legacyBibEntries = []
     this.bibFiles = new Map(files)
     this.rebuildBibIndexes()
@@ -320,7 +333,7 @@ export class ProjectIndex {
     const roots = [...active]
       .filter((path) => ![...(reverse.get(path) ?? [])].some((parent) => active.has(parent)))
       .sort()
-    const colors: ColorDefinition[] = []
+    const colors: ColorDefinition[] = [...this.runtimeColors]
     const visit = (path: string, stack: Set<string>) => {
       if (stack.has(path)) return
       const symbols = this.files.get(path)
@@ -546,17 +559,20 @@ export class ProjectIndex {
     kind: 'counter' | 'length' | 'glossary' | 'acronym' | 'font-family',
     filePath?: string,
   ): ProjectValue[] {
-    return this.itemsInScope(filePath, (symbols) => {
+    const project = this.itemsInScope(filePath, (symbols) => {
       if (kind === 'counter') return symbols.counters
       if (kind === 'length') return symbols.lengths
       if (kind === 'glossary') return symbols.glossaryEntries
       if (kind === 'acronym') return symbols.acronymEntries
       return symbols.fontFamilies
     })
+    return kind === 'counter' || kind === 'length'
+      ? [...(this.runtimeValues.get(kind) ?? []), ...project]
+      : project
   }
 
   getProjectKeys(filePath?: string, families?: ReadonlySet<string>): ProjectKeyDefinition[] {
-    return this.itemsInScope(filePath, (symbols) => symbols.keys).filter(
+    return [...this.runtimeKeys, ...this.itemsInScope(filePath, (symbols) => symbols.keys)].filter(
       (key) => !families || families.has(key.family),
     )
   }
@@ -638,6 +654,8 @@ export class ProjectIndex {
       estimatedCodeUnits += path.length + JSON.stringify(data).length
     }
     estimatedCodeUnits += JSON.stringify(this.legacyBibEntries).length
+    if (this.completionSnapshot)
+      estimatedCodeUnits += JSON.stringify(this.completionSnapshot).length
     return {
       sourceFiles: this.files.size,
       bibliographyFiles: this.bibFiles.size,
@@ -666,26 +684,127 @@ export class ProjectIndex {
   }
 
   updateEngineCommands(commands: string[]): void {
-    this.engineCommands = new Map()
+    this.completionSnapshot = null
+    this.completionSnapshotStale = false
+    this.runtimeColors = []
+    this.runtimeValues.clear()
+    this.runtimeKeys = []
+    const { commands: parsed, environments } = this.parseEngineCommands(commands)
+    this.engineCommands = parsed
+    this.engineEnvironments = environments
+  }
+
+  private parseEngineCommands(commands: string[]): {
+    commands: Map<string, EngineCommandInfo>
+    environments: Set<string>
+  } {
+    const parsed = new Map<string, EngineCommandInfo>()
     const names = new Set<string>()
     for (const entry of commands) {
       const info = parseEngineEntry(entry)
       if (L3_INTERNAL_RE.test(info.name)) continue
-      this.engineCommands.set(info.name, info)
+      parsed.set(info.name, info)
       names.add(info.name)
     }
     // LaTeX's \DeclareRobustCommand creates a 0-arg wrapper "\foo" that
     // calls an inner "\foo " (trailing space) which has the real args.
     // Merge arg counts from "name " entries into "name" entries.
-    for (const [name, info] of this.engineCommands) {
+    for (const [name, info] of parsed) {
       if (!name.endsWith(' ') || info.argCount <= 0) continue
       const baseName = name.trimEnd()
-      const baseInfo = this.engineCommands.get(baseName)
+      const baseInfo = parsed.get(baseName)
       if (baseInfo && baseInfo.argCount <= 0) {
         baseInfo.argCount = info.argCount
       }
     }
-    this.engineEnvironments = detectEnvironments(names)
+    return { commands: parsed, environments: detectEnvironments(names) }
+  }
+
+  /** Atomically replace every runtime-observed completion field. */
+  updateCompletionSnapshot(snapshot: CompletionSnapshot): void {
+    const bounded = boundCompletionSnapshot(snapshot)
+    const commands = new Map<string, EngineCommandInfo>()
+    for (const command of bounded.fields.commands.values) {
+      commands.set(command.name, {
+        name: command.name,
+        eqType: command.eqType,
+        argCount: command.argCount,
+        category: classifyEqType(command.eqType),
+      })
+    }
+    const location: SourceLocation = {
+      file: `completion-snapshot:${bounded.identity.projectRevision}`,
+      line: 1,
+      column: 1,
+    }
+    const runtimeValues = new Map<'counter' | 'length', ProjectValue[]>([
+      [
+        'counter',
+        bounded.fields.counters.values.map((value) => ({
+          name: value.name,
+          role: 'runtime-observed',
+          location,
+        })),
+      ],
+      [
+        'length',
+        bounded.fields.lengths.values.map((value) => ({
+          name: value.name,
+          role: 'runtime-observed',
+          location,
+        })),
+      ],
+    ])
+    const runtimeKeys = bounded.fields.keyFamilies.values.flatMap((family) =>
+      family.keys.map((key) => ({
+        family: family.name,
+        name: key.name,
+        valueType: 'free-text' as const,
+        location,
+        provenance: 'runtime-observed' as const,
+      })),
+    )
+    const runtimeColors = bounded.fields.colors.values.map((value) => ({
+      name: value.name,
+      kind: 'define' as const,
+      location,
+      provenance: 'runtime-observed' as const,
+    }))
+
+    this.engineCommands = commands
+    this.engineEnvironments = new Set(
+      bounded.fields.environments.values.map((environment) => environment.name),
+    )
+    this.runtimeValues = runtimeValues
+    this.runtimeKeys = runtimeKeys
+    this.runtimeColors = runtimeColors
+    this.completionSnapshot = bounded
+    this.completionSnapshotStale = false
+  }
+
+  /** Mark observations stale on any project/source topology change. Static/project
+   *  declarations stay available, but runtime values are no longer consumed. */
+  invalidateCompletionSnapshot(): void {
+    if (!this.completionSnapshot || this.completionSnapshotStale) return
+    this.completionSnapshotStale = true
+    this.engineCommands = new Map()
+    this.engineEnvironments = new Set()
+    this.runtimeColors = []
+    this.runtimeValues.clear()
+    this.runtimeKeys = []
+  }
+
+  getCompletionSnapshotState(): CompletionSnapshotState {
+    if (!this.completionSnapshot) return { status: 'absent' }
+    return {
+      status: this.completionSnapshotStale ? 'stale' : 'fresh',
+      snapshot: structuredClone(this.completionSnapshot),
+    }
+  }
+
+  getCompletionSnapshotStatus(): CompletionSnapshotState['status'] {
+    if (!this.completionSnapshot) return 'absent'
+    return this.completionSnapshotStale ? 'stale' : 'fresh'
   }
 
   getEngineCommands(): ReadonlyMap<string, EngineCommandInfo> {

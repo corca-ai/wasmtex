@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createCompletionSnapshot } from './engine/completion-snapshot'
 import {
   InMemoryTexResourceCatalogProvider,
   type TexResourceCatalogIdentity,
@@ -314,6 +315,43 @@ describe('LatexLspServer', () => {
     const { server, sent } = makeServer()
     server.handle({ jsonrpc: '2.0', id: 9, method: 'textDocument/foo', params: {} })
     expect(responseFor(sent, 9)!.error!.code).toBe(-32601)
+  })
+
+  it('accepts revisioned completion snapshots and reports them stale after a change', async () => {
+    const text = '\\runt'
+    const snapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root: 'main.tex',
+      profile: { id: 'rpc-test', texliveYear: '2025', mirrorRevision: 'rev-1' },
+      projectFiles: [{ path: 'main.tex', content: text }],
+      engineCommands: ['runtimecmd\t111\t0'],
+    })
+    const { server, sent } = makeServer({ files: { 'main.tex': text }, lint: false })
+    await server.handle({
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'wasmtex/updateCompletionSnapshot',
+      params: { snapshot },
+    })
+    expect(result(sent, 20).status).toBe('fresh')
+    server.handle({
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'textDocument/completion',
+      params: { textDocument: { uri: URI }, position: { line: 0, character: 5 } },
+    })
+    expect(result(sent, 21).items.map((item: { label: string }) => item.label)).toContain(
+      '\\runtimecmd',
+    )
+    server.handle({
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: URI },
+        contentChanges: [{ text: `${text}\n% changed` }],
+      },
+    })
+    server.handle({ jsonrpc: '2.0', id: 22, method: 'wasmtex/completionSnapshotState' })
+    expect(result(sent, 22).status).toBe('stale')
   })
 
   it('does not crash on a malformed request (missing position)', () => {

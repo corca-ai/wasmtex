@@ -7,6 +7,10 @@ import type {
 } from '../types'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
 import type { CompileEngine } from './compile-engine'
+import {
+  type EngineCompletionObservation,
+  parseEngineCompletionObservation,
+} from './completion-snapshot'
 import { buildDependencyGraph } from './dependency-graph'
 import { engineFormatUrl, engineWorkerUrl } from './engine-assets'
 import { readResponseWithProgress } from './fetch-gz'
@@ -62,11 +66,45 @@ interface WorkerMessage {
   preambleSnapshot?: boolean
   preambleRebuilt?: boolean
   engineCommands?: string[]
+  engineCommandsComplete?: boolean
+  engineCommandsDropped?: number
   inputFiles?: string[]
   inputFilesComplete?: boolean
   semanticTrace?: string
+  completionObservations?: string[]
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
+}
+
+function applyEngineCommandObservation(result: CompileResult, data: WorkerMessage): void {
+  const rawCommands = Array.isArray(data.engineCommands) ? data.engineCommands : null
+  const commands = rawCommands?.filter((command): command is string => typeof command === 'string')
+  if (commands) result.engineCommands = commands
+
+  const engineDropped = data.engineCommandsDropped
+  if (
+    typeof engineDropped !== 'number' ||
+    !Number.isSafeInteger(engineDropped) ||
+    engineDropped < 0
+  ) {
+    result.engineCommandsComplete = false
+    return
+  }
+  const hostDropped = rawCommands ? rawCommands.length - (commands?.length ?? 0) : 0
+  result.engineCommandsDropped = Math.min(Number.MAX_SAFE_INTEGER, engineDropped + hostDropped)
+  result.engineCommandsComplete =
+    rawCommands !== null && data.engineCommandsComplete === true && hostDropped === 0
+}
+
+function applyRecorderObservation(result: CompileResult, data: WorkerMessage): void {
+  if (!Array.isArray(data.inputFiles)) {
+    result.inputFilesComplete = false
+    return
+  }
+  const inputFiles = data.inputFiles.filter((path): path is string => typeof path === 'string')
+  result.inputFiles = inputFiles
+  result.inputFilesComplete =
+    data.inputFilesComplete === true && inputFiles.length === data.inputFiles.length
 }
 
 /** Merge two warmup caches; `override` entries win on key collisions.
@@ -117,6 +155,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Last-written text sources, so dependency extraction can read the main source
    *  synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
+  private completionObservation: EngineCompletionObservation | null = null
   /** Download/persist watermark (drives auto-persist; single-flight guarded). */
   private readonly persist: PersistState = { downloadCount: 0, lastPersisted: -1, inFlight: false }
 
@@ -466,6 +505,9 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     const start = performance.now()
 
     const data = await this.postMessageWithResponse({ cmd: 'compilelatex' }, 'cmd:compile')
+    this.completionObservation = Array.isArray(data.completionObservations)
+      ? parseEngineCompletionObservation(data.completionObservations)
+      : null
 
     this.status = 'ready'
     const compileTime = performance.now() - start
@@ -496,13 +538,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       preambleSnapshot,
       preambleRebuilt,
     }
-    if (data.engineCommands) {
-      result.engineCommands = data.engineCommands
-    }
-    if (data.inputFiles) {
-      result.inputFiles = data.inputFiles
-    }
-    result.inputFilesComplete = data.inputFilesComplete === true
+    applyEngineCommandObservation(result, data)
+    applyRecorderObservation(result, data)
     if (data.semanticTrace) {
       result.semanticTrace = data.semanticTrace
     }
@@ -527,6 +564,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (success) this.maybePersistCache()
 
     return result
+  }
+
+  getCompletionObservation(): EngineCompletionObservation | null {
+    return this.completionObservation ? structuredClone(this.completionObservation) : null
   }
 
   /**

@@ -893,7 +893,7 @@ function completeProjectKeys(
         kind: 'keyword',
         insertText: needsValue ? `${name}=\${1}` : name,
         ...(needsValue ? { snippet: true as const } : {}),
-        detail: `${first.valueType} key · project/${first.family}`,
+        detail: `${first.valueType} key · ${first.provenance === 'runtime-observed' ? 'runtime-observed' : 'project'}/${first.family}`,
         documentation: definitions
           .map((key) => `${key.location.file}:${key.location.line}`)
           .join('\n\n'),
