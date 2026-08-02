@@ -359,6 +359,30 @@ describe('runtime completion snapshots', () => {
     expect(service.getCompletionSnapshotState().status).toBe('stale')
   })
 
+  it('explicitly clears engine observations before a replacement engine compiles', async () => {
+    const source = '\\runt'
+    const snapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root: 'main.tex',
+      profile,
+      projectFiles: [{ path: 'main.tex', content: source }],
+      engineCommands: ['runtimecmd\t111\t0'],
+    })
+    const service = new LatexLanguageService({ files: { 'main.tex': source }, lint: false })
+
+    await service.updateCompletionSnapshot(snapshot)
+    expect(service.getCompletions('main.tex', 1, 6).map((item) => item.label)).toContain(
+      '\\runtimecmd',
+    )
+
+    service.clearCompletionSnapshot()
+
+    expect(service.getCompletionSnapshotState()).toEqual({ status: 'absent' })
+    expect(service.getCompletions('main.tex', 1, 6).map((item) => item.label)).not.toContain(
+      '\\runtimecmd',
+    )
+  })
+
   it('does not let an older asynchronous validation replace a newer matching snapshot', async () => {
     const firstSource = '\\first'
     const secondSource = '\\second'

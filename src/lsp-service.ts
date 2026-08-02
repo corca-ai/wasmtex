@@ -354,6 +354,11 @@ export class LatexLanguageService {
     return this.index.getCompletionSnapshotState()
   }
 
+  clearCompletionSnapshot(): void {
+    this.completionSnapshotUpdate++
+    this.index.clearCompletionSnapshot()
+  }
+
   private assertCompletionProfile(snapshot: CompletionSnapshot): void {
     const actual = snapshot.identity.profile
     const selected = this.completionProfile
