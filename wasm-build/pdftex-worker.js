@@ -614,7 +614,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         console.log("[kpse] Downloaded: " + reqname + " (" + format + ")");
         return ptr;
     } else {
-        console.warn("[kpse] Failed: " + reqname + " (" + format + ") - status: " + xhr.status);
+        var status = xhr ? xhr.status : "network error";
+        console.warn("[kpse] Failed: " + reqname + " (" + format + ") - status: " + status);
         texlive404_cache[cacheKey] = 1;
         return 0;
     }
