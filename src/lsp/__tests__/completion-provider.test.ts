@@ -1,7 +1,8 @@
 import type * as monaco from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
 import { VirtualFS } from '../../fs/virtual-fs'
-import { createCompletionProvider } from '../completion-provider'
+import { createAsyncCompletionProvider, createCompletionProvider } from '../completion-provider'
+import { CompletionResolverRegistry } from '../completion-registry'
 import { ProjectIndex } from '../project-index'
 
 interface MockModel {
@@ -68,6 +69,41 @@ describe('createCompletionProvider', () => {
     const result = complete(provider, mockModel(['\\fra']), 1, 5)
     expect(result.suggestions.length).toBeGreaterThan(0)
     expect(result.suggestions.some((s) => s.label === '\\frac')).toBe(true)
+  })
+
+  it('forwards a host registry and cancellation token through the async adapter', async () => {
+    const registry = new CompletionResolverRegistry()
+    registry.registerResolver('command', (context) => [
+      {
+        label: '\\custom',
+        kind: 'command',
+        insertText: 'custom',
+        replaceLength: context.prefix.length,
+      },
+    ])
+    const asyncProvider = createAsyncCompletionProvider(index, fs, registry)
+
+    const result = (await asyncProvider.provideCompletionItems(
+      mockModel(['\\cus']) as unknown as monaco.editor.ITextModel,
+      { lineNumber: 1, column: 5 } as unknown as monaco.Position,
+      undefined as unknown as monaco.languages.CompletionContext,
+      { isCancellationRequested: false } as monaco.CancellationToken,
+    )) as CompletionResult
+
+    expect(result.suggestions.map(({ label }) => label)).toEqual(['\\custom'])
+  })
+
+  it('returns no async suggestions when the request is already cancelled', async () => {
+    const asyncProvider = createAsyncCompletionProvider(index, fs)
+
+    const result = (await asyncProvider.provideCompletionItems(
+      mockModel(['\\fra']) as unknown as monaco.editor.ITextModel,
+      { lineNumber: 1, column: 5 } as unknown as monaco.Position,
+      undefined as unknown as monaco.languages.CompletionContext,
+      { isCancellationRequested: true } as monaco.CancellationToken,
+    )) as CompletionResult
+
+    expect(result.suggestions).toEqual([])
   })
 
   it('provides only matching commands', () => {

@@ -115,7 +115,13 @@ export class LatexLspServer {
         this.didChange(params)
         break
       case 'textDocument/completion':
-        this.respond(id, this.completion(pos))
+        {
+          const completion = this.completion(pos)
+          if (completion instanceof Promise) {
+            return completion.then((result) => this.respond(id, result))
+          }
+          this.respond(id, completion)
+        }
         break
       case 'textDocument/hover':
         this.respond(id, this.hover(pos))
@@ -177,13 +183,19 @@ export class LatexLspServer {
     this.publishAllDiagnostics()
   }
 
-  private completion(params: DocPositionParams): { isIncomplete: boolean; items: object[] } {
+  private completion(
+    params: DocPositionParams,
+  ):
+    | { isIncomplete: boolean; items: object[] }
+    | Promise<{ isIncomplete: boolean; items: object[] }> {
     const { path, line, column } = locate(params)
-    const result = this.service.getCompletionResult(path, line, column)
-    return {
+    const initial = this.service.getCompletionResult(path, line, column)
+    const mapResult = (result: typeof initial) => ({
       isIncomplete: result.isIncomplete,
       items: result.items.map((it) => toLspCompletionItem(it, params.position)),
-    }
+    })
+    if (!initial.isIncomplete) return mapResult(initial)
+    return this.service.getCompletionResultAsync(path, line, column).then(mapResult)
   }
 
   private hover(params: DocPositionParams): object | null {

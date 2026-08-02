@@ -17,6 +17,8 @@ export declare function detectCompletionContext(lineContent: string, column: num
 export interface ProvideCompletionOptions {
     registry?: CompletionResolverRegistry;
     cancellationToken?: CompletionCancellationToken;
+    /** Collect lazy catalog work required by the resolved completion domain. */
+    waitUntil?: (pending: Promise<unknown>) => void;
 }
 export interface DefaultCompletionRegistryOptions {
     resourceCatalog?: TexResourceCatalogProvider;
@@ -30,6 +32,11 @@ export declare function preloadSemanticCatalog(registry: CompletionResolverRegis
 export declare function provideCompletions(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex, fs: VirtualFS, options?: ProvideCompletionOptions): NeutralCompletionItem[];
 /** Compute completions plus lazy-loading state at a position (editor-neutral). */
 export declare function provideCompletionResult(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex, fs: VirtualFS, options?: ProvideCompletionOptions): NeutralCompletionList;
+/**
+ * Compute completion after the lazy catalog work started by this request settles once.
+ * A failed or still-partial source remains `isIncomplete` and may retry on a later request.
+ */
+export declare function provideCompletionResultAsync(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex, fs: VirtualFS, options?: ProvideCompletionOptions): Promise<NeutralCompletionList>;
 /** Hover info at a position (editor-neutral). */
 export declare function provideHover(doc: NeutralDocument, pos: NeutralPosition, index: ProjectIndex): NeutralHover | null;
 /** Go-to-definition target at a position (editor-neutral). */

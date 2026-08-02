@@ -3,6 +3,7 @@ import { createCompletionSnapshot } from './engine/completion-snapshot'
 import {
   InMemoryTexResourceCatalogProvider,
   type TexResourceCatalogIdentity,
+  type TexResourceCatalogProvider,
 } from './lsp/resource-catalog'
 import { type JsonRpcMessage, LatexLspServer, pathFromUri, uriFromPath } from './lsp-server'
 import type { LatexLanguageServiceOptions } from './lsp-service'
@@ -158,13 +159,13 @@ describe('LatexLspServer', () => {
     expect(frac.textEdit.newText).toContain('frac')
   })
 
-  it('returns exact catalog resources over JSON-RPC', () => {
+  it('returns a cold catalog on the opening-brace JSON-RPC request', async () => {
     const identity: TexResourceCatalogIdentity = {
       schemaVersion: 1,
       texliveYear: '2025',
       mirrorRevision: '2025-0123456789abcdef',
     }
-    const resourceCatalog = new InMemoryTexResourceCatalogProvider(identity, [
+    const readyCatalog = new InMemoryTexResourceCatalogProvider(identity, [
       {
         ...identity,
         kind: 'tex-class',
@@ -187,18 +188,30 @@ describe('LatexLspServer', () => {
         ],
       },
     ])
+    let ready = false
+    const resourceCatalog: TexResourceCatalogProvider = {
+      identity,
+      getState(kind) {
+        return ready ? readyCatalog.getState(kind) : { status: 'idle' }
+      },
+      async load(kind) {
+        await Promise.resolve()
+        ready = true
+        return readyCatalog.load(kind)
+      },
+    }
     const { server, sent } = makeServer({ resourceCatalog })
     const uri = 'file:///m.tex'
-    const line = '\\documentclass{bo}'
+    const line = '\\documentclass{'
     server.handle({
       method: 'textDocument/didOpen',
       params: { textDocument: { uri, text: line } },
     })
-    server.handle({
+    await server.handle({
       jsonrpc: '2.0',
       id: 12,
       method: 'textDocument/completion',
-      params: { textDocument: { uri }, position: { line: 0, character: line.indexOf('}') } },
+      params: { textDocument: { uri }, position: { line: 0, character: line.length } },
     })
 
     expect(result(sent, 12)).toMatchObject({
