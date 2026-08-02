@@ -16,7 +16,7 @@
 #   scripts/build-icu-data.sh                 # build icudt68l.dat into /tmp/icu-data/
 #   scripts/build-icu-data.sh --upload        # build + gzip + upload to the CDN (needs AWS)
 #
-# CDN target: s3://corca-wasmtex-texlib/<year>/icudt68l.dat (gzip Content-Encoding,
+# CDN target: s3://corca-fastlatex-texlib/<year>/icudt68l.dat (gzip Content-Encoding,
 # so the worker's XHR transparently decompresses). The worker fetches it at
 # ${texlive_endpoint}icudt68l.dat.
 set -euo pipefail
@@ -24,7 +24,7 @@ set -euo pipefail
 ICU_VER="68_2"          # must match emscripten's ICU port (tools/ports/icu.py TAG)
 ICU_MAJOR="68"
 YEAR="${YEAR:-2025}"
-S3_BUCKET="${S3_BUCKET:-corca-wasmtex-texlib}"
+S3_BUCKET="${S3_BUCKET:-corca-fastlatex-texlib}"
 EMSDK_IMAGE="${EMSDK_IMAGE:-emscripten/emsdk:3.1.46}"
 WORK="${WORK_DIR:-/tmp/icu-data}"
 UPLOAD=0

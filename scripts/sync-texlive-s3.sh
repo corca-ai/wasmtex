@@ -44,7 +44,7 @@ METADATA_URL=$(json_value metadataArchive.url)
 METADATA_SHA512=$(json_value metadataArchive.sha512)
 TLPDB_MEMBER=$(json_value tlpdb.archiveMember)
 
-S3_BUCKET="${S3_BUCKET:-corca-wasmtex-texlib}"
+S3_BUCKET="${S3_BUCKET:-corca-fastlatex-texlib}"
 WORK_DIR="${WORK_DIR:-/tmp/texlive-s3}"
 RELEASE_ROOT="$WORK_DIR/release"
 S3_YEAR_ROOT="s3://$S3_BUCKET/$TEXLIVE_YEAR"

@@ -27,7 +27,7 @@ const FONT_ROOT =
   process.argv.find((a) => !a.startsWith('--') && a.endsWith('pdftex')) || '/tmp/texlive-s3/pdftex'
 const FONT_DIRS = ['47', '36', '32'] // opentype, truetype, type1
 const OUT = join(root, 'xetexfontlist.txt')
-const S3_BUCKET = process.env.S3_BUCKET || 'corca-wasmtex-texlib'
+const S3_BUCKET = process.env.S3_BUCKET || 'corca-fastlatex-texlib'
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 
 const SEP = '\x1f' // ASCII unit separator — won't appear in font metadata

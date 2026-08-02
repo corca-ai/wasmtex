@@ -28,7 +28,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-const S3_BUCKET = 's3://corca-wasmtex-texlib'
+const S3_BUCKET = 's3://corca-fastlatex-texlib'
 const S3_PREFIX = '2025/pdftex/'
 const OUTPUT_FILE = join(__dirname, '..', 'bloom-filter.bin')
 
