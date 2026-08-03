@@ -17,8 +17,8 @@ jobs:
   lib-fresh:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm run check:licenses
       # Plain `npm ci` (not --ignore-scripts): esbuild's postinstall fetches its binary,
@@ -40,14 +40,14 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run test:coverage
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/
@@ -56,13 +56,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm run check:licenses
       - run: npm ci
       - name: Download latest WASM engine
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-build.yml
           name: wasm-pdftex
@@ -71,7 +71,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest BibTeX WASM
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-build.yml
           name: wasm-bibtex
@@ -80,7 +80,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest BibTeX8 WASM
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-bibtex8.yml
           name: wasm-bibtex8
@@ -89,7 +89,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest makeindex WASM
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-makeindex.yml
           name: wasm-makeindex
@@ -103,7 +103,7 @@ jobs:
         # having run yet (the API 404s listing runs, which `if_no_artifact_found`
         # does not cover).
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-xetex.yml
           name: wasm-xetex
@@ -117,7 +117,7 @@ jobs:
         # continue-on-error keeps the deploy green; LuaLaTeX then degrades to the
         # actionable "requires LuaLaTeX" result.
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-luatex.yml
           name: wasm-luatex
@@ -146,7 +146,7 @@ jobs:
         env:
           BASE_URL: /${{ github.event.repository.name }}/
       - run: node scripts/check-release-notices.mjs --assets public/wasmtex/2025 --demo dist
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.ref == 'refs/heads/main'
         with: { path: dist }
 
@@ -160,4 +160,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
