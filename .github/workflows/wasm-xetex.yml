@@ -43,7 +43,7 @@ jobs:
   build-xetex:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
         run: node scripts/check-license-compliance.mjs 2025
@@ -52,7 +52,7 @@ jobs:
         if: github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24 }
 
       - name: Build XeLaTeX engine from source (own glue)
@@ -130,7 +130,7 @@ jobs:
             wasmtex-dvipdfm.js wasmtex-dvipdfm.worker.js wasmtex-dvipdfm.wasm
 
       - name: Upload XeLaTeX WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-xetex
           path: |
@@ -145,7 +145,7 @@ jobs:
           retention-days: 90
 
       - name: Upload non-release XeTeX link-map evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-xetex-link-map
           path: |
