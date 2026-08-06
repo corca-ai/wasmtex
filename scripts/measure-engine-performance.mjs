@@ -16,7 +16,8 @@ if (!['pdflatex', 'xelatex', 'lualatex'].includes(engine)) {
 }
 
 const assetBaseUrl = 'http://assets.local/'
-installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl })
+const publicDir = process.env.WASMTEX_PUBLIC_DIR || join(root, 'public')
+installNodeWorkerHost({ publicDir, assetBaseUrl })
 const unicode = engine !== 'pdflatex'
 const source = [
   `% !TEX program = ${engine}`,
@@ -56,6 +57,8 @@ const sample = {
   initMs: Math.round(initMs),
   firstCompileMs: Math.round(firstCompileMs),
   secondCompileMs: Math.round(secondCompileMs),
+  firstPhaseTimings: first.phaseTimings ?? null,
+  secondPhaseTimings: second.phaseTimings ?? null,
   peakRssMiB: Math.ceil(process.resourceUsage().maxRSS / 1024),
 }
 const output = `${JSON.stringify(sample, null, 2)}\n`

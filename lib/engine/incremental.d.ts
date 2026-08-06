@@ -116,6 +116,9 @@ export declare class IncrementalCompiler {
      * a compile is the caller's responsibility to serialize.
      */
     prebuild(source: string, files?: FileSet, editOffset?: number): Promise<boolean>;
+    /** Prebuild for a host cursor/edit location. Included files map to the position of
+     *  their `\include`/`\input` command in the main source, matching editOffset(). */
+    prebuildForEdit(source: string, files: FileSet, path: string, offset: number): Promise<boolean>;
     /** First changed position in the main source, pulled earlier to the `\include`/`\input`
      *  command of any included file whose content changed since the last full compile. */
     private editOffset;

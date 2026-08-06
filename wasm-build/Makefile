@@ -187,6 +187,12 @@ SYNCTEX_REDEFINE = \
 # EXTRA_EXPORTED_RUNTIME_METHODS: cwrap for calling C functions, FS for
 #   virtual filesystem access.
 
+# The worker keeps an initialization snapshot and copies it before every run, so
+# an oversized initial heap is multiplied in browser memory. pdfTeX grows on
+# demand; 64 MiB covers the golden corpus and large-document smoke test while
+# keeping the snapshot bounded. Override this for build experiments/corpus bisects.
+PDFTEX_INITIAL_MEMORY ?= 67108864
+
 EMCC_FLAGS = \
 	-O2 \
 	-sEMIT_EMSCRIPTEN_LICENSE=1 \
@@ -198,7 +204,7 @@ EMCC_FLAGS = \
 	-sMODULARIZE=0 \
 	-sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileBibtex","_compileFormat","_main","_setMainEntry","_malloc","_free","_scanHashTable"]' \
 	-sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","HEAPU8"]' \
-	-sINITIAL_MEMORY=536870912 \
+	-sINITIAL_MEMORY=$(PDFTEX_INITIAL_MEMORY) \
 	-sWASM=1 \
 	--js-library $(JSLIB) \
 	-Wl,--wrap=kpse_find_file \

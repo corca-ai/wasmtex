@@ -2,6 +2,7 @@ import { CachedTexliveFile, CompileResult, TexliveFileEntry, TexliveVersion, War
 import { BaseWorkerEngine } from './base-worker-engine';
 import { CompileEngine } from './compile-engine';
 import { EngineCompletionObservation } from './completion-snapshot';
+import { BinaryStore } from './persistent-cache';
 export interface WasmTexEngineOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -25,6 +26,15 @@ export interface WasmTexEngineOptions {
      *  so return visits are near-instant and work offline. Silently no-ops where
      *  IndexedDB is unavailable. Defaults to false. */
     persistentCache?: boolean;
+    /** Persist document-specific pdfLaTeX preamble formats across worker sessions.
+     *  Requires an immutable `preambleCacheIdentity.mirrorRevision`. */
+    persistentPreambleCache?: boolean;
+    /** Immutable TeX Live mirror identity used to fail closed on cache reuse. */
+    preambleCacheIdentity?: {
+        mirrorRevision: string | null;
+    };
+    /** Test/integration injection point; browser hosts normally omit it. @internal */
+    preambleCacheStore?: BinaryStore;
 }
 /** Incoming response message from the WASM worker. */
 interface WorkerMessage {
@@ -43,6 +53,10 @@ interface WorkerMessage {
     data?: string;
     preambleSnapshot?: boolean;
     preambleRebuilt?: boolean;
+    phaseTimings?: unknown;
+    preambleFormat?: ArrayBuffer;
+    preambleHash?: string;
+    preambleInputFiles?: string[];
     engineCommands?: string[];
     engineCommandsComplete?: boolean;
     engineCommandsDropped?: number;
@@ -64,6 +78,16 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private warmupCache;
     private preambleSnapshotEnabled;
     private persistentCacheEnabled;
+    private readonly assetBaseUrl;
+    private readonly effectiveTexliveUrl;
+    private readonly preambleMirrorRevision;
+    private preambleCache;
+    private engineBuildId;
+    private readonly projectFiles;
+    private loadedPreambleKey;
+    private attemptedPreambleKey;
+    private activePreambleDependencies;
+    private preamblePersistInFlight;
     private durableCache;
     private bloomFilter;
     /** Main file name, tracked for source-based dependency extraction. */
@@ -77,6 +101,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     onFileDownload?: (filename: string) => void;
     constructor(options?: WasmTexEngineOptions);
     init(): Promise<void>;
+    private loadEngineBuildId;
     /**
      * Dispatch a worker message to the appropriate handler.
      * Separated from init() to reduce cognitive complexity.
@@ -127,6 +152,11 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
      *  or reaching into the worker protocol directly. */
     buildFormat(): Promise<Uint8Array>;
     compile(): Promise<CompileResult>;
+    private validPhaseTimings;
+    private currentPreambleKey;
+    private restorePersistentPreamble;
+    private dependenciesMatch;
+    private persistPreambleSnapshot;
     getCompletionObservation(): EngineCompletionObservation | null;
     /**
      * Build a mid-document checkpoint (#55): run `headText + \dump` in INITEX to capture

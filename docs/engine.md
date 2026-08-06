@@ -510,6 +510,36 @@ Some preambles are hostile to precompilation (e.g. packages that misbehave under
   worker discards the cached `.fmt` and retries with the base format — so output
   correctness always wins over the speed optimization.
 
+### Durable preamble snapshots
+
+Set `persistentPreambleCache: true` to retain successful pdfLaTeX preamble formats
+across compiler and worker sessions. The browser cache is a 32 MiB bounded LRU in
+IndexedDB. It is independent of `persistentCache`, which stores fetched TeX Live
+files rather than the document-specific format.
+
+A snapshot key binds the engine build receipt, TeX Live year and URL, immutable
+mirror revision, and exact preamble bytes. Recorder-observed project files used by
+the preamble are stored with SHA-256 digests and rechecked before restore. A changed
+style/class file, malformed entry, incompatible schema, missing build receipt, or
+unavailable IndexedDB therefore fails closed to a normal preamble rebuild.
+
+```ts
+new WasmTexCompiler({
+  completionProfile: { id: 'production-2025', mirrorRevision: 'immutable-r42' },
+  persistentPreambleCache: true,
+})
+```
+
+The worker returns a copied format only when it rebuilt the preamble; persistence
+runs off the compile response path. `clearCache()` clears both TeX Live assets and
+durable preamble snapshots.
+
+The pdfTeX WASM build starts with a 64 MiB growable heap. The worker copies this
+heap for initialization restore, so keeping the initial allocation bounded avoids
+multiplying an unused 512 MiB reservation while still allowing large documents to
+grow on demand. `PDFTEX_INITIAL_MEMORY` can override the default for build-corpus
+experiments.
+
 ### Opting out
 
 Set `disablePreambleSnapshot: true` to turn the feature off entirely and always run

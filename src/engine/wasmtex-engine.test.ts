@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CachedTexliveFile, WarmupCache } from '../types'
+import { MemoryBinaryStore } from './persistent-cache'
 import { mergeWarmupCaches, WasmTexPdftexEngine } from './wasmtex-engine'
 import type { EngineWorker } from './worker-host'
 
@@ -53,6 +54,12 @@ type WorkerReply = {
   inputFiles?: unknown[]
   inputFilesComplete?: boolean
   completionObservations?: unknown[]
+  phaseTimings?: unknown
+  preambleFormat?: ArrayBuffer
+  preambleHash?: string
+  preambleInputFiles?: string[]
+  preambleRebuilt?: boolean
+  preambleSnapshot?: boolean
 }
 
 /** Drives the engine without a real Worker by exposing the protected seams. */
@@ -79,6 +86,88 @@ class TestableEngine extends WasmTexPdftexEngine {
 function noop(): void {
   /* init callbacks are unused for cmd-keyed replies */
 }
+
+describe('WasmTexPdftexEngine persistent preamble cache', () => {
+  class PreambleTestEngine extends WasmTexPdftexEngine {
+    loadCalls = 0
+
+    markReady(): void {
+      this.status = 'ready'
+      ;(this as unknown as { engineBuildId: string }).engineBuildId = 'a'.repeat(64)
+    }
+
+    installProtocol(compileReply: WorkerReply): void {
+      this.worker = {
+        postMessage: (message: unknown) => {
+          const command = (message as { cmd?: string }).cmd
+          if (!command) return
+          if (command === 'loadpreamblesnapshot') this.loadCalls++
+          const reply: WorkerReply =
+            command === 'compilelatex' ? compileReply : { cmd: command, result: 'ok' }
+          this.dispatchWorkerMessage(reply as never, noop, noop)
+        },
+      } as unknown as EngineWorker
+    }
+
+    async waitForPreamblePersist(): Promise<void> {
+      await (this as unknown as { preamblePersistInFlight: Promise<void> | null })
+        .preamblePersistInFlight
+    }
+  }
+
+  const options = (store: MemoryBinaryStore) => ({
+    assetBaseUrl: '/',
+    persistentPreambleCache: true,
+    preambleCacheIdentity: { mirrorRevision: '2025-0123456789abcdef' },
+    preambleCacheStore: store,
+  })
+  const source = '\\documentclass{article}\n\\usepackage{local}\n\\begin{document}Hi\\end{document}'
+
+  async function writeProject(engine: PreambleTestEngine, style: string): Promise<void> {
+    await Promise.all([engine.writeFile('main.tex', source), engine.writeFile('local.sty', style)])
+    engine.setMainFile('main.tex')
+  }
+
+  it('restores a snapshot in a new engine only when project dependencies match', async () => {
+    const store = new MemoryBinaryStore()
+    const first = new PreambleTestEngine(options(store))
+    first.markReady()
+    first.installProtocol({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      preambleRebuilt: true,
+      preambleFormat: Uint8Array.of(1, 2, 3).buffer,
+      preambleHash: 'worker-hash',
+      preambleInputFiles: ['/work/local.sty', '/tex/article.cls'],
+    })
+    await writeProject(first, 'STYLE-A')
+    await first.compile()
+    await first.waitForPreamblePersist()
+
+    const matching = new PreambleTestEngine(options(store))
+    matching.markReady()
+    matching.installProtocol({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      preambleSnapshot: true,
+    })
+    await writeProject(matching, 'STYLE-A')
+    await matching.compile()
+    expect(matching.loadCalls).toBe(1)
+    matching.setMainFile('main.tex')
+    await matching.compile()
+    expect(matching.loadCalls).toBe(1)
+
+    const changed = new PreambleTestEngine(options(store))
+    changed.markReady()
+    changed.installProtocol({ cmd: 'compile', result: 'ok', status: 0 })
+    await writeProject(changed, 'STYLE-B')
+    await changed.compile()
+    expect(changed.loadCalls).toBe(0)
+  })
+})
 
 describe('WasmTexPdftexEngine worker crash after init', () => {
   /** Ready engine + a worker that never replies, so a started compile stays pending. */
@@ -247,6 +336,43 @@ describe('WasmTexPdftexEngine persist watermark', () => {
 })
 
 describe('WasmTexPdftexEngine compile() result mapping', () => {
+  const validPhaseTimings = {
+    workerTotalMs: 20,
+    heapRestoreMs: 7,
+    heapSnapshotMs: 3,
+    heapSnapshotBytes: 64 * 1024 * 1024,
+    heapSizeBytes: 64 * 1024 * 1024,
+    preambleBuildMs: 0,
+    formatInstallMs: 2,
+    preambleExportMs: 0,
+    postProcessMs: 1,
+    texRunMs: 10,
+  }
+
+  it('maps valid worker phase timings and rejects malformed telemetry', async () => {
+    const valid = new TestableEngine({ assetBaseUrl: '/' })
+    valid.markReady()
+    valid.installWorker(() => ({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      phaseTimings: validPhaseTimings,
+    }))
+    await expect(valid.compile()).resolves.toMatchObject({
+      phaseTimings: validPhaseTimings,
+    })
+
+    const malformed = new TestableEngine({ assetBaseUrl: '/' })
+    malformed.markReady()
+    malformed.installWorker(() => ({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      phaseTimings: { workerTotalMs: -1 },
+    }))
+    expect((await malformed.compile()).phaseTimings).toBeUndefined()
+  })
+
   it('maps bounded worker observations without changing compile output', async () => {
     const engine = new TestableEngine({ assetBaseUrl: '/' })
     const pdf = Uint8Array.of(37, 80, 68, 70).buffer

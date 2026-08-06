@@ -19,6 +19,7 @@ export {
   type WasmTexCompilerOptions,
 } from './headless'
 export type {
+  CompilePhaseTimings,
   CompileResult,
   CompletionSnapshot,
   CompletionSnapshotCollection,

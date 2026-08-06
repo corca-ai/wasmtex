@@ -23,11 +23,10 @@ describe('syncAllFilesToEngine', () => {
 
     const done = syncAllFilesToEngine(fs, engine, async () => {}, 'main.tex')
 
-    // listFiles() sorts → extra.tex is written first; let it suspend there.
+    // Both worker requests are dispatched without serializing their round trips.
     await tick()
-    expect(writes).toEqual(['extra.tex'])
-    resolvers[0]!() // extra.tex write resolves; loop advances to main.tex
-    await tick()
+    expect(writes).toEqual(['extra.tex', 'main.tex'])
+    resolvers[0]!() // extra.tex write resolves while main.tex remains in flight
 
     // A host edit replaces extra.tex AFTER it was captured/written — it must remain
     // modified so the next cycle re-sends it.

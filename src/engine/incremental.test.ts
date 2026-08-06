@@ -282,6 +282,18 @@ describe('IncrementalCompiler — speculative prebuild (#99)', () => {
     expect(await inc.prebuild(changed)).toBe(false)
     expect(mock.buildCalls).toBe(0)
   })
+
+  it('maps an included-file edit to its command in the main source', async () => {
+    const main = `${PRE}\\begin{document}\nHead.\n\\clearpage\n\\input{chapter}\n\\end{document}\n`
+    const files = new Map([
+      ['main.tex', main],
+      ['chapter.tex', 'chapter body'],
+    ])
+    await inc.compile(main, files)
+
+    expect(await inc.prebuildForEdit(main, files, 'chapter.tex', 4)).toBe(true)
+    expect(mock.buildCalls).toBe(1)
+  })
 })
 
 describe('IncrementalCompiler — checkpoint-unreproducible documents take the full path (#99)', () => {

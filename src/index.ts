@@ -38,6 +38,7 @@ export type {
   AppStatus,
   BoxGeometry,
   CachedTexliveFile,
+  CompilePhaseTimings,
   CompileResult,
   CompletionSnapshot,
   CompletionSnapshotCollection,

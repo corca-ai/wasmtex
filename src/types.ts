@@ -18,6 +18,9 @@ export interface CompileResult {
   preambleSnapshot?: boolean
   /** Whether the preamble `.fmt` cache was rebuilt during this compilation */
   preambleRebuilt?: boolean
+  /** Worker-side pdfTeX phase timings. Optional because older assets and the
+   *  Unicode engines do not report this protocol extension. */
+  phaseTimings?: CompilePhaseTimings
   /** Control sequences from pdfTeX hash table (package + user commands) */
   engineCommands?: string[]
   /** Whether the command inventory is complete for this engine pass. Older worker
@@ -46,6 +49,29 @@ export interface CompileResult {
    *  branch on. `errors`/`glyphCoverage` are kept for back-compat. (Geometry +
    *  dependency-graph pillars land in later increments.) */
   telemetry?: EngineTelemetry
+}
+
+export interface CompilePhaseTimings {
+  /** Total time inside the worker's compile routine. */
+  workerTotalMs: number
+  /** Aggregate time copying the pristine WASM heap back before TeX phases. */
+  heapRestoreMs: number
+  /** One-time cost of capturing the pristine initialization heap. */
+  heapSnapshotMs: number
+  /** Bytes retained by the pristine initialization snapshot. */
+  heapSnapshotBytes: number
+  /** Current grow-only WASM linear-memory size after this compile. */
+  heapSizeBytes: number
+  /** Time building a document-specific preamble format on a cache miss. */
+  preambleBuildMs: number
+  /** Time installing the selected format into the worker filesystem. */
+  formatInstallMs: number
+  /** Time copying a rebuilt preamble format for durable persistence. */
+  preambleExportMs: number
+  /** Time extracting outputs, recorder data, and runtime observations. */
+  postProcessMs: number
+  /** Aggregate time inside the main pdfTeX run(s), excluding heap restore. */
+  texRunMs: number
 }
 
 /** Stable, machine-readable classification of a compile diagnostic (#54). A host

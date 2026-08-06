@@ -29,4 +29,14 @@ describe('authored worker controllers', () => {
       expect(source.slice(importAt)).toMatch(/^importScripts\([\s\S]*\)\s*;?\s*$/)
     })
   }
+
+  it('pdftex exposes durable preamble import and phase timing protocol', () => {
+    const source = readFileSync(join(ROOT, 'pdftex-worker.js'), 'utf8')
+    expect(source).toContain('loadpreamblesnapshot')
+    expect(source).toContain('preambleFormat')
+    expect(source).toContain('heapRestoreMs')
+    expect(source).toContain('heapSnapshotMs')
+    expect(source).toContain('postProcessMs')
+    expect(source).toContain('workerTotalMs')
+  })
 })

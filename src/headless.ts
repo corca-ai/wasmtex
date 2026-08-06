@@ -16,7 +16,7 @@ import {
   createCompileEngine,
   unavailableEngineResult,
 } from './engine/compile-engine'
-import { createCompletionSnapshot } from './engine/completion-snapshot'
+import { CompletionFileDigestCache, createCompletionSnapshot } from './engine/completion-snapshot'
 import {
   type AuxiliaryDependencyObservation,
   buildDependencyManifest,
@@ -61,6 +61,7 @@ export {
   COMPLETION_SNAPSHOT_SCHEMA_VERSION,
 } from './engine/completion-snapshot'
 export type {
+  CompilePhaseTimings,
   CompletionSnapshot,
   CompletionSnapshotCollection,
   CompletionSnapshotCommand,
@@ -102,6 +103,10 @@ export interface WasmTexCompilerOptions {
   /** Enable the built-in persistent (IndexedDB) cache of fetched TeX Live assets.
    *  Silently no-ops where IndexedDB is unavailable. Defaults to false. */
   persistentCache?: boolean
+  /** Persist pdfLaTeX's document-specific preamble format in IndexedDB across
+   *  compiler sessions. Requires `completionProfile.mirrorRevision`; otherwise
+   *  it fails closed to the normal in-worker snapshot. Defaults to false. */
+  persistentPreambleCache?: boolean
   /** Pre-fetched TeX Live files from `warmup()`. */
   warmupCache?: WarmupCache
   /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
@@ -150,8 +155,12 @@ export class WasmTexCompiler {
   /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
    *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
   private incremental: IncrementalCompiler | null = null
+  /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
+  private prebuildInFlight: Promise<boolean> | null = null
+  private compileInFlight = false
   private fs: VirtualFS
   private projectIndex = new ProjectIndex()
+  private completionDigests = new CompletionFileDigestCache()
   private mainFile: string
   private assetBaseUrl: string
   private opts: WasmTexCompilerOptions
@@ -193,6 +202,10 @@ export class WasmTexCompiler {
       skipFormatPreload: !!this.opts.skipFormatPreload,
       disablePreambleSnapshot: !!this.opts.disablePreambleSnapshot,
       persistentCache: !!this.opts.persistentCache,
+      persistentPreambleCache: !!this.opts.persistentPreambleCache,
+      preambleCacheIdentity: {
+        mirrorRevision: this.opts.completionProfile?.mirrorRevision ?? null,
+      },
       texliveVersion: this.opts.texliveVersion ?? '2025',
       ...(this.opts.warmupCache ? { warmupCache: this.opts.warmupCache } : {}),
     }
@@ -255,6 +268,16 @@ export class WasmTexCompiler {
 
   async compile(): Promise<CompileResult> {
     this.ensureInitialized()
+    if (this.prebuildInFlight) await this.prebuildInFlight
+    this.compileInFlight = true
+    try {
+      return await this.compileIdle()
+    } finally {
+      this.compileInFlight = false
+    }
+  }
+
+  private async compileIdle(): Promise<CompileResult> {
     this.currentAuxiliaryDependencies.clear()
     await this.ensureEngine()
     if (this.unavailable || !this.engine) {
@@ -315,6 +338,42 @@ export class WasmTexCompiler {
     await this.attachCompletionSnapshot(result)
     this.incremental?.noteFull(this.mainSource(), this.projectTexFiles(), result.synctex)
     return result
+  }
+
+  /**
+   * Build the incremental checkpoint nearest an expected edit while the compiler is idle.
+   * Calling this after a successful full compile moves the one-time checkpoint build out of
+   * the next interactive compile. `offset` is a UTF-16 offset in `path`; included-file paths
+   * warm the checkpoint before their `\include`/`\input` command.
+   *
+   * Returns false when incremental mode is disabled/ineligible, project writes are pending,
+   * a compile owns the worker, or the checkpoint is already warm. A compile started while a
+   * preparation is running waits for it before using the worker.
+   */
+  async prepareIncrementalCompile(path = this.mainFile, offset?: number): Promise<boolean> {
+    this.ensureInitialized()
+    const incremental = this.incremental
+    if (
+      !incremental ||
+      this.unavailable ||
+      !this.engine ||
+      this.compileInFlight ||
+      this.fs.getModifiedFiles().length > 0
+    ) {
+      return false
+    }
+    if (this.prebuildInFlight) return this.prebuildInFlight
+    const content = this.fs.readFile(path)
+    if (typeof content !== 'string' || !path.toLowerCase().endsWith('.tex')) return false
+    const source = this.mainSource()
+    const files = this.projectTexFiles()
+    const task = incremental.prebuildForEdit(source, files, path, offset ?? content.length)
+    this.prebuildInFlight = task
+    try {
+      return await task
+    } finally {
+      if (this.prebuildInFlight === task) this.prebuildInFlight = null
+    }
   }
 
   /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
@@ -513,20 +572,20 @@ export class WasmTexCompiler {
     if (this.fs.getModifiedFiles().length > 0) return
     const engine = this.engine
     const root = this.mainFile
-    const projectFiles = this.fs
-      .listFiles()
-      .filter((path) => !this.generatedFiles.has(path))
-      .flatMap((path) => {
-        const file = this.fs.getFile(path)
-        if (!file) return []
-        return [
-          {
-            path: file.path,
-            content:
-              typeof file.content === 'string' ? file.content : Uint8Array.from(file.content),
-          },
-        ]
-      })
+    const projectFiles = await Promise.all(
+      this.fs
+        .listFiles()
+        .filter((path) => !this.generatedFiles.has(path))
+        .flatMap((path) => {
+          const file = this.fs.getFile(path)
+          return file ? [file] : []
+        })
+        .map(async (file) => ({
+          path: file.path,
+          content: file.content,
+          digest: await this.completionDigests.digest(file, file.content),
+        })),
+    )
     const engineObservation = engine.getCompletionObservation?.()
     const snapshot = await createCompletionSnapshot({
       engine: this.engineKind,
@@ -570,9 +629,7 @@ export class WasmTexCompiler {
     if (!engine || this.unavailable) return
     const modified = this.fs.getModifiedFiles()
     await this.ensureEngineDirectories(modified.map((file) => file.path))
-    for (const file of modified) {
-      await engine.writeFile(file.path, file.content)
-    }
+    await Promise.all(modified.map((file) => engine.writeFile(file.path, file.content)))
     // Only clear the files we synced; edits that landed during the awaits above
     // replaced their map entries and must remain modified for the next cycle.
     this.fs.markSynced(modified)

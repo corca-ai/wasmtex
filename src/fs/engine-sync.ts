@@ -30,13 +30,15 @@ export async function syncAllFilesToEngine(
 ): Promise<void> {
   const paths = fs.listFiles()
   await ensureDirectories(paths)
-  const synced: VirtualFile[] = []
-  for (const path of paths) {
+  // Capture the exact VFS entries before dispatch. The worker processes writes on
+  // one thread, but allowing their request/response round trips to overlap avoids
+  // one main-thread scheduling turn per file. Identity-based markSynced below still
+  // leaves any entry replaced by a concurrent host edit modified.
+  const synced = paths.flatMap((path) => {
     const file = fs.getFile(path)
-    if (!file) continue
-    await engine.writeFile(path, file.content)
-    synced.push(file)
-  }
+    return file ? [file] : []
+  })
+  await Promise.all(synced.map((file) => engine.writeFile(file.path, file.content)))
   fs.markSynced(synced)
   engine.setMainFile(mainFile)
 }
