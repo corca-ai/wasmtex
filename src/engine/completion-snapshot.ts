@@ -46,6 +46,9 @@ function compareText(a: string, b: string): number {
 export interface CompletionSnapshotProjectFile {
   path: string
   content: string | Uint8Array
+  /** Precomputed SHA-256 of `content`. Internal hosts use this to avoid rehashing
+   *  unchanged immutable VFS entries on every successful compile. */
+  digest?: string
 }
 
 /** Bounded, engine-private observations produced after a normal engine pass. */
@@ -77,8 +80,34 @@ function hex(bytes: ArrayBuffer): string {
 
 async function sha256(value: string | Uint8Array): Promise<string> {
   const bytes: Uint8Array<ArrayBuffer> =
-    typeof value === 'string' ? new TextEncoder().encode(value) : Uint8Array.from(value)
+    typeof value === 'string'
+      ? new TextEncoder().encode(value)
+      : value.buffer instanceof ArrayBuffer
+        ? (value as Uint8Array<ArrayBuffer>)
+        : Uint8Array.from(value)
   return hex(await crypto.subtle.digest('SHA-256', bytes))
+}
+
+/** Hash one project file without copying ordinary ArrayBuffer-backed binary data. */
+export function completionFileDigest(content: string | Uint8Array): Promise<string> {
+  return sha256(content)
+}
+
+/**
+ * Digest memoization keyed by an immutable host entry, rather than by the content
+ * object. A host can replace an entry while reusing/mutating the same Uint8Array;
+ * the new entry then necessarily gets a fresh digest.
+ */
+export class CompletionFileDigestCache<TEntry extends object = object> {
+  private readonly digests = new WeakMap<TEntry, Promise<string>>()
+
+  digest(entry: TEntry, content: string | Uint8Array): Promise<string> {
+    const cached = this.digests.get(entry)
+    if (cached) return cached
+    const digest = completionFileDigest(content)
+    this.digests.set(entry, digest)
+    return digest
+  }
 }
 
 /** Hash paths, content kinds, and bytes without concatenating the whole project in memory. */
@@ -89,7 +118,9 @@ export async function completionProjectRevision(
   const records: string[] = []
   for (const file of sorted) {
     const kind = typeof file.content === 'string' ? 'text' : 'binary'
-    records.push(`${JSON.stringify(file.path)}\t${kind}\t${await sha256(file.content)}`)
+    records.push(
+      `${JSON.stringify(file.path)}\t${kind}\t${file.digest ?? (await sha256(file.content))}`,
+    )
   }
   return `sha256:${await sha256(records.join('\n'))}`
 }

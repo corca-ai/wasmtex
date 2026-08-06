@@ -6,7 +6,7 @@ export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './
 export * from './backend-api';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
-export type { CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
+export type { CompilePhaseTimings, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
 export interface WasmTexCompilerOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -27,6 +27,10 @@ export interface WasmTexCompilerOptions {
     /** Enable the built-in persistent (IndexedDB) cache of fetched TeX Live assets.
      *  Silently no-ops where IndexedDB is unavailable. Defaults to false. */
     persistentCache?: boolean;
+    /** Persist pdfLaTeX's document-specific preamble format in IndexedDB across
+     *  compiler sessions. Requires `completionProfile.mirrorRevision`; otherwise
+     *  it fails closed to the normal in-worker snapshot. Defaults to false. */
+    persistentPreambleCache?: boolean;
     /** Pre-fetched TeX Live files from `warmup()`. */
     warmupCache?: WarmupCache;
     /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
@@ -64,8 +68,12 @@ export declare class WasmTexCompiler {
     /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
      *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
     private incremental;
+    /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
+    private prebuildInFlight;
+    private compileInFlight;
     private fs;
     private projectIndex;
+    private completionDigests;
     private mainFile;
     private assetBaseUrl;
     private opts;
@@ -98,6 +106,18 @@ export declare class WasmTexCompiler {
     private ensureEngine;
     init(): Promise<void>;
     compile(): Promise<CompileResult>;
+    private compileIdle;
+    /**
+     * Build the incremental checkpoint nearest an expected edit while the compiler is idle.
+     * Calling this after a successful full compile moves the one-time checkpoint build out of
+     * the next interactive compile. `offset` is a UTF-16 offset in `path`; included-file paths
+     * warm the checkpoint before their `\include`/`\input` command.
+     *
+     * Returns false when incremental mode is disabled/ineligible, project writes are pending,
+     * a compile owns the worker, or the checkpoint is already warm. A compile started while a
+     * preparation is running waits for it before using the worker.
+     */
+    prepareIncrementalCompile(path?: string, offset?: number): Promise<boolean>;
     /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
      *  diagnostics; head errors can't recur (the head is unchanged), and metadata/cross-refs are
      *  unchanged for a `final` result, so the last full compile's project index still holds. The raw

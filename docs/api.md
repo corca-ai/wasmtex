@@ -59,6 +59,7 @@ or a CSS selector string.
 | `disablePreambleSnapshot` | `boolean` | `false` | Disable [precompiled preamble snapshots](engine.md#preamble-snapshots) and always run a full compile. Escape hatch for documents incompatible with preamble precompilation. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) in the interactive loop (pdfLaTeX only). A body edit after a page break re-typesets only the tail and splices it (PDF **and** SyncTeX) onto the cached head for an immediate, **exact** **fast paint** — no reconcile needed for a single-file `final` edit. The `status` event's `incremental` flag marks a fast paint. Falls back to a full compile for XeLaTeX/LuaLaTeX, preamble/early edits, and label/citation edits, and to a background reconcile for multi-file tails. Opt-in. |
 | `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. Near-instant return visits, works offline. No-ops without IndexedDB. See `clearCache()`. |
+| `persistentPreambleCache` | `boolean` | `false` | Persist [pdfLaTeX preamble snapshots](engine.md#durable-preamble-snapshots) in a bounded IndexedDB cache across compiler sessions. Requires `completionProfile.mirrorRevision`; otherwise reuse fails closed. |
 | `editorContainerClassName` | `string` | `''` | Extra class name(s) for the editor container |
 | `previewContainerClassName` | `string` | `''` | Extra class name(s) for the preview container |
 | `runtimeScopeAttribute` | `string` | `data-wasmtex-runtime` | Attribute used to scope runtime UI styles |
@@ -199,6 +200,7 @@ const result = await compiler.compile()
 | `skipFormatPreload` | `boolean` | `false` | Skip `.fmt` preload during engine bootstrap. |
 | `disablePreambleSnapshot` | `boolean` | `false` | Disable [precompiled preamble snapshots](engine.md#preamble-snapshots) and always run a full compile. |
 | `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. No-ops without IndexedDB. |
+| `persistentPreambleCache` | `boolean` | `false` | Persist [pdfLaTeX preamble snapshots](engine.md#durable-preamble-snapshots) across compiler sessions. Requires an immutable `completionProfile.mirrorRevision` and IndexedDB. |
 | `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only). |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
@@ -239,6 +241,13 @@ content-addressed cache.
 
 With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\newpage`) re-typesets only the *tail* of the document — booting the engine from a cached checkpoint at the latest page break before the change and splicing the new tail pages onto a cached head PDF. On long documents this turns a multi-second recompile into a ~200 ms one (≈3–5× and climbing with length).
 
+Headless hosts that know the active cursor can move the first checkpoint-build cost to idle
+time. After a stabilized full compile and before the next edit, call
+`await compiler.prepareIncrementalCompile(activePath, offset)`. `offset` is a UTF-16 offset
+in that file; an included-file path warms the boundary before its `\include`/`\input` in the
+main document. This is best-effort and returns `false` when no safe boundary exists or the
+checkpoint is already warm.
+
 - **pdfLaTeX only** — XeLaTeX/LuaLaTeX always do a full compile.
 - **Optional peer dependency**: splicing uses [`pdf-lib`](https://www.npmjs.com/package/pdf-lib). If it isn't installed, incremental silently falls back to a full compile.
 - **Automatic fallback** to a full compile when the preamble changed, there's no page break before the edit, or the edit touches labels/sectioning (so cross-references stay correct — LaTeX's usual two-pass reconcile still applies).
@@ -260,6 +269,10 @@ that changed since the last full compile falls back to a background full reconci
 
 - `init(): Promise<void>`
 - `compile(): Promise<CompileResult>`
+- `prepareIncrementalCompile(path?: string, offset?: number): Promise<boolean>` — with
+  `incremental: true`, build an eligible pdfLaTeX checkpoint while idle. Defaults to the end
+  of the main file. A `compile()` waits for an in-flight preparation; preparation returns
+  `false` while a compile or unsynchronized project edit is active.
 - `setFile(path, content): void`
 - `loadProject(files): Promise<void>`
 - `getFile(path): string | Uint8Array | null`
@@ -272,6 +285,28 @@ that changed since the last full compile falls back to a background full reconci
 - `flushCache(): Promise<void>`
 - `clearCache(): Promise<void>` — clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live year.
 - `dispose(): void`
+
+### Compile phase timings
+
+pdfLaTeX engine results may expose `CompileResult.phaseTimings`. These worker-side
+durations separate the costs hidden inside the host-visible `compileTime`:
+
+| Field | Description |
+|-------|-------------|
+| `workerTotalMs` | Total time in the worker compile routine. |
+| `heapRestoreMs` | Time spent restoring the reusable WASM initialization heap. |
+| `heapSnapshotMs` | One-time time spent capturing that pristine initialization heap. |
+| `heapSnapshotBytes` | Bytes retained by the initialization snapshot. |
+| `heapSizeBytes` | Current grow-only WASM heap size after the compile. |
+| `preambleBuildMs` | Time spent building a document-specific preamble format; zero on a snapshot hit. |
+| `formatInstallMs` | Time spent installing the selected format in the worker filesystem. |
+| `preambleExportMs` | Time spent copying a rebuilt format for durable persistence. |
+| `postProcessMs` | Time spent extracting PDF/SyncTeX, recorder data, and runtime observations. |
+| `texRunMs` | Time spent in the TeX entry point, including a correctness fallback when required. |
+
+Treat absent timings as an older or non-pdfLaTeX engine rather than synthesizing
+zeros. The performance benchmark prints both compile passes' phase timings and can
+exercise a staged engine build with `WASMTEX_PUBLIC_DIR=/path/to/public`.
 
 ### Compile telemetry
 

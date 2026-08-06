@@ -110,16 +110,19 @@ Module["onAbort"] = function() {
 // faster than re-initializing the entire WASM module.
 
 function dumpHeapMemory() {
+    var started = performance.now();
     var src = wasmMemory.buffer;
     var dst = new Uint8Array(src.byteLength);
     dst.set(new Uint8Array(src));
+    self._heapSnapshotMs = performance.now() - started;
     return dst;
 }
 
 function restoreHeapMemory() {
+    var started = performance.now();
     if (self.initmem === undefined) {
         console.error("Cannot restore heap: no snapshot taken");
-        return;
+        return 0;
     }
     var dst = new Uint8Array(wasmMemory.buffer);
     dst.set(self.initmem);
@@ -132,6 +135,7 @@ function restoreHeapMemory() {
     if (dst.length > self.initmem.length) {
         dst.fill(0, self.initmem.length);
     }
+    return performance.now() - started;
 }
 
 // --- Virtual filesystem helpers ----------------------------------------------
@@ -198,7 +202,8 @@ function cleanDir(dir) {
 // initial state, closing stale file streams, and changing to the working dir.
 function prepareExecutionContext() {
     self.memlog = "";
-    restoreHeapMemory();
+    var restoreMs = restoreHeapMemory();
+    if (self._activePhaseTimings) self._activePhaseTimings.heapRestoreMs += restoreMs;
     closeFSStreams();
     FS.chdir(WORKROOT);
 }
@@ -694,6 +699,19 @@ function kpse_find_pk_impl(nameptr, dpi) {
 // The .synctex file contains source-to-PDF position mappings that enable
 // click-to-jump between the editor and PDF viewer.
 function compileLaTeXRoutine() {
+    var routineStart = performance.now();
+    var phaseTimings = self._activePhaseTimings = {
+        formatInstallMs: 0,
+        heapSizeBytes: wasmMemory.buffer.byteLength,
+        heapRestoreMs: 0,
+        heapSnapshotBytes: self.initmem ? self.initmem.byteLength : 0,
+        heapSnapshotMs: self._heapSnapshotMs || 0,
+        preambleBuildMs: 0,
+        preambleExportMs: 0,
+        postProcessMs: 0,
+        texRunMs: 0,
+        workerTotalMs: 0
+    };
     prepareExecutionContext();
 
     // kpathsea does lstat(argv[0]) to find the program directory.
@@ -778,6 +796,7 @@ function compileLaTeXRoutine() {
             var fmtBuildStart = performance.now();
             var fmt = buildPreambleFormat(split.preamble);
             var fmtBuildMs = Math.round(performance.now() - fmtBuildStart);
+            phaseTimings.preambleBuildMs += fmtBuildMs;
             if (fmt) {
                 console.log("[preamble] MISS — format built in " + fmtBuildMs + "ms");
                 self._preambleFmtData = fmt;
@@ -806,6 +825,7 @@ function compileLaTeXRoutine() {
     // the file in the cache transparently switches between full and preamble formats.
     var fmtToUse = usedPreamble ? self._preambleFmtData : self._fmtData;
     if (fmtToUse) {
+        var formatInstallStart = performance.now();
         FS.writeFile(TEXCACHEROOT + "/wasmtex-pdftex.fmt", fmtToUse);
         texlive200_cache["10/wasmtex-pdftex.fmt"] = TEXCACHEROOT + "/wasmtex-pdftex.fmt";
         FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", fmtToUse);
@@ -815,6 +835,7 @@ function compileLaTeXRoutine() {
         // pdfTeX to look for pdflatex.fmt. Without this write, a stale base
         // pdflatex.fmt left by buildPreambleFormat() would be loaded instead.
         FS.writeFile(WORKROOT + "/pdflatex.fmt", fmtToUse);
+        phaseTimings.formatInstallMs += performance.now() - formatInstallStart;
     }
 
     // Semantic trace: write hook file and inject \input{__strace} after \begin{document}.
@@ -850,6 +871,7 @@ function compileLaTeXRoutine() {
         }
     }
     var compileMs = Math.round(performance.now() - compileStart);
+    phaseTimings.texRunMs += compileMs;
 
     // Restore original main.tex after compilation.
     // The preamble path replaces main.tex with a padded body, and the trace
@@ -880,6 +902,7 @@ function compileLaTeXRoutine() {
         // Restore original file content and base format
         FS.writeFile(WORKROOT + "/" + self.mainfile, texSource);
         if (self._fmtData) {
+            var fallbackFormatInstallStart = performance.now();
             FS.writeFile(TEXCACHEROOT + "/wasmtex-pdftex.fmt", self._fmtData);
             texlive200_cache["10/wasmtex-pdftex.fmt"] = TEXCACHEROOT + "/wasmtex-pdftex.fmt";
             FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
@@ -888,9 +911,11 @@ function compileLaTeXRoutine() {
             // Without this, the stale preamble format left by the normal compile path
             // would be loaded instead of the base format, causing permanent failure.
             FS.writeFile(WORKROOT + "/pdflatex.fmt", self._fmtData);
+            phaseTimings.formatInstallMs += performance.now() - fallbackFormatInstallStart;
         }
 
         writeTexmfCnf();
+        var fallbackStart = performance.now();
         try {
             status = runMain("pdflatex", ["-interaction=nonstopmode", "-synctex=1",
                                            "-recorder", "&pdflatex", self.mainfile]);
@@ -902,8 +927,10 @@ function compileLaTeXRoutine() {
                 status = -254;
             }
         }
+        phaseTimings.texRunMs += performance.now() - fallbackStart;
     }
 
+    var postProcessStart = performance.now();
     console.log("[compile] " + compileMs + "ms" + (usedPreamble ? " (preamble HIT)" : ""));
 
     // Semantic Trace: extract defined commands from pdfTeX hash table.
@@ -1024,6 +1051,7 @@ function compileLaTeXRoutine() {
             "cmd": "compile",
             "preambleSnapshot": usedPreamble,
             "preambleRebuilt": preambleRebuilt,
+            "phaseTimings": phaseTimings,
             "engineCommands": engineCommands,
             "engineCommandsComplete": engineCommandsComplete,
             "engineCommandsDropped": engineCommandsDropped,
@@ -1047,10 +1075,27 @@ function compileLaTeXRoutine() {
             self._fmtBuiltThisSession = false;
         }
 
+        if (preambleRebuilt && self._preambleFmtData) {
+            var preambleExportStart = performance.now();
+            var preambleCopy = new Uint8Array(self._preambleFmtData);
+            response["preambleFormat"] = preambleCopy.buffer;
+            response["preambleHash"] = self._preambleHash;
+            response["preambleInputFiles"] = self._preambleInputFiles || [];
+            transferables.push(preambleCopy.buffer);
+            phaseTimings.preambleExportMs += performance.now() - preambleExportStart;
+        }
+
+        phaseTimings.heapSizeBytes = wasmMemory.buffer.byteLength;
+        phaseTimings.postProcessMs = performance.now() - postProcessStart;
+        phaseTimings.workerTotalMs = performance.now() - routineStart;
+
         self.postMessage(response, transferables);
 
     } else {
         console.error("Compilation failed, with status code " + status);
+        phaseTimings.heapSizeBytes = wasmMemory.buffer.byteLength;
+        phaseTimings.postProcessMs = performance.now() - postProcessStart;
+        phaseTimings.workerTotalMs = performance.now() - routineStart;
         self.postMessage({
             "result": "failed",
             "status": status,
@@ -1058,6 +1103,7 @@ function compileLaTeXRoutine() {
             "cmd": "compile",
             "preambleSnapshot": false,
             "preambleRebuilt": preambleRebuilt,
+            "phaseTimings": phaseTimings,
             "engineCommands": engineCommands,
             "engineCommandsComplete": engineCommandsComplete,
             "engineCommandsDropped": engineCommandsDropped,
@@ -1365,6 +1411,23 @@ self["onmessage"] = function(ev) {
             self._preambleHash = "";
         }
         self.postMessage({ "result": "ok", "cmd": "setpreamblesnapshot" });
+    } else if (cmd === "loadpreamblesnapshot") {
+        var preambleFormat = data["format"] ? new Uint8Array(data["format"]) : null;
+        var preambleHash = data["hash"];
+        var preambleInputs = data["inputFiles"];
+        var validPreamble = self._preambleSnapshotEnabled && preambleFormat &&
+            self._fmtData && preambleFormat.length >= self._fmtData.length * 0.5 &&
+            typeof preambleHash === "string" && preambleHash.length > 0 &&
+            Array.isArray(preambleInputs);
+        if (validPreamble) {
+            self._preambleFmtData = preambleFormat;
+            self._preambleHash = preambleHash;
+            self._preambleInputFiles = preambleInputs.slice();
+        }
+        self.postMessage({
+            "result": validPreamble ? "ok" : "failed",
+            "cmd": "loadpreamblesnapshot"
+        });
     } else if (cmd === "dumpcache") {
         // Export every TeX Live file fetched/preloaded this session so the host
         // can persist it (built-in persistent cache). Keys in texlive200_cache

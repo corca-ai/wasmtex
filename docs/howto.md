@@ -149,6 +149,35 @@ Compile conservatively when the manifest is absent/incomplete or a file was
 added, deleted, or renamed. The richer `telemetry.dependencies` graph is useful
 for inspection, but its best-effort observations are not itself a reuse proof.
 
+With `incremental: true`, a host that owns the editor cursor can prepare the next
+pdfLaTeX checkpoint during idle time after a successful full compile:
+
+```ts
+await compiler.prepareIncrementalCompile(activeTexPath, cursorOffset)
+```
+
+The offset is UTF-16, matching browser editor offsets. The call is best-effort: it
+returns `true` only when it built a new checkpoint, and leaves the current compile
+result untouched. A later `compile()` waits if preparation is still finishing.
+
+For return visits, opt into the separate durable preamble cache and bind it to the
+immutable mirror revision already used by the compile profile:
+
+```ts
+const compiler = new WasmTexCompiler({
+  completionProfile: {
+    id: 'texlive-2025-production',
+    mirrorRevision: 'sha256:immutable-catalog-revision',
+  },
+  incremental: true,
+  persistentPreambleCache: true,
+})
+```
+
+The durable cache is best-effort and browser-only: missing IndexedDB, a missing
+mirror revision, a changed project preamble dependency, or invalid stored bytes all
+fall back to rebuilding normally.
+
 ### Server backends (BibTeX / Biber / xindy offload)
 
 By default every compile stage runs **client-side** (WASM/TS), so nothing leaves the

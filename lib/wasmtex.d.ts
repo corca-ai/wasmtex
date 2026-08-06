@@ -12,6 +12,7 @@ export declare class WasmTex {
     private previewContainer;
     private engine;
     private fs;
+    private completionDigests;
     private synctexParser;
     private pdfViewer?;
     private scheduler;

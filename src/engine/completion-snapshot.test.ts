@@ -4,6 +4,8 @@ import { LatexLanguageService } from '../lsp-service'
 import {
   boundCompletionSnapshot,
   COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
+  CompletionFileDigestCache,
+  completionFileDigest,
   completionProjectRevision,
   createCompletionSnapshot,
   parseEngineCompletionObservation,
@@ -26,6 +28,26 @@ describe('runtime completion snapshots', () => {
         { path: 'logo.bin', content: Uint8Array.of(0, 1, 3) },
       ]),
     ).not.toBe(forward)
+  })
+
+  it('reuses digests by immutable VFS entry identity', async () => {
+    const cache = new CompletionFileDigestCache<object>()
+    const entry = {}
+    const content = Uint8Array.of(1, 2, 3)
+    const first = await cache.digest(entry, content)
+
+    content[2] = 4
+    expect(await cache.digest(entry, content)).toBe(first)
+    expect(await cache.digest({}, content)).not.toBe(first)
+  })
+
+  it('accepts a cached digest without changing the revision contract', async () => {
+    const content = Uint8Array.of(4, 5, 6)
+    const uncached = await completionProjectRevision([{ path: 'asset.bin', content }])
+    const cached = await completionProjectRevision([
+      { path: 'asset.bin', content, digest: await completionFileDigest(content) },
+    ])
+    expect(cached).toBe(uncached)
   })
 
   it('uses one contract across engines and marks unavailable fields explicitly', async () => {

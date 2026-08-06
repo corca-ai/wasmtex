@@ -9,7 +9,7 @@ import { createEditor, createFileModel, revealLine } from './editor/setup'
 import { BibtexEngine } from './engine/bibtex-engine'
 import { unavailableEngineResult } from './engine/compile-engine'
 import { CompileScheduler } from './engine/compile-scheduler'
-import { createCompletionSnapshot } from './engine/completion-snapshot'
+import { CompletionFileDigestCache, createCompletionSnapshot } from './engine/completion-snapshot'
 import { normalizeProjectDependencyPath } from './engine/dependency-manifest'
 import { type EngineDetection, resolveEngine } from './engine/engine-select'
 import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
@@ -145,6 +145,7 @@ export class WasmTex {
   private engine: WasmTexPdftexEngine
 
   private fs: VirtualFS
+  private completionDigests = new CompletionFileDigestCache()
 
   private synctexParser = new SynctexParser()
 
@@ -277,6 +278,10 @@ export class WasmTex {
       skipFormatPreload: !!this.opts.skipFormatPreload,
       disablePreambleSnapshot: !!this.opts.disablePreambleSnapshot,
       persistentCache: !!this.opts.persistentCache,
+      persistentPreambleCache: !!this.opts.persistentPreambleCache,
+      preambleCacheIdentity: {
+        mirrorRevision: this.opts.completionProfile?.mirrorRevision ?? null,
+      },
       texliveVersion: this.opts.texliveVersion || '2025',
       ...(this.opts.warmupCache ? { warmupCache: this.opts.warmupCache } : {}),
     }
@@ -475,20 +480,20 @@ export class WasmTex {
     if (!result.success) return
     if (this.fs.getModifiedFiles().length > 0) return
     const root = this.mainFile
-    const projectFiles = this.fs
-      .listFiles()
-      .filter((path) => !this.generatedFiles.has(path))
-      .flatMap((path) => {
-        const file = this.fs.getFile(path)
-        if (!file) return []
-        return [
-          {
-            path: file.path,
-            content:
-              typeof file.content === 'string' ? file.content : Uint8Array.from(file.content),
-          },
-        ]
-      })
+    const projectFiles = await Promise.all(
+      this.fs
+        .listFiles()
+        .filter((path) => !this.generatedFiles.has(path))
+        .flatMap((path) => {
+          const file = this.fs.getFile(path)
+          return file ? [file] : []
+        })
+        .map(async (file) => ({
+          path: file.path,
+          content: file.content,
+          digest: await this.completionDigests.digest(file, file.content),
+        })),
+    )
     const engineObservation = this.engine.getCompletionObservation()
     const snapshot = await createCompletionSnapshot({
       engine: 'pdflatex',

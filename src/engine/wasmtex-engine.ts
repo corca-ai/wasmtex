@@ -12,12 +12,16 @@ import {
   parseEngineCompletionObservation,
 } from './completion-snapshot'
 import { buildDependencyGraph } from './dependency-graph'
+import { normalizeProjectDependencyPath } from './dependency-manifest'
 import { engineFormatUrl, engineWorkerUrl } from './engine-assets'
 import { readResponseWithProgress } from './fetch-gz'
 import { enrichGlyphSuggestions } from './glyph-suggestions'
 import { buildDiagnostics, parseGlyphGaps, parseTexErrors } from './parse-errors'
 import { type PersistState, persistIfNeeded } from './persist-watermark'
+import type { BinaryStore } from './persistent-cache'
 import { isIndexedDbSupported, PersistentCache } from './persistent-cache'
+import { durablePreambleKey, PreambleSnapshotCache, preambleSha256 } from './preamble-cache'
+import { extractPreamble } from './preamble-utils'
 import { createEngineWorker } from './worker-host'
 
 export interface WasmTexEngineOptions {
@@ -43,6 +47,13 @@ export interface WasmTexEngineOptions {
    *  so return visits are near-instant and work offline. Silently no-ops where
    *  IndexedDB is unavailable. Defaults to false. */
   persistentCache?: boolean
+  /** Persist document-specific pdfLaTeX preamble formats across worker sessions.
+   *  Requires an immutable `preambleCacheIdentity.mirrorRevision`. */
+  persistentPreambleCache?: boolean
+  /** Immutable TeX Live mirror identity used to fail closed on cache reuse. */
+  preambleCacheIdentity?: { mirrorRevision: string | null }
+  /** Test/integration injection point; browser hosts normally omit it. @internal */
+  preambleCacheStore?: BinaryStore
 }
 
 /** Counter for unique message IDs. */
@@ -65,6 +76,10 @@ interface WorkerMessage {
   data?: string
   preambleSnapshot?: boolean
   preambleRebuilt?: boolean
+  phaseTimings?: unknown
+  preambleFormat?: ArrayBuffer
+  preambleHash?: string
+  preambleInputFiles?: string[]
   engineCommands?: string[]
   engineCommandsComplete?: boolean
   engineCommandsDropped?: number
@@ -148,6 +163,16 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private warmupCache: WarmupCache | undefined
   private preambleSnapshotEnabled: boolean
   private persistentCacheEnabled: boolean
+  private readonly assetBaseUrl: string
+  private readonly effectiveTexliveUrl: string
+  private readonly preambleMirrorRevision: string | null
+  private preambleCache: PreambleSnapshotCache | null = null
+  private engineBuildId: string | null = null
+  private readonly projectFiles = new Map<string, string | Uint8Array>()
+  private loadedPreambleKey: string | null = null
+  private attemptedPreambleKey: string | null = null
+  private activePreambleDependencies = new Set<string>()
+  private preamblePersistInFlight: Promise<void> | null = null
   private durableCache: PersistentCache | null = null
   private bloomFilter: ArrayBuffer | undefined
   /** Main file name, tracked for source-based dependency extraction. */
@@ -172,6 +197,18 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     this.warmupCache = options?.warmupCache
     this.preambleSnapshotEnabled = !options?.disablePreambleSnapshot
     this.persistentCacheEnabled = !!options?.persistentCache && isIndexedDbSupported()
+    this.assetBaseUrl = base
+    this.effectiveTexliveUrl = resolveTexliveUrl(options?.texliveUrl ?? null, version)
+    this.preambleMirrorRevision = options?.preambleCacheIdentity?.mirrorRevision ?? null
+    if (
+      options?.persistentPreambleCache &&
+      this.preambleMirrorRevision &&
+      (isIndexedDbSupported() || options.preambleCacheStore)
+    ) {
+      this.preambleCache = new PreambleSnapshotCache(
+        options.preambleCacheStore ? { store: options.preambleCacheStore } : {},
+      )
+    }
   }
 
   async init(): Promise<void> {
@@ -200,8 +237,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     // Set TexLive endpoint — proxied through Vite dev server (/texlive/ → texlive:5001)
     // Note: do NOT use PdfTeXEngine's setTexliveEndpoint() — it has a bug
     // that nullifies the worker reference after posting the message
-    const texliveUrl = resolveTexliveUrl(this.texliveUrl, this.version)
-    this.worker!.postMessage({ cmd: 'settexliveurl', url: texliveUrl })
+    this.worker!.postMessage({ cmd: 'settexliveurl', url: this.effectiveTexliveUrl })
 
     // Apply the preamble-snapshot opt-out before any compile runs. The worker
     // defaults to enabled, so we only need to message it when disabling.
@@ -232,7 +268,32 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!this.skipFormatPreload) {
       preloads.push(this.preloadFormat())
     }
-    await Promise.all(preloads)
+    const receipt = this.preambleCache ? this.loadEngineBuildId() : Promise.resolve()
+    await Promise.all([...preloads, receipt])
+  }
+
+  private async loadEngineBuildId(): Promise<void> {
+    try {
+      const response = await fetch(
+        `${this.assetBaseUrl}wasmtex/${this.version}/BUILD-RECEIPT.pdftex.json`,
+      )
+      if (!response.ok) return
+      const receipt = (await response.json()) as {
+        buildId?: unknown
+        family?: unknown
+        texliveYear?: unknown
+      }
+      if (
+        typeof receipt.buildId === 'string' &&
+        /^[a-f0-9]{64}$/.test(receipt.buildId) &&
+        receipt.family === 'pdftex' &&
+        receipt.texliveYear === this.version
+      ) {
+        this.engineBuildId = receipt.buildId
+      }
+    } catch {
+      // Receipt unavailable/malformed: durable preamble reuse stays disabled.
+    }
   }
 
   /**
@@ -384,7 +445,13 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   async writeFile(path: string, content: string | Uint8Array): Promise<void> {
     this.checkInitialized()
+    this.projectFiles.set(path, content)
     if (typeof content === 'string') this.sources.set(path, content)
+    if (this.activePreambleDependencies.has(path)) {
+      this.loadedPreambleKey = null
+      this.attemptedPreambleKey = null
+      this.activePreambleDependencies.clear()
+    }
     await this.postMessageWithResponse(
       { cmd: 'writefile', url: path, src: content },
       'cmd:writefile',
@@ -393,6 +460,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   setMainFile(path: string): void {
     this.checkInitialized()
+    if (path !== this.mainFileName) {
+      this.loadedPreambleKey = null
+      this.attemptedPreambleKey = null
+      this.activePreambleDependencies.clear()
+    }
     this.mainFileName = path
     this.worker!.postMessage({ cmd: 'setmainfile', url: path })
   }
@@ -404,6 +476,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   setPreambleSnapshot(enabled: boolean): void {
     this.checkInitialized()
     this.preambleSnapshotEnabled = enabled
+    if (!enabled) {
+      this.loadedPreambleKey = null
+      this.attemptedPreambleKey = null
+      this.activePreambleDependencies.clear()
+    }
     this.worker!.postMessage({ cmd: 'setpreamblesnapshot', enabled })
   }
 
@@ -414,6 +491,12 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   async flushCache(): Promise<void> {
     this.checkInitialized()
+    await this.preamblePersistInFlight
+    this.loadedPreambleKey = null
+    this.attemptedPreambleKey = null
+    this.activePreambleDependencies.clear()
+    this.projectFiles.clear()
+    this.sources.clear()
     this.worker!.postMessage({ cmd: 'flushcache' })
   }
 
@@ -471,7 +554,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     const cache =
       this.durableCache ??
       (isIndexedDbSupported() ? new PersistentCache({ version: this.version }) : null)
-    await cache?.clear()
+    await Promise.all([cache?.clear(), this.preambleCache?.clear()])
   }
 
   private maybePersistCache(): void {
@@ -500,6 +583,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   async compile(): Promise<CompileResult> {
     this.checkReady()
+    const durablePreambleKey = this.preambleCache ? await this.restorePersistentPreamble() : null
     this.status = 'compiling'
 
     const start = performance.now()
@@ -538,6 +622,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       preambleSnapshot,
       preambleRebuilt,
     }
+    const phaseTimings = this.validPhaseTimings(data.phaseTimings)
+    if (phaseTimings) result.phaseTimings = phaseTimings
     applyEngineCommandObservation(result, data)
     applyRecorderObservation(result, data)
     if (data.semanticTrace) {
@@ -562,8 +648,160 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     // Built-in persistent cache: after a successful compile that fetched new
     // files, durably persist the worker's cache (non-blocking, best-effort).
     if (success) this.maybePersistCache()
+    if (
+      success &&
+      preambleRebuilt &&
+      durablePreambleKey &&
+      data.preambleFormat &&
+      data.preambleHash &&
+      data.preambleInputFiles
+    ) {
+      this.persistPreambleSnapshot(
+        durablePreambleKey,
+        data.preambleFormat,
+        data.preambleHash,
+        data.preambleInputFiles,
+      )
+    }
 
     return result
+  }
+
+  private validPhaseTimings(value: unknown): CompileResult['phaseTimings'] | null {
+    if (!value || typeof value !== 'object') return null
+    const candidate = value as Record<string, unknown>
+    const read = (field: string): number | null => {
+      const number = candidate[field]
+      return typeof number === 'number' && Number.isFinite(number) && number >= 0 ? number : null
+    }
+    const workerTotalMs = read('workerTotalMs')
+    const heapRestoreMs = read('heapRestoreMs')
+    const heapSnapshotMs = read('heapSnapshotMs')
+    const heapSnapshotBytes = read('heapSnapshotBytes')
+    const heapSizeBytes = read('heapSizeBytes')
+    const preambleBuildMs = read('preambleBuildMs')
+    const formatInstallMs = read('formatInstallMs')
+    const preambleExportMs = read('preambleExportMs')
+    const postProcessMs = read('postProcessMs')
+    const texRunMs = read('texRunMs')
+    if (
+      workerTotalMs === null ||
+      heapRestoreMs === null ||
+      heapSnapshotMs === null ||
+      heapSnapshotBytes === null ||
+      heapSizeBytes === null ||
+      preambleBuildMs === null ||
+      formatInstallMs === null ||
+      preambleExportMs === null ||
+      postProcessMs === null ||
+      texRunMs === null
+    ) {
+      return null
+    }
+    return {
+      workerTotalMs,
+      heapRestoreMs,
+      heapSnapshotMs,
+      heapSnapshotBytes,
+      heapSizeBytes,
+      preambleBuildMs,
+      formatInstallMs,
+      preambleExportMs,
+      postProcessMs,
+      texRunMs,
+    }
+  }
+
+  private async currentPreambleKey(): Promise<string | null> {
+    if (!this.preambleCache || !this.engineBuildId || !this.preambleMirrorRevision) return null
+    const source = this.sources.get(this.mainFileName)
+    if (!source) return null
+    const split = extractPreamble(source)
+    if (!split) return null
+    return durablePreambleKey(
+      {
+        engineBuildId: this.engineBuildId,
+        mirrorRevision: this.preambleMirrorRevision,
+        texliveUrl: this.effectiveTexliveUrl,
+        texliveYear: this.version,
+      },
+      split.preamble,
+    )
+  }
+
+  private async restorePersistentPreamble(): Promise<string | null> {
+    if (!this.preambleSnapshotEnabled || !this.preambleCache) return null
+    const key = await this.currentPreambleKey()
+    if (!key || key === this.loadedPreambleKey || key === this.attemptedPreambleKey) return key
+    this.attemptedPreambleKey = key
+    const snapshot = await this.preambleCache.load(key).catch(() => null)
+    if (!snapshot || !(await this.dependenciesMatch(snapshot.projectDependencies))) return key
+    const format = snapshot.format.slice(0)
+    const response = await this.postMessageWithResponse(
+      {
+        cmd: 'loadpreamblesnapshot',
+        format,
+        hash: snapshot.workerHash,
+        inputFiles: snapshot.inputFiles,
+      },
+      'cmd:loadpreamblesnapshot',
+      [format],
+    )
+    if (response.result === 'ok') {
+      this.loadedPreambleKey = key
+      this.activePreambleDependencies = new Set(
+        snapshot.projectDependencies.map((dependency) => dependency.path),
+      )
+    }
+    return key
+  }
+
+  private async dependenciesMatch(
+    dependencies: ReadonlyArray<{ path: string; sha256: string }>,
+  ): Promise<boolean> {
+    const actual = await Promise.all(
+      dependencies.map(async (dependency) => {
+        const content = this.projectFiles.get(dependency.path)
+        return content === undefined ? null : preambleSha256(content)
+      }),
+    )
+    return actual.every((digest, index) => digest === dependencies[index]!.sha256)
+  }
+
+  private persistPreambleSnapshot(
+    key: string,
+    format: ArrayBuffer,
+    workerHash: string,
+    inputFiles: string[],
+  ): void {
+    const cache = this.preambleCache
+    if (!cache) return
+    const paths = [
+      ...new Set(
+        inputFiles
+          .map(normalizeProjectDependencyPath)
+          .filter((path): path is string => !!path && this.projectFiles.has(path)),
+      ),
+    ].sort()
+    this.activePreambleDependencies = new Set(paths)
+    const task = Promise.all(
+      paths.map(async (path) => ({
+        path,
+        sha256: await preambleSha256(this.projectFiles.get(path)!),
+      })),
+    )
+      .then((projectDependencies) =>
+        cache.save({ key, workerHash, format, inputFiles, projectDependencies }),
+      )
+      .then(() => {
+        this.loadedPreambleKey = key
+        this.attemptedPreambleKey = key
+      })
+      .catch(() => {})
+    const tracked = task.finally(() => {
+      if (this.preamblePersistInFlight === tracked) this.preamblePersistInFlight = null
+    })
+    this.preamblePersistInFlight = tracked
   }
 
   getCompletionObservation(): EngineCompletionObservation | null {

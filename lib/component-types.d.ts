@@ -46,6 +46,10 @@ export interface WasmTexOptions {
      *  Return visits become near-instant and work offline. Silently no-ops where
      *  IndexedDB is unavailable. Defaults to false. See `clearCache()`. */
     persistentCache?: boolean;
+    /** Persist pdfLaTeX's document-specific preamble format across browser sessions.
+     *  Requires an immutable `completionProfile.mirrorRevision`; otherwise it safely
+     *  remains session-only. Defaults to false. */
+    persistentPreambleCache?: boolean;
     /** Optional class name(s) to add to the editor container. */
     editorContainerClassName?: string;
     /** Optional class name(s) to add to the preview container. */
