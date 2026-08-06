@@ -118,7 +118,7 @@
     "monaco-editor": "^0.55.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624",
-    "vite": "^7.3.1",
+    "vite": "^8.2.0",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.0.18"
   }
