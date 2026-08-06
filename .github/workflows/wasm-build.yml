@@ -20,7 +20,7 @@ jobs:
   build-wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
         run: node scripts/check-license-compliance.mjs 2025
@@ -29,9 +29,9 @@ jobs:
         if: github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: /tmp/.buildx-cache
           key: wasm-docker-${{ hashFiles('wasm-build/Dockerfile') }}
@@ -60,7 +60,7 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24 }
 
       - name: Extract prebuilt pdfLaTeX format (.fmt)
@@ -131,7 +131,7 @@ jobs:
             wasmtex-bibtex.js wasmtex-bibtex.worker.js wasmtex-bibtex.wasm
 
       - name: Upload pdfTeX WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-pdftex
           path: |
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload BibTeX WASM artifacts
         if: steps.bibtex-smoke.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-bibtex
           path: |
@@ -156,7 +156,7 @@ jobs:
           retention-days: 90
 
       - name: Upload non-release pdfTeX/BibTeX link-map evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-pdftex-bibtex-link-maps
           path: |

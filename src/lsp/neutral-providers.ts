@@ -113,6 +113,8 @@ function legacyContextType(
 export interface ProvideCompletionOptions {
   registry?: CompletionResolverRegistry
   cancellationToken?: CompletionCancellationToken
+  /** Collect lazy catalog work required by the resolved completion domain. */
+  waitUntil?: (pending: Promise<unknown>) => void
 }
 
 export interface DefaultCompletionRegistryOptions {
@@ -137,6 +139,7 @@ class SemanticCompletionBinding {
     index: ProjectIndex,
     cancellationToken?: CompletionCancellationToken,
     documentPath?: string,
+    waitUntil?: (pending: Promise<unknown>) => void,
   ): SemanticSyncResult {
     return this.syncScopes(
       [
@@ -144,12 +147,14 @@ class SemanticCompletionBinding {
         ...[...index.getLoadedClasses(documentPath)].map((name) => `class/${name}`),
       ],
       cancellationToken,
+      waitUntil,
     )
   }
 
   syncScopes(
     scopeIds: Iterable<string>,
     cancellationToken?: CompletionCancellationToken,
+    waitUntil?: (pending: Promise<unknown>) => void,
   ): SemanticSyncResult {
     const shards: TexSemanticShard[] = []
     let isIncomplete = false
@@ -172,11 +177,11 @@ class SemanticCompletionBinding {
         state.status === 'error'
       ) {
         isIncomplete = true
-        if (state.status !== 'loading') {
-          void this.provider.load(scopeId, cancellationToken).then((loaded) => {
-            if (loaded.status === 'ready') this.register(loaded.shard)
-          })
-        }
+        const pendingLoad = this.provider.load(scopeId, cancellationToken).then((loaded) => {
+          if (loaded.status === 'ready') this.register(loaded.shard)
+        })
+        waitUntil?.(pendingLoad)
+        if (!waitUntil) void pendingLoad
       }
     }
     return { shards, isIncomplete }
@@ -206,6 +211,7 @@ export function createDefaultCompletionRegistry(
       env.index,
       env.cancellationToken,
       env.document.path,
+      env.waitUntil,
     )
     return {
       items: completeCommands(context.prefix, context.prefix.length, env.index, env.document.path),
@@ -223,6 +229,7 @@ export function createDefaultCompletionRegistry(
       env.index,
       env.cancellationToken,
       env.document.path,
+      env.waitUntil,
     )
     const items = completeEnvironments(
       context.prefix,
@@ -275,6 +282,7 @@ export function createDefaultCompletionRegistry(
       env.index,
       env.cancellationToken,
       env.document.path,
+      env.waitUntil,
     )
     return {
       items: completeColors(env, semantic?.shards ?? []),
@@ -356,7 +364,39 @@ export function provideCompletionResult(
     index,
     fs,
     ...(options.cancellationToken ? { cancellationToken: options.cancellationToken } : {}),
+    ...(options.waitUntil ? { waitUntil: options.waitUntil } : {}),
   })
+}
+
+/**
+ * Compute completion after the lazy catalog work started by this request settles once.
+ * A failed or still-partial source remains `isIncomplete` and may retry on a later request.
+ */
+export async function provideCompletionResultAsync(
+  doc: NeutralDocument,
+  pos: NeutralPosition,
+  index: ProjectIndex,
+  fs: VirtualFS,
+  options: ProvideCompletionOptions = {},
+): Promise<NeutralCompletionList> {
+  const pending = new Set<Promise<unknown>>()
+  const first = provideCompletionResult(doc, pos, index, fs, {
+    ...options,
+    waitUntil: (task) => pending.add(task),
+  })
+  if (
+    !first.isIncomplete ||
+    pending.size === 0 ||
+    options.cancellationToken?.isCancellationRequested
+  ) {
+    return first
+  }
+
+  await Promise.allSettled(pending)
+  if (options.cancellationToken?.isCancellationRequested) {
+    return { items: [], isIncomplete: false }
+  }
+  return provideCompletionResult(doc, pos, index, fs, options)
 }
 
 function argSuffix(argCount: number): string {
@@ -961,6 +1001,7 @@ function resolveKeyValue(
   const semantic = binding?.syncScopes(
     semanticScopeIds(context),
     environment.cancellationToken,
+    environment.waitUntil,
   ) ?? {
     shards: [],
     isIncomplete: false,
@@ -1060,8 +1101,10 @@ function resourceResolver(
     const project = projectResourceCompletions(context.prefix, context.prefix.length, kind, env.fs)
     if (!provider) return project
     const state = provider.getState(kind)
-    if (state.status === 'idle' || state.status === 'error') {
-      void provider.load(kind, env.cancellationToken)
+    if (state.status === 'idle' || state.status === 'loading' || state.status === 'error') {
+      const pendingLoad = provider.load(kind, env.cancellationToken)
+      env.waitUntil?.(pendingLoad)
+      if (!env.waitUntil) void pendingLoad
     }
     if (state.status !== 'ready') {
       return {

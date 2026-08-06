@@ -33,7 +33,7 @@ jobs:
   build-bibtex8:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
         run: node scripts/check-license-compliance.mjs 2025
@@ -42,7 +42,7 @@ jobs:
         if: github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image
         run: |
@@ -61,7 +61,7 @@ jobs:
             -v ${{ github.workspace }}/wasm-build/dist-bibtex8:/dist \
             bibtex8-wasm
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24 }
 
       - name: Smoke test (WASM validity + entry export + own glue)
@@ -90,7 +90,7 @@ jobs:
             wasmtex-bibtex8.js wasmtex-bibtex8.worker.js wasmtex-bibtex8.wasm
 
       - name: Upload bibtex8 WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-bibtex8
           path: |
@@ -101,7 +101,7 @@ jobs:
           retention-days: 90
 
       - name: Upload non-release BibTeX8 link-map evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-bibtex8-link-map
           path: wasm-build/dist-bibtex8/wasmtex-bibtex8.map

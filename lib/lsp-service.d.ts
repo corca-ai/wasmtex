@@ -106,6 +106,8 @@ export declare class LatexLanguageService {
     getCompletionContext(path: string, line: number, column: number): CompletionContext | null;
     getCompletions(path: string, line: number, column: number, cancellationToken?: CompletionCancellationToken): NeutralCompletionItem[];
     getCompletionResult(path: string, line: number, column: number, cancellationToken?: CompletionCancellationToken): NeutralCompletionList;
+    /** Resolve completion after request-scoped lazy catalog loads settle once. */
+    getCompletionResultAsync(path: string, line: number, column: number, cancellationToken?: CompletionCancellationToken): Promise<NeutralCompletionList>;
     getHover(path: string, line: number, column: number): NeutralHover | null;
     getDefinition(path: string, line: number, column: number): NeutralLocation | null;
     getReferences(path: string, line: number, column: number): NeutralLocation[];

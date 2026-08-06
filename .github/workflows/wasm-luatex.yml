@@ -34,7 +34,7 @@ jobs:
   build-luatex:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
         run: node scripts/check-license-compliance.mjs 2025
@@ -43,9 +43,9 @@ jobs:
         if: github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: /tmp/.buildx-cache-luatex
           key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex', 'wasm-build/patches/texlive-wtpdf.patch', 'wasm-build/pdf-backend/wtpdf*', 'wasm-build/sha2/*') }}
@@ -75,7 +75,7 @@ jobs:
           rm -rf /tmp/.buildx-cache-luatex
           mv /tmp/.buildx-cache-luatex-new /tmp/.buildx-cache-luatex 2>/dev/null || true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24 }
 
       - name: Extract prebuilt LuaLaTeX format (.fmt)
@@ -138,7 +138,7 @@ jobs:
             wasmtex-luatex.fmt.gz
 
       - name: Upload LuaTeX WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-luatex
           path: |
@@ -150,7 +150,7 @@ jobs:
           retention-days: 90
 
       - name: Upload non-release LuaHBTeX link-map evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wasm-luatex-link-map
           path: wasm-build/dist-luatex/wasmtex-luatex.map

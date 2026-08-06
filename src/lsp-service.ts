@@ -32,6 +32,7 @@ import {
   createDefaultCompletionRegistry,
   preloadSemanticCatalog,
   provideCompletionResult,
+  provideCompletionResultAsync,
   provideDefinition,
   provideHover,
   provideReferences,
@@ -460,6 +461,19 @@ export class LatexLanguageService {
     cancellationToken?: CompletionCancellationToken,
   ): NeutralCompletionList {
     return provideCompletionResult(this.docFor(path), { line, column }, this.index, this.fs, {
+      registry: this.completionRegistry,
+      ...(cancellationToken ? { cancellationToken } : {}),
+    })
+  }
+
+  /** Resolve completion after request-scoped lazy catalog loads settle once. */
+  getCompletionResultAsync(
+    path: string,
+    line: number,
+    column: number,
+    cancellationToken?: CompletionCancellationToken,
+  ): Promise<NeutralCompletionList> {
+    return provideCompletionResultAsync(this.docFor(path), { line, column }, this.index, this.fs, {
       registry: this.completionRegistry,
       ...(cancellationToken ? { cancellationToken } : {}),
     })

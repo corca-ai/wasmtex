@@ -25,6 +25,8 @@ export interface CompletionResolverEnvironment {
   index: ProjectIndex
   fs: VirtualFS
   cancellationToken?: CompletionCancellationToken
+  /** Async catalog work required to settle this completion request. */
+  waitUntil?: (pending: Promise<unknown>) => void
 }
 
 export type CompletionResolverResult = NeutralCompletionItem[] | NeutralCompletionList
