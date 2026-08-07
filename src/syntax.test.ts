@@ -102,4 +102,27 @@ describe('LatexSyntaxService', () => {
     expect(alpha?.kind).toBe('call')
     expect(alpha?.definitions).toEqual([])
   })
+
+  it('excludes Markdown metadata, inline code, comments, and false TeX branches', () => {
+    const content = [
+      '---',
+      'formula: $metadata$',
+      '---',
+      '`$inline$` <!-- $comment$ -->',
+      '\\iffalse $false$ \\else $true$ \\fi',
+      '$visible$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'f1',
+      path: 'main.md',
+      content,
+      documentVersion: 1,
+      language: 'markdown',
+    })
+    expect(
+      syntax.mathRegions.map((region) =>
+        content.slice(region.contentRange.startOffset, region.contentRange.endOffset),
+      ),
+    ).toEqual(['true', 'visible'])
+  })
 })

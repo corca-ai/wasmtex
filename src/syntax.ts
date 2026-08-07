@@ -190,7 +190,10 @@ function findMathRegions(
   allTokens: readonly Token[],
   markdown: boolean,
 ): LatexMathRegion[] {
-  const excluded = markdown ? markdownFenceSpans(source) : []
+  const excluded = [
+    ...conditionalMaskSpans(allTokens, source.length),
+    ...(markdown ? markdownExcludedSpans(source) : []),
+  ]
   const tokens = allTokens.filter(
     (token) => token.type !== 'comment' && token.type !== 'verb' && !inside(token.start, excluded),
   )
@@ -275,6 +278,26 @@ function environmentAt(
   }
 }
 
+function markdownExcludedSpans(source: string): Array<readonly [number, number]> {
+  const spans = markdownFenceSpans(source)
+  spans.push(...markdownFrontmatterSpans(source), ...markdownCommentSpans(source))
+  for (const [lineStart, line] of markdownLines(source)) {
+    let open: { length: number; start: number } | null = null
+    for (const match of line.matchAll(/`+/g)) {
+      const start = lineStart + match.index
+      if (inside(start, spans)) continue
+      const length = match[0].length
+      if (!open) open = { length, start }
+      else if (open.length === length) {
+        spans.push([open.start, start + length])
+        open = null
+      }
+    }
+    if (open) spans.push([open.start, lineStart + line.length])
+  }
+  return spans
+}
+
 function markdownFenceSpans(source: string): Array<readonly [number, number]> {
   const spans: Array<readonly [number, number]> = []
   const fence = /^\s*(`{3,}|~{3,})/gm
@@ -290,6 +313,98 @@ function markdownFenceSpans(source: string): Array<readonly [number, number]> {
   }
   if (opened) spans.push([opened.start, source.length])
   return spans
+}
+
+function markdownFrontmatterSpans(source: string): Array<readonly [number, number]> {
+  if (!/^(?:---|\+\+\+)\s*(?:\r?\n|$)/.test(source)) return []
+  const end = /^(?:---|\.\.\.|\+\+\+)\s*$/gm
+  end.lastIndex = source.indexOf('\n') + 1
+  const match = end.exec(source)
+  return [[0, match ? match.index + match[0].length : source.length]]
+}
+
+function markdownCommentSpans(source: string): Array<readonly [number, number]> {
+  return [...source.matchAll(/<!--[\s\S]*?(?:-->|$)/g)].map((match) => [
+    match.index,
+    match.index + match[0].length,
+  ])
+}
+
+function markdownLines(source: string): Array<readonly [number, string]> {
+  const lines: Array<readonly [number, string]> = []
+  let start = 0
+  for (const line of source.split('\n')) {
+    lines.push([start, line])
+    start += line.length + 1
+  }
+  return lines
+}
+
+interface ConditionalFrame {
+  falseStart: number
+  kind: 'false' | 'other' | 'true'
+  sawElse: boolean
+}
+
+function conditionalMaskSpans(
+  tokens: readonly Token[],
+  sourceLength: number,
+): Array<readonly [number, number]> {
+  const spans: Array<readonly [number, number]> = []
+  const stack: ConditionalFrame[] = []
+  for (const token of tokens) {
+    if (token.type === 'command') updateConditionalState(token, stack, spans)
+  }
+  for (const frame of stack) {
+    if (frame.falseStart >= 0) spans.push([frame.falseStart, sourceLength])
+  }
+  return spans
+}
+
+function updateConditionalState(
+  token: Token,
+  stack: ConditionalFrame[],
+  spans: Array<readonly [number, number]>,
+): void {
+  if (token.value === 'iffalse') {
+    stack.push({ falseStart: token.end, kind: 'false', sawElse: false })
+    return
+  }
+  if (token.value === 'iftrue') {
+    stack.push({ falseStart: -1, kind: 'true', sawElse: false })
+    return
+  }
+  if (token.value === 'else') {
+    updateConditionalElse(stack[stack.length - 1], token, spans)
+    return
+  }
+  if (token.value === 'fi') {
+    closeConditional(stack.pop(), token, spans)
+    return
+  }
+  if (token.value.startsWith('if') && token.value !== 'iff')
+    stack.push({ falseStart: -1, kind: 'other', sawElse: false })
+}
+
+function updateConditionalElse(
+  frame: ConditionalFrame | undefined,
+  token: Token,
+  spans: Array<readonly [number, number]>,
+): void {
+  if (!frame || frame.sawElse) return
+  frame.sawElse = true
+  if (frame.kind === 'false') spans.push([frame.falseStart, token.start])
+  else if (frame.kind === 'true') frame.falseStart = token.end
+}
+
+function closeConditional(
+  frame: ConditionalFrame | undefined,
+  token: Token,
+  spans: Array<readonly [number, number]>,
+): void {
+  if (!frame) return
+  if (frame.kind === 'false' && !frame.sawElse) spans.push([frame.falseStart, token.start])
+  else if (frame.kind === 'true' && frame.sawElse) spans.push([frame.falseStart, token.start])
 }
 
 function inside(offset: number, spans: readonly (readonly [number, number])[]): boolean {
