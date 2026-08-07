@@ -1513,7 +1513,11 @@ function collectExpanded(expanded: string, location: SourceLocation, symbols: Fi
  * User macros that wrap `\label`/`\ref`/`\cite` are shallow-expanded so the
  * symbols they generate are indexed at their call sites.
  */
-export function parseLatexFile(content: string, filePath: string): FileSymbols {
+export function parseLatexFile(
+  content: string,
+  filePath: string,
+  tokens: readonly Token[] = tokenize(content),
+): FileSymbols {
   const symbols: FileSymbols = {
     labels: [],
     labelRefs: [],
@@ -1538,8 +1542,7 @@ export function parseLatexFile(content: string, filePath: string): FileSymbols {
     bibItems: [],
   }
 
-  const tokens = tokenize(content)
-  const masked = maskContent(content, tokens)
+  const masked = maskContent(content, [...tokens])
   const ctx: Ctx = {
     masked,
     lineStarts: buildLineStarts(masked),
