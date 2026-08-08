@@ -36,11 +36,43 @@ describe('LatexSyntaxService', () => {
     })
     const call = syntax.macros.find((event) => event.kind === 'call' && event.name === 'vect')
     expect(call?.definitions).toHaveLength(1)
+    expect(call?.expansion).toEqual({ status: 'expanded', depth: 0, editable: false })
 
     service.move('f1', 'new.tex')
     expect(service.getFile('f1')?.path).toBe('new.tex')
     expect(service.getProjectIndex().hasFile('old.tex')).toBe(false)
     expect(service.getProjectIndex().hasFile('new.tex')).toBe(true)
+  })
+
+  it('relinks macro provenance across project files without reparsing callers', () => {
+    const service = new LatexSyntaxService()
+    service.upsert({
+      fileId: 'caller',
+      path: 'chapter.tex',
+      content: '$\\vect{x}$',
+      documentVersion: 1,
+    })
+    service.upsert({
+      fileId: 'defs',
+      path: 'macros.tex',
+      content: '\\newcommand{\\vect}[1]{#1}',
+      documentVersion: 1,
+    })
+    const call = service
+      .getFile('caller')
+      ?.macros.find((event) => event.kind === 'call' && event.name === 'vect')
+    expect(call?.definitions[0]?.fileId).toBe('defs')
+    expect(service.getStats().parseCount).toBe(2)
+
+    service.move('defs', 'shared/macros.tex')
+    expect(
+      service.getFile('caller')?.macros.find((event) => event.name === 'vect')?.definitions[0]
+        ?.path,
+    ).toBe('shared/macros.tex')
+    service.remove('defs')
+    expect(
+      service.getFile('caller')?.macros.find((event) => event.name === 'vect')?.definitions,
+    ).toEqual([])
   })
 
   it('returns a partial region and diagnostic for unfinished input', () => {
@@ -124,6 +156,34 @@ describe('LatexSyntaxService', () => {
     const alpha = syntax.macros.find((event) => event.name === 'alpha')
     expect(alpha?.kind).toBe('call')
     expect(alpha?.definitions).toEqual([])
+    expect(alpha?.expansion).toEqual({ status: 'unresolved', depth: 0, editable: true })
+  })
+
+  it('reports bounded macro expansion cycles and truncation without synthetic editability', () => {
+    const content = [
+      '\\newcommand{\\a}{\\b}',
+      '\\newcommand{\\b}{\\a}',
+      '\\newcommand{\\c}{\\d}',
+      '\\newcommand{\\d}{\\e}',
+      '\\newcommand{\\e}{\\f}',
+      '\\newcommand{\\f}{\\g}',
+      '\\newcommand{\\g}{\\h}',
+      '\\newcommand{\\h}{x}',
+      '$\\a \\c$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'f1',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const calls = syntax.macros.filter((event) => event.kind === 'call')
+    expect(calls.find((event) => event.name === 'a')?.expansion.status).toBe('cycle')
+    expect(calls.find((event) => event.name === 'c')?.expansion).toEqual({
+      status: 'truncated',
+      depth: 4,
+      editable: false,
+    })
   })
 
   it('excludes Markdown metadata, inline code, comments, and false TeX branches', () => {

@@ -1,10 +1,11 @@
 import { parseLatexFile } from './lsp/latex-parser'
+import { NEWCMD_CMDS } from './lsp/latex-patterns'
 import { type Token, tokenize } from './lsp/latex-tokenizer'
 import { ProjectIndex } from './lsp/project-index'
 import { buildLineStarts } from './lsp/source-position'
 import type { FileSymbols, SourceLocation } from './lsp/types'
 
-export const LATEX_SYNTAX_SCHEMA_VERSION = 1 as const
+export const LATEX_SYNTAX_SCHEMA_VERSION = 2 as const
 
 export interface LatexSyntaxRange {
   startOffset: number
@@ -29,6 +30,13 @@ export interface LatexMacroEvent {
   name: string
   source: LatexSyntaxSourceRef
   definitions: readonly LatexSyntaxSourceRef[]
+  expansion: {
+    /** Bounded static expansion outcome for this source occurrence. */
+    status: 'not-applicable' | 'unresolved' | 'expanded' | 'cycle' | 'truncated'
+    depth: number
+    /** False when meaning is generated and an editor must not edit a synthetic occurrence. */
+    editable: boolean
+  }
 }
 
 export interface LatexInclude {
@@ -138,7 +146,8 @@ export class LatexSyntaxService {
     if (document.language !== 'markdown') this.index.updateFileSymbols(document.path, symbols)
     const syntax = buildFileSyntax(document, tokens, symbols)
     this.files.set(document.fileId, { input: { ...document }, syntax })
-    return syntax
+    this.refreshMacroDefinitions()
+    return this.files.get(document.fileId)!.syntax
   }
 
   move(fileId: string, nextPath: string): void {
@@ -152,6 +161,7 @@ export class LatexSyntaxService {
     if (!state) return
     this.index.removeFile(state.input.path)
     this.files.delete(fileId)
+    this.refreshMacroDefinitions()
   }
 
   getFile(fileId: string): LatexFileSyntax | null {
@@ -165,6 +175,28 @@ export class LatexSyntaxService {
 
   getStats(): LatexSyntaxStats {
     return { documents: this.files.size, parseCount: this.parseCount }
+  }
+
+  /** Re-link calls after any inventory change without reparsing unchanged files. */
+  private refreshMacroDefinitions(): void {
+    const definitions = new Map<string, LatexSyntaxSourceRef[]>()
+    for (const state of this.files.values()) {
+      for (const event of state.syntax.macros) {
+        if (event.kind !== 'definition') continue
+        const bucket = definitions.get(event.name)
+        if (bucket) bucket.push(event.source)
+        else definitions.set(event.name, [event.source])
+      }
+    }
+    for (const state of this.files.values()) {
+      state.syntax = {
+        ...state.syntax,
+        macros: state.syntax.macros.map((event) => ({
+          ...event,
+          definitions: definitions.get(event.name) ?? [],
+        })),
+      }
+    }
   }
 }
 
@@ -428,6 +460,7 @@ function inside(offset: number, spans: readonly (readonly [number, number])[]): 
 
 function macroEvents(document: LatexDocumentInput, symbols: FileSymbols): LatexMacroEvent[] {
   const lineStarts = buildLineStarts(document.content)
+  const expansionGraph = collectMacroBodies(document.content)
   const definitions = new Map<string, LatexSyntaxSourceRef[]>()
   for (const definition of symbols.commands) {
     const source = sourceRef(document, lineStarts, definition.location, definition.name.length)
@@ -441,6 +474,7 @@ function macroEvents(document: LatexDocumentInput, symbols: FileSymbols): LatexM
     name: definition.name,
     source: sourceRef(document, lineStarts, definition.location, definition.name.length),
     definitions: definitions.get(definition.name) ?? [],
+    expansion: { status: 'not-applicable', depth: 0, editable: true },
   }))
   for (const use of symbols.commandUses) {
     const source = sourceRef(document, lineStarts, use.location, use.name.length)
@@ -453,12 +487,87 @@ function macroEvents(document: LatexDocumentInput, symbols: FileSymbols): LatexM
         name: use.name,
         source,
         definitions: definitions.get(use.name) ?? [],
+        expansion: macroExpansion(use.name, expansionGraph),
       })
     }
   }
   return events.sort(
     (left, right) => left.source.range.startOffset - right.source.range.startOffset,
   )
+}
+
+interface MacroBody {
+  body: string
+}
+
+const SYNTAX_MACRO_DEPTH_LIMIT = 4
+const SYNTAX_NEWCMD_RE = new RegExp(
+  `\\\\(?:${NEWCMD_CMDS}|DeclareMathOperator)\\*?\\{\\\\([a-zA-Z@]+)\\}(?:\\[\\d+\\])?(?:\\[[^\\]]*\\])?\\s*\\{`,
+  'g',
+)
+const SYNTAX_DEF_RE = /\\def\\([a-zA-Z@]+)(?:#\d)*\s*\{/g
+
+/** Minimal definition graph used only to report provenance; parsing remains owned by latex-parser. */
+function collectMacroBodies(source: string): Map<string, MacroBody> {
+  const bodies = new Map<string, MacroBody>()
+  const collect = (pattern: RegExp): void => {
+    for (const match of source.matchAll(pattern)) {
+      const open = match.index + match[0].length - 1
+      const body = balancedGroup(source, open)
+      if (body !== null) bodies.set(match[1]!, { body })
+    }
+  }
+  collect(SYNTAX_NEWCMD_RE)
+  collect(SYNTAX_DEF_RE)
+  return bodies
+}
+
+function balancedGroup(source: string, open: number): string | null {
+  if (source[open] !== '{') return null
+  let depth = 1
+  for (let cursor = open + 1; cursor < source.length; cursor++) {
+    if (source[cursor] === '\\') {
+      cursor++
+      continue
+    }
+    if (source[cursor] === '{') depth++
+    if (source[cursor] === '}' && --depth === 0) return source.slice(open + 1, cursor)
+  }
+  return null
+}
+
+function macroExpansion(
+  name: string,
+  graph: ReadonlyMap<string, MacroBody>,
+): LatexMacroEvent['expansion'] {
+  if (!graph.has(name)) return { status: 'unresolved', depth: 0, editable: true }
+  const outcome = traceMacro(name, graph, [], 0)
+  return { ...outcome, editable: false }
+}
+
+function traceMacro(
+  name: string,
+  graph: ReadonlyMap<string, MacroBody>,
+  stack: readonly string[],
+  depth: number,
+): Pick<LatexMacroEvent['expansion'], 'status' | 'depth'> {
+  if (stack.includes(name)) return { status: 'cycle', depth }
+  const body = graph.get(name)
+  if (!body) return { status: 'expanded', depth }
+  const dependencies = [...body.body.matchAll(/\\([a-zA-Z@]+)/g)]
+    .map((match) => match[1]!)
+    .filter((dependency) => graph.has(dependency))
+  if (dependencies.length === 0) return { status: 'expanded', depth }
+  if (depth >= SYNTAX_MACRO_DEPTH_LIMIT) return { status: 'truncated', depth }
+
+  let deepest = depth
+  for (const dependency of dependencies) {
+    const outcome = traceMacro(dependency, graph, [...stack, name], depth + 1)
+    if (outcome.status === 'cycle') return outcome
+    if (outcome.status === 'truncated') return outcome
+    deepest = Math.max(deepest, outcome.depth)
+  }
+  return { status: 'expanded', depth: deepest }
 }
 
 function includes(document: LatexDocumentInput, symbols: FileSymbols): LatexInclude[] {
