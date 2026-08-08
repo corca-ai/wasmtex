@@ -6,7 +6,8 @@ import {
   type TexResourceCatalogProvider,
 } from './lsp/resource-catalog'
 import { type JsonRpcMessage, LatexLspServer, pathFromUri, uriFromPath } from './lsp-server'
-import type { LatexLanguageServiceOptions } from './lsp-service'
+import { LatexLanguageService, type LatexLanguageServiceOptions } from './lsp-service'
+import { LatexSyntaxService } from './syntax'
 
 function makeServer(options?: LatexLanguageServiceOptions) {
   const sent: JsonRpcMessage[] = []
@@ -61,6 +62,80 @@ describe('LatexLspServer', () => {
       (d) => d.code,
     )
     expect(codes).toContain('undefined-ref')
+  })
+
+  it('shares injected syntax state and removes a closed document', () => {
+    const syntax = new LatexSyntaxService()
+    const service = new LatexLanguageService({ syntaxService: syntax })
+    const sent: JsonRpcMessage[] = []
+    const server = new LatexLspServer((message) => sent.push(message), service)
+
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: {
+        textDocument: { uri: URI, languageId: 'latex', version: 3, text: '\\label{x}' },
+      },
+    })
+    expect(syntax.getFile(URI)?.documentVersion).toBe(3)
+    expect(syntax.getStats().parseCount).toBe(1)
+
+    server.handle({ method: 'textDocument/didClose', params: { textDocument: { uri: URI } } })
+    expect(syntax.getFile(URI)).toBeNull()
+    expect(service.getFile('main.tex')).toBeNull()
+  })
+
+  it('suppresses a pending response after standard cancellation', async () => {
+    const service = new LatexLanguageService()
+    service.updateCompletionSnapshot = async () => {
+      await Promise.resolve()
+      return { status: 'absent' }
+    }
+    const sent: JsonRpcMessage[] = []
+    const server = new LatexLspServer((message) => sent.push(message), service)
+    const pending = server.handle({
+      id: 91,
+      method: 'wasmtex/updateCompletionSnapshot',
+      params: { snapshot: {} },
+    })
+    server.handle({ method: '$/cancelRequest', params: { id: 91 } })
+    await pending
+
+    expect(responseFor(sent, 91)).toBeUndefined()
+  })
+
+  it('handles lifecycle notifications and Markdown full-sync changes', () => {
+    const syntax = new LatexSyntaxService()
+    const service = new LatexLanguageService({ syntaxService: syntax })
+    const sent: JsonRpcMessage[] = []
+    const server = new LatexLspServer((message) => sent.push(message), service)
+
+    server.handle({ method: 'initialized' })
+    server.handle({ method: 'exit' })
+    server.handle({ id: 7, method: 'shutdown' })
+    server.handle({ method: '$/cancelRequest', params: { id: null } })
+    server.handle({ method: 'textDocument/didClose', params: { textDocument: {} } })
+    server.handle({
+      method: 'textDocument/didOpen',
+      params: { textDocument: { uri: 'file:///notes.md', languageId: 'markdown', text: '$x$' } },
+    })
+    server.handle({
+      method: 'textDocument/didChange',
+      params: {
+        textDocument: { uri: 'file:///notes.md', version: 2 },
+        contentChanges: [{ text: '$y$' }],
+      },
+    })
+    server.handle({
+      method: 'textDocument/didChange',
+      params: { textDocument: { uri: 'file:///notes.md' }, contentChanges: [] },
+    })
+
+    expect(result(sent, 7)).toBeNull()
+    expect(syntax.getFile('file:///notes.md')).toMatchObject({
+      documentVersion: 2,
+      path: 'notes.md',
+    })
+    expect(syntax.getProjectIndex().hasFile('notes.md')).toBe(false)
   })
 
   const diagsFor = (sent: JsonRpcMessage[], uri: string) =>

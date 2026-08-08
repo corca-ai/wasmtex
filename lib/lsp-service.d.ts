@@ -10,6 +10,7 @@ import { TexResourceCatalogProvider, TexResourceCatalogState, TexResourceKind } 
 import { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog';
 import { SemanticTrace } from './lsp/trace-parser';
 import { FileSymbols, SectionDef } from './lsp/types';
+import { LatexDocumentInput, LatexFileSyntax, LatexSyntaxService } from './syntax';
 import { CompletionSnapshot, CompletionSnapshotProfile, CompletionSnapshotState } from './types';
 export { lintSource, type LintConfig };
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
@@ -43,6 +44,9 @@ export interface LatexLanguageServiceOptions {
     /** Static linter (ChkTeX-style). `false` disables it; an object overrides
      *  per-rule enabled/severity. Defaults to on with the default rule set. */
     lint?: boolean | Partial<LintConfig>;
+    /** Shared parser/index owner. Use this when another consumer, such as Semath,
+     * needs the exact syntax snapshot that backs the LaTeX language features. */
+    syntaxService?: LatexSyntaxService;
 }
 /** Atomically replace the profile-bound completion sources without rebuilding the project index. */
 export interface LatexCompletionConfiguration {
@@ -66,6 +70,11 @@ export interface LatexWorkspaceEdit {
 export declare class LatexLanguageService {
     private fs;
     private index;
+    private readonly syntaxService;
+    private readonly documentPaths;
+    private readonly documentIds;
+    private readonly documentVersions;
+    private readonly documentLanguages;
     private lint;
     private linter;
     private completionRegistry;
@@ -79,7 +88,14 @@ export declare class LatexLanguageService {
     loadProject(files: Record<string, string | Uint8Array>): void;
     updateFile(path: string, content: string | Uint8Array): void;
     removeFile(path: string): boolean;
+    /** Update a stable document identity and return the syntax snapshot used by LSP queries. */
+    updateDocument(document: LatexDocumentInput): LatexFileSyntax;
+    moveDocument(fileId: string, nextPath: string): LatexFileSyntax;
+    removeDocument(fileId: string): boolean;
+    getSyntaxService(): LatexSyntaxService;
     getFile(path: string): string | Uint8Array | null;
+    private upsertSyntaxDocument;
+    private removeSyntaxDocument;
     listFiles(): string[];
     setMainFile(path: string): void;
     configureCompletion(configuration: LatexCompletionConfiguration): void;

@@ -1,4 +1,4 @@
-import { LatexLanguageServiceOptions } from './lsp-service';
+import { LatexLanguageService, LatexLanguageServiceOptions } from './lsp-service';
 export interface JsonRpcMessage {
     jsonrpc?: '2.0';
     id?: number | string | null;
@@ -16,7 +16,8 @@ export declare function uriFromPath(path: string): string;
 export declare class LatexLspServer {
     private send;
     private service;
-    constructor(send: SendMessage, options?: LatexLanguageServiceOptions);
+    private readonly cancelledRequests;
+    constructor(send: SendMessage, options?: LatexLanguageServiceOptions | LatexLanguageService);
     /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
     handle(message: JsonRpcMessage): void | Promise<void>;
     private dispatch;
@@ -25,6 +26,7 @@ export declare class LatexLspServer {
     private respondError;
     private didOpen;
     private didChange;
+    private didClose;
     private completion;
     private hover;
     private definition;

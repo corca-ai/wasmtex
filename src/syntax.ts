@@ -67,6 +67,12 @@ export interface LatexFileSyntax {
   diagnostics: readonly LatexSyntaxDiagnostic[]
 }
 
+export interface LatexSyntaxStats {
+  documents: number
+  /** Number of source tokenization/parsing passes performed by this service. */
+  parseCount: number
+}
+
 interface FileState {
   input: LatexDocumentInput
   syntax: LatexFileSyntax
@@ -110,6 +116,7 @@ const MATH_ENVIRONMENTS = new Set([
 export class LatexSyntaxService {
   private readonly files = new Map<string, FileState>()
   private readonly index = new ProjectIndex()
+  private parseCount = 0
 
   reset(snapshot: LatexProjectSyntaxInput): void {
     for (const state of this.files.values()) this.index.removeFile(state.input.path)
@@ -119,12 +126,16 @@ export class LatexSyntaxService {
 
   upsert(document: LatexDocumentInput): LatexFileSyntax {
     const previous = this.files.get(document.fileId)
-    if (previous && previous.input.path !== document.path)
+    if (
+      previous &&
+      (previous.input.path !== document.path || previous.input.language === 'markdown')
+    )
       this.index.removeFile(previous.input.path)
 
+    this.parseCount++
     const tokens = tokenize(document.content)
     const symbols = parseLatexFile(document.content, document.path, tokens)
-    this.index.updateFileSymbols(document.path, symbols)
+    if (document.language !== 'markdown') this.index.updateFileSymbols(document.path, symbols)
     const syntax = buildFileSyntax(document, tokens, symbols)
     this.files.set(document.fileId, { input: { ...document }, syntax })
     return syntax
@@ -150,6 +161,10 @@ export class LatexSyntaxService {
   /** The LSP service can reuse the exact same parsed snapshot. */
   getProjectIndex(): ProjectIndex {
     return this.index
+  }
+
+  getStats(): LatexSyntaxStats {
+    return { documents: this.files.size, parseCount: this.parseCount }
   }
 }
 

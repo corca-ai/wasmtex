@@ -85,6 +85,12 @@ describe('parseAuxFile', () => {
     expect(result.includes).toEqual(['chapter1.aux', 'chapter2.aux'])
   })
 
+  it('parses nested input groups in linear time without a backtracking regex', () => {
+    const nested = `{${'a'.repeat(20_000)}}`
+    const result = parseAuxFile(`\\@input{${nested}}\n\\@input{unfinished`)
+    expect(result.includes).toEqual([nested])
+  })
+
   it('parses mixed content with \\@input + \\newlabel + \\bibcite', () => {
     const aux = `\\relax
 \\newlabel{sec:intro}{{1}{1}}

@@ -12,6 +12,7 @@ Full reference for the `WasmTex` SDK.
 | `wasmtex/lsp` | Monaco-free LaTeX language service core. |
 | `wasmtex/lsp/monaco` | Monaco provider adapter for the language service. |
 | `wasmtex/lsp/server` | Transport-agnostic JSON-RPC language server. |
+| `wasmtex/syntax` | Stable, versioned syntax snapshots shared by language and semantic services. |
 | `wasmtex/synctex` | SyncTeX parser + PDF↔source mapping (`SynctexParser`, `TextMapper`). |
 | `wasmtex/style.css` | Optional built-in UI/viewer styles. |
 
@@ -162,6 +163,31 @@ For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
 | `analyzeCompletionContext` / `CompletionContext` | Parse a LaTeX command invocation or `.bib` entry at a cursor, including unfinished input, list/key-value position, selectors, BibTeX entry metadata, and an exact replacement range. |
 | `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
 | `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
+
+### Shared syntax lifecycle
+
+Create one `LatexSyntaxService` when LaTeX language features and another semantic
+consumer must observe the same parse. Pass it to `LatexLanguageService`, then use
+stable `fileId` values across path moves:
+
+```ts
+import { LatexLanguageService } from 'wasmtex/lsp'
+import { LatexSyntaxService } from 'wasmtex/syntax'
+
+const syntax = new LatexSyntaxService()
+const language = new LatexLanguageService({ syntaxService: syntax })
+const snapshot = language.updateDocument({
+  fileId: 'document-42',
+  path: 'chapters/intro.tex',
+  content: '$E = mc^2$',
+  documentVersion: 7,
+})
+```
+
+`snapshot` and all subsequent LSP queries are backed by the same `ProjectIndex`.
+`moveDocument` and `removeDocument` preserve or retire the stable identity.
+Markdown documents expose math regions but do not contribute LaTeX symbols to
+the project index. `getStats()` reports parse passes for integration budgets.
 
 ### Linter
 

@@ -21,6 +21,8 @@ describe('LatexSyntaxService', () => {
       ),
     ).toBe('x_i')
     expect(syntax.mathRegions[1]!.delimiter).toBe('\\[')
+    expect(service.getProjectIndex().hasFile('main.md')).toBe(false)
+    expect(service.getStats()).toEqual({ documents: 1, parseCount: 1 })
   })
 
   it('preserves stable identity, mutable paths, and macro provenance', () => {
@@ -88,7 +90,28 @@ describe('LatexSyntaxService', () => {
     service.remove('missing')
     service.remove('c')
     expect(service.getFile('c')).toBeNull()
+    expect(service.getStats()).toEqual({ documents: 0, parseCount: 3 })
     expect(() => service.move('missing', 'next.tex')).toThrow('unknown fileId')
+  })
+
+  it('removes stale LaTeX symbols when a document becomes Markdown', () => {
+    const service = new LatexSyntaxService()
+    service.upsert({
+      fileId: 'stable',
+      path: 'notes.tex',
+      content: '\\label{old}',
+      documentVersion: 1,
+    })
+    service.upsert({
+      fileId: 'stable',
+      path: 'notes.md',
+      content: '$x$',
+      documentVersion: 2,
+      language: 'markdown',
+    })
+
+    expect(service.getProjectIndex().hasFile('notes.tex')).toBe(false)
+    expect(service.getProjectIndex().hasFile('notes.md')).toBe(false)
   })
 
   it('reports builtin macro calls without invented definitions', () => {

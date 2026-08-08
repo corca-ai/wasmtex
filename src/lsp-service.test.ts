@@ -6,6 +6,7 @@ import {
   type TexResourceCatalogIdentity,
   type TexResourceCatalogShard,
 } from './lsp-service'
+import { LatexSyntaxService } from './syntax'
 
 const resourceIdentity = {
   schemaVersion: 1,
@@ -152,5 +153,67 @@ describe('LatexLanguageService', () => {
     expect(service.getProjectIndex()).toBe(index)
     expect(service.getCompletions('main.tex', 1, 18).map((item) => item.label)).toEqual(['bookest'])
     expect(service.getCompletionSnapshotState()).toEqual({ status: 'absent' })
+  })
+
+  it('reuses one stable syntax snapshot for document lifecycle and LSP queries', () => {
+    const syntaxService = new LatexSyntaxService()
+    const service = new LatexLanguageService({ syntaxService })
+
+    const syntax = service.updateDocument({
+      fileId: 'doc-1',
+      path: 'old.tex',
+      content: '\\section{Intro}\n\\label{sec:intro}',
+      documentVersion: 4,
+    })
+
+    expect(service.getSyntaxService()).toBe(syntaxService)
+    expect(service.getProjectIndex()).toBe(syntaxService.getProjectIndex())
+    expect(syntaxService.getStats()).toEqual({ documents: 1, parseCount: 1 })
+    expect(service.getOutline('old.tex')[0]?.title).toBe('Intro')
+    expect(syntax.macros.some((event) => event.name === 'section')).toBe(true)
+
+    // A duplicate delivery of the same version is a no-op, not a second parse.
+    expect(
+      service.updateDocument({
+        fileId: 'doc-1',
+        path: 'old.tex',
+        content: '\\section{Intro}\n\\label{sec:intro}',
+        documentVersion: 4,
+      }),
+    ).toBe(syntax)
+    expect(syntaxService.getStats().parseCount).toBe(1)
+
+    service.moveDocument('doc-1', 'chapter.tex')
+    expect(service.getFile('old.tex')).toBeNull()
+    expect(service.getOutline('chapter.tex')[0]?.title).toBe('Intro')
+    expect(syntaxService.getStats().parseCount).toBe(2)
+
+    expect(service.removeDocument('doc-1')).toBe(true)
+    expect(service.getProjectIndex().hasFile('chapter.tex')).toBe(false)
+    expect(service.removeDocument('doc-1')).toBe(false)
+    expect(() => service.moveDocument('missing', 'next.tex')).toThrow('unknown fileId')
+  })
+
+  it('keeps Markdown syntax isolated and resolves path identity conflicts', () => {
+    const syntaxService = new LatexSyntaxService()
+    const service = new LatexLanguageService({ syntaxService })
+
+    service.updateFile('notes.md', '$first$')
+    service.updateFile('notes.md', '$second$')
+    expect(syntaxService.getFile('path:notes.md')?.documentVersion).toBe(2)
+    expect(service.getProjectIndex().hasFile('notes.md')).toBe(false)
+
+    service.updateDocument({
+      fileId: 'replacement',
+      path: 'notes.md',
+      content: '$third$',
+      documentVersion: 8,
+      language: 'markdown',
+    })
+    expect(syntaxService.getFile('path:notes.md')).toBeNull()
+    expect(syntaxService.getFile('replacement')?.documentVersion).toBe(8)
+
+    service.updateFile('notes.md', new Uint8Array([1]))
+    expect(syntaxService.getFile('replacement')).toBeNull()
   })
 })

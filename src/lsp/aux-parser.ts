@@ -1,7 +1,5 @@
 import type { AuxData } from './types'
 
-const INPUT_RE = /\\@input\{(.+?)\}/g
-
 /** Unwrap a single fully-enclosing brace layer: `{knuth84}` → `knuth84`, `2.3` → `2.3`. */
 function unwrapBraces(s: string): string {
   const inner = readGroup(s, 0)
@@ -57,6 +55,14 @@ function parseBibcites(content: string, citations: Set<string>): void {
   }
 }
 
+function parseInputs(content: string, includes: string[]): void {
+  const TOKEN = '\\@input{'
+  for (let idx = content.indexOf(TOKEN); idx !== -1; idx = content.indexOf(TOKEN, idx + 1)) {
+    const input = readGroup(content, idx + TOKEN.length - 1)
+    if (input) includes.push(input.content)
+  }
+}
+
 export function parseAuxFile(content: string): AuxData {
   const labels = new Map<string, string>()
   const citations = new Set<string>()
@@ -64,10 +70,7 @@ export function parseAuxFile(content: string): AuxData {
 
   parseNewlabels(content, labels)
   parseBibcites(content, citations)
-
-  for (const m of content.matchAll(INPUT_RE)) {
-    includes.push(m[1]!)
-  }
+  parseInputs(content, includes)
 
   return { labels, citations, includes }
 }
