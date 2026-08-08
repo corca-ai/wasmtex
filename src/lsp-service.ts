@@ -37,7 +37,7 @@ import {
   provideHover,
   provideReferences,
 } from './lsp/neutral-providers'
-import { ProjectIndex } from './lsp/project-index'
+import type { ProjectIndex } from './lsp/project-index'
 import type {
   NeutralCompletionItem,
   NeutralCompletionList,
@@ -53,6 +53,7 @@ import type {
 import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
+import { type LatexDocumentInput, type LatexFileSyntax, LatexSyntaxService } from './syntax'
 import type {
   CompletionSnapshot,
   CompletionSnapshotProfile,
@@ -179,6 +180,9 @@ export interface LatexLanguageServiceOptions {
   /** Static linter (ChkTeX-style). `false` disables it; an object overrides
    *  per-rule enabled/severity. Defaults to on with the default rule set. */
   lint?: boolean | Partial<LintConfig>
+  /** Shared parser/index owner. Use this when another consumer, such as Semath,
+   * needs the exact syntax snapshot that backs the LaTeX language features. */
+  syntaxService?: LatexSyntaxService
 }
 
 /** Atomically replace the profile-bound completion sources without rebuilding the project index. */
@@ -208,7 +212,12 @@ function isLatexSource(path: string): boolean {
 
 export class LatexLanguageService {
   private fs = new VirtualFS({ empty: true })
-  private index = new ProjectIndex()
+  private index: ProjectIndex
+  private readonly syntaxService: LatexSyntaxService
+  private readonly documentPaths = new Map<string, string>()
+  private readonly documentIds = new Map<string, string>()
+  private readonly documentVersions = new Map<string, number>()
+  private readonly documentLanguages = new Map<string, 'latex' | 'markdown'>()
   private lint: boolean | Partial<LintConfig>
   private linter: IncrementalLinter
   private completionRegistry: CompletionResolverRegistry
@@ -220,6 +229,8 @@ export class LatexLanguageService {
   private completionSnapshotUpdate = 0
 
   constructor(options: LatexLanguageServiceOptions = {}) {
+    this.syntaxService = options.syntaxService ?? new LatexSyntaxService()
+    this.index = this.syntaxService.getProjectIndex()
     this.lint = options.lint ?? true
     this.linter = new IncrementalLinter(this.lint)
     this.resourceCatalog = options.resourceCatalog
@@ -241,7 +252,12 @@ export class LatexLanguageService {
   loadProject(files: Record<string, string | Uint8Array>): void {
     this.projectRevisionEpoch++
     this.fs = new VirtualFS({ empty: true })
-    this.index = new ProjectIndex()
+    this.syntaxService.reset({ documents: [] })
+    this.index = this.syntaxService.getProjectIndex()
+    this.documentPaths.clear()
+    this.documentIds.clear()
+    this.documentVersions.clear()
+    this.documentLanguages.clear()
     this.linter = new IncrementalLinter(this.lint)
     for (const [path, content] of Object.entries(files)) {
       this.updateFile(path, content)
@@ -257,13 +273,19 @@ export class LatexLanguageService {
     this.fs.writeFile(path, content)
     this.linter.updateFile(path, content)
     if (typeof content !== 'string') {
-      if (isLatexSource(path)) this.index.removeFile(path)
+      const fileId = this.documentIds.get(path)
+      if (fileId) this.removeSyntaxDocument(fileId)
       if (path.toLowerCase().endsWith('.bib')) this.index.removeBibFile(path)
       return
     }
     if (isLatexSource(path)) {
-      this.index.updateFile(path, content)
-      preloadSemanticCatalog(this.completionRegistry, this.index)
+      const fileId = this.documentIds.get(path) ?? `path:${path}`
+      const documentVersion = (this.documentVersions.get(fileId) ?? 0) + 1
+      this.upsertSyntaxDocument({ fileId, path, content, documentVersion, language: 'latex' })
+    } else if (/\.md$/i.test(path)) {
+      const fileId = this.documentIds.get(path) ?? `path:${path}`
+      const documentVersion = (this.documentVersions.get(fileId) ?? 0) + 1
+      this.upsertSyntaxDocument({ fileId, path, content, documentVersion, language: 'markdown' })
     }
     if (path.toLowerCase().endsWith('.bib')) {
       this.index.updateBibFile(path, parseBibFileData(content, path))
@@ -276,13 +298,88 @@ export class LatexLanguageService {
     this.projectRevisionEpoch++
     this.index.invalidateCompletionSnapshot()
     this.linter.removeFile(path)
-    if (isLatexSource(path)) this.index.removeFile(path)
+    const fileId = this.documentIds.get(path)
+    if (fileId) this.removeSyntaxDocument(fileId)
     if (path.toLowerCase().endsWith('.bib')) this.index.removeBibFile(path)
     return removed
   }
 
+  /** Update a stable document identity and return the syntax snapshot used by LSP queries. */
+  updateDocument(document: LatexDocumentInput): LatexFileSyntax {
+    const previousPath = this.documentPaths.get(document.fileId)
+    if (previousPath && previousPath !== document.path) {
+      this.fs.deleteFile(previousPath)
+      this.linter.removeFile(previousPath)
+      this.documentIds.delete(previousPath)
+    }
+    const conflictingId = this.documentIds.get(document.path)
+    if (conflictingId && conflictingId !== document.fileId) this.removeSyntaxDocument(conflictingId)
+
+    const previous = this.fs.readFile(document.path)
+    const previousVersion = this.documentVersions.get(document.fileId)
+    if (previous === document.content && previousVersion === document.documentVersion) {
+      const syntax = this.syntaxService.getFile(document.fileId)
+      if (syntax) return syntax
+    }
+
+    this.projectRevisionEpoch++
+    this.index.invalidateCompletionSnapshot()
+    this.fs.writeFile(document.path, document.content)
+    this.linter.updateFile(document.path, document.content)
+    return this.upsertSyntaxDocument(document)
+  }
+
+  moveDocument(fileId: string, nextPath: string): LatexFileSyntax {
+    const previousPath = this.documentPaths.get(fileId)
+    if (!previousPath) throw new Error(`unknown fileId: ${fileId}`)
+    // documentPaths only contains text documents accepted by updateDocument/updateFile.
+    const content = this.fs.readFile(previousPath) as string
+    return this.updateDocument({
+      fileId,
+      path: nextPath,
+      content,
+      documentVersion: this.documentVersions.get(fileId)!,
+      language: this.documentLanguages.get(fileId)!,
+    })
+  }
+
+  removeDocument(fileId: string): boolean {
+    const path = this.documentPaths.get(fileId)
+    if (!path) return false
+    const removed = this.fs.deleteFile(path)
+    this.projectRevisionEpoch++
+    this.index.invalidateCompletionSnapshot()
+    this.linter.removeFile(path)
+    this.removeSyntaxDocument(fileId)
+    return removed
+  }
+
+  getSyntaxService(): LatexSyntaxService {
+    return this.syntaxService
+  }
+
   getFile(path: string): string | Uint8Array | null {
     return this.fs.readFile(path)
+  }
+
+  private upsertSyntaxDocument(document: LatexDocumentInput): LatexFileSyntax {
+    const syntax = this.syntaxService.upsert(document)
+    this.documentPaths.set(document.fileId, document.path)
+    this.documentIds.set(document.path, document.fileId)
+    this.documentVersions.set(document.fileId, document.documentVersion)
+    this.documentLanguages.set(document.fileId, document.language ?? 'latex')
+    if (document.language !== 'markdown')
+      preloadSemanticCatalog(this.completionRegistry, this.index)
+    return syntax
+  }
+
+  private removeSyntaxDocument(fileId: string): void {
+    const path = this.documentPaths.get(fileId)
+    this.syntaxService.remove(fileId)
+    this.documentPaths.delete(fileId)
+    this.documentVersions.delete(fileId)
+    this.documentLanguages.delete(fileId)
+    if (path) this.documentIds.delete(path)
   }
 
   listFiles(): string[] {

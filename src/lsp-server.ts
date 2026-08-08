@@ -76,12 +76,14 @@ interface DocPositionParams {
 
 export class LatexLspServer {
   private service: LatexLanguageService
+  private readonly cancelledRequests = new Set<number | string>()
 
   constructor(
     private send: SendMessage,
-    options?: LatexLanguageServiceOptions,
+    options?: LatexLanguageServiceOptions | LatexLanguageService,
   ) {
-    this.service = new LatexLanguageService(options)
+    this.service =
+      options instanceof LatexLanguageService ? options : new LatexLanguageService(options)
   }
 
   /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
@@ -105,14 +107,25 @@ export class LatexLspServer {
         this.respond(id, { capabilities: serverCapabilities() })
         break
       case 'initialized':
+      case 'exit':
+        break
       case 'shutdown':
         this.respond(id, null)
         break
+      case '$/cancelRequest': {
+        const requestId = params?.id
+        if (typeof requestId === 'number' || typeof requestId === 'string')
+          this.cancelledRequests.add(requestId)
+        break
+      }
       case 'textDocument/didOpen':
         this.didOpen(params)
         break
       case 'textDocument/didChange':
         this.didChange(params)
+        break
+      case 'textDocument/didClose':
+        this.didClose(params)
         break
       case 'textDocument/completion':
         {
@@ -160,26 +173,53 @@ export class LatexLspServer {
   }
 
   private respond(id: JsonRpcMessage['id'], result: unknown): void {
-    if (id != null) this.send({ jsonrpc: '2.0', id, result })
+    if (id == null) return
+    if (this.cancelledRequests.delete(id)) return
+    this.send({ jsonrpc: '2.0', id, result })
   }
   private respondError(id: number | string, code: number, msg: string): void {
     this.send({ jsonrpc: '2.0', id, error: { code, message: msg } })
   }
 
   private didOpen(params: Record<string, unknown> | undefined): void {
-    const doc = (params?.textDocument ?? {}) as { uri: string; text: string }
-    this.service.updateFile(pathFromUri(doc.uri), doc.text ?? '')
+    const doc = (params?.textDocument ?? {}) as {
+      uri: string
+      text: string
+      version?: number
+      languageId?: string
+    }
+    this.service.updateDocument({
+      fileId: doc.uri,
+      path: pathFromUri(doc.uri),
+      content: doc.text ?? '',
+      documentVersion: doc.version ?? 0,
+      language: doc.languageId === 'markdown' ? 'markdown' : 'latex',
+    })
     this.publishAllDiagnostics()
   }
 
   private didChange(params: Record<string, unknown> | undefined): void {
-    const td = (params?.textDocument ?? {}) as { uri: string }
+    const td = (params?.textDocument ?? {}) as { uri: string; version?: number }
     const changes = (params?.contentChanges ?? []) as Array<{ text: string }>
     // No changes → no-op. Falling back to '' would full-sync-replace the document with empty
     // content, wiping its symbols/diagnostics. A conformant full-sync client always sends the
     // whole text, so an empty array is malformed and must be ignored, not destructive.
     if (!changes.length) return
-    this.service.updateFile(pathFromUri(td.uri), changes[changes.length - 1]!.text)
+    const path = pathFromUri(td.uri)
+    this.service.updateDocument({
+      fileId: td.uri,
+      path,
+      content: changes[changes.length - 1]!.text,
+      documentVersion: td.version ?? 0,
+      language: /\.md$/i.test(path) ? 'markdown' : 'latex',
+    })
+    this.publishAllDiagnostics()
+  }
+
+  private didClose(params: Record<string, unknown> | undefined): void {
+    const td = (params?.textDocument ?? {}) as { uri?: string }
+    if (!td.uri) return
+    this.service.removeDocument(td.uri)
     this.publishAllDiagnostics()
   }
 

@@ -52,6 +52,11 @@ export interface LatexFileSyntax {
     includes: readonly LatexInclude[];
     diagnostics: readonly LatexSyntaxDiagnostic[];
 }
+export interface LatexSyntaxStats {
+    documents: number;
+    /** Number of source tokenization/parsing passes performed by this service. */
+    parseCount: number;
+}
 /**
  * Stable, versioned syntax boundary for consumers such as Semath.
  * Offsets are UTF-16, zero-based and half-open, matching JavaScript and Monaco.
@@ -59,6 +64,7 @@ export interface LatexFileSyntax {
 export declare class LatexSyntaxService {
     private readonly files;
     private readonly index;
+    private parseCount;
     reset(snapshot: LatexProjectSyntaxInput): void;
     upsert(document: LatexDocumentInput): LatexFileSyntax;
     move(fileId: string, nextPath: string): void;
@@ -66,5 +72,6 @@ export declare class LatexSyntaxService {
     getFile(fileId: string): LatexFileSyntax | null;
     /** The LSP service can reuse the exact same parsed snapshot. */
     getProjectIndex(): ProjectIndex;
+    getStats(): LatexSyntaxStats;
 }
 export declare function createLatexSyntaxService(snapshot?: LatexProjectSyntaxInput): LatexSyntaxService;

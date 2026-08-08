@@ -138,6 +138,13 @@ file. The cached active graph follows `input`/`include`/`subfile` plus project-l
 class/package load edges. Queries for completion use that graph, while per-name navigation
 lookups remain backed by inverted indexes.
 
+`LatexSyntaxService` is the parser/index owner for composed authoring runtimes. A host
+passes the same instance to `LatexLanguageService`; each stable document update then
+produces the public math/macro/include snapshot and updates LSP symbols from one token
+stream. Markdown contributes math regions for semantic consumers without polluting the
+LaTeX project index. The service is transport-neutral and can live in a browser Worker
+or a native language-server process.
+
 ### Rename (F2)
 Rename functionality uses `ProjectIndex.findAllOccurrences()` to find symbols in both `.tex` and `.bib` files. It handles:
 - `\label` ↔ `\ref`
