@@ -189,6 +189,13 @@ const snapshot = language.updateDocument({
 Markdown documents expose math regions but do not contribute LaTeX symbols to
 the project index. `getStats()` reports parse passes for integration budgets.
 
+Syntax schema 2 adds bounded macro provenance. Each macro event carries its
+definition and invocation source ranges plus an expansion outcome (`expanded`,
+`cycle`, `truncated`, or `unresolved`). `editable: false` means the apparent
+meaning is generated: consumers may navigate to its source but must not create
+an automatic edit against a synthetic occurrence. Project inventory changes
+relink definition ranges without reparsing unchanged callers.
+
 ### Linter
 
 `lintSource(content, path, config?)`, `DEFAULT_LINT_CONFIG`, and the types

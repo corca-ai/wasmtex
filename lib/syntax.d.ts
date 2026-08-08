@@ -1,5 +1,5 @@
 import { ProjectIndex } from './lsp/project-index';
-export declare const LATEX_SYNTAX_SCHEMA_VERSION: 1;
+export declare const LATEX_SYNTAX_SCHEMA_VERSION: 2;
 export interface LatexSyntaxRange {
     startOffset: number;
     endOffset: number;
@@ -20,6 +20,13 @@ export interface LatexMacroEvent {
     name: string;
     source: LatexSyntaxSourceRef;
     definitions: readonly LatexSyntaxSourceRef[];
+    expansion: {
+        /** Bounded static expansion outcome for this source occurrence. */
+        status: 'not-applicable' | 'unresolved' | 'expanded' | 'cycle' | 'truncated';
+        depth: number;
+        /** False when meaning is generated and an editor must not edit a synthetic occurrence. */
+        editable: boolean;
+    };
 }
 export interface LatexInclude {
     path: string;
@@ -73,5 +80,7 @@ export declare class LatexSyntaxService {
     /** The LSP service can reuse the exact same parsed snapshot. */
     getProjectIndex(): ProjectIndex;
     getStats(): LatexSyntaxStats;
+    /** Re-link calls after any inventory change without reparsing unchanged files. */
+    private refreshMacroDefinitions;
 }
 export declare function createLatexSyntaxService(snapshot?: LatexProjectSyntaxInput): LatexSyntaxService;
