@@ -51,6 +51,10 @@
       "types": "./lib/lsp-server.d.ts",
       "import": "./lib/lsp-server.js"
     },
+    "./syntax": {
+      "types": "./lib/syntax.d.ts",
+      "import": "./lib/syntax.js"
+    },
     "./style.css": "./lib/wasmtex.css",
     "./wasmtex.css": "./lib/wasmtex.css"
   },

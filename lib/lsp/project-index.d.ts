@@ -43,6 +43,8 @@ export declare class ProjectIndex {
     private bibEntryIndex;
     private allLabelsCache;
     updateFile(filePath: string, content: string): void;
+    /** Update from a caller-owned syntax snapshot without parsing the source again. */
+    updateFileSymbols(filePath: string, symbols: FileSymbols): void;
     removeFile(filePath: string): void;
     private addToIndexes;
     private removeFromIndexes;

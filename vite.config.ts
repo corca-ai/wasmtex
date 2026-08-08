@@ -74,6 +74,7 @@ export default defineConfig(({ mode }) => {
               lsp: 'src/lsp-service.ts',
               'lsp-monaco': 'src/lsp-monaco.ts',
               'lsp-server': 'src/lsp-server.ts',
+              syntax: 'src/syntax.ts',
             },
             formats: ['es'] as const,
             fileName: (_format, entryName) => `${entryName}.js`,

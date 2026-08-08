@@ -148,10 +148,14 @@ export class ProjectIndex {
   private allLabelsCache: LabelDef[] | null = null
 
   updateFile(filePath: string, content: string): void {
+    this.updateFileSymbols(filePath, parseLatexFile(content, filePath))
+  }
+
+  /** Update from a caller-owned syntax snapshot without parsing the source again. */
+  updateFileSymbols(filePath: string, symbols: FileSymbols): void {
     this.invalidateCompletionSnapshot()
     const previous = this.files.get(filePath)
     if (previous) this.removeFromIndexes(filePath, previous)
-    const symbols = parseLatexFile(content, filePath)
     this.files.set(filePath, symbols)
     this.addToIndexes(symbols)
     this.allLabelsCache = null

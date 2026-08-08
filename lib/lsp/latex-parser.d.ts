@@ -20,4 +20,4 @@ export declare function maskSpansFromTokens(tokens: Token[]): Array<[number, num
  * User macros that wrap `\label`/`\ref`/`\cite` are shallow-expanded so the
  * symbols they generate are indexed at their call sites.
  */
-export declare function parseLatexFile(content: string, filePath: string): FileSymbols;
+export declare function parseLatexFile(content: string, filePath: string, tokens?: readonly Token[]): FileSymbols;
