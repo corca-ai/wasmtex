@@ -36,12 +36,38 @@ describe('LatexSyntaxService', () => {
     })
     const call = syntax.macros.find((event) => event.kind === 'call' && event.name === 'vect')
     expect(call?.definitions).toHaveLength(1)
-    expect(call?.expansion).toEqual({ status: 'expanded', depth: 0, editable: false })
+    const invocationStart = content.indexOf('\\vect{x}')
+    expect(call?.expansion).toEqual({
+      status: 'expanded',
+      depth: 0,
+      editable: false,
+      surface: 'x',
+      inputRange: { startOffset: invocationStart, endOffset: invocationStart + '\\vect{x}'.length },
+    })
 
     service.move('f1', 'new.tex')
     expect(service.getFile('f1')?.path).toBe('new.tex')
     expect(service.getProjectIndex().hasFile('old.tex')).toBe(false)
     expect(service.getProjectIndex().hasFile('new.tex')).toBe(true)
+  })
+
+  it('returns the expanded surface and full invocation range for nested math macros', () => {
+    const content = [
+      '\\newcommand{\\bold}[1]{\\mathbf{#1}}',
+      '\\newcommand{\\vect}[1]{\\bold{#1}}',
+      '$\\vect{x+y}$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'f1',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const call = syntax.macros.find((event) => event.kind === 'call' && event.name === 'vect')
+    expect(call?.expansion.surface).toBe('\\mathbf{x+y}')
+    expect(
+      content.slice(call?.expansion.inputRange?.startOffset, call?.expansion.inputRange?.endOffset),
+    ).toBe('\\vect{x+y}')
   })
 
   it('relinks macro provenance across project files without reparsing callers', () => {
