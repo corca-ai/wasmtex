@@ -1386,22 +1386,39 @@ function expandCall(
 ): string {
   const def = macros.get(name)
   if (!def || depth > MAX_EXPANSION_DEPTH || seen.has(name)) return ''
-  let body = def.body.replace(/#(\d)/g, (_, d) => args[Number(d) - 1] ?? '')
-  // Expand nested user-macro calls in the substituted body.
-  body = body.replace(/\\(\w+)/g, (whole, callName: string, offset: number) => {
+  const body = def.body.replace(/#(\d)/g, (_, d) => args[Number(d) - 1] ?? '')
+  return expandMacroSurface(body, macros, depth, new Set([...seen, name]))
+}
+
+function expandMacroSurface(
+  surface: string,
+  macros: Map<string, MacroDef>,
+  depth: number,
+  seen: ReadonlySet<string>,
+): string {
+  let cursor = 0
+  let expanded = ''
+  for (const match of surface.matchAll(/\\(\w+)/g)) {
+    const callName = match[1]!
     const nestedDef = macros.get(callName)
-    if (!nestedDef) return whole
+    if (!nestedDef) continue
     const { args: nestedArgs } = readArgs(
-      body,
-      offset + whole.length,
+      surface,
+      match.index + match[0].length,
       nestedDef.argCount,
       nestedDef.optional,
     )
-    const nested = new Set(seen)
-    nested.add(name)
-    return expandCall(callName, nestedArgs, macros, depth + 1, nested)
-  })
-  return body
+    const replacement = expandCall(callName, nestedArgs, macros, depth + 1, new Set(seen))
+    expanded += surface.slice(cursor, match.index)
+    expanded += replacement || surface.slice(match.index, match.index + match[0].length)
+    cursor = readArgs(
+      surface,
+      match.index + match[0].length,
+      nestedDef.argCount,
+      nestedDef.optional,
+    ).end
+  }
+  return expanded + surface.slice(cursor)
 }
 
 /** Extract labels/refs/cites that user macros generate, attributed to call sites. */
@@ -1472,6 +1489,48 @@ function extractMacroExpansions(ctx: Ctx, symbols: FileSymbols): void {
     const location = locAt(ctx, m.index)
     collectExpanded(expanded, location, symbols)
   }
+}
+
+export interface UserMacroExpansion {
+  name: string
+  inputStart: number
+  inputEnd: number
+  surface: string
+}
+
+/**
+ * Expand every concrete user-macro invocation in a document.
+ *
+ * This is the structural handoff used by semantic consumers. It deliberately
+ * returns source ranges alongside generated text: diagnostics and edits remain
+ * anchored to the invocation, never to synthetic expansion text.
+ */
+export function expandUserMacroCalls(source: string): readonly UserMacroExpansion[] {
+  const macros = collectMacros(source)
+  if (macros.size === 0) return []
+
+  const expansions: UserMacroExpansion[] = []
+  for (const match of source.matchAll(/\\(\w+)/g)) {
+    const name = match[1]!
+    const definition = macros.get(name)
+    if (!definition || isMacroDefinitionSite(source, match.index)) continue
+    const invocation = readArgs(
+      source,
+      match.index + match[0].length,
+      definition.argCount,
+      definition.optional,
+    )
+    if (invocation.args.length !== definition.argCount) continue
+    const surface = expandCall(name, invocation.args, macros, 0, new Set())
+    if (!surface) continue
+    expansions.push({
+      name,
+      inputStart: match.index,
+      inputEnd: invocation.end,
+      surface,
+    })
+  }
+  return expansions
 }
 
 /** A non-empty symbol name that is not a bare parameter placeholder. */

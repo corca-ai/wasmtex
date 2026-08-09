@@ -1,11 +1,11 @@
-import { parseLatexFile } from './lsp/latex-parser'
+import { expandUserMacroCalls, parseLatexFile } from './lsp/latex-parser'
 import { NEWCMD_CMDS } from './lsp/latex-patterns'
 import { type Token, tokenize } from './lsp/latex-tokenizer'
 import { ProjectIndex } from './lsp/project-index'
 import { buildLineStarts } from './lsp/source-position'
 import type { FileSymbols, SourceLocation } from './lsp/types'
 
-export const LATEX_SYNTAX_SCHEMA_VERSION = 2 as const
+export const LATEX_SYNTAX_SCHEMA_VERSION = 3 as const
 
 export interface LatexSyntaxRange {
   startOffset: number
@@ -36,6 +36,10 @@ export interface LatexMacroEvent {
     depth: number
     /** False when meaning is generated and an editor must not edit a synthetic occurrence. */
     editable: boolean
+    /** Expanded TeX surface. Present only for a complete, bounded call expansion. */
+    surface?: string
+    /** Full invocation replaced by `surface`, including consumed arguments. */
+    inputRange?: LatexSyntaxRange
   }
 }
 
@@ -461,6 +465,9 @@ function inside(offset: number, spans: readonly (readonly [number, number])[]): 
 function macroEvents(document: LatexDocumentInput, symbols: FileSymbols): LatexMacroEvent[] {
   const lineStarts = buildLineStarts(document.content)
   const expansionGraph = collectMacroBodies(document.content)
+  const callExpansions = new Map(
+    expandUserMacroCalls(document.content).map((expansion) => [expansion.inputStart, expansion]),
+  )
   const definitions = new Map<string, LatexSyntaxSourceRef[]>()
   for (const definition of symbols.commands) {
     const source = sourceRef(document, lineStarts, definition.location, definition.name.length)
@@ -482,12 +489,21 @@ function macroEvents(document: LatexDocumentInput, symbols: FileSymbols): LatexM
       (definition) => definition.range.startOffset === source.range.startOffset,
     )
     if (!isDefinition) {
+      const expanded = callExpansions.get(source.range.startOffset - 1)
+      const expansion = macroExpansion(use.name, expansionGraph)
       events.push({
         kind: 'call',
         name: use.name,
         source,
         definitions: definitions.get(use.name) ?? [],
-        expansion: macroExpansion(use.name, expansionGraph),
+        expansion:
+          expansion.status === 'expanded' && expanded
+            ? {
+                ...expansion,
+                surface: expanded.surface,
+                inputRange: { startOffset: expanded.inputStart, endOffset: expanded.inputEnd },
+              }
+            : expansion,
       })
     }
   }
