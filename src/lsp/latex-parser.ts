@@ -1260,7 +1260,7 @@ function extractProjectKeys(ctx: Ctx, symbols: FileSymbols): void {
 
 // --- Macro shallow expansion -------------------------------------------------
 
-interface MacroDef {
+export interface UserMacroDefinition {
   argCount: number
   body: string
   /** Default value of the leading optional argument (`\newcommand{\m}[n][default]{…}`),
@@ -1275,8 +1275,8 @@ const MACRO_NEWCMD_RE = new RegExp(
 const MACRO_DEF_RE = /\\def\\(\w+)((?:#\d)*)\s*\{/g
 
 /** Collect user macro definitions (\newcommand / \def / \DeclareMathOperator). */
-function collectMacros(masked: string): Map<string, MacroDef> {
-  const macros = new Map<string, MacroDef>()
+function collectMacros(masked: string): Map<string, UserMacroDefinition> {
+  const macros = new Map<string, UserMacroDefinition>()
   for (const m of masked.matchAll(MACRO_NEWCMD_RE)) {
     const braceIdx = m.index + m[0].length - 1
     const body = extractBraceContent(masked, braceIdx)
@@ -1304,7 +1304,7 @@ function collectMacros(masked: string): Map<string, MacroDef> {
 const EXPANDABLE_RE = new RegExp(`\\\\(?:label|${REF_CMDS}|${CITE_CMDS})\\b`)
 
 /** Macros whose (transitively expanded) body can produce a label/ref/cite. */
-function interestingMacros(macros: Map<string, MacroDef>): Set<string> {
+function interestingMacros(macros: Map<string, UserMacroDefinition>): Set<string> {
   const interesting = new Set<string>()
   let changed = true
   while (changed) {
@@ -1322,7 +1322,7 @@ function interestingMacros(macros: Map<string, MacroDef>): Set<string> {
 
 function callsInteresting(
   body: string,
-  macros: Map<string, MacroDef>,
+  macros: Map<string, UserMacroDefinition>,
   interesting: Set<string>,
 ): boolean {
   for (const m of body.matchAll(/\\(\w+)/g)) {
@@ -1380,7 +1380,7 @@ const MAX_EXPANSION_DEPTH = 4
 function expandCall(
   name: string,
   args: string[],
-  macros: Map<string, MacroDef>,
+  macros: Map<string, UserMacroDefinition>,
   depth: number,
   seen: Set<string>,
 ): string {
@@ -1392,7 +1392,7 @@ function expandCall(
 
 function expandMacroSurface(
   surface: string,
-  macros: Map<string, MacroDef>,
+  macros: Map<string, UserMacroDefinition>,
   depth: number,
   seen: ReadonlySet<string>,
 ): string {
@@ -1498,6 +1498,16 @@ export interface UserMacroExpansion {
   surface: string
 }
 
+export function collectUserMacroDefinitions(
+  sources: readonly string[],
+): ReadonlyMap<string, UserMacroDefinition> {
+  const definitions = new Map<string, UserMacroDefinition>()
+  for (const source of sources) {
+    for (const [name, definition] of collectMacros(source)) definitions.set(name, definition)
+  }
+  return definitions
+}
+
 /**
  * Expand every concrete user-macro invocation in a document.
  *
@@ -1505,8 +1515,12 @@ export interface UserMacroExpansion {
  * returns source ranges alongside generated text: diagnostics and edits remain
  * anchored to the invocation, never to synthetic expansion text.
  */
-export function expandUserMacroCalls(source: string): readonly UserMacroExpansion[] {
-  const macros = collectMacros(source)
+export function expandUserMacroCalls(
+  source: string,
+  projectDefinitions: ReadonlyMap<string, UserMacroDefinition> = new Map(),
+): readonly UserMacroExpansion[] {
+  const macros = new Map(projectDefinitions)
+  for (const [name, definition] of collectMacros(source)) macros.set(name, definition)
   if (macros.size === 0) return []
 
   const expansions: UserMacroExpansion[] = []
