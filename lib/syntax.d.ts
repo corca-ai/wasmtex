@@ -76,6 +76,7 @@ export declare class LatexSyntaxService {
     private readonly files;
     private readonly index;
     private parseCount;
+    private relinkDeferred;
     reset(snapshot: LatexProjectSyntaxInput): void;
     upsert(document: LatexDocumentInput): LatexFileSyntax;
     move(fileId: string, nextPath: string): void;

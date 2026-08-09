@@ -1,4 +1,9 @@
-import { expandUserMacroCalls, parseLatexFile } from './lsp/latex-parser'
+import {
+  collectUserMacroDefinitions,
+  expandUserMacroCalls,
+  parseLatexFile,
+  type UserMacroDefinition,
+} from './lsp/latex-parser'
 import { NEWCMD_CMDS } from './lsp/latex-patterns'
 import { type Token, tokenize } from './lsp/latex-tokenizer'
 import { ProjectIndex } from './lsp/project-index'
@@ -129,11 +134,18 @@ export class LatexSyntaxService {
   private readonly files = new Map<string, FileState>()
   private readonly index = new ProjectIndex()
   private parseCount = 0
+  private relinkDeferred = false
 
   reset(snapshot: LatexProjectSyntaxInput): void {
     for (const state of this.files.values()) this.index.removeFile(state.input.path)
     this.files.clear()
-    for (const document of snapshot.documents) this.upsert(document)
+    this.relinkDeferred = true
+    try {
+      for (const document of snapshot.documents) this.upsert(document)
+    } finally {
+      this.relinkDeferred = false
+    }
+    this.refreshMacroDefinitions()
   }
 
   upsert(document: LatexDocumentInput): LatexFileSyntax {
@@ -150,7 +162,7 @@ export class LatexSyntaxService {
     if (document.language !== 'markdown') this.index.updateFileSymbols(document.path, symbols)
     const syntax = buildFileSyntax(document, tokens, symbols)
     this.files.set(document.fileId, { input: { ...document }, syntax })
-    this.refreshMacroDefinitions()
+    if (!this.relinkDeferred) this.refreshMacroDefinitions()
     return this.files.get(document.fileId)!.syntax
   }
 
@@ -183,24 +195,85 @@ export class LatexSyntaxService {
 
   /** Re-link calls after any inventory change without reparsing unchanged files. */
   private refreshMacroDefinitions(): void {
-    const definitions = new Map<string, LatexSyntaxSourceRef[]>()
+    const catalog = collectProjectMacroCatalog(this.files.values())
     for (const state of this.files.values()) {
-      for (const event of state.syntax.macros) {
-        if (event.kind !== 'definition') continue
-        const bucket = definitions.get(event.name)
-        if (bucket) bucket.push(event.source)
-        else definitions.set(event.name, [event.source])
-      }
-    }
-    for (const state of this.files.values()) {
+      const expansions = new Map(
+        expandUserMacroCalls(state.input.content, catalog.expansionDefinitions).map((expansion) => [
+          expansion.inputStart,
+          expansion,
+        ]),
+      )
       state.syntax = {
         ...state.syntax,
-        macros: state.syntax.macros.map((event) => ({
-          ...event,
-          definitions: definitions.get(event.name) ?? [],
-        })),
+        macros: state.syntax.macros.map((event) => relinkMacro(event, expansions, catalog)),
       }
     }
+  }
+}
+
+interface ProjectMacroCatalog {
+  bodies: ReadonlyMap<string, MacroBody>
+  definitions: ReadonlyMap<string, readonly LatexSyntaxSourceRef[]>
+  expansionDefinitions: ReadonlyMap<string, UserMacroDefinition>
+}
+
+function collectProjectMacroCatalog(states: Iterable<FileState>): ProjectMacroCatalog {
+  const files = [...states]
+  const definitions = new Map<string, LatexSyntaxSourceRef[]>()
+  const bodies = new Map<string, MacroBody>()
+  const ambiguous = new Set<string>()
+  for (const state of files) {
+    mergeUniqueMacroBodies(bodies, ambiguous, collectMacroBodies(state.input.content))
+    for (const event of state.syntax.macros) {
+      if (event.kind !== 'definition') continue
+      const bucket = definitions.get(event.name)
+      if (bucket) bucket.push(event.source)
+      else definitions.set(event.name, [event.source])
+    }
+  }
+  return {
+    bodies,
+    definitions,
+    expansionDefinitions: collectUserMacroDefinitions(files.map((state) => state.input.content)),
+  }
+}
+
+function mergeUniqueMacroBodies(
+  target: Map<string, MacroBody>,
+  ambiguous: Set<string>,
+  additions: ReadonlyMap<string, MacroBody>,
+): void {
+  for (const [name, body] of additions) {
+    if (target.has(name)) {
+      target.delete(name)
+      ambiguous.add(name)
+    } else if (!ambiguous.has(name)) target.set(name, body)
+  }
+}
+
+function relinkMacro(
+  event: LatexMacroEvent,
+  expansions: ReadonlyMap<number, { inputStart: number; inputEnd: number; surface: string }>,
+  catalog: ProjectMacroCatalog,
+): LatexMacroEvent {
+  const definitions = catalog.definitions.get(event.name) ?? []
+  if (event.kind === 'definition') return { ...event, definitions }
+  const expanded = expansions.get(event.source.range.startOffset - 1)
+  const expansion =
+    definitions.length === 1
+      ? macroExpansion(event.name, catalog.bodies)
+      : { status: 'unresolved' as const, depth: 0, editable: true }
+  return {
+    ...event,
+    definitions,
+    expansion:
+      expansion.status === 'expanded' && expanded
+        ? {
+            ...expansion,
+            surface: expanded.surface,
+            inputRange: { startOffset: expanded.inputStart, endOffset: expanded.inputEnd },
+          }
+        : expansion,
   }
 }
 

@@ -9,12 +9,20 @@ export declare function maskSpans(content: string): Array<[number, number]>;
 /** Like {@link maskSpans} but reuses already-computed tokens — so a caller that already
  *  tokenized (e.g. the linter) doesn't tokenize the same source a second time. */
 export declare function maskSpansFromTokens(tokens: Token[]): Array<[number, number]>;
+export interface UserMacroDefinition {
+    argCount: number;
+    body: string;
+    /** Default value of the leading optional argument (`\newcommand{\m}[n][default]{…}`),
+     *  or undefined when the macro has no optional argument. When set, `#1` is optional. */
+    optional?: string | undefined;
+}
 export interface UserMacroExpansion {
     name: string;
     inputStart: number;
     inputEnd: number;
     surface: string;
 }
+export declare function collectUserMacroDefinitions(sources: readonly string[]): ReadonlyMap<string, UserMacroDefinition>;
 /**
  * Expand every concrete user-macro invocation in a document.
  *
@@ -22,7 +30,7 @@ export interface UserMacroExpansion {
  * returns source ranges alongside generated text: diagnostics and edits remain
  * anchored to the invocation, never to synthetic expansion text.
  */
-export declare function expandUserMacroCalls(source: string): readonly UserMacroExpansion[];
+export declare function expandUserMacroCalls(source: string, projectDefinitions?: ReadonlyMap<string, UserMacroDefinition>): readonly UserMacroExpansion[];
 /**
  * Parse a LaTeX file into a flat {@link FileSymbols} record.
  *

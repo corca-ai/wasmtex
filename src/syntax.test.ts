@@ -101,6 +101,61 @@ describe('LatexSyntaxService', () => {
     ).toEqual([])
   })
 
+  it('expands project macros across files while preserving the caller range', () => {
+    const service = createLatexSyntaxService({
+      documents: [
+        {
+          fileId: 'caller',
+          path: 'chapter.tex',
+          content: '$\\Voltage=\\Current\\Resistance$',
+          documentVersion: 1,
+        },
+        {
+          fileId: 'defs',
+          path: 'macros.tex',
+          content: [
+            '\\newcommand{\\Voltage}{V}',
+            '\\newcommand{\\Current}{I}',
+            '\\newcommand{\\Resistance}{R}',
+          ].join('\n'),
+          documentVersion: 1,
+        },
+      ],
+    })
+    const syntax = service.getFile('caller')!
+    for (const [name, surface] of [
+      ['Voltage', 'V'],
+      ['Current', 'I'],
+      ['Resistance', 'R'],
+    ]) {
+      const call = syntax.macros.find((event) => event.kind === 'call' && event.name === name)
+      expect(call?.expansion.status).toBe('expanded')
+      expect(call?.expansion.surface).toBe(surface)
+      expect(call?.expansion.inputRange).toEqual(
+        call && {
+          startOffset: call.source.range.startOffset - 1,
+          endOffset: call.source.range.endOffset,
+        },
+      )
+    }
+    expect(service.getStats().parseCount).toBe(2)
+  })
+
+  it('refuses an ambiguous project macro definition', () => {
+    const service = createLatexSyntaxService({
+      documents: [
+        { fileId: 'caller', path: 'main.tex', content: '$\\value$', documentVersion: 1 },
+        { fileId: 'one', path: 'one.tex', content: '\\newcommand{\\value}{x}', documentVersion: 1 },
+        { fileId: 'two', path: 'two.tex', content: '\\newcommand{\\value}{y}', documentVersion: 1 },
+      ],
+    })
+    const call = service
+      .getFile('caller')
+      ?.macros.find((event) => event.kind === 'call' && event.name === 'value')
+    expect(call?.definitions).toHaveLength(2)
+    expect(call?.expansion).toEqual({ status: 'unresolved', depth: 0, editable: true })
+  })
+
   it('returns a partial region and diagnostic for unfinished input', () => {
     const syntax = new LatexSyntaxService().upsert({
       fileId: 'f1',
