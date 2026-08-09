@@ -1,5 +1,5 @@
 import { ProjectIndex } from './lsp/project-index';
-export declare const LATEX_SYNTAX_SCHEMA_VERSION: 2;
+export declare const LATEX_SYNTAX_SCHEMA_VERSION: 3;
 export interface LatexSyntaxRange {
     startOffset: number;
     endOffset: number;
@@ -26,6 +26,10 @@ export interface LatexMacroEvent {
         depth: number;
         /** False when meaning is generated and an editor must not edit a synthetic occurrence. */
         editable: boolean;
+        /** Expanded TeX surface. Present only for a complete, bounded call expansion. */
+        surface?: string;
+        /** Full invocation replaced by `surface`, including consumed arguments. */
+        inputRange?: LatexSyntaxRange;
     };
 }
 export interface LatexInclude {

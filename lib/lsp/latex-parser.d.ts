@@ -9,6 +9,20 @@ export declare function maskSpans(content: string): Array<[number, number]>;
 /** Like {@link maskSpans} but reuses already-computed tokens — so a caller that already
  *  tokenized (e.g. the linter) doesn't tokenize the same source a second time. */
 export declare function maskSpansFromTokens(tokens: Token[]): Array<[number, number]>;
+export interface UserMacroExpansion {
+    name: string;
+    inputStart: number;
+    inputEnd: number;
+    surface: string;
+}
+/**
+ * Expand every concrete user-macro invocation in a document.
+ *
+ * This is the structural handoff used by semantic consumers. It deliberately
+ * returns source ranges alongside generated text: diagnostics and edits remain
+ * anchored to the invocation, never to synthetic expansion text.
+ */
+export declare function expandUserMacroCalls(source: string): readonly UserMacroExpansion[];
 /**
  * Parse a LaTeX file into a flat {@link FileSymbols} record.
  *
