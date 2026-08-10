@@ -471,6 +471,7 @@ function relinkNotationNode(
   const event = expansions.get(commandStart)
   const surface = event?.expansion.surface
   if (!event || surface === undefined) return node
+  if (event.expansion.notation) return node
   const shape = expandedNotationShape(surface)
   if (!shape) return node
   const shapeArguments =
@@ -597,7 +598,12 @@ function generatedNotationTree(surface: string): LatexGeneratedNotationTree {
 }
 
 function compositeNotation(surface: string): { notation?: LatexGeneratedNotationTree } {
-  return expandedNotationShape(surface) ? {} : { notation: generatedNotationTree(surface) }
+  const notation = generatedNotationTree(surface)
+  const root = notation.nodes[notation.root]
+  const node = root?.children.length === 1 ? notation.nodes[root.children[0]!] : undefined
+  return node && ['token', 'modifier', 'style', 'named-operator'].includes(node.kind)
+    ? {}
+    : { notation }
 }
 
 export function createLatexSyntaxService(snapshot?: LatexProjectSyntaxInput): LatexSyntaxService {

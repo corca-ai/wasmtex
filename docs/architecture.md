@@ -169,10 +169,12 @@ existing completion/package signature authority without pulling that much larger
 catalog into the syntax runtime bundle.
 
 Static project declarations use the same boundary. Bounded macro expansion is
-classified through the generic notation parser and then attached to the real
-call-site node with non-editable expansion provenance; no synthetic editor
-location or second persistent notation tree is created. Removing a definition
-retracts that shape from unchanged callers without re-tokenizing them. Rich
+classified through the generic notation parser. A single compositional result
+is attached to the real call-site node; a composite result is a range-free
+generated-notation sidecar on the macro event. Both use the event's real call
+and definition provenance, and neither creates a synthetic editor location.
+Removing a definition retracts either form from unchanged callers without
+re-tokenizing them. Rich
 operator, paired-delimiter, macro, glossary, and acronym records preserve
 neutral fields and exact ranges so semantic consumers do not rescan TeX source.
 The syntax service reports the exact snapshots invalidated by a project
