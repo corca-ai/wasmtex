@@ -190,7 +190,7 @@ Markdown documents expose math regions plus ATX and setext section scopes, but
 do not contribute LaTeX symbols to the project index. `getStats()` reports
 parse passes for integration budgets.
 
-Document Syntax Snapshot schema 4 is the singular source-preserving contract for
+Document Syntax Snapshot schema 5 is the singular source-preserving contract for
 notation roots, visible prose, section/environment scopes, neutral declarations,
 macros, and includes. The notation arena uses revision-local numeric node IDs with
 parent/child references and exact UTF-16 ranges. IDs are not stable across edits.
