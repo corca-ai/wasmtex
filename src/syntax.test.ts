@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   assertLatexSyntaxSchemaVersion,
   createLatexSyntaxService,
+  findLatexNotationPath,
   LATEX_SYNTAX_SCHEMA_VERSION,
+  type LatexNotationNode,
   LatexSyntaxService,
 } from './syntax'
 
@@ -21,7 +23,7 @@ describe('LatexSyntaxService', () => {
     const root = syntax.mathRoots[0]!
     const node = syntax.nodes[root.node]!
     expect(node).toMatchObject({
-      kind: 'opaque',
+      kind: 'sequence',
       parent: null,
       ranges: { full: root.contentRange, editable: root.contentRange },
       provenance: { origin: 'source', editable: true },
@@ -33,6 +35,255 @@ describe('LatexSyntaxService', () => {
     expect(() => assertLatexSyntaxSchemaVersion({ schemaVersion: 3 })).toThrow(
       'Unsupported LaTeX syntax schema 3; expected 4',
     )
+    expect(new LatexSyntaxService().getStats()).toMatchObject({
+      notationNodes: 0,
+      recoveredNodes: 0,
+      lastInvalidatedDocuments: 0,
+    })
+  })
+
+  it('keeps an unbraced modifier and its nucleus on one source path', () => {
+    const content = '$\\hat y$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const modifier = syntax.nodes.find((node) => node.kind === 'modifier' && node.name === 'hat')!
+    const nucleus = syntax.nodes[modifier.children[0]!]!
+
+    expect(content.slice(modifier.ranges.full.startOffset, modifier.ranges.full.endOffset)).toBe(
+      '\\hat y',
+    )
+    expect(
+      content.slice(modifier.ranges.nucleus?.startOffset, modifier.ranges.nucleus?.endOffset),
+    ).toBe('y')
+    expect(nucleus.text).toBe('y')
+    expect(nucleus.parent).toBe(syntax.nodes.indexOf(modifier))
+  })
+
+  it('preserves modifier, style, group, and script composition order', () => {
+    const content = '$\\hat{\\mathbf y}_t$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const scriptIndex = syntax.nodes.findIndex(
+      (node) => node.kind === 'script' && node.name === 'subscript',
+    )
+    const script = syntax.nodes[scriptIndex]!
+    const modifierIndex = script.children[0]!
+    const modifier = syntax.nodes[modifierIndex]!
+    const group = syntax.nodes[modifier.children[0]!]!
+    const style = syntax.nodes[group.children[0]!]!
+
+    expect([modifier.kind, group.kind, style.kind]).toEqual(['modifier', 'group', 'style'])
+    expect(style.name).toBe('mathbf')
+    expect(modifier.parent).toBe(scriptIndex)
+    expect(content.slice(script.ranges.full.startOffset, script.ranges.full.endOffset)).toBe(
+      '\\hat{\\mathbf y}_t',
+    )
+    assertArenaInvariants(syntax.nodes)
+  })
+
+  it('distinguishes explicit named operators from styled and plain letter runs', () => {
+    const content = '$\\operatorname{ECE}+\\mathrm{ECE}+ECE$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const namedIndex = syntax.nodes.findIndex(
+      (node) => node.kind === 'named-operator' && node.name === 'ECE',
+    )
+    const named = syntax.nodes[namedIndex]!
+    const styled = syntax.nodes.find((node) => node.kind === 'style' && node.name === 'mathrm')!
+    const namedStart = content.indexOf('ECE')
+
+    expect(content.slice(named.ranges.name?.startOffset, named.ranges.name?.endOffset)).toBe('ECE')
+    for (let offset = namedStart; offset < namedStart + 3; offset++) {
+      expect(findLatexNotationPath(syntax, offset)).toContain(namedIndex)
+    }
+    expect(styled.children).toHaveLength(1)
+    expect(syntax.nodes[styled.children[0]!]!.kind).toBe('group')
+    expect(
+      syntax.nodes.filter(
+        (node) =>
+          node.kind === 'named-operator' &&
+          node.ranges.full.startOffset > named.ranges.full.endOffset,
+      ),
+    ).toEqual([])
+    const plainStart = content.lastIndexOf('ECE')
+    expect(
+      syntax.nodes
+        .filter(
+          (node) =>
+            node.kind === 'token' &&
+            plainStart <= node.ranges.full.startOffset &&
+            node.ranges.full.endOffset <= plainStart + 3,
+        )
+        .map((node) => node.text),
+    ).toEqual(['E', 'C', 'E'])
+  })
+
+  it('preserves a named surface followed by delimiters without claiming application', () => {
+    const content = '$\\operatorname*{acc}(B_m)-\\operatorname{conf}(B_m)$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const root = syntax.nodes[syntax.mathRoots[0]!.node]!
+
+    expect(root.children.map((child) => syntax.nodes[child]!.kind)).toEqual([
+      'named-operator',
+      'delimiter',
+      'token',
+      'named-operator',
+      'delimiter',
+    ])
+    expect(
+      syntax.nodes.filter((node) => node.kind === 'named-operator').map((node) => node.name),
+    ).toEqual(['acc', 'conf'])
+  })
+
+  it('represents nested math environments and alignment markers structurally', () => {
+    const content = '$\\begin{matrix}a&b\\\\c&d\\end{matrix}$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const environment = syntax.nodes.find(
+      (node) => node.kind === 'environment' && node.name === 'matrix',
+    )!
+
+    expect(environment.state).toBe('complete')
+    expect(
+      content.slice(environment.ranges.name?.startOffset, environment.ranges.name?.endOffset),
+    ).toBe('matrix')
+    expect(
+      environment.children.filter((child) => syntax.nodes[child]!.kind === 'alignment'),
+    ).toHaveLength(3)
+    assertArenaInvariants(syntax.nodes)
+  })
+
+  it('recovers incomplete groups, scripts, delimiters, and deep input', () => {
+    const content = `$\\hat{x_i+(y^${'{'.repeat(140)}z$`
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(syntax.mathRoots[0]?.state).toBe('complete')
+    expect(syntax.nodes.some((node) => node.state === 'incomplete')).toBe(true)
+    expect(syntax.nodes.some((node) => node.state === 'truncated')).toBe(true)
+    assertArenaInvariants(syntax.nodes)
+  })
+
+  it('bounds adversarial notation arenas and collapses the remaining surface', () => {
+    const content = `$${'x'.repeat(12_000)}$`
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(syntax.nodes.length).toBeLessThanOrEqual(10_000)
+    expect(syntax.nodes.some((node) => node.state === 'truncated')).toBe(true)
+    assertArenaInvariants(syntax.nodes)
+  })
+
+  it('cancels adversarial notation before publishing partial project state', () => {
+    const service = new LatexSyntaxService()
+    service.upsert({
+      fileId: 'stable',
+      path: 'old.tex',
+      content: '\\label{old} $x$',
+      documentVersion: 1,
+    })
+    let checks = 0
+    const cancellationToken = {
+      get isCancellationRequested() {
+        checks++
+        return checks >= 5
+      },
+    }
+
+    expect(() =>
+      service.upsert(
+        {
+          fileId: 'stable',
+          path: 'new.tex',
+          content: `$${'x'.repeat(12_000)}$`,
+          documentVersion: 2,
+        },
+        cancellationToken,
+      ),
+    ).toThrow('Syntax update cancelled')
+    expect(service.getFile('stable')?.documentVersion).toBe(1)
+    expect(service.getProjectIndex().hasFile('old.tex')).toBe(true)
+    expect(service.getProjectIndex().hasFile('new.tex')).toBe(false)
+  })
+
+  it('reports notation, recovery, invalidation, and transfer counters lazily', () => {
+    const service = new LatexSyntaxService()
+    const syntax = service.upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content: '$\\hat{x$',
+      documentVersion: 1,
+    })
+    const stats = service.getStats()
+
+    expect(stats.notationNodes).toBe(syntax.nodes.length)
+    expect(stats.recoveredNodes).toBeGreaterThan(0)
+    expect(stats.snapshotBytes).toBeGreaterThan(0)
+    expect(stats.lastInvalidatedDocuments).toBe(1)
+    expect(stats.lastTransferBytes).toBe(stats.snapshotBytes)
+  })
+
+  it('produces equivalent clean and incrementally replaced notation snapshots', () => {
+    const input = {
+      fileId: 'stable',
+      path: 'main.tex',
+      content: '$\\operatorname{ECE}=\\hat y_i$',
+      documentVersion: 2,
+    }
+    const incremental = new LatexSyntaxService()
+    incremental.upsert({ ...input, content: '$x$', documentVersion: 1 })
+    const updated = incremental.upsert(input)
+    const clean = new LatexSyntaxService().upsert(input)
+
+    expect(updated).toEqual(clean)
+    expect(incremental.getStats().parseCount).toBe(2)
+  })
+
+  it('keeps UTF-16 ranges exact for astral notation tokens', () => {
+    const content = '$😀_i+𝑦$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const tokens = syntax.nodes.filter((node) => node.kind === 'token')
+
+    expect(tokens.map((node) => node.text)).toEqual(['😀', 'i', '+', '𝑦'])
+    for (const token of tokens) {
+      expect(content.slice(token.ranges.full.startOffset, token.ranges.full.endOffset)).toBe(
+        token.text,
+      )
+    }
   })
 
   it('exposes only visible prose while retaining prose command arguments', () => {
@@ -138,7 +389,7 @@ describe('LatexSyntaxService', () => {
     ).toBe('x_i')
     expect(syntax.mathRegions[1]!.delimiter).toBe('\\[')
     expect(service.getProjectIndex().hasFile('main.md')).toBe(false)
-    expect(service.getStats()).toEqual({ documents: 1, parseCount: 1 })
+    expect(service.getStats()).toMatchObject({ documents: 1, parseCount: 1 })
   })
 
   it('preserves stable identity, mutable paths, and macro provenance', () => {
@@ -319,7 +570,7 @@ describe('LatexSyntaxService', () => {
     service.remove('missing')
     service.remove('c')
     expect(service.getFile('c')).toBeNull()
-    expect(service.getStats()).toEqual({ documents: 0, parseCount: 3 })
+    expect(service.getStats()).toMatchObject({ documents: 0, parseCount: 3 })
     expect(() => service.move('missing', 'next.tex')).toThrow('unknown fileId')
   })
 
@@ -333,14 +584,13 @@ describe('LatexSyntaxService', () => {
     })
     service.upsert({
       fileId: 'stable',
-      path: 'notes.md',
+      path: 'notes.tex',
       content: '$x$',
       documentVersion: 2,
       language: 'markdown',
     })
 
     expect(service.getProjectIndex().hasFile('notes.tex')).toBe(false)
-    expect(service.getProjectIndex().hasFile('notes.md')).toBe(false)
   })
 
   it('reports builtin macro calls without invented definitions', () => {
@@ -406,3 +656,23 @@ describe('LatexSyntaxService', () => {
     ).toEqual(['true', 'visible'])
   })
 })
+
+function assertArenaInvariants(nodes: readonly LatexNotationNode[]): void {
+  for (const [index, node] of nodes.entries()) {
+    expect(node.ranges.full.startOffset).toBeLessThanOrEqual(node.ranges.full.endOffset)
+    expect(node.provenance.source.range).toEqual(node.ranges.full)
+    expect(node.provenance.editable).toBe(node.ranges.editable !== undefined)
+    let previousEnd = node.ranges.full.startOffset
+    for (const child of node.children) {
+      expect(child).toBeGreaterThanOrEqual(0)
+      expect(child).toBeLessThan(nodes.length)
+      expect(nodes[child]!.parent).toBe(index)
+      expect(nodes[child]!.ranges.full.startOffset).toBeGreaterThanOrEqual(
+        node.ranges.full.startOffset,
+      )
+      expect(nodes[child]!.ranges.full.endOffset).toBeLessThanOrEqual(node.ranges.full.endOffset)
+      expect(nodes[child]!.ranges.full.startOffset).toBeGreaterThanOrEqual(previousEnd)
+      previousEnd = nodes[child]!.ranges.full.endOffset
+    }
+  }
+}

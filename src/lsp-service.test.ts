@@ -168,7 +168,7 @@ describe('LatexLanguageService', () => {
 
     expect(service.getSyntaxService()).toBe(syntaxService)
     expect(service.getProjectIndex()).toBe(syntaxService.getProjectIndex())
-    expect(syntaxService.getStats()).toEqual({ documents: 1, parseCount: 1 })
+    expect(syntaxService.getStats()).toMatchObject({ documents: 1, parseCount: 1 })
     expect(service.getOutline('old.tex')[0]?.title).toBe('Intro')
     expect(syntax.macros.some((event) => event.name === 'section')).toBe(true)
 

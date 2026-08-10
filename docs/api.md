@@ -195,6 +195,22 @@ macros, and includes. The notation arena uses revision-local numeric node IDs wi
 parent/child references and exact UTF-16 ranges. IDs are not stable across edits.
 Malformed or unknown TeX remains representable through incomplete and opaque states;
 `assertLatexSyntaxSchemaVersion` rejects incompatible wire versions explicitly.
+`findLatexNotationPath(snapshot, offset)` returns the root-to-leaf arena path using
+binary search over ordered source ranges. `getStats()` exposes parse, notation-node,
+recovery, serialized-byte, last-invalidation, and last-transfer counters without
+adding a serialized interval index. Counters that require serialization are computed
+lazily when stats are requested.
+
+`upsert(document, cancellationToken?)` accepts a token with a live
+`isCancellationRequested` property. Cancellation throws `LatexSyntaxCancelledError`
+before any partial file snapshot or project-index mutation becomes visible.
+
+The CST preserves groups, consumed command arguments, scripts, delimiters,
+alignments, nested environments, modifiers, styles, and explicit named operators.
+For example, `\hat y` retains a modifier-to-nucleus path and
+`\operatorname{ECE}` has one named surface covering each `ECE` character. In
+contrast, `\mathrm{ECE}` is a style over three ordinary tokens and plain `ECE`
+remains three juxtaposed tokens.
 
 Each macro event carries bounded
 definition and invocation source ranges plus an expansion outcome (`expanded`,

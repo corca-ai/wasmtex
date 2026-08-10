@@ -9,10 +9,10 @@ import { type Token, tokenize } from './lsp/latex-tokenizer'
 import { ProjectIndex } from './lsp/project-index'
 import { buildLineStarts } from './lsp/source-position'
 import type { FileSymbols, SourceLocation } from './lsp/types'
+import { buildNotationCst } from './notation-cst'
 import {
   LATEX_SYNTAX_SCHEMA_VERSION,
   type LatexDocumentSyntaxSnapshot,
-  type LatexMathRoot,
   type LatexNotationNode,
   type LatexStructuralDeclaration,
   type LatexSyntaxRange,
@@ -21,6 +21,7 @@ import {
   type LatexVisibleProseSpan,
 } from './syntax-contract'
 
+export { findLatexNotationPath } from './notation-cst'
 export * from './syntax-contract'
 
 export interface LatexMathRegion {
@@ -73,6 +74,14 @@ export interface LatexProjectSyntaxInput {
   documents: readonly LatexDocumentInput[]
 }
 
+export interface LatexSyntaxCancellationToken {
+  readonly isCancellationRequested: boolean
+}
+
+export class LatexSyntaxCancelledError extends Error {
+  override readonly name = 'LatexSyntaxCancelledError'
+}
+
 export interface LatexFileSyntax extends LatexDocumentSyntaxSnapshot {
   schemaVersion: typeof LATEX_SYNTAX_SCHEMA_VERSION
   fileId: string
@@ -88,6 +97,11 @@ export interface LatexSyntaxStats {
   documents: number
   /** Number of source tokenization/parsing passes performed by this service. */
   parseCount: number
+  notationNodes: number
+  recoveredNodes: number
+  snapshotBytes: number
+  lastInvalidatedDocuments: number
+  lastTransferBytes: number
 }
 
 interface FileState {
@@ -126,6 +140,8 @@ const MATH_ENVIRONMENTS = new Set([
   'flalign*',
 ])
 
+const UTF8_ENCODER = new TextEncoder()
+
 /**
  * Stable, versioned syntax boundary for consumers such as Semath.
  * Offsets are UTF-16, zero-based and half-open, matching JavaScript and Monaco.
@@ -135,6 +151,7 @@ export class LatexSyntaxService {
   private readonly index = new ProjectIndex()
   private parseCount = 0
   private relinkDeferred = false
+  private lastTransferFileIds: readonly string[] = []
 
   reset(snapshot: LatexProjectSyntaxInput): void {
     for (const state of this.files.values()) this.index.removeFile(state.input.path)
@@ -146,23 +163,34 @@ export class LatexSyntaxService {
       this.relinkDeferred = false
     }
     this.refreshMacroDefinitions()
+    this.lastTransferFileIds = snapshot.documents.map((document) => document.fileId)
   }
 
-  upsert(document: LatexDocumentInput): LatexFileSyntax {
+  upsert(
+    document: LatexDocumentInput,
+    cancellationToken?: LatexSyntaxCancellationToken,
+  ): LatexFileSyntax {
     const previous = this.files.get(document.fileId)
-    if (
-      previous &&
-      (previous.input.path !== document.path || previous.input.language === 'markdown')
-    )
-      this.index.removeFile(previous.input.path)
-
+    throwIfSyntaxCancelled(cancellationToken)
     this.parseCount++
     const tokens = tokenize(document.content)
+    throwIfSyntaxCancelled(cancellationToken)
     const symbols = parseLatexFile(document.content, document.path, tokens)
+    throwIfSyntaxCancelled(cancellationToken)
+    const syntax = buildFileSyntax(document, tokens, symbols, cancellationToken)
+    throwIfSyntaxCancelled(cancellationToken)
+
+    if (
+      previous &&
+      previous.input.language !== 'markdown' &&
+      (previous.input.path !== document.path || document.language === 'markdown')
+    ) {
+      this.index.removeFile(previous.input.path)
+    }
     if (document.language !== 'markdown') this.index.updateFileSymbols(document.path, symbols)
-    const syntax = buildFileSyntax(document, tokens, symbols)
     this.files.set(document.fileId, { input: { ...document }, syntax })
     if (!this.relinkDeferred) this.refreshMacroDefinitions()
+    this.lastTransferFileIds = [document.fileId]
     return this.files.get(document.fileId)!.syntax
   }
 
@@ -178,6 +206,7 @@ export class LatexSyntaxService {
     this.index.removeFile(state.input.path)
     this.files.delete(fileId)
     this.refreshMacroDefinitions()
+    this.lastTransferFileIds = []
   }
 
   getFile(fileId: string): LatexFileSyntax | null {
@@ -190,7 +219,23 @@ export class LatexSyntaxService {
   }
 
   getStats(): LatexSyntaxStats {
-    return { documents: this.files.size, parseCount: this.parseCount }
+    const syntaxes = [...this.files.values()].map((state) => state.syntax)
+    const transferred = this.lastTransferFileIds.flatMap((fileId) => {
+      const syntax = this.files.get(fileId)?.syntax
+      return syntax ? [syntax] : []
+    })
+    return {
+      documents: this.files.size,
+      parseCount: this.parseCount,
+      notationNodes: syntaxes.reduce((total, syntax) => total + syntax.nodes.length, 0),
+      recoveredNodes: syntaxes.reduce(
+        (total, syntax) => total + syntax.nodes.filter(isRecoveredNotationNode).length,
+        0,
+      ),
+      snapshotBytes: syntaxWireBytes(syntaxes),
+      lastInvalidatedDocuments: this.lastTransferFileIds.length,
+      lastTransferBytes: syntaxWireBytes(transferred),
+    }
   }
 
   /** Re-link calls after any inventory change without reparsing unchanged files. */
@@ -287,6 +332,7 @@ function buildFileSyntax(
   document: LatexDocumentInput,
   tokens: readonly Token[],
   symbols: FileSymbols,
+  cancellationToken?: LatexSyntaxCancellationToken,
 ): LatexFileSyntax {
   const mathRegions = findMathRegions(document.content, tokens, document.language === 'markdown')
   const diagnostics: LatexSyntaxDiagnostic[] = mathRegions
@@ -297,7 +343,13 @@ function buildFileSyntax(
       severity: 'warning',
       range: region.fullRange,
     }))
-  const documentSyntax = buildDocumentSyntax(document, tokens, symbols, mathRegions)
+  const documentSyntax = buildDocumentSyntax(
+    document,
+    tokens,
+    symbols,
+    mathRegions,
+    cancellationToken,
+  )
   return {
     schemaVersion: LATEX_SYNTAX_SCHEMA_VERSION,
     fileId: document.fileId,
@@ -356,35 +408,13 @@ function buildDocumentSyntax(
   tokens: readonly Token[],
   symbols: FileSymbols,
   mathRegions: readonly LatexMathRegion[],
+  cancellationToken?: LatexSyntaxCancellationToken,
 ): LatexDocumentSyntaxSnapshot {
   const tokensByStart = new Map(tokens.map((token) => [token.start, token]))
-  const nodes: LatexNotationNode[] = []
-  const mathRoots: LatexMathRoot[] = mathRegions.map((region) => {
-    const node = nodes.length
-    const source = syntaxSourceRef(document, region.contentRange)
-    nodes.push({
-      kind: 'opaque',
-      parent: null,
-      children: [],
-      ranges: {
-        full: region.contentRange,
-        editable: region.contentRange,
-      },
-      state: region.closed ? 'opaque' : 'incomplete',
-      provenance: { origin: 'source', source, editable: true },
-    })
-    return {
-      node,
-      delimiter: region.delimiter,
-      fullRange: region.fullRange,
-      contentRange: region.contentRange,
-      state: region.closed ? 'complete' : 'incomplete',
-    }
-  })
-
   return {
-    nodes,
-    mathRoots,
+    ...buildNotationCst(document, tokens, mathRegions, () =>
+      throwIfSyntaxCancelled(cancellationToken),
+    ),
     visibleProse: visibleProseSpans(document, tokens, mathRegions),
     scopes: syntaxScopes(document, tokens, tokensByStart, symbols),
     declarations: structuralDeclarations(document, tokensByStart, symbols),
@@ -709,6 +739,28 @@ function structuralDeclarations(
 
 function offsetAt(lineStarts: readonly number[], location: SourceLocation): number {
   return (lineStarts[location.line - 1] ?? 0) + location.column - 1
+}
+
+function wireBytes(value: unknown): number {
+  return UTF8_ENCODER.encode(JSON.stringify(value)).byteLength
+}
+
+function throwIfSyntaxCancelled(token?: LatexSyntaxCancellationToken): void {
+  if (token?.isCancellationRequested) throw new LatexSyntaxCancelledError('Syntax update cancelled')
+}
+
+function syntaxWireBytes(syntaxes: readonly LatexFileSyntax[]): number {
+  return syntaxes.reduce((total, syntax) => total + wireBytes(syntax), 0)
+}
+
+function isRecoveredNotationNode(node: LatexNotationNode): boolean {
+  return (
+    node.kind === 'error' ||
+    node.state === 'incomplete' ||
+    node.state === 'ambiguous' ||
+    node.state === 'cyclic' ||
+    node.state === 'truncated'
+  )
 }
 
 function findMathRegions(

@@ -1,5 +1,6 @@
 import { ProjectIndex } from './lsp/project-index';
 import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract';
+export { findLatexNotationPath } from './notation-cst';
 export * from './syntax-contract';
 export interface LatexMathRegion {
     delimiter: string;
@@ -45,6 +46,12 @@ export interface LatexDocumentInput {
 export interface LatexProjectSyntaxInput {
     documents: readonly LatexDocumentInput[];
 }
+export interface LatexSyntaxCancellationToken {
+    readonly isCancellationRequested: boolean;
+}
+export declare class LatexSyntaxCancelledError extends Error {
+    readonly name = "LatexSyntaxCancelledError";
+}
 export interface LatexFileSyntax extends LatexDocumentSyntaxSnapshot {
     schemaVersion: typeof LATEX_SYNTAX_SCHEMA_VERSION;
     fileId: string;
@@ -59,6 +66,11 @@ export interface LatexSyntaxStats {
     documents: number;
     /** Number of source tokenization/parsing passes performed by this service. */
     parseCount: number;
+    notationNodes: number;
+    recoveredNodes: number;
+    snapshotBytes: number;
+    lastInvalidatedDocuments: number;
+    lastTransferBytes: number;
 }
 /**
  * Stable, versioned syntax boundary for consumers such as Semath.
@@ -69,8 +81,9 @@ export declare class LatexSyntaxService {
     private readonly index;
     private parseCount;
     private relinkDeferred;
+    private lastTransferFileIds;
     reset(snapshot: LatexProjectSyntaxInput): void;
-    upsert(document: LatexDocumentInput): LatexFileSyntax;
+    upsert(document: LatexDocumentInput, cancellationToken?: LatexSyntaxCancellationToken): LatexFileSyntax;
     move(fileId: string, nextPath: string): void;
     remove(fileId: string): void;
     getFile(fileId: string): LatexFileSyntax | null;
