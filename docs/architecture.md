@@ -149,6 +149,17 @@ Markdown contributes math and visible prose without polluting the LaTeX project 
 The service is transport-neutral and can live in a browser Worker or a native
 language-server process.
 
+The notation arena is an error-tolerant CST built from that same token stream. It
+preserves sequences, groups, commands and consumed groups, scripts, delimiters,
+alignments, nested environments, modifiers, styles, and explicit named-operator
+surfaces. Parent/child paths retain composition order and UTF-16 ranges. A changed
+document replaces its revision-local arena atomically; clean and incremental builds
+are equivalent. `findLatexNotationPath` binary-searches math roots and ordered children
+instead of serializing a second interval tree. Node count, depth, and opaque argument
+recovery are bounded. Optional cancellation is checked between parse phases and during
+large notation scans; a cancelled update does not publish partial file or project-index
+state.
+
 WasmTex reports observable TeX structure only. Mathematical application, binders,
 derivatives, intervals, overloaded operators, domain concepts, laws, and entity
 resolution belong to downstream semantic consumers. The dependency is therefore
