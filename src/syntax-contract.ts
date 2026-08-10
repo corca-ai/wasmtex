@@ -51,6 +51,7 @@ export interface LatexNotationNodeRanges {
   command?: LatexSyntaxRange
   name?: LatexSyntaxRange
   nucleus?: LatexSyntaxRange
+  /** Override for explicit provenance; implicit direct-source nodes edit `full`. */
   editable?: LatexSyntaxRange
 }
 
@@ -85,7 +86,12 @@ export interface LatexNotationNode {
   text?: string
   arguments?: readonly LatexNotationArgument[]
   mathClass?: TexMathClass
-  provenance: LatexSyntaxProvenance
+  /**
+   * Omitted for an editable node copied directly from this snapshot's file.
+   * In that canonical case the source and editable range are
+   * `(fileId, path, ranges.full)`.
+   */
+  provenance?: LatexSyntaxProvenance
 }
 
 export interface LatexMathRoot {

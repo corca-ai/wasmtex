@@ -12,7 +12,6 @@ import type {
   LatexNotationNode,
   LatexSyntaxNodeId,
   LatexSyntaxRange,
-  LatexSyntaxSourceRef,
 } from './syntax-contract'
 
 interface NotationDocument {
@@ -491,14 +490,12 @@ class NotationParser {
     mathClass?: TexMathClass
   }): LatexSyntaxNodeId {
     const node = this.nodes.length
-    const source = this.source(input.range)
     this.nodes.push({
       kind: input.kind,
       parent: null,
       children: input.children,
       ranges: {
         full: input.range,
-        editable: input.range,
         ...(input.command ? { command: input.command } : {}),
         ...(input.nameRange ? { name: input.nameRange } : {}),
         ...(input.nucleus ? { nucleus: input.nucleus } : {}),
@@ -508,14 +505,9 @@ class NotationParser {
       ...(input.text === undefined ? {} : { text: input.text }),
       ...(input.arguments === undefined ? {} : { arguments: input.arguments }),
       ...(input.mathClass === undefined ? {} : { mathClass: input.mathClass }),
-      provenance: { origin: 'source', source, editable: true },
     })
     for (const child of input.children) this.nodes[child]!.parent = node
     return node
-  }
-
-  private source(range: LatexSyntaxRange): LatexSyntaxSourceRef {
-    return { fileId: this.document.fileId, path: this.document.path, range }
   }
 
   private lastEnd(fallback: number, children: readonly LatexSyntaxNodeId[]): number {

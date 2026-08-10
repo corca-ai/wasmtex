@@ -25,9 +25,9 @@ describe('LatexSyntaxService', () => {
     expect(node).toMatchObject({
       kind: 'sequence',
       parent: null,
-      ranges: { full: root.contentRange, editable: root.contentRange },
-      provenance: { origin: 'source', editable: true },
+      ranges: { full: root.contentRange },
     })
+    expect(node.provenance).toBeUndefined()
     expect(content.slice(node.ranges.full.startOffset, node.ranges.full.endOffset)).toBe(
       '\\operatorname{ECE}=x',
     )
@@ -548,7 +548,7 @@ describe('LatexSyntaxService', () => {
       content,
       documentVersion: 1,
     })
-    const callNodes = syntax.nodes.filter((node) => node.provenance.origin === 'expansion')
+    const callNodes = syntax.nodes.filter((node) => node.provenance?.origin === 'expansion')
 
     expect(callNodes.map((node) => [node.kind, node.name])).toEqual([
       ['named-operator', 'ECE'],
@@ -556,9 +556,12 @@ describe('LatexSyntaxService', () => {
       ['modifier', 'hat'],
     ])
     for (const node of callNodes) {
-      expect(node.provenance.editable).toBe(false)
-      expect(node.provenance.callSite).toEqual(node.provenance.source)
-      expect(node.provenance.definitions).toHaveLength(1)
+      const provenance = node.provenance
+      expect(provenance).toBeDefined()
+      if (!provenance) throw new Error('expanded nodes require explicit provenance')
+      expect(provenance.editable).toBe(false)
+      expect(provenance.callSite).toEqual(provenance.source)
+      expect(provenance.definitions).toHaveLength(1)
       expect(node.ranges.editable).toBeUndefined()
     }
     expect(callNodes[1]?.arguments?.[0]?.role).toBe('nucleus')
@@ -593,8 +596,8 @@ describe('LatexSyntaxService', () => {
     expect(callNode()).toMatchObject({
       kind: 'command',
       state: 'opaque',
-      provenance: { origin: 'source', editable: true },
     })
+    expect(callNode()?.provenance).toBeUndefined()
     expect(service.getStats().parseCount).toBe(2)
   })
 
@@ -797,8 +800,12 @@ describe('LatexSyntaxService', () => {
 function assertArenaInvariants(nodes: readonly LatexNotationNode[]): void {
   for (const [index, node] of nodes.entries()) {
     expect(node.ranges.full.startOffset).toBeLessThanOrEqual(node.ranges.full.endOffset)
-    expect(node.provenance.source.range).toEqual(node.ranges.full)
-    expect(node.provenance.editable).toBe(node.ranges.editable !== undefined)
+    if (node.provenance) {
+      expect(node.provenance.source.range).toEqual(node.ranges.full)
+      expect(node.provenance.editable).toBe(node.ranges.editable !== undefined)
+    } else {
+      expect(node.ranges.editable).toBeUndefined()
+    }
     let previousEnd = node.ranges.full.startOffset
     for (const child of node.children) {
       expect(child).toBeGreaterThanOrEqual(0)

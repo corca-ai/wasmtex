@@ -478,7 +478,11 @@ function expandedCallNode(
   }))
   const { name: _name, text: _text, arguments: _arguments, mathClass: _mathClass, ...base } = node
   const { editable: _editable, ...ranges } = node.ranges
-  const callSite = node.provenance.source
+  const callSite = node.provenance?.source ?? {
+    fileId: syntax.fileId,
+    path: syntax.path,
+    range: node.ranges.full,
+  }
   return {
     ...base,
     kind: shape.kind,
