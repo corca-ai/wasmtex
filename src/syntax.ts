@@ -21,6 +21,7 @@ import {
   type LatexVisibleProseSpan,
 } from './syntax-contract'
 
+export * from './math-command-spec'
 export { findLatexNotationPath } from './notation-cst'
 export * from './syntax-contract'
 
