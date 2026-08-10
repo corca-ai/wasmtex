@@ -348,6 +348,37 @@ describe('LatexSyntaxService', () => {
     )
   })
 
+  it('records nested and sibling Markdown heading scopes without reading fences', () => {
+    const content = [
+      '# One',
+      'alpha',
+      '## Nested',
+      'beta',
+      '```md',
+      '# Not a scope',
+      '```',
+      'Two',
+      '===',
+      'gamma',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'markdown',
+      path: 'paper.md',
+      content,
+      documentVersion: 1,
+    })
+    const sections = syntax.scopes.filter((scope) => scope.kind === 'section')
+    const first = sections.find((scope) => scope.name === 'One')!
+    const nested = sections.find((scope) => scope.name === 'Nested')!
+    const second = sections.find((scope) => scope.name === 'Two')!
+
+    expect(sections.map((scope) => scope.name)).toEqual(['One', 'Nested', 'Two'])
+    expect(nested.parent).toBe(syntax.scopes.indexOf(first))
+    expect(second.parent).toBe(0)
+    expect(content.slice(first.range.startOffset, first.range.endOffset)).not.toContain('Two\n===')
+    expect(content.slice(second.range.startOffset, second.range.endOffset)).toContain('gamma')
+  })
+
   it('exposes neutral declarations without downstream semantic vocabulary', () => {
     const content = [
       '\\documentclass[twocolumn]{article}',

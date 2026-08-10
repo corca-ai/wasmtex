@@ -145,7 +145,8 @@ The snapshot is the single source-preserving boundary for notation roots, visibl
 prose, scopes, macros, includes, and neutral structural declarations. Its notation
 arena uses revision-local indices; consumers must not persist them as cross-edit
 identity. Unknown and malformed TeX remains bounded as opaque or incomplete structure.
-Markdown contributes math and visible prose without polluting the LaTeX project index.
+Markdown contributes math, visible prose, and ATX or setext section scopes
+without polluting the LaTeX project index.
 The service is transport-neutral and can live in a browser Worker or a native
 language-server process.
 

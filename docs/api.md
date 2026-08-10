@@ -186,8 +186,9 @@ const snapshot = language.updateDocument({
 
 `snapshot` and all subsequent LSP queries are backed by the same `ProjectIndex`.
 `moveDocument` and `removeDocument` preserve or retire the stable identity.
-Markdown documents expose math regions but do not contribute LaTeX symbols to
-the project index. `getStats()` reports parse passes for integration budgets.
+Markdown documents expose math regions plus ATX and setext section scopes, but
+do not contribute LaTeX symbols to the project index. `getStats()` reports
+parse passes for integration budgets.
 
 Document Syntax Snapshot schema 4 is the singular source-preserving contract for
 notation roots, visible prose, section/environment scopes, neutral declarations,

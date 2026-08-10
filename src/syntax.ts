@@ -207,27 +207,32 @@ export class LatexSyntaxService {
     document: LatexDocumentInput,
     cancellationToken?: LatexSyntaxCancellationToken,
   ): LatexFileSyntax {
+    const input = {
+      ...document,
+      language:
+        document.language ?? (/\.(?:md|markdown)$/iu.test(document.path) ? 'markdown' : 'latex'),
+    } as const
     const previous = this.files.get(document.fileId)
     throwIfSyntaxCancelled(cancellationToken)
     this.parseCount++
-    const tokens = tokenize(document.content)
+    const tokens = tokenize(input.content)
     throwIfSyntaxCancelled(cancellationToken)
-    const symbols = parseLatexFile(document.content, document.path, tokens)
+    const symbols = parseLatexFile(input.content, input.path, tokens)
     throwIfSyntaxCancelled(cancellationToken)
-    const syntax = buildFileSyntax(document, tokens, symbols, cancellationToken)
+    const syntax = buildFileSyntax(input, tokens, symbols, cancellationToken)
     throwIfSyntaxCancelled(cancellationToken)
 
     if (
       previous &&
       previous.input.language !== 'markdown' &&
-      (previous.input.path !== document.path || document.language === 'markdown')
+      (previous.input.path !== input.path || input.language === 'markdown')
     ) {
       this.index.removeFile(previous.input.path)
     }
-    if (document.language !== 'markdown') this.index.updateFileSymbols(document.path, symbols)
-    this.files.set(document.fileId, { input: { ...document }, baseSyntax: syntax, syntax })
+    if (input.language !== 'markdown') this.index.updateFileSymbols(input.path, symbols)
+    this.files.set(input.fileId, { input, baseSyntax: syntax, syntax })
     if (!this.relinkDeferred) {
-      this.lastTransferFileIds = this.refreshMacroDefinitions(new Set([document.fileId]))
+      this.lastTransferFileIds = this.refreshMacroDefinitions(new Set([input.fileId]))
     }
     return this.files.get(document.fileId)!.syntax
   }
@@ -834,9 +839,118 @@ function syntaxScopes(
       state: 'complete',
     },
   ]
-  appendSectionScopes(scopes, document, tokensByStart, symbols)
+  if (document.language === 'markdown') appendMarkdownSectionScopes(scopes, document)
+  else appendSectionScopes(scopes, document, tokensByStart, symbols)
   appendEnvironmentScopes(scopes, document, tokens)
   return scopes
+}
+
+interface MarkdownSection {
+  depth: number
+  name: string
+  sourceEnd: number
+  start: number
+}
+
+function appendMarkdownSectionScopes(
+  scopes: LatexSyntaxScope[],
+  document: LatexDocumentInput,
+): void {
+  const sections = markdownSections(document.content)
+  const sectionIndices: number[] = []
+  for (let index = 0; index < sections.length; index++) {
+    const section = sections[index]!
+    const end =
+      sections.slice(index + 1).find((candidate) => candidate.depth <= section.depth)?.start ??
+      document.content.length
+    let parent = 0
+    for (let previous = index - 1; previous >= 0; previous--) {
+      if (sections[previous]!.depth < section.depth) {
+        parent = sectionIndices[previous]!
+        break
+      }
+    }
+    sectionIndices.push(scopes.length)
+    scopes.push({
+      kind: 'section',
+      parent,
+      range: { startOffset: section.start, endOffset: end },
+      state: 'complete',
+      name: section.name,
+      source: syntaxSourceRef(document, {
+        startOffset: section.start,
+        endOffset: section.sourceEnd,
+      }),
+    })
+  }
+}
+
+function markdownSections(source: string): MarkdownSection[] {
+  const excluded = markdownExcludedSpans(source)
+  const lines = markdownLines(source)
+  const sections: MarkdownSection[] = []
+  for (let index = 0; index < lines.length; index++) {
+    const [start, line] = lines[index]!
+    if (inside(start, excluded)) continue
+    const atx = parseAtxHeading(line)
+    if (atx) {
+      sections.push({
+        depth: atx.depth,
+        name: atx.name,
+        sourceEnd: start + line.length,
+        start,
+      })
+      continue
+    }
+    const setextDepth = setextHeadingDepth(line)
+    const previous = lines[index - 1]
+    if (!setextDepth || !previous || inside(previous[0], excluded) || !previous[1].trim()) continue
+    sections.push({
+      depth: setextDepth,
+      name: previous[1].trim(),
+      sourceEnd: start + line.length,
+      start: previous[0],
+    })
+  }
+  return sections
+}
+
+function parseAtxHeading(line: string): { depth: number; name: string } | null {
+  let offset = 0
+  while (offset < line.length && line[offset] === ' ') offset++
+  if (offset > 3) return null
+  const markerStart = offset
+  while (offset < line.length && line[offset] === '#' && offset - markerStart < 6) offset++
+  const depth = offset - markerStart
+  if (
+    depth === 0 ||
+    line[offset] === '#' ||
+    (line[offset] !== undefined && !/[ \t]/.test(line[offset]!))
+  ) {
+    return null
+  }
+  let name = line.slice(offset).trim()
+  let closingStart = name.length
+  while (closingStart > 0 && name[closingStart - 1] === '#') closingStart--
+  if (closingStart < name.length && closingStart > 0 && /[ \t]/.test(name[closingStart - 1]!)) {
+    name = name.slice(0, closingStart).trimEnd()
+  }
+  return { depth, name }
+}
+
+function setextHeadingDepth(line: string): number | null {
+  let offset = 0
+  while (offset < line.length && line[offset] === ' ') offset++
+  if (offset > 3 || (line[offset] !== '=' && line[offset] !== '-')) return null
+  const marker = line[offset]
+  let markers = 0
+  while (offset < line.length && line[offset] === marker) {
+    markers++
+    offset++
+  }
+  if (markers === 0) return null
+  while (offset < line.length && (line[offset] === ' ' || line[offset] === '\t')) offset++
+  return offset === line.length ? (marker === '=' ? 1 : 2) : null
 }
 
 function appendSectionScopes(
