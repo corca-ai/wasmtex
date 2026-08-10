@@ -33,7 +33,7 @@ describe('LatexSyntaxService', () => {
     )
     expect(() => assertLatexSyntaxSchemaVersion(syntax)).not.toThrow()
     expect(() => assertLatexSyntaxSchemaVersion({ schemaVersion: 3 })).toThrow(
-      'Unsupported LaTeX syntax schema 3; expected 4',
+      'Unsupported LaTeX syntax schema 3; expected 5',
     )
     expect(new LatexSyntaxService().getStats()).toMatchObject({
       notationNodes: 0,
@@ -312,6 +312,61 @@ describe('LatexSyntaxService', () => {
     expect(prose).not.toContain('comment')
     expect(prose).not.toContain('verbatim')
     expect(prose).not.toContain('math')
+  })
+
+  it('publishes citation syntax separately from visible prose', () => {
+    const content = [
+      'Prior work \\parencite[see][p. 4]{smith,jones} may support $x$.',
+      'Later work \\textcite{doe} does not.',
+      'Broken \\autocite{oops',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(
+      syntax.proseAnnotations.map((annotation) => ({
+        ...annotation,
+        source: content.slice(annotation.range.startOffset, annotation.range.endOffset),
+      })),
+    ).toEqual([
+      {
+        kind: 'citation',
+        name: 'parencite',
+        range: {
+          startOffset: content.indexOf('\\parencite'),
+          endOffset: content.indexOf(' may support'),
+        },
+        state: 'complete',
+        source: '\\parencite[see][p. 4]{smith,jones}',
+      },
+      {
+        kind: 'citation',
+        name: 'textcite',
+        range: {
+          startOffset: content.indexOf('\\textcite'),
+          endOffset: content.indexOf(' does not'),
+        },
+        state: 'complete',
+        source: '\\textcite{doe}',
+      },
+      {
+        kind: 'citation',
+        name: 'autocite',
+        range: { startOffset: content.indexOf('\\autocite'), endOffset: content.length },
+        state: 'incomplete',
+        source: '\\autocite{oops',
+      },
+    ])
+    const prose = syntax.visibleProse
+      .map(({ range }) => content.slice(range.startOffset, range.endOffset))
+      .join(' ')
+    expect(prose).not.toContain('smith')
+    expect(prose).not.toContain('{doe}')
+    expect(prose).not.toContain('oops')
   })
 
   it('records nested section and environment scope spans with recovery', () => {

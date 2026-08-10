@@ -7,7 +7,7 @@ import type { MathCommandArgumentRole, TexMathClass } from './math-command-spec'
  * deliberately left to downstream semantic engines.
  */
 
-export const LATEX_SYNTAX_SCHEMA_VERSION = 4 as const
+export const LATEX_SYNTAX_SCHEMA_VERSION = 5 as const
 
 export interface LatexSyntaxRange {
   startOffset: number
@@ -107,6 +107,15 @@ export interface LatexVisibleProseSpan {
   state: 'complete'
 }
 
+/** Observable source annotation adjacent to visible prose. */
+export interface LatexProseAnnotation {
+  kind: 'citation'
+  /** Bare control-sequence name, without the leading backslash. */
+  name: string
+  range: LatexSyntaxRange
+  state: 'complete' | 'incomplete'
+}
+
 export type LatexScopeKind = 'document' | 'section' | 'environment'
 
 export interface LatexSyntaxScope {
@@ -193,6 +202,7 @@ export interface LatexDocumentSyntaxSnapshot {
   nodes: readonly LatexNotationNode[]
   mathRoots: readonly LatexMathRoot[]
   visibleProse: readonly LatexVisibleProseSpan[]
+  proseAnnotations: readonly LatexProseAnnotation[]
   scopes: readonly LatexSyntaxScope[]
   declarations: readonly LatexStructuralDeclaration[]
 }

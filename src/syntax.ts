@@ -5,7 +5,7 @@ import {
   type UserMacroArgument,
   type UserMacroDefinition,
 } from './lsp/latex-parser'
-import { NEWCMD_CMDS } from './lsp/latex-patterns'
+import { CITE_CMDS, NEWCMD_CMDS } from './lsp/latex-patterns'
 import { type Token, tokenize } from './lsp/latex-tokenizer'
 import { ProjectIndex } from './lsp/project-index'
 import { buildLineStarts } from './lsp/source-position'
@@ -17,6 +17,7 @@ import {
   type LatexDocumentSyntaxSnapshot,
   type LatexNotationArgument,
   type LatexNotationNode,
+  type LatexProseAnnotation,
   type LatexStructuralDeclaration,
   type LatexSyntaxRange,
   type LatexSyntaxScope,
@@ -692,6 +693,12 @@ const NON_PROSE_COMMAND_GROUPS = new Map<string, readonly ProseArgumentKind[]>([
   ['DeclarePairedDelimiter', ['required', 'required']],
 ])
 
+const CITATION_COMMANDS = new Set(CITE_CMDS.split('|'))
+const CITATION_ARGUMENTS: readonly ProseArgumentKind[] = ['optional', 'optional', 'required']
+for (const command of CITATION_COMMANDS) {
+  NON_PROSE_COMMAND_GROUPS.set(command, CITATION_ARGUMENTS)
+}
+
 function buildDocumentSyntax(
   document: LatexDocumentInput,
   tokens: readonly Token[],
@@ -705,6 +712,7 @@ function buildDocumentSyntax(
       throwIfSyntaxCancelled(cancellationToken),
     ),
     visibleProse: visibleProseSpans(document, tokens, mathRegions),
+    proseAnnotations: proseAnnotations(document, tokens),
     scopes: syntaxScopes(document, tokens, tokensByStart, symbols),
     declarations: structuralDeclarations(document, tokens, tokensByStart, symbols),
   }
@@ -743,7 +751,7 @@ function visibleProseSpans(
         token.start,
         groups === undefined
           ? token.end
-          : commandInvocationEnd(document.content, token.end, groups),
+          : scanCommandInvocation(document.content, token.end, groups).end,
       ])
     }
   }
@@ -758,27 +766,47 @@ function visibleProseSpans(
   return spans
 }
 
-function commandInvocationEnd(
+interface ScannedCommandInvocation {
+  end: number
+  complete: boolean
+}
+
+function scanCommandInvocation(
   source: string,
   commandEnd: number,
   groups: readonly ProseArgumentKind[],
-): number {
+): ScannedCommandInvocation {
   let cursor = commandEnd
   if (source[cursor] === '*') cursor++
   for (const group of groups) {
     while (/\s/.test(source[cursor] ?? '')) cursor++
-    const open = source[cursor]
-    if (group === 'optional') {
-      if (open === '[') cursor = balancedDelimiterEnd(source, cursor, '[', ']')
-    } else {
-      if (open !== '{') return cursor
-      cursor = balancedDelimiterEnd(source, cursor, '{', '}')
-    }
+    const scanned = scanCommandGroup(source, cursor, group)
+    if (scanned === null) continue
+    cursor = scanned.end
+    if (!scanned.complete) return scanned
   }
-  return cursor
+  return { end: cursor, complete: true }
 }
 
-function balancedDelimiterEnd(source: string, start: number, open: string, close: string): number {
+function scanCommandGroup(
+  source: string,
+  cursor: number,
+  group: ProseArgumentKind,
+): ScannedCommandInvocation | null {
+  if (group === 'optional') {
+    return source[cursor] === '[' ? balancedDelimiter(source, cursor, '[', ']') : null
+  }
+  return source[cursor] === '{'
+    ? balancedDelimiter(source, cursor, '{', '}')
+    : { end: cursor, complete: false }
+}
+
+function balancedDelimiter(
+  source: string,
+  start: number,
+  open: string,
+  close: string,
+): ScannedCommandInvocation {
   let depth = 0
   for (let cursor = start; cursor < source.length; cursor++) {
     if (source[cursor] === '\\') {
@@ -786,9 +814,29 @@ function balancedDelimiterEnd(source: string, start: number, open: string, close
       continue
     }
     if (source[cursor] === open) depth++
-    else if (source[cursor] === close && --depth === 0) return cursor + 1
+    else if (source[cursor] === close && --depth === 0) {
+      return { end: cursor + 1, complete: true }
+    }
   }
-  return source.length
+  return { end: source.length, complete: false }
+}
+
+function proseAnnotations(
+  document: LatexDocumentInput,
+  tokens: readonly Token[],
+): LatexProseAnnotation[] {
+  const annotations: LatexProseAnnotation[] = []
+  for (const token of tokens) {
+    if (token.type !== 'command' || !CITATION_COMMANDS.has(token.value)) continue
+    const invocation = scanCommandInvocation(document.content, token.end, CITATION_ARGUMENTS)
+    annotations.push({
+      kind: 'citation',
+      name: token.value,
+      range: { startOffset: token.start, endOffset: invocation.end },
+      state: invocation.complete ? 'complete' : 'incomplete',
+    })
+  }
+  return annotations
 }
 
 function mergeSpans(
