@@ -437,6 +437,30 @@ describe('LatexSyntaxService', () => {
     ).toBe('\\vect{x+y}')
   })
 
+  it('preserves each concrete required and optional macro argument at its call site', () => {
+    const content = [
+      '\\newcommand{\\estimate}[2][mean]{\\hat{#2}_{#1}}',
+      '$\\estimate[median]{y}$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const call = syntax.macros.find((event) => event.kind === 'call' && event.name === 'estimate')
+
+    expect(call?.arguments?.map(({ index, kind, value }) => ({ index, kind, value }))).toEqual([
+      { index: 0, kind: 'optional', value: 'median' },
+      { index: 1, kind: 'required', value: 'y' },
+    ])
+    expect(
+      call?.arguments?.map((argument) =>
+        content.slice(argument.source.range.startOffset, argument.source.range.endOffset),
+      ),
+    ).toEqual(['[median]', '{y}'])
+  })
+
   it('relinks macro provenance across project files without reparsing callers', () => {
     const service = new LatexSyntaxService()
     service.upsert({
@@ -455,14 +479,17 @@ describe('LatexSyntaxService', () => {
       .getFile('caller')
       ?.macros.find((event) => event.kind === 'call' && event.name === 'vect')
     expect(call?.definitions[0]?.fileId).toBe('defs')
+    expect(service.getInvalidatedFiles().map((syntax) => syntax.fileId)).toEqual(['caller', 'defs'])
     expect(service.getStats().parseCount).toBe(2)
 
     service.move('defs', 'shared/macros.tex')
+    expect(service.getInvalidatedFiles().map((syntax) => syntax.fileId)).toEqual(['caller', 'defs'])
     expect(
       service.getFile('caller')?.macros.find((event) => event.name === 'vect')?.definitions[0]
         ?.path,
     ).toBe('shared/macros.tex')
     service.remove('defs')
+    expect(service.getInvalidatedFiles().map((syntax) => syntax.fileId)).toEqual(['caller'])
     expect(
       service.getFile('caller')?.macros.find((event) => event.name === 'vect')?.definitions,
     ).toEqual([])
@@ -506,6 +533,116 @@ describe('LatexSyntaxService', () => {
       )
     }
     expect(service.getStats().parseCount).toBe(2)
+  })
+
+  it('lowers declared operators and bounded macro wrappers into the generic notation CST', () => {
+    const content = [
+      '\\DeclareMathOperator{\\ECE}{ECE}',
+      '\\newcommand{\\estimate}[1]{\\hat{#1}}',
+      '\\newcommand{\\nestedestimate}[1]{\\estimate{#1}}',
+      '$\\ECE+\\estimate{y}+\\nestedestimate{z}$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const callNodes = syntax.nodes.filter((node) => node.provenance.origin === 'expansion')
+
+    expect(callNodes.map((node) => [node.kind, node.name])).toEqual([
+      ['named-operator', 'ECE'],
+      ['modifier', 'hat'],
+      ['modifier', 'hat'],
+    ])
+    for (const node of callNodes) {
+      expect(node.provenance.editable).toBe(false)
+      expect(node.provenance.callSite).toEqual(node.provenance.source)
+      expect(node.provenance.definitions).toHaveLength(1)
+      expect(node.ranges.editable).toBeUndefined()
+    }
+    expect(callNodes[1]?.arguments?.[0]?.role).toBe('nucleus')
+    expect(callNodes[2]?.arguments?.[0]?.role).toBe('nucleus')
+  })
+
+  it('retracts generated notation when a project macro definition disappears', () => {
+    const service = createLatexSyntaxService({
+      documents: [
+        {
+          fileId: 'caller',
+          path: 'main.tex',
+          content: '$\\estimate{x}$',
+          documentVersion: 1,
+        },
+        {
+          fileId: 'defs',
+          path: 'defs.tex',
+          content: '\\newcommand{\\estimate}[1]{\\hat{#1}}',
+          documentVersion: 1,
+        },
+      ],
+    })
+    const callNode = () =>
+      service.getFile('caller')?.nodes.find((node) => node.ranges.command?.startOffset === 1)
+
+    expect(callNode()).toMatchObject({
+      kind: 'modifier',
+      provenance: { origin: 'expansion', editable: false },
+    })
+    service.remove('defs')
+    expect(callNode()).toMatchObject({
+      kind: 'command',
+      state: 'opaque',
+      provenance: { origin: 'source', editable: true },
+    })
+    expect(service.getStats().parseCount).toBe(2)
+  })
+
+  it('limits a macro-definition edit to its actual caller closure', () => {
+    const unrelated = Array.from({ length: 100 }, (_, index) => ({
+      fileId: `unrelated-${index}`,
+      path: `unrelated-${index}.tex`,
+      content: '$x$',
+      documentVersion: 1,
+    }))
+    const service = createLatexSyntaxService({
+      documents: [
+        ...unrelated,
+        {
+          fileId: 'caller-a',
+          path: 'caller-a.tex',
+          content: '$\\estimate{x}$',
+          documentVersion: 1,
+        },
+        {
+          fileId: 'caller-b',
+          path: 'caller-b.tex',
+          content: '$\\estimate{y}$',
+          documentVersion: 1,
+        },
+        {
+          fileId: 'defs',
+          path: 'defs.tex',
+          content: '\\newcommand{\\estimate}[1]{\\hat{#1}}',
+          documentVersion: 1,
+        },
+      ],
+    })
+
+    service.upsert({
+      fileId: 'defs',
+      path: 'defs.tex',
+      content: '\\newcommand{\\estimate}[1]{\\bar{#1}}',
+      documentVersion: 2,
+    })
+
+    expect(
+      service
+        .getInvalidatedFiles()
+        .map((syntax) => syntax.fileId)
+        .sort(),
+    ).toEqual(['caller-a', 'caller-b', 'defs'])
+    expect(service.getStats().parseCount).toBe(104)
   })
 
   it('refuses an ambiguous project macro definition', () => {

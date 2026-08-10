@@ -2,6 +2,7 @@ import {
   collectUserMacroDefinitions,
   expandUserMacroCalls,
   parseLatexFile,
+  type UserMacroArgument,
   type UserMacroDefinition,
 } from './lsp/latex-parser'
 import { NEWCMD_CMDS } from './lsp/latex-patterns'
@@ -10,9 +11,11 @@ import { ProjectIndex } from './lsp/project-index'
 import { buildLineStarts } from './lsp/source-position'
 import type { FileSymbols, SourceLocation } from './lsp/types'
 import { buildNotationCst } from './notation-cst'
+import { collectRichStructuralDeclarations } from './structural-declarations'
 import {
   LATEX_SYNTAX_SCHEMA_VERSION,
   type LatexDocumentSyntaxSnapshot,
+  type LatexNotationArgument,
   type LatexNotationNode,
   type LatexStructuralDeclaration,
   type LatexSyntaxRange,
@@ -37,6 +40,7 @@ export interface LatexMacroEvent {
   name: string
   source: LatexSyntaxSourceRef
   definitions: readonly LatexSyntaxSourceRef[]
+  arguments?: readonly LatexMacroArgument[]
   expansion: {
     /** Bounded static expansion outcome for this source occurrence. */
     status: 'not-applicable' | 'unresolved' | 'expanded' | 'cycle' | 'truncated'
@@ -48,6 +52,13 @@ export interface LatexMacroEvent {
     /** Full invocation replaced by `surface`, including consumed arguments. */
     inputRange?: LatexSyntaxRange
   }
+}
+
+export interface LatexMacroArgument {
+  index: number
+  kind: 'required' | 'optional'
+  value: string
+  source: LatexSyntaxSourceRef
 }
 
 export interface LatexInclude {
@@ -107,6 +118,7 @@ export interface LatexSyntaxStats {
 
 interface FileState {
   input: LatexDocumentInput
+  baseSyntax: LatexFileSyntax
   syntax: LatexFileSyntax
 }
 
@@ -150,6 +162,7 @@ const UTF8_ENCODER = new TextEncoder()
 export class LatexSyntaxService {
   private readonly files = new Map<string, FileState>()
   private readonly index = new ProjectIndex()
+  private macroCatalog = emptyProjectMacroCatalog()
   private parseCount = 0
   private relinkDeferred = false
   private lastTransferFileIds: readonly string[] = []
@@ -163,8 +176,10 @@ export class LatexSyntaxService {
     } finally {
       this.relinkDeferred = false
     }
-    this.refreshMacroDefinitions()
-    this.lastTransferFileIds = snapshot.documents.map((document) => document.fileId)
+    this.lastTransferFileIds = this.refreshMacroDefinitions(
+      new Set(snapshot.documents.map((document) => document.fileId)),
+      true,
+    )
   }
 
   upsert(
@@ -189,9 +204,10 @@ export class LatexSyntaxService {
       this.index.removeFile(previous.input.path)
     }
     if (document.language !== 'markdown') this.index.updateFileSymbols(document.path, symbols)
-    this.files.set(document.fileId, { input: { ...document }, syntax })
-    if (!this.relinkDeferred) this.refreshMacroDefinitions()
-    this.lastTransferFileIds = [document.fileId]
+    this.files.set(document.fileId, { input: { ...document }, baseSyntax: syntax, syntax })
+    if (!this.relinkDeferred) {
+      this.lastTransferFileIds = this.refreshMacroDefinitions(new Set([document.fileId]))
+    }
     return this.files.get(document.fileId)!.syntax
   }
 
@@ -206,12 +222,19 @@ export class LatexSyntaxService {
     if (!state) return
     this.index.removeFile(state.input.path)
     this.files.delete(fileId)
-    this.refreshMacroDefinitions()
-    this.lastTransferFileIds = []
+    this.lastTransferFileIds = this.refreshMacroDefinitions()
   }
 
   getFile(fileId: string): LatexFileSyntax | null {
     return this.files.get(fileId)?.syntax ?? null
+  }
+
+  /** Snapshots whose syntax/provenance changed in the latest inventory mutation. */
+  getInvalidatedFiles(): readonly LatexFileSyntax[] {
+    return this.lastTransferFileIds.flatMap((fileId) => {
+      const syntax = this.files.get(fileId)?.syntax
+      return syntax ? [syntax] : []
+    })
   }
 
   /** The LSP service can reuse the exact same parsed snapshot. */
@@ -240,20 +263,38 @@ export class LatexSyntaxService {
   }
 
   /** Re-link calls after any inventory change without reparsing unchanged files. */
-  private refreshMacroDefinitions(): void {
+  private refreshMacroDefinitions(
+    directlyChanged: ReadonlySet<string> = new Set(),
+    relinkAll = false,
+  ): readonly string[] {
     const catalog = collectProjectMacroCatalog(this.files.values())
-    for (const state of this.files.values()) {
+    const changedMacros = changedMacroNames(this.macroCatalog, catalog)
+    const invalidated: string[] = []
+    for (const [fileId, state] of this.files) {
+      if (
+        !relinkAll &&
+        !directlyChanged.has(fileId) &&
+        (changedMacros.size === 0 ||
+          !state.baseSyntax.macros.some((event) => changedMacros.has(event.name)))
+      ) {
+        continue
+      }
       const expansions = new Map(
         expandUserMacroCalls(state.input.content, catalog.expansionDefinitions).map((expansion) => [
           expansion.inputStart,
           expansion,
         ]),
       )
+      const macros = state.baseSyntax.macros.map((event) => relinkMacro(event, expansions, catalog))
       state.syntax = {
-        ...state.syntax,
-        macros: state.syntax.macros.map((event) => relinkMacro(event, expansions, catalog)),
+        ...state.baseSyntax,
+        macros,
+        nodes: relinkNotationNodes(state.baseSyntax, macros),
       }
+      invalidated.push(fileId)
     }
+    this.macroCatalog = catalog
+    return invalidated
   }
 }
 
@@ -263,6 +304,37 @@ interface ProjectMacroCatalog {
   expansionDefinitions: ReadonlyMap<string, UserMacroDefinition>
 }
 
+function emptyProjectMacroCatalog(): ProjectMacroCatalog {
+  return { bodies: new Map(), definitions: new Map(), expansionDefinitions: new Map() }
+}
+
+function changedMacroNames(
+  previous: ProjectMacroCatalog,
+  next: ProjectMacroCatalog,
+): ReadonlySet<string> {
+  const names = new Set([
+    ...previous.bodies.keys(),
+    ...previous.definitions.keys(),
+    ...previous.expansionDefinitions.keys(),
+    ...next.bodies.keys(),
+    ...next.definitions.keys(),
+    ...next.expansionDefinitions.keys(),
+  ])
+  return new Set(
+    [...names].filter(
+      (name) => macroCatalogEntry(previous, name) !== macroCatalogEntry(next, name),
+    ),
+  )
+}
+
+function macroCatalogEntry(catalog: ProjectMacroCatalog, name: string): string {
+  return JSON.stringify({
+    body: catalog.bodies.get(name),
+    definitions: catalog.definitions.get(name),
+    expansion: catalog.expansionDefinitions.get(name),
+  })
+}
+
 function collectProjectMacroCatalog(states: Iterable<FileState>): ProjectMacroCatalog {
   const files = [...states]
   const definitions = new Map<string, LatexSyntaxSourceRef[]>()
@@ -270,7 +342,7 @@ function collectProjectMacroCatalog(states: Iterable<FileState>): ProjectMacroCa
   const ambiguous = new Set<string>()
   for (const state of files) {
     mergeUniqueMacroBodies(bodies, ambiguous, collectMacroBodies(state.input.content))
-    for (const event of state.syntax.macros) {
+    for (const event of state.baseSyntax.macros) {
       if (event.kind !== 'definition') continue
       const bucket = definitions.get(event.name)
       if (bucket) bucket.push(event.source)
@@ -299,7 +371,15 @@ function mergeUniqueMacroBodies(
 
 function relinkMacro(
   event: LatexMacroEvent,
-  expansions: ReadonlyMap<number, { inputStart: number; inputEnd: number; surface: string }>,
+  expansions: ReadonlyMap<
+    number,
+    {
+      inputStart: number
+      inputEnd: number
+      surface: string
+      arguments: readonly UserMacroArgument[]
+    }
+  >,
   catalog: ProjectMacroCatalog,
 ): LatexMacroEvent {
   const definitions = catalog.definitions.get(event.name) ?? []
@@ -312,6 +392,7 @@ function relinkMacro(
   return {
     ...event,
     definitions,
+    ...(expanded === undefined ? {} : { arguments: macroArguments(event, expanded.arguments) }),
     expansion:
       expansion.status === 'expanded' && expanded
         ? {
@@ -320,6 +401,141 @@ function relinkMacro(
             inputRange: { startOffset: expanded.inputStart, endOffset: expanded.inputEnd },
           }
         : expansion,
+  }
+}
+
+function macroArguments(
+  event: LatexMacroEvent,
+  arguments_: readonly UserMacroArgument[],
+): LatexMacroArgument[] {
+  return arguments_.map((argument) => ({
+    index: argument.index,
+    kind: argument.kind,
+    value: argument.value,
+    source: {
+      fileId: event.source.fileId,
+      path: event.source.path,
+      range: { startOffset: argument.inputStart, endOffset: argument.inputEnd },
+    },
+  }))
+}
+
+function relinkNotationNodes(
+  syntax: LatexFileSyntax,
+  macros: readonly LatexMacroEvent[],
+): readonly LatexNotationNode[] {
+  const expansions = new Map(
+    macros
+      .filter(
+        (event) =>
+          event.kind === 'call' &&
+          event.expansion.status === 'expanded' &&
+          event.expansion.surface !== undefined &&
+          event.expansion.inputRange !== undefined,
+      )
+      .map((event) => [event.expansion.inputRange!.startOffset, event] as const),
+  )
+  if (expansions.size === 0) return syntax.nodes
+  return syntax.nodes.map((node) => relinkNotationNode(node, syntax, expansions))
+}
+
+function relinkNotationNode(
+  node: LatexNotationNode,
+  syntax: LatexFileSyntax,
+  expansions: ReadonlyMap<number, LatexMacroEvent>,
+): LatexNotationNode {
+  const commandStart = node.ranges.command?.startOffset
+  if (node.kind !== 'command' || commandStart === undefined) return node
+  const event = expansions.get(commandStart)
+  const surface = event?.expansion.surface
+  if (!event || surface === undefined) return node
+  const shape = expandedNotationShape(surface)
+  if (!shape) return node
+  const shapeArguments =
+    shape.kind === 'named-operator' && node.children.length === 0 ? [] : shape.arguments
+  if (!shapeArgumentsMatch(shapeArguments, node.children)) return node
+  return expandedCallNode(node, syntax, event, shape, shapeArguments)
+}
+
+function shapeArgumentsMatch(
+  arguments_: readonly LatexNotationArgument[],
+  children: readonly number[],
+): boolean {
+  return arguments_.length === 0 || (children.length > 0 && arguments_.length === children.length)
+}
+
+function expandedCallNode(
+  node: LatexNotationNode,
+  syntax: LatexFileSyntax,
+  event: LatexMacroEvent,
+  shape: NonNullable<ReturnType<typeof expandedNotationShape>>,
+  shapeArguments: readonly LatexNotationArgument[],
+): LatexNotationNode {
+  const arguments_ = shapeArguments.map((argument, index) => ({
+    ...argument,
+    node: node.children[index]!,
+    range: syntax.nodes[node.children[index]!]!.ranges.full,
+  }))
+  const { name: _name, text: _text, arguments: _arguments, mathClass: _mathClass, ...base } = node
+  const { editable: _editable, ...ranges } = node.ranges
+  const callSite = node.provenance.source
+  return {
+    ...base,
+    kind: shape.kind,
+    state: shape.state,
+    ...(shape.name === undefined ? {} : { name: shape.name }),
+    ...(shape.text === undefined ? {} : { text: shape.text }),
+    ...(shape.mathClass === undefined ? {} : { mathClass: shape.mathClass }),
+    ...(arguments_.length === 0 ? {} : { arguments: arguments_ }),
+    ranges,
+    provenance: {
+      origin: 'expansion',
+      source: callSite,
+      callSite,
+      definitions: event.definitions,
+      editable: false,
+    },
+  }
+}
+
+function expandedNotationShape(surface: string): {
+  kind: LatexNotationNode['kind']
+  state: LatexNotationNode['state']
+  name?: string
+  text?: string
+  arguments: readonly LatexNotationArgument[]
+  mathClass?: LatexNotationNode['mathClass']
+} | null {
+  const notation = buildNotationCst(
+    { fileId: 'generated', path: 'generated', content: surface },
+    tokenize(surface),
+    [
+      {
+        delimiter: 'generated',
+        fullRange: { startOffset: 0, endOffset: surface.length },
+        contentRange: { startOffset: 0, endOffset: surface.length },
+        closed: true,
+      },
+    ],
+  )
+  const root = notation.nodes[notation.mathRoots[0]!.node]!
+  if (root.children.length !== 1) return null
+  const node = notation.nodes[root.children[0]!]!
+  if (
+    node.kind !== 'token' &&
+    node.kind !== 'modifier' &&
+    node.kind !== 'style' &&
+    node.kind !== 'named-operator'
+  ) {
+    return null
+  }
+  return {
+    kind: node.kind,
+    state: node.state,
+    arguments: node.arguments ?? [],
+    ...(node.name === undefined ? {} : { name: node.name }),
+    ...(node.text === undefined ? {} : { text: node.text }),
+    ...(node.mathClass === undefined ? {} : { mathClass: node.mathClass }),
   }
 }
 
@@ -418,7 +634,7 @@ function buildDocumentSyntax(
     ),
     visibleProse: visibleProseSpans(document, tokens, mathRegions),
     scopes: syntaxScopes(document, tokens, tokensByStart, symbols),
-    declarations: structuralDeclarations(document, tokensByStart, symbols),
+    declarations: structuralDeclarations(document, tokens, tokensByStart, symbols),
   }
 }
 
@@ -682,9 +898,21 @@ function deepestContainingSection(scopes: readonly LatexSyntaxScope[], offset: n
 
 function structuralDeclarations(
   document: LatexDocumentInput,
+  tokens: readonly Token[],
   tokensByStart: ReadonlyMap<number, Token>,
   symbols: FileSymbols,
 ): LatexStructuralDeclaration[] {
+  const rich = collectRichStructuralDeclarations(document, tokens)
+  const richMacroNames = new Set(
+    rich
+      .filter(
+        (declaration) =>
+          declaration.kind === 'macro' ||
+          declaration.kind === 'operator' ||
+          declaration.kind === 'paired-delimiter',
+      )
+      .map((declaration) => declaration.name),
+  )
   const lineStarts = buildLineStarts(document.content)
   const atCommand = (location: SourceLocation): LatexSyntaxSourceRef => {
     const offset = offsetAt(lineStarts, location)
@@ -711,30 +939,19 @@ function structuralDeclarations(
       options: value.options,
       source: atCommand(value.location),
     })),
-    ...symbols.commands.map((value) => ({
-      kind: 'macro' as const,
-      name: value.name,
-      source: atName(value.location, value.name),
-    })),
+    ...symbols.commands
+      .filter((value) => !richMacroNames.has(value.name))
+      .map((value) => ({
+        kind: 'macro' as const,
+        name: value.name,
+        source: atName(value.location, value.name),
+      })),
     ...symbols.environmentDefs.map((value) => ({
       kind: 'environment' as const,
       name: value.name,
       source: atCommand(value.location),
     })),
-    ...symbols.glossaryEntries
-      .filter((value) => value.role === 'definition')
-      .map((value) => ({
-        kind: 'glossary' as const,
-        key: value.name,
-        source: atName(value.location, value.name),
-      })),
-    ...symbols.acronymEntries
-      .filter((value) => value.role === 'definition')
-      .map((value) => ({
-        kind: 'acronym' as const,
-        key: value.name,
-        source: atName(value.location, value.name),
-      })),
+    ...rich,
   ]
 }
 
