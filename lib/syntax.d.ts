@@ -1,14 +1,6 @@
 import { ProjectIndex } from './lsp/project-index';
-export declare const LATEX_SYNTAX_SCHEMA_VERSION: 3;
-export interface LatexSyntaxRange {
-    startOffset: number;
-    endOffset: number;
-}
-export interface LatexSyntaxSourceRef {
-    fileId: string;
-    path: string;
-    range: LatexSyntaxRange;
-}
+import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract';
+export * from './syntax-contract';
 export interface LatexMathRegion {
     delimiter: string;
     fullRange: LatexSyntaxRange;
@@ -53,7 +45,7 @@ export interface LatexDocumentInput {
 export interface LatexProjectSyntaxInput {
     documents: readonly LatexDocumentInput[];
 }
-export interface LatexFileSyntax {
+export interface LatexFileSyntax extends LatexDocumentSyntaxSnapshot {
     schemaVersion: typeof LATEX_SYNTAX_SCHEMA_VERSION;
     fileId: string;
     path: string;

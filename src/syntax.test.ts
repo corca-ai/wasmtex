@@ -1,7 +1,123 @@
 import { describe, expect, it } from 'vitest'
-import { createLatexSyntaxService, LatexSyntaxService } from './syntax'
+import {
+  assertLatexSyntaxSchemaVersion,
+  createLatexSyntaxService,
+  LATEX_SYNTAX_SCHEMA_VERSION,
+  LatexSyntaxService,
+} from './syntax'
 
 describe('LatexSyntaxService', () => {
+  it('publishes one explicitly versioned document syntax snapshot', () => {
+    const content = 'For held-out data, $\\operatorname{ECE}=x$.'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(syntax.schemaVersion).toBe(LATEX_SYNTAX_SCHEMA_VERSION)
+    expect(syntax.mathRoots).toHaveLength(1)
+    const root = syntax.mathRoots[0]!
+    const node = syntax.nodes[root.node]!
+    expect(node).toMatchObject({
+      kind: 'opaque',
+      parent: null,
+      ranges: { full: root.contentRange, editable: root.contentRange },
+      provenance: { origin: 'source', editable: true },
+    })
+    expect(content.slice(node.ranges.full.startOffset, node.ranges.full.endOffset)).toBe(
+      '\\operatorname{ECE}=x',
+    )
+    expect(() => assertLatexSyntaxSchemaVersion(syntax)).not.toThrow()
+    expect(() => assertLatexSyntaxSchemaVersion({ schemaVersion: 3 })).toThrow(
+      'Unsupported LaTeX syntax schema 3; expected 4',
+    )
+  })
+
+  it('exposes only visible prose while retaining prose command arguments', () => {
+    const content = [
+      'Visible \\emph{important} prose.',
+      '\\label{not-prose} {later prose} \\iffalse hidden \\else shown \\fi',
+      '% comment',
+      '\\verb|verbatim| $math$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const prose = syntax.visibleProse
+      .map(({ range }) => content.slice(range.startOffset, range.endOffset))
+      .join(' ')
+
+    expect(prose).toContain('Visible')
+    expect(prose).toContain('important')
+    expect(prose).toContain('later prose')
+    expect(prose).toContain('shown')
+    expect(prose).not.toContain('not-prose')
+    expect(prose).not.toContain('hidden')
+    expect(prose).not.toContain('comment')
+    expect(prose).not.toContain('verbatim')
+    expect(prose).not.toContain('math')
+  })
+
+  it('records nested section and environment scope spans with recovery', () => {
+    const content = [
+      '\\section{One}',
+      '\\begin{theorem}body\\begin{proof}proof\\end{proof}\\end{theorem}',
+      '\\subsection{Nested}',
+      '\\begin{unfinished}tail',
+      '\\section{Two}',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const { scopes } = syntax
+    const first = scopes.find((scope) => scope.kind === 'section' && scope.name === 'One')!
+    const nested = scopes.find((scope) => scope.kind === 'section' && scope.name === 'Nested')!
+    const theoremIndex = scopes.findIndex(
+      (scope) => scope.kind === 'environment' && scope.name === 'theorem',
+    )
+    const proof = scopes.find((scope) => scope.kind === 'environment' && scope.name === 'proof')!
+    const unfinished = scopes.find(
+      (scope) => scope.kind === 'environment' && scope.name === 'unfinished',
+    )!
+
+    expect(nested.parent).toBe(scopes.indexOf(first))
+    expect(proof.parent).toBe(theoremIndex)
+    expect(scopes[theoremIndex]?.state).toBe('complete')
+    expect(unfinished.state).toBe('incomplete')
+    expect(content.slice(first.range.startOffset, first.range.endOffset)).not.toContain(
+      '\\section{Two}',
+    )
+  })
+
+  it('exposes neutral declarations without downstream semantic vocabulary', () => {
+    const content = [
+      '\\documentclass[twocolumn]{article}',
+      '\\usepackage{amsmath}',
+      '\\newcommand{\\vect}[1]{#1}',
+      '\\newenvironment{claim}{}{}',
+      '\\newglossaryentry{ece}{name=ECE}',
+      '\\newacronym{ml}{ML}{machine learning}',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(syntax.declarations.map((declaration) => declaration.kind)).toEqual(
+      expect.arrayContaining(['class', 'package', 'macro', 'environment', 'glossary', 'acronym']),
+    )
+  })
+
   it('returns UTF-16 math ranges and ignores fenced Markdown', () => {
     const content = '한글 😀 $x_i$\n```tex\n$ignored$\n```\n\\[y\\]'
     const service = new LatexSyntaxService()
