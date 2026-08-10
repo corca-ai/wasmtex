@@ -228,6 +228,30 @@ meaning is generated: consumers may navigate to its source but must not create
 an automatic edit against a synthetic occurrence. Project inventory changes
 relink definition ranges without reparsing unchanged callers.
 
+Complete bounded expansions that have one compositional shape are lowered onto
+the call-site CST node. Thus a declared operator and direct
+`\operatorname`, or a project wrapper and its direct modifier/style form, use
+the same node kinds while retaining different call/definition provenance.
+Unsupported or structurally incompatible expansions stay opaque. Macro events
+also expose the exact required and explicitly supplied optional arguments at
+the invocation; omitted defaults remain declaration evidence rather than fake
+source occurrences.
+
+`getInvalidatedFiles()` returns the current snapshots whose syntax or
+provenance changed in the latest inventory mutation. An ordinary leaf edit
+returns only that file; adding, changing, moving, or removing a macro
+definition additionally returns only callers of the affected macro names.
+Hosts forward this explicit closure rather than retransmitting the project.
+
+Structural declarations preserve the neutral source data needed downstream.
+Operator declarations include their command name, displayed surface, limits
+form, and separate source ranges. Paired delimiters retain both delimiters.
+Macro declarations retain parameter count, optional default, and body when
+statically complete. Glossary and acronym declarations retain key, short/long
+forms, top-level fields/options (including plural and description fields), and
+exact source ranges. Incomplete declarations remain local `incomplete`
+records instead of invalidating the document.
+
 The snapshot intentionally contains no mathematical application, binder, derivative,
 interval, overloaded-operator, concept, law, pack, entity, or UI types. Downstream
 semantic engines own those interpretations and may depend on WasmTex; the reverse

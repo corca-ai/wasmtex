@@ -168,6 +168,17 @@ add a command-name branch. Test-only conformance compares overlapping entries wi
 existing completion/package signature authority without pulling that much larger
 catalog into the syntax runtime bundle.
 
+Static project declarations use the same boundary. Bounded macro expansion is
+classified through the generic notation parser and then attached to the real
+call-site node with non-editable expansion provenance; no synthetic editor
+location or second persistent notation tree is created. Removing a definition
+retracts that shape from unchanged callers without re-tokenizing them. Rich
+operator, paired-delimiter, macro, glossary, and acronym records preserve
+neutral fields and exact ranges so semantic consumers do not rescan TeX source.
+The syntax service reports the exact snapshots invalidated by a project
+declaration change and selects callers by the affected macro names instead of
+rebuilding or retransmitting unrelated documents.
+
 WasmTex reports observable TeX structure only. Mathematical application, binders,
 derivatives, intervals, overloaded operators, domain concepts, laws, and entity
 resolution belong to downstream semantic consumers. The dependency is therefore

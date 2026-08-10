@@ -16,11 +16,19 @@ export interface UserMacroDefinition {
      *  or undefined when the macro has no optional argument. When set, `#1` is optional. */
     optional?: string | undefined;
 }
+export interface UserMacroArgument {
+    index: number;
+    kind: 'required' | 'optional';
+    value: string;
+    inputStart: number;
+    inputEnd: number;
+}
 export interface UserMacroExpansion {
     name: string;
     inputStart: number;
     inputEnd: number;
     surface: string;
+    arguments: readonly UserMacroArgument[];
 }
 export declare function collectUserMacroDefinitions(sources: readonly string[]): ReadonlyMap<string, UserMacroDefinition>;
 /**

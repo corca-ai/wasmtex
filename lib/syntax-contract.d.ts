@@ -84,14 +84,60 @@ export type LatexStructuralDeclaration = {
     options: string;
     source: LatexSyntaxSourceRef;
 } | {
-    kind: 'macro' | 'environment' | 'operator' | 'paired-delimiter';
+    kind: 'environment';
     name: string;
     source: LatexSyntaxSourceRef;
 } | {
-    kind: 'glossary' | 'acronym';
-    key: string;
+    kind: 'macro';
+    name: string;
+    parameters?: number;
+    optionalDefault?: string;
+    body?: string;
+    bodySource?: LatexSyntaxSourceRef;
     source: LatexSyntaxSourceRef;
+    state?: 'complete' | 'incomplete';
+} | {
+    kind: 'operator';
+    name: string;
+    surface: string;
+    limits: boolean;
+    source: LatexSyntaxSourceRef;
+    nameSource: LatexSyntaxSourceRef;
+    surfaceSource: LatexSyntaxSourceRef;
+    state: 'complete' | 'incomplete';
+} | {
+    kind: 'paired-delimiter';
+    name: string;
+    left: string;
+    right: string;
+    source: LatexSyntaxSourceRef;
+    nameSource: LatexSyntaxSourceRef;
+    state: 'complete' | 'incomplete';
+} | {
+    kind: 'glossary';
+    key: string;
+    options: readonly LatexStructuralField[];
+    fields: readonly LatexStructuralField[];
+    source: LatexSyntaxSourceRef;
+    keySource: LatexSyntaxSourceRef;
+    state: 'complete' | 'incomplete';
+} | {
+    kind: 'acronym';
+    key: string;
+    short: string;
+    long: string;
+    options: readonly LatexStructuralField[];
+    source: LatexSyntaxSourceRef;
+    keySource: LatexSyntaxSourceRef;
+    shortSource: LatexSyntaxSourceRef;
+    longSource: LatexSyntaxSourceRef;
+    state: 'complete' | 'incomplete';
 };
+export interface LatexStructuralField {
+    name: string;
+    value: string;
+    source: LatexSyntaxSourceRef;
+}
 export interface LatexDocumentSyntaxSnapshot {
     /** Arena nodes; array position is the revision-local node ID. */
     nodes: readonly LatexNotationNode[];

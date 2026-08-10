@@ -1268,11 +1268,20 @@ export interface UserMacroDefinition {
   optional?: string | undefined
 }
 
+export interface UserMacroArgument {
+  index: number
+  kind: 'required' | 'optional'
+  value: string
+  inputStart: number
+  inputEnd: number
+}
+
 const MACRO_NEWCMD_RE = new RegExp(
   `\\\\(?:${NEWCMD_CMDS})\\*?\\{\\\\(\\w+)\\}(?:\\[(\\d+)\\])?(?:\\[([^\\]]*)\\])?\\s*\\{`,
   'g',
 )
 const MACRO_DEF_RE = /\\def\\(\w+)((?:#\d)*)\s*\{/g
+const MACRO_OPERATOR_RE = /\\DeclareMathOperator(\*)?\{\\(\w+)\}\s*\{/g
 
 /** Collect user macro definitions (\newcommand / \def / \DeclareMathOperator). */
 function collectMacros(masked: string): Map<string, UserMacroDefinition> {
@@ -1292,6 +1301,16 @@ function collectMacros(masked: string): Map<string, UserMacroDefinition> {
     const body = extractBraceContent(masked, braceIdx)
     if (body !== null) {
       macros.set(m[1]!, { argCount: (m[2]!.match(/#/g) || []).length, body })
+    }
+  }
+  for (const m of masked.matchAll(MACRO_OPERATOR_RE)) {
+    const braceIdx = m.index + m[0].length - 1
+    const surface = extractBraceContent(masked, braceIdx)
+    if (surface !== null) {
+      macros.set(m[2]!, {
+        argCount: 0,
+        body: `\\operatorname${m[1] ?? ''}{${surface}}`,
+      })
     }
   }
   return macros
@@ -1338,11 +1357,25 @@ const skipSpace = (text: string, i: number): number => {
 
 /** Consume the leading optional `[..]` argument for `#1` if present, else fill it with the
  *  declared `default`. Returns the arg value and the offset just past it. */
-function readOptionalArg(text: string, pos: number, def: string): { value: string; end: number } {
+function readOptionalArg(
+  text: string,
+  pos: number,
+  def: string,
+): { value: string; end: number; argument?: UserMacroArgument } {
   const j = skipSpace(text, pos)
   const close = text[j] === '[' ? text.indexOf(']', j) : -1
   return close !== -1
-    ? { value: text.slice(j + 1, close), end: close + 1 }
+    ? {
+        value: text.slice(j + 1, close),
+        end: close + 1,
+        argument: {
+          index: 0,
+          kind: 'optional',
+          value: text.slice(j + 1, close),
+          inputStart: j,
+          inputEnd: close + 1,
+        },
+      }
     : { value: def, end: pos }
 }
 
@@ -1355,23 +1388,34 @@ function readArgs(
   pos: number,
   n: number,
   optional?: string,
-): { args: string[]; end: number } {
+): { args: string[]; arguments: UserMacroArgument[]; end: number } {
   const args: string[] = []
+  const arguments_: UserMacroArgument[] = []
   let i = pos
   if (optional !== undefined && n > 0) {
     const opt = readOptionalArg(text, i, optional)
     args.push(opt.value)
+    if (opt.argument) arguments_.push(opt.argument)
     i = opt.end
   }
   while (args.length < n) {
     i = skipSpace(text, i)
     if (text[i] !== '{') break
+    const inputStart = i
     const content = extractBraceContent(text, i)
     if (content === null) break
+    const index = args.length
     args.push(content)
     i += content.length + 2 // skip { content }
+    arguments_.push({
+      index,
+      kind: 'required',
+      value: content,
+      inputStart,
+      inputEnd: i,
+    })
   }
-  return { args, end: i }
+  return { args, arguments: arguments_, end: i }
 }
 
 const MAX_EXPANSION_DEPTH = 4
@@ -1496,6 +1540,7 @@ export interface UserMacroExpansion {
   inputStart: number
   inputEnd: number
   surface: string
+  arguments: readonly UserMacroArgument[]
 }
 
 export function collectUserMacroDefinitions(
@@ -1542,6 +1587,7 @@ export function expandUserMacroCalls(
       inputStart: match.index,
       inputEnd: invocation.end,
       surface,
+      arguments: invocation.arguments,
     })
   }
   return expansions

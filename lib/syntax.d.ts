@@ -14,6 +14,7 @@ export interface LatexMacroEvent {
     name: string;
     source: LatexSyntaxSourceRef;
     definitions: readonly LatexSyntaxSourceRef[];
+    arguments?: readonly LatexMacroArgument[];
     expansion: {
         /** Bounded static expansion outcome for this source occurrence. */
         status: 'not-applicable' | 'unresolved' | 'expanded' | 'cycle' | 'truncated';
@@ -25,6 +26,12 @@ export interface LatexMacroEvent {
         /** Full invocation replaced by `surface`, including consumed arguments. */
         inputRange?: LatexSyntaxRange;
     };
+}
+export interface LatexMacroArgument {
+    index: number;
+    kind: 'required' | 'optional';
+    value: string;
+    source: LatexSyntaxSourceRef;
 }
 export interface LatexInclude {
     path: string;
@@ -80,6 +87,7 @@ export interface LatexSyntaxStats {
 export declare class LatexSyntaxService {
     private readonly files;
     private readonly index;
+    private macroCatalog;
     private parseCount;
     private relinkDeferred;
     private lastTransferFileIds;
@@ -88,6 +96,8 @@ export declare class LatexSyntaxService {
     move(fileId: string, nextPath: string): void;
     remove(fileId: string): void;
     getFile(fileId: string): LatexFileSyntax | null;
+    /** Snapshots whose syntax/provenance changed in the latest inventory mutation. */
+    getInvalidatedFiles(): readonly LatexFileSyntax[];
     /** The LSP service can reuse the exact same parsed snapshot. */
     getProjectIndex(): ProjectIndex;
     getStats(): LatexSyntaxStats;
