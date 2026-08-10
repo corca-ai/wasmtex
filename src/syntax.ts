@@ -9,19 +9,19 @@ import { type Token, tokenize } from './lsp/latex-tokenizer'
 import { ProjectIndex } from './lsp/project-index'
 import { buildLineStarts } from './lsp/source-position'
 import type { FileSymbols, SourceLocation } from './lsp/types'
+import {
+  LATEX_SYNTAX_SCHEMA_VERSION,
+  type LatexDocumentSyntaxSnapshot,
+  type LatexMathRoot,
+  type LatexNotationNode,
+  type LatexStructuralDeclaration,
+  type LatexSyntaxRange,
+  type LatexSyntaxScope,
+  type LatexSyntaxSourceRef,
+  type LatexVisibleProseSpan,
+} from './syntax-contract'
 
-export const LATEX_SYNTAX_SCHEMA_VERSION = 3 as const
-
-export interface LatexSyntaxRange {
-  startOffset: number
-  endOffset: number
-}
-
-export interface LatexSyntaxSourceRef {
-  fileId: string
-  path: string
-  range: LatexSyntaxRange
-}
+export * from './syntax-contract'
 
 export interface LatexMathRegion {
   delimiter: string
@@ -73,7 +73,7 @@ export interface LatexProjectSyntaxInput {
   documents: readonly LatexDocumentInput[]
 }
 
-export interface LatexFileSyntax {
+export interface LatexFileSyntax extends LatexDocumentSyntaxSnapshot {
   schemaVersion: typeof LATEX_SYNTAX_SCHEMA_VERSION
   fileId: string
   path: string
@@ -297,6 +297,7 @@ function buildFileSyntax(
       severity: 'warning',
       range: region.fullRange,
     }))
+  const documentSyntax = buildDocumentSyntax(document, tokens, symbols, mathRegions)
   return {
     schemaVersion: LATEX_SYNTAX_SCHEMA_VERSION,
     fileId: document.fileId,
@@ -306,7 +307,408 @@ function buildFileSyntax(
     macros: macroEvents(document, symbols),
     includes: includes(document, symbols),
     diagnostics,
+    ...documentSyntax,
   }
+}
+
+const SECTION_RANK = {
+  part: 0,
+  chapter: 1,
+  section: 2,
+  subsection: 3,
+  subsubsection: 4,
+  paragraph: 5,
+} as const
+
+type ProseArgumentKind = 'optional' | 'required'
+
+const NON_PROSE_COMMAND_GROUPS = new Map<string, readonly ProseArgumentKind[]>([
+  ['addbibresource', ['optional', 'required']],
+  ['begin', ['required']],
+  ['bibliography', ['required']],
+  ['bibliographystyle', ['required']],
+  ['cite', ['optional', 'optional', 'required']],
+  ['citep', ['optional', 'optional', 'required']],
+  ['citet', ['optional', 'optional', 'required']],
+  ['documentclass', ['optional', 'required']],
+  ['end', ['required']],
+  ['include', ['required']],
+  ['includegraphics', ['optional', 'required']],
+  ['input', ['required']],
+  ['label', ['required']],
+  ['newacronym', ['optional', 'required', 'required', 'required']],
+  ['newcommand', ['required', 'optional', 'optional', 'required']],
+  ['newenvironment', ['required', 'optional', 'optional', 'required', 'required']],
+  ['newglossaryentry', ['required', 'required']],
+  ['pageref', ['required']],
+  ['providecommand', ['required', 'optional', 'optional', 'required']],
+  ['ref', ['required']],
+  ['renewcommand', ['required', 'optional', 'optional', 'required']],
+  ['renewenvironment', ['required', 'optional', 'optional', 'required', 'required']],
+  ['subfile', ['required']],
+  ['usepackage', ['optional', 'required']],
+  ['DeclareMathOperator', ['required', 'required']],
+  ['DeclarePairedDelimiter', ['required', 'required']],
+])
+
+function buildDocumentSyntax(
+  document: LatexDocumentInput,
+  tokens: readonly Token[],
+  symbols: FileSymbols,
+  mathRegions: readonly LatexMathRegion[],
+): LatexDocumentSyntaxSnapshot {
+  const tokensByStart = new Map(tokens.map((token) => [token.start, token]))
+  const nodes: LatexNotationNode[] = []
+  const mathRoots: LatexMathRoot[] = mathRegions.map((region) => {
+    const node = nodes.length
+    const source = syntaxSourceRef(document, region.contentRange)
+    nodes.push({
+      kind: 'opaque',
+      parent: null,
+      children: [],
+      ranges: {
+        full: region.contentRange,
+        editable: region.contentRange,
+      },
+      state: region.closed ? 'opaque' : 'incomplete',
+      provenance: { origin: 'source', source, editable: true },
+    })
+    return {
+      node,
+      delimiter: region.delimiter,
+      fullRange: region.fullRange,
+      contentRange: region.contentRange,
+      state: region.closed ? 'complete' : 'incomplete',
+    }
+  })
+
+  return {
+    nodes,
+    mathRoots,
+    visibleProse: visibleProseSpans(document, tokens, mathRegions),
+    scopes: syntaxScopes(document, tokens, tokensByStart, symbols),
+    declarations: structuralDeclarations(document, tokensByStart, symbols),
+  }
+}
+
+function syntaxSourceRef(
+  document: LatexDocumentInput,
+  range: LatexSyntaxRange,
+): LatexSyntaxSourceRef {
+  return { fileId: document.fileId, path: document.path, range }
+}
+
+function visibleProseSpans(
+  document: LatexDocumentInput,
+  tokens: readonly Token[],
+  mathRegions: readonly LatexMathRegion[],
+): LatexVisibleProseSpan[] {
+  const excluded: Array<readonly [number, number]> = [
+    ...conditionalMaskSpans(tokens, document.content.length),
+    ...(document.language === 'markdown' ? markdownExcludedSpans(document.content) : []),
+    ...mathRegions.map(
+      (region) => [region.fullRange.startOffset, region.fullRange.endOffset] as const,
+    ),
+  ]
+  for (const token of tokens) {
+    if (
+      token.type === 'comment' ||
+      token.type === 'verb' ||
+      token.type === 'open' ||
+      token.type === 'close'
+    ) {
+      excluded.push([token.start, token.end])
+    } else if (token.type === 'command') {
+      const groups = NON_PROSE_COMMAND_GROUPS.get(token.value)
+      excluded.push([
+        token.start,
+        groups === undefined
+          ? token.end
+          : commandInvocationEnd(document.content, token.end, groups),
+      ])
+    }
+  }
+
+  const spans: LatexVisibleProseSpan[] = []
+  let cursor = 0
+  for (const [start, end] of mergeSpans(excluded, document.content.length)) {
+    pushVisibleProse(document.content, cursor, start, spans)
+    cursor = Math.max(cursor, end)
+  }
+  pushVisibleProse(document.content, cursor, document.content.length, spans)
+  return spans
+}
+
+function commandInvocationEnd(
+  source: string,
+  commandEnd: number,
+  groups: readonly ProseArgumentKind[],
+): number {
+  let cursor = commandEnd
+  if (source[cursor] === '*') cursor++
+  for (const group of groups) {
+    while (/\s/.test(source[cursor] ?? '')) cursor++
+    const open = source[cursor]
+    if (group === 'optional') {
+      if (open === '[') cursor = balancedDelimiterEnd(source, cursor, '[', ']')
+    } else {
+      if (open !== '{') return cursor
+      cursor = balancedDelimiterEnd(source, cursor, '{', '}')
+    }
+  }
+  return cursor
+}
+
+function balancedDelimiterEnd(source: string, start: number, open: string, close: string): number {
+  let depth = 0
+  for (let cursor = start; cursor < source.length; cursor++) {
+    if (source[cursor] === '\\') {
+      cursor++
+      continue
+    }
+    if (source[cursor] === open) depth++
+    else if (source[cursor] === close && --depth === 0) return cursor + 1
+  }
+  return source.length
+}
+
+function mergeSpans(
+  spans: readonly (readonly [number, number])[],
+  sourceLength: number,
+): Array<readonly [number, number]> {
+  const ordered = spans
+    .map(
+      ([start, end]) =>
+        [
+          Math.max(0, Math.min(start, sourceLength)),
+          Math.max(0, Math.min(end, sourceLength)),
+        ] as const,
+    )
+    .filter(([start, end]) => end > start)
+    .sort((left, right) => left[0] - right[0] || left[1] - right[1])
+  const merged: Array<[number, number]> = []
+  for (const [start, end] of ordered) {
+    const previous = merged[merged.length - 1]
+    if (!previous || start > previous[1]) merged.push([start, end])
+    else previous[1] = Math.max(previous[1], end)
+  }
+  return merged
+}
+
+function pushVisibleProse(
+  source: string,
+  start: number,
+  end: number,
+  spans: LatexVisibleProseSpan[],
+): void {
+  while (start < end && /\s/.test(source[start]!)) start++
+  while (end > start && /\s/.test(source[end - 1]!)) end--
+  if (end > start) spans.push({ range: { startOffset: start, endOffset: end }, state: 'complete' })
+}
+
+function syntaxScopes(
+  document: LatexDocumentInput,
+  tokens: readonly Token[],
+  tokensByStart: ReadonlyMap<number, Token>,
+  symbols: FileSymbols,
+): LatexSyntaxScope[] {
+  const scopes: LatexSyntaxScope[] = [
+    {
+      kind: 'document',
+      parent: null,
+      range: { startOffset: 0, endOffset: document.content.length },
+      state: 'complete',
+    },
+  ]
+  appendSectionScopes(scopes, document, tokensByStart, symbols)
+  appendEnvironmentScopes(scopes, document, tokens)
+  return scopes
+}
+
+function appendSectionScopes(
+  scopes: LatexSyntaxScope[],
+  document: LatexDocumentInput,
+  tokensByStart: ReadonlyMap<number, Token>,
+  symbols: FileSymbols,
+): void {
+  const lineStarts = buildLineStarts(document.content)
+  const sections = symbols.sections
+    .map((section) => ({
+      level: section.level,
+      offset: offsetAt(lineStarts, section.location),
+      name: section.title,
+    }))
+    .sort((left, right) => left.offset - right.offset)
+  const sectionIndices: number[] = []
+  for (let index = 0; index < sections.length; index++) {
+    const section = sections[index]!
+    let end = document.content.length
+    for (let next = index + 1; next < sections.length; next++) {
+      if (SECTION_RANK[sections[next]!.level] <= SECTION_RANK[section.level]) {
+        end = sections[next]!.offset
+        break
+      }
+    }
+    let parent = 0
+    for (let previous = index - 1; previous >= 0; previous--) {
+      if (SECTION_RANK[sections[previous]!.level] < SECTION_RANK[section.level]) {
+        parent = sectionIndices[previous]!
+        break
+      }
+    }
+    const token = tokensByStart.get(section.offset)
+    sectionIndices.push(scopes.length)
+    scopes.push({
+      kind: 'section',
+      parent,
+      range: { startOffset: section.offset, endOffset: end },
+      state: 'complete',
+      name: section.name,
+      level: section.level,
+      source: syntaxSourceRef(document, {
+        startOffset: section.offset,
+        endOffset: token?.end ?? section.offset,
+      }),
+    })
+  }
+}
+
+function appendEnvironmentScopes(
+  scopes: LatexSyntaxScope[],
+  document: LatexDocumentInput,
+  tokens: readonly Token[],
+): void {
+  const environmentStack: Array<{ index: number; name: string }> = []
+  for (const token of tokens) {
+    const environment = environmentAt(document.content, token)
+    if (!environment) continue
+    if (environment.kind === 'begin') {
+      const parent =
+        environmentStack[environmentStack.length - 1]?.index ??
+        deepestContainingSection(scopes, token.start)
+      const index = scopes.length
+      scopes.push({
+        kind: 'environment',
+        parent,
+        range: { startOffset: token.start, endOffset: document.content.length },
+        state: 'incomplete',
+        name: environment.name,
+        source: syntaxSourceRef(document, {
+          startOffset: token.start,
+          endOffset: environment.end,
+        }),
+      })
+      environmentStack.push({ index, name: environment.name })
+      continue
+    }
+    const match = findOpenEnvironment(environmentStack, environment.name)
+    if (match < 0) continue
+    closeEnvironmentScope(scopes, environmentStack, match, environment.name, environment.end)
+  }
+}
+
+function findOpenEnvironment(
+  stack: readonly { index: number; name: string }[],
+  name: string,
+): number {
+  for (let index = stack.length - 1; index >= 0; index--) {
+    if (stack[index]!.name === name) return index
+  }
+  return -1
+}
+
+function closeEnvironmentScope(
+  scopes: LatexSyntaxScope[],
+  stack: Array<{ index: number; name: string }>,
+  match: number,
+  name: string,
+  endOffset: number,
+): void {
+  while (stack.length > match) {
+    const entry = stack.pop()!
+    if (entry.name !== name) continue
+    const scope = scopes[entry.index]!
+    scopes[entry.index] = {
+      ...scope,
+      range: { ...scope.range, endOffset },
+      state: 'complete',
+    }
+  }
+}
+
+function deepestContainingSection(scopes: readonly LatexSyntaxScope[], offset: number): number {
+  for (let index = scopes.length - 1; index > 0; index--) {
+    const scope = scopes[index]!
+    if (
+      scope.kind === 'section' &&
+      scope.range.startOffset <= offset &&
+      offset < scope.range.endOffset
+    )
+      return index
+  }
+  return 0
+}
+
+function structuralDeclarations(
+  document: LatexDocumentInput,
+  tokensByStart: ReadonlyMap<number, Token>,
+  symbols: FileSymbols,
+): LatexStructuralDeclaration[] {
+  const lineStarts = buildLineStarts(document.content)
+  const atCommand = (location: SourceLocation): LatexSyntaxSourceRef => {
+    const offset = offsetAt(lineStarts, location)
+    const token = tokensByStart.get(offset)
+    return syntaxSourceRef(document, {
+      startOffset: offset,
+      endOffset: token?.end ?? offset,
+    })
+  }
+  const atName = (location: SourceLocation, name: string): LatexSyntaxSourceRef => {
+    const offset = offsetAt(lineStarts, location)
+    return syntaxSourceRef(document, { startOffset: offset, endOffset: offset + name.length })
+  }
+  return [
+    ...symbols.classes.map((value) => ({
+      kind: 'class' as const,
+      name: value.name,
+      options: value.options,
+      source: atCommand(value.location),
+    })),
+    ...symbols.packages.map((value) => ({
+      kind: 'package' as const,
+      name: value.name,
+      options: value.options,
+      source: atCommand(value.location),
+    })),
+    ...symbols.commands.map((value) => ({
+      kind: 'macro' as const,
+      name: value.name,
+      source: atName(value.location, value.name),
+    })),
+    ...symbols.environmentDefs.map((value) => ({
+      kind: 'environment' as const,
+      name: value.name,
+      source: atCommand(value.location),
+    })),
+    ...symbols.glossaryEntries
+      .filter((value) => value.role === 'definition')
+      .map((value) => ({
+        kind: 'glossary' as const,
+        key: value.name,
+        source: atName(value.location, value.name),
+      })),
+    ...symbols.acronymEntries
+      .filter((value) => value.role === 'definition')
+      .map((value) => ({
+        kind: 'acronym' as const,
+        key: value.name,
+        source: atName(value.location, value.name),
+      })),
+  ]
+}
+
+function offsetAt(lineStarts: readonly number[], location: SourceLocation): number {
+  return (lineStarts[location.line - 1] ?? 0) + location.column - 1
 }
 
 function findMathRegions(

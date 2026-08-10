@@ -189,12 +189,24 @@ const snapshot = language.updateDocument({
 Markdown documents expose math regions but do not contribute LaTeX symbols to
 the project index. `getStats()` reports parse passes for integration budgets.
 
-Syntax schema 2 adds bounded macro provenance. Each macro event carries its
+Document Syntax Snapshot schema 4 is the singular source-preserving contract for
+notation roots, visible prose, section/environment scopes, neutral declarations,
+macros, and includes. The notation arena uses revision-local numeric node IDs with
+parent/child references and exact UTF-16 ranges. IDs are not stable across edits.
+Malformed or unknown TeX remains representable through incomplete and opaque states;
+`assertLatexSyntaxSchemaVersion` rejects incompatible wire versions explicitly.
+
+Each macro event carries bounded
 definition and invocation source ranges plus an expansion outcome (`expanded`,
 `cycle`, `truncated`, or `unresolved`). `editable: false` means the apparent
 meaning is generated: consumers may navigate to its source but must not create
 an automatic edit against a synthetic occurrence. Project inventory changes
 relink definition ranges without reparsing unchanged callers.
+
+The snapshot intentionally contains no mathematical application, binder, derivative,
+interval, overloaded-operator, concept, law, pack, entity, or UI types. Downstream
+semantic engines own those interpretations and may depend on WasmTex; the reverse
+dependency is forbidden.
 
 ### Linter
 

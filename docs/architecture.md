@@ -140,10 +140,20 @@ lookups remain backed by inverted indexes.
 
 `LatexSyntaxService` is the parser/index owner for composed authoring runtimes. A host
 passes the same instance to `LatexLanguageService`; each stable document update then
-produces the public math/macro/include snapshot and updates LSP symbols from one token
-stream. Markdown contributes math regions for semantic consumers without polluting the
-LaTeX project index. The service is transport-neutral and can live in a browser Worker
-or a native language-server process.
+produces Document Syntax Snapshot v4 and updates LSP symbols from one token stream.
+The snapshot is the single source-preserving boundary for notation roots, visible
+prose, scopes, macros, includes, and neutral structural declarations. Its notation
+arena uses revision-local indices; consumers must not persist them as cross-edit
+identity. Unknown and malformed TeX remains bounded as opaque or incomplete structure.
+Markdown contributes math and visible prose without polluting the LaTeX project index.
+The service is transport-neutral and can live in a browser Worker or a native
+language-server process.
+
+WasmTex reports observable TeX structure only. Mathematical application, binders,
+derivatives, intervals, overloaded operators, domain concepts, laws, and entity
+resolution belong to downstream semantic consumers. The dependency is therefore
+strictly one-way: a semantic engine may depend on `wasmtex/syntax`; WasmTex never
+depends on a semantic engine or an editor host.
 
 ### Rename (F2)
 Rename functionality uses `ProjectIndex.findAllOccurrences()` to find symbols in both `.tex` and `.bib` files. It handles:
