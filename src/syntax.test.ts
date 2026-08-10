@@ -437,6 +437,34 @@ describe('LatexSyntaxService', () => {
     ).toBe('\\vect{x+y}')
   })
 
+  it('exports bounded composite expansions as neutral generated notation', () => {
+    const content = [
+      '\\newcommand{\\kinetic}[3]{#1=\\frac{1}{2}#2#3^2}',
+      '$\\kinetic{K}{m}{v}$',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const call = syntax.macros.find((event) => event.kind === 'call' && event.name === 'kinetic')
+    const notation = call?.expansion.notation
+
+    expect(notation).toBeDefined()
+    expect(notation?.nodes[notation.root]?.kind).toBe('sequence')
+    expect(notation?.nodes.map((node) => node.text).filter(Boolean)).toEqual([
+      'K',
+      '=',
+      '1',
+      '2',
+      'm',
+      'v',
+      '2',
+    ])
+    expect(notation?.nodes.every((node) => !('ranges' in node))).toBe(true)
+  })
+
   it('preserves each concrete required and optional macro argument at its call site', () => {
     const content = [
       '\\newcommand{\\estimate}[2][mean]{\\hat{#2}_{#1}}',
