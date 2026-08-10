@@ -232,10 +232,13 @@ Complete bounded expansions that have one compositional shape are lowered onto
 the call-site CST node. Thus a declared operator and direct
 `\operatorname`, or a project wrapper and its direct modifier/style form, use
 the same node kinds while retaining different call/definition provenance.
-Unsupported or structurally incompatible expansions stay opaque. Macro events
-also expose the exact required and explicitly supplied optional arguments at
-the invocation; omitted defaults remain declaration evidence rather than fake
-source occurrences.
+Complete composite expansions expose a neutral generated-notation tree on the
+macro event. Its nodes carry structure but no source ranges or editability; the
+event's real call and definition ranges remain the only provenance. Dynamic,
+cyclic, truncated, or structurally unsupported expansions stay opaque. Macro
+events also expose the exact required and explicitly supplied optional
+arguments at the invocation; omitted defaults remain declaration evidence
+rather than fake source occurrences.
 
 `getInvalidatedFiles()` returns the current snapshots whose syntax or
 provenance changed in the latest inventory mutation. An ordinary leaf edit

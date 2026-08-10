@@ -1,5 +1,5 @@
 import { ProjectIndex } from './lsp/project-index';
-import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract';
+import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexNotationArgument, LatexNotationNode, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract';
 export * from './math-command-spec';
 export { findLatexNotationPath } from './notation-cst';
 export * from './syntax-contract';
@@ -25,7 +25,26 @@ export interface LatexMacroEvent {
         surface?: string;
         /** Full invocation replaced by `surface`, including consumed arguments. */
         inputRange?: LatexSyntaxRange;
+        /** Neutral generated syntax for complete composite expansions. */
+        notation?: LatexGeneratedNotationTree;
     };
+}
+export interface LatexGeneratedNotationTree {
+    nodes: readonly LatexGeneratedNotationNode[];
+    root: number;
+}
+export interface LatexGeneratedNotationNode {
+    kind: LatexNotationNode['kind'];
+    children: readonly number[];
+    state: LatexNotationNode['state'];
+    name?: string;
+    text?: string;
+    arguments?: readonly {
+        node: number;
+        role: LatexNotationArgument['role'];
+        syntax: LatexNotationArgument['syntax'];
+    }[];
+    mathClass?: LatexNotationNode['mathClass'];
 }
 export interface LatexMacroArgument {
     index: number;

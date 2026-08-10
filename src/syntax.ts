@@ -51,7 +51,28 @@ export interface LatexMacroEvent {
     surface?: string
     /** Full invocation replaced by `surface`, including consumed arguments. */
     inputRange?: LatexSyntaxRange
+    /** Neutral generated syntax for complete composite expansions. */
+    notation?: LatexGeneratedNotationTree
   }
+}
+
+export interface LatexGeneratedNotationTree {
+  nodes: readonly LatexGeneratedNotationNode[]
+  root: number
+}
+
+export interface LatexGeneratedNotationNode {
+  kind: LatexNotationNode['kind']
+  children: readonly number[]
+  state: LatexNotationNode['state']
+  name?: string
+  text?: string
+  arguments?: readonly {
+    node: number
+    role: LatexNotationArgument['role']
+    syntax: LatexNotationArgument['syntax']
+  }[]
+  mathClass?: LatexNotationNode['mathClass']
 }
 
 export interface LatexMacroArgument {
@@ -399,6 +420,7 @@ function relinkMacro(
             ...expansion,
             surface: expanded.surface,
             inputRange: { startOffset: expanded.inputStart, endOffset: expanded.inputEnd },
+            ...compositeNotation(expanded.surface),
           }
         : expansion,
   }
@@ -449,6 +471,7 @@ function relinkNotationNode(
   const event = expansions.get(commandStart)
   const surface = event?.expansion.surface
   if (!event || surface === undefined) return node
+  if (event.expansion.notation) return node
   const shape = expandedNotationShape(surface)
   if (!shape) return node
   const shapeArguments =
@@ -541,6 +564,46 @@ function expandedNotationShape(surface: string): {
     ...(node.text === undefined ? {} : { text: node.text }),
     ...(node.mathClass === undefined ? {} : { mathClass: node.mathClass }),
   }
+}
+
+function generatedNotationTree(surface: string): LatexGeneratedNotationTree {
+  const notation = buildNotationCst(
+    { fileId: 'generated', path: 'generated', content: surface },
+    tokenize(surface),
+    [
+      {
+        delimiter: 'generated',
+        fullRange: { startOffset: 0, endOffset: surface.length },
+        contentRange: { startOffset: 0, endOffset: surface.length },
+        closed: true,
+      },
+    ],
+  )
+  return {
+    nodes: notation.nodes.map((node) => ({
+      kind: node.kind,
+      children: node.children,
+      state: node.state,
+      ...(node.name === undefined ? {} : { name: node.name }),
+      ...(node.text === undefined ? {} : { text: node.text }),
+      ...(node.arguments === undefined
+        ? {}
+        : {
+            arguments: node.arguments.map(({ node, role, syntax }) => ({ node, role, syntax })),
+          }),
+      ...(node.mathClass === undefined ? {} : { mathClass: node.mathClass }),
+    })),
+    root: notation.mathRoots[0]!.node,
+  }
+}
+
+function compositeNotation(surface: string): { notation?: LatexGeneratedNotationTree } {
+  const notation = generatedNotationTree(surface)
+  const root = notation.nodes[notation.root]
+  const node = root?.children.length === 1 ? notation.nodes[root.children[0]!] : undefined
+  return node && ['token', 'modifier', 'style', 'named-operator'].includes(node.kind)
+    ? {}
+    : { notation }
 }
 
 export function createLatexSyntaxService(snapshot?: LatexProjectSyntaxInput): LatexSyntaxService {
@@ -1251,6 +1314,7 @@ function macroEvents(document: LatexDocumentInput, symbols: FileSymbols): LatexM
                 ...expansion,
                 surface: expanded.surface,
                 inputRange: { startOffset: expanded.inputStart, endOffset: expanded.inputEnd },
+                ...compositeNotation(expanded.surface),
               }
             : expansion,
       })
