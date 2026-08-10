@@ -160,6 +160,14 @@ recovery are bounded. Optional cancellation is checked between parse phases and 
 large notation scans; a cancelled update does not publish partial file or project-index
 state.
 
+Core command structure is data-driven by the immutable `MathCommandSpec` registry.
+Each entry records neutral argument roles and consumption, TeX math class, optional
+star handling, structural/opaque/ignored expansion policy, and package provenance.
+The parser has one generic specified-command path; adding an ordinary command does not
+add a command-name branch. Test-only conformance compares overlapping entries with the
+existing completion/package signature authority without pulling that much larger
+catalog into the syntax runtime bundle.
+
 WasmTex reports observable TeX structure only. Mathematical application, binders,
 derivatives, intervals, overloaded operators, domain concepts, laws, and entity
 resolution belong to downstream semantic consumers. The dependency is therefore

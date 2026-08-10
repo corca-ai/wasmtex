@@ -1,7 +1,14 @@
 import type { Token } from './lsp/latex-tokenizer'
+import {
+  getMathCommandSpec,
+  type MathCommandArgumentSpec,
+  type MathCommandSpec,
+  type TexMathClass,
+} from './math-command-spec'
 import type {
   LatexDocumentSyntaxSnapshot,
   LatexMathRoot,
+  LatexNotationArgument,
   LatexNotationNode,
   LatexSyntaxNodeId,
   LatexSyntaxRange,
@@ -39,30 +46,6 @@ interface RawGroup {
   endCursor: number
   complete: boolean
 }
-
-type StructuralCommandKind = 'modifier' | 'style' | 'named-operator'
-
-const STRUCTURAL_COMMANDS = new Map<string, StructuralCommandKind>([
-  ['bar', 'modifier'],
-  ['ddot', 'modifier'],
-  ['dot', 'modifier'],
-  ['hat', 'modifier'],
-  ['overline', 'modifier'],
-  ['tilde', 'modifier'],
-  ['underline', 'modifier'],
-  ['vec', 'modifier'],
-  ['widehat', 'modifier'],
-  ['widetilde', 'modifier'],
-  ['mathbf', 'style'],
-  ['mathbb', 'style'],
-  ['mathcal', 'style'],
-  ['mathfrak', 'style'],
-  ['mathit', 'style'],
-  ['mathrm', 'style'],
-  ['mathsf', 'style'],
-  ['mathtt', 'style'],
-  ['operatorname', 'named-operator'],
-])
 
 const MAX_DOCUMENT_NODES = 10_000
 const MAX_PARSE_DEPTH = 128
@@ -162,14 +145,20 @@ class NotationParser {
       const current = this.input[this.cursor]!
       if (current.kind === 'close' && closing === '}') break
       if (current.kind === 'character' && current.value === closing) break
-      if (current.kind === 'character' && (current.value === '_' || current.value === '^')) {
-        this.attachScript(children, depth)
-        continue
-      }
+      this.appendSequenceItem(children, current, depth)
+    }
+    return children
+  }
+
+  private appendSequenceItem(children: LatexSyntaxNodeId[], current: Lexeme, depth: number): void {
+    if (current.kind === 'character' && current.value === "'") {
+      this.attachPrime(children)
+    } else if (current.kind === 'character' && (current.value === '_' || current.value === '^')) {
+      this.attachScript(children, depth)
+    } else {
       const atom = this.parseAtom(depth)
       if (atom) children.push(atom.node)
     }
-    return children
   }
 
   private parseAtom(depth: number): ParsedAtom | null {
@@ -246,10 +235,9 @@ class NotationParser {
 
   private parseCommand(depth: number): ParsedAtom {
     const command = this.input[this.cursor++]!
-    if (command.value === '\\') return this.atom('alignment', command.range, command.value)
     if (command.value === 'begin') return this.parseEnvironment(command, depth)
-    const structural = STRUCTURAL_COMMANDS.get(command.value)
-    if (structural) return this.parseStructuralCommand(command, structural, depth)
+    const spec = getMathCommandSpec(command.value)
+    if (spec) return this.parseSpecifiedCommand(command, spec, depth)
     const children: LatexSyntaxNodeId[] = []
     for (let count = 0; count < MAX_OPAQUE_ARGUMENTS; count++) {
       const next = this.input[this.cursor]
@@ -272,32 +260,34 @@ class NotationParser {
     return { node, range }
   }
 
-  private parseStructuralCommand(
-    command: Lexeme,
-    kind: StructuralCommandKind,
-    depth: number,
-  ): ParsedAtom {
+  private parseSpecifiedCommand(command: Lexeme, spec: MathCommandSpec, depth: number): ParsedAtom {
     const star =
-      kind === 'named-operator' && this.input[this.cursor]?.value === '*'
+      spec.acceptsStar && this.input[this.cursor]?.value === '*'
         ? this.input[this.cursor++]
         : undefined
-    const argument = this.parseAtom(depth)
-    const children = argument ? [argument.node] : []
+    const parsed = this.parseSpecifiedArguments(spec.arguments, depth)
+    const children = parsed.arguments.map((argument) => argument.node)
     const range = {
       startOffset: command.range.startOffset,
-      endOffset: argument?.range.endOffset ?? star?.range.endOffset ?? command.range.endOffset,
+      endOffset: this.lastEnd(star?.range.endOffset ?? command.range.endOffset, children),
     }
+    const named = parsed.arguments.find((argument) => argument.role === 'name')
     const nameRange =
-      kind === 'named-operator' && argument
-        ? innerRange(this.nodes[argument.node]!, argument.range)
+      spec.behavior === 'named-surface' && named
+        ? innerRange(this.nodes[named.node]!, named.range)
         : commandNameRange(command)
+    const nucleus = parsed.arguments.find((argument) => argument.role === 'nucleus')
     const node = this.addNode({
-      kind,
+      kind: notationKind(spec),
       children,
       range,
-      state: argument ? 'complete' : 'incomplete',
+      state: parsed.missingRequired
+        ? 'incomplete'
+        : spec.expansion === 'opaque'
+          ? 'opaque'
+          : 'complete',
       name:
-        kind === 'named-operator' && argument
+        spec.behavior === 'named-surface' && named
           ? this.document.content.slice(nameRange.startOffset, nameRange.endOffset)
           : command.value,
       command: {
@@ -305,9 +295,51 @@ class NotationParser {
         endOffset: star?.range.endOffset ?? command.range.endOffset,
       },
       nameRange,
-      ...(argument ? { nucleus: argument.range } : {}),
+      ...(parsed.arguments.length === 0 ? {} : { arguments: parsed.arguments }),
+      ...(nucleus ? { nucleus: nucleus.range } : {}),
+      ...(spec.mathClass ? { mathClass: spec.mathClass } : {}),
     })
     return { node, range }
+  }
+
+  private parseSpecifiedArguments(
+    specs: readonly MathCommandArgumentSpec[],
+    depth: number,
+  ): { arguments: LatexNotationArgument[]; missingRequired: boolean } {
+    const arguments_: LatexNotationArgument[] = []
+    let missingRequired = false
+    for (const spec of specs) {
+      const parsed = this.parseSpecifiedArgument(spec, depth)
+      if (parsed.argument) arguments_.push(parsed.argument)
+      missingRequired ||= parsed.missingRequired
+    }
+    return { arguments: arguments_, missingRequired }
+  }
+
+  private parseSpecifiedArgument(
+    spec: MathCommandArgumentSpec,
+    depth: number,
+  ): { argument?: LatexNotationArgument; missingRequired: boolean } {
+    const next = this.input[this.cursor]
+    if (spec.syntax === 'optional' && next?.value !== '[') return { missingRequired: false }
+    if (!next || next.kind === 'close') {
+      return { missingRequired: spec.syntax === 'required' }
+    }
+    const atom =
+      spec.consumption === 'token' ? this.parseStructuralToken(depth) : this.parseAtom(depth)
+    if (!atom) return { missingRequired: spec.syntax === 'required' }
+    return {
+      argument: { node: atom.node, role: spec.role, syntax: spec.syntax, range: atom.range },
+      missingRequired: false,
+    }
+  }
+
+  private parseStructuralToken(depth: number): ParsedAtom | null {
+    const current = this.input[this.cursor]
+    if (!current) return null
+    if (current.kind === 'command') return this.parseCommand(depth)
+    this.cursor++
+    return this.atom('token', current.range, current.value)
   }
 
   private parseEnvironment(command: Lexeme, depth: number): ParsedAtom {
@@ -332,12 +364,7 @@ class NotationParser {
         break
       }
       const current = this.input[this.cursor]!
-      if (current.kind === 'character' && (current.value === '_' || current.value === '^')) {
-        this.attachScript(children, depth)
-      } else {
-        const atom = this.parseAtom(depth)
-        if (atom) children.push(atom.node)
-      }
+      this.appendSequenceItem(children, current, depth)
     }
     const range = {
       startOffset: command.range.startOffset,
@@ -400,6 +427,38 @@ class NotationParser {
     )
   }
 
+  private attachPrime(children: LatexSyntaxNodeId[]): void {
+    const base = children.pop()
+    const marks: LatexSyntaxNodeId[] = []
+    let first: LatexSyntaxRange | undefined
+    let last: LatexSyntaxRange | undefined
+    while (
+      this.input[this.cursor]?.kind === 'character' &&
+      this.input[this.cursor]?.value === "'"
+    ) {
+      const mark = this.input[this.cursor++]!
+      first ??= mark.range
+      last = mark.range
+      marks.push(this.atom('token', mark.range, mark.value).node)
+    }
+    if (base === undefined || !first || !last) {
+      for (const mark of marks) children.push(mark)
+      return
+    }
+    const baseRange = this.nodes[base]!.ranges.full
+    children.push(
+      this.addNode({
+        kind: 'script',
+        children: [base, ...marks],
+        range: { startOffset: baseRange.startOffset, endOffset: last.endOffset },
+        state: 'complete',
+        name: 'prime',
+        command: { startOffset: first.startOffset, endOffset: last.endOffset },
+        nucleus: baseRange,
+      }),
+    )
+  }
+
   private unexpectedClose(lexeme: Lexeme): ParsedAtom {
     this.cursor++
     return this.atom('error', lexeme.range, lexeme.value, 'incomplete')
@@ -428,6 +487,8 @@ class NotationParser {
     command?: LatexSyntaxRange
     nameRange?: LatexSyntaxRange
     nucleus?: LatexSyntaxRange
+    arguments?: readonly LatexNotationArgument[]
+    mathClass?: TexMathClass
   }): LatexSyntaxNodeId {
     const node = this.nodes.length
     const source = this.source(input.range)
@@ -445,6 +506,8 @@ class NotationParser {
       state: input.state,
       ...(input.name === undefined ? {} : { name: input.name }),
       ...(input.text === undefined ? {} : { text: input.text }),
+      ...(input.arguments === undefined ? {} : { arguments: input.arguments }),
+      ...(input.mathClass === undefined ? {} : { mathClass: input.mathClass }),
       provenance: { origin: 'source', source, editable: true },
     })
     for (const child of input.children) this.nodes[child]!.parent = node
@@ -510,6 +573,15 @@ function splitCharacters(
     }
     offset = endOffset
   }
+}
+
+function notationKind(spec: MathCommandSpec): LatexNotationNode['kind'] {
+  if (spec.behavior === 'modifier') return 'modifier'
+  if (spec.behavior === 'style' || spec.behavior === 'text') return 'style'
+  if (spec.behavior === 'named-surface') return 'named-operator'
+  if (spec.behavior === 'delimiter') return 'delimiter'
+  if (spec.behavior === 'alignment') return 'alignment'
+  return 'command'
 }
 
 function commandNameRange(command: Lexeme): LatexSyntaxRange {

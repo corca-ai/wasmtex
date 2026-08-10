@@ -1,3 +1,5 @@
+import type { MathCommandArgumentRole, TexMathClass } from './math-command-spec'
+
 /**
  * Transport-neutral document syntax contract shared by WasmTex consumers.
  *
@@ -60,6 +62,13 @@ export interface LatexSyntaxProvenance {
   editable: boolean
 }
 
+export interface LatexNotationArgument {
+  node: LatexSyntaxNodeId
+  role: MathCommandArgumentRole
+  syntax: 'required' | 'optional'
+  range: LatexSyntaxRange
+}
+
 /**
  * One source-preserving node in a compact revision-local arena.
  *
@@ -74,6 +83,8 @@ export interface LatexNotationNode {
   state: LatexSyntaxState
   name?: string
   text?: string
+  arguments?: readonly LatexNotationArgument[]
+  mathClass?: TexMathClass
   provenance: LatexSyntaxProvenance
 }
 

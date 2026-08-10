@@ -1,5 +1,6 @@
 import { ProjectIndex } from './lsp/project-index';
 import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract';
+export * from './math-command-spec';
 export { findLatexNotationPath } from './notation-cst';
 export * from './syntax-contract';
 export interface LatexMathRegion {

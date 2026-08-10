@@ -212,6 +212,15 @@ For example, `\hat y` retains a modifier-to-nucleus path and
 contrast, `\mathrm{ECE}` is a style over three ordinary tokens and plain `ECE`
 remains three juxtaposed tokens.
 
+`MATH_COMMAND_SPECS` and `getMathCommandSpec(name)` expose the immutable neutral
+command registry. A spec contains argument syntax and roles, optional single-token
+consumption, TeX math class, star policy, structural/opaque/ignored expansion policy,
+and exact or curated package provenance. The built-in families cover modifiers,
+styles, named surfaces, fractions and roots, large operators, class overrides,
+delimiters, multiscripts, layout choices, spacing/text, Unicode math styles, and
+explicitly opaque package DSLs. These records describe TeX structure only; they do not
+declare application, binders, derivatives, intervals, products, or domain meaning.
+
 Each macro event carries bounded
 definition and invocation source ranges plus an expansion outcome (`expanded`,
 `cycle`, `truncated`, or `unresolved`). `editable: false` means the apparent
