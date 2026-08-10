@@ -204,17 +204,7 @@ class NotationParser {
     const close = this.input[this.cursor]
     const complete = close?.kind === 'close'
     if (complete) this.cursor++
-    const endOffset = complete
-      ? close.range.endOffset
-      : this.lastEnd(open.range.endOffset, children)
-    const range = { startOffset: open.range.startOffset, endOffset }
-    const node = this.addNode({
-      kind: 'group',
-      children,
-      range,
-      state: complete ? 'complete' : 'incomplete',
-    })
-    return { node, range }
+    return this.container('group', open, children, complete ? close.range.endOffset : undefined)
   }
 
   private parseDelimiter(depth: number): ParsedAtom {
@@ -224,16 +214,32 @@ class NotationParser {
     const close = this.input[this.cursor]
     const complete = close?.kind === 'character' && close.value === closing
     if (complete) this.cursor++
-    const endOffset = complete
-      ? close.range.endOffset
-      : this.lastEnd(open.range.endOffset, children)
-    const range = { startOffset: open.range.startOffset, endOffset }
+    return this.container(
+      'delimiter',
+      open,
+      children,
+      complete ? close.range.endOffset : undefined,
+      complete ? `${open.value}${closing}` : open.value,
+    )
+  }
+
+  private container(
+    kind: 'delimiter' | 'group',
+    open: Lexeme,
+    children: readonly LatexSyntaxNodeId[],
+    closeEnd?: number,
+    name?: string,
+  ): ParsedAtom {
+    const range = {
+      startOffset: open.range.startOffset,
+      endOffset: closeEnd ?? this.lastEnd(open.range.endOffset, children),
+    }
     const node = this.addNode({
-      kind: 'delimiter',
+      kind,
       children,
       range,
-      state: complete ? 'complete' : 'incomplete',
-      name: complete ? `${open.value}${closing}` : open.value,
+      state: closeEnd === undefined ? 'incomplete' : 'complete',
+      ...(name === undefined ? {} : { name }),
     })
     return { node, range }
   }
