@@ -581,54 +581,62 @@ export class PdfViewer {
 
   /** Forward search: highlight a source location in the PDF */
   forwardSearch(file: string, line: number): void {
-    let loc = this.synctexData
-      ? this.synctexParser.forwardLookup(this.synctexData, file, line)
-      : null
+    let locations = this.synctexData
+      ? this.synctexParser.forwardLookupAll(this.synctexData, file, line)
+      : []
 
-    loc ??= this.textMapper.forwardLookup(file, line)
+    if (locations.length === 0) {
+      const fallback = this.textMapper.forwardLookup(file, line)
+      if (fallback) locations = [fallback]
+    }
 
-    if (!loc) return
+    const primary = locations[0]
+    if (!primary) return
 
     // Find the page wrapper
     const pages = this.pagesContainer.querySelectorAll('.pdf-page-container')
-    const pageEl = pages[loc.page - 1]
+    const pageEl = pages[primary.page - 1]
     if (!pageEl) return
 
     // Remove previous highlight
     for (const el of this.pagesContainer.querySelectorAll('.forward-search-highlight')) {
       el.remove()
     }
-
-    // Create highlight overlay
-    const highlight = document.createElement('div')
-    highlight.className = 'forward-search-highlight'
-    // Position relative to the canvas as currently PAINTED (renderedScale), not the
-    // synchronously-advanced this.scale — during an in-flight zoom they differ and this.scale
-    // would offset the overlay from the page it sits on. Equal in steady state.
-    highlight.style.cssText = [
-      'position: absolute',
-      `left: ${loc.x * this.renderedScale}px`,
-      `top: ${loc.y * this.renderedScale}px`,
-      `width: ${Math.max(loc.width * this.renderedScale, 200)}px`,
-      `height: ${Math.max(loc.height * this.renderedScale, 20)}px`,
-      'background: rgba(255, 200, 0, 0.3)',
-      'border: none',
-      'pointer-events: none',
-      'transition: opacity 0.5s',
-    ].join(';')
-
     // Page wrapper needs relative positioning for absolute child
     ;(pageEl as HTMLElement).style.position = 'relative'
-    pageEl.appendChild(highlight)
+
+    for (const loc of locations) {
+      // A display query selects one page; keep the guard explicit for fallback
+      // implementations or future page-hint support.
+      if (loc.page !== primary.page) continue
+
+      const highlight = document.createElement('div')
+      highlight.className = 'forward-search-highlight'
+      // Position relative to the canvas as currently PAINTED (renderedScale), not the
+      // synchronously-advanced this.scale — during an in-flight zoom they differ and this.scale
+      // would offset the overlay from the page it sits on. Equal in steady state.
+      highlight.style.cssText = [
+        'position: absolute',
+        `left: ${loc.x * this.renderedScale}px`,
+        `top: ${loc.y * this.renderedScale}px`,
+        `width: ${Math.max(loc.width * this.renderedScale, 200)}px`,
+        `height: ${Math.max(loc.height * this.renderedScale, 20)}px`,
+        'background: rgba(255, 200, 0, 0.3)',
+        'border: none',
+        'pointer-events: none',
+        'transition: opacity 0.5s',
+      ].join(';')
+      pageEl.appendChild(highlight)
+
+      // Fade out after 2s
+      setTimeout(() => {
+        highlight.style.opacity = '0'
+        setTimeout(() => highlight.remove(), 500)
+      }, 2000)
+    }
 
     // Scroll to the page
     pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-
-    // Fade out after 2s
-    setTimeout(() => {
-      highlight.style.opacity = '0'
-      setTimeout(() => highlight.remove(), 500)
-    }, 2000)
   }
 
   /** Tear down the viewer: invalidate any in-flight render, disconnect the page

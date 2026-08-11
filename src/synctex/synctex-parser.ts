@@ -588,7 +588,19 @@ export class SynctexParser {
   }
 
   /**
-   * Forward search: source line → PDF region.
+   * Forward search: source line → primary PDF region.
+   *
+   * Use `forwardLookupAll` when the host can paint every match. A source line can
+   * produce disjoint boxes (most visibly when text crosses a column boundary),
+   * so collapsing all matches into one bounding rectangle can cover most of a
+   * page. This compatibility method returns the first display result instead.
+   */
+  forwardLookup(data: SynctexData, file: string, line: number): PdfLocation | null {
+    return this.forwardLookupAll(data, file, line)[0] ?? null
+  }
+
+  /**
+   * Forward search: source line → all PDF regions on the selected page.
    * Port of synctex_iterator_new_display from reference.
    *
    * Algorithm:
@@ -599,7 +611,7 @@ export class SynctexParser {
    *    then include boxes as fallback
    */
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: nearest-line zigzag with two-pass search
-  forwardLookup(data: SynctexData, file: string, line: number): PdfLocation | null {
+  forwardLookupAll(data: SynctexData, file: string, line: number): PdfLocation[] {
     // Find input tag for this file. Prefer an EXACT name match over a basename/suffix
     // match: with two files sharing a basename (chapters/intro.tex, intro.tex), a bare
     // `intro.tex` query must bind to the exact input, not whichever suffix-matches first.
@@ -618,7 +630,7 @@ export class SynctexParser {
         }
       }
     }
-    if (inputTag === -1) return null
+    if (inputTag === -1) return []
 
     // Nearest-line zigzag (reference: synctex_iterator_new_display lines 7510-7572)
     // Tries: line, line+1, line-1, line+2, line-2, ...
@@ -630,8 +642,8 @@ export class SynctexParser {
     for (let tries = 0; tries < 100; tries++) {
       if (Math.abs(currentLine - line) > MAX_ZIGZAG_DISTANCE) break
       if (currentLine > 0) {
-        const result = this.forwardForLine(data, inputTag, currentLine)
-        if (result) return result
+        const results = this.forwardForLine(data, inputTag, currentLine)
+        if (results.length > 0) return results
       }
       currentLine += lineOffset
       lineOffset = lineOffset < 0 ? -(lineOffset - 1) : -(lineOffset + 1)
@@ -641,19 +653,19 @@ export class SynctexParser {
         lineOffset = lineOffset < 0 ? -(lineOffset - 1) : -(lineOffset + 1)
       }
     }
-    return null
+    return []
   }
 
   /** Forward search for a specific line. Two-pass: non-box first, then all. */
-  private forwardForLine(data: SynctexData, inputTag: number, line: number): PdfLocation | null {
+  private forwardForLine(data: SynctexData, inputTag: number, line: number): PdfLocation[] {
     const friends = data.friendIndex?.get(`${inputTag}:${line}`)
-    if (!friends || friends.length === 0) return null
+    if (!friends || friends.length === 0) return []
 
     // Skip zero-width anchor nodes (label markers, counter marks, etc.)
     // pdfTeX emits these at \begin{document} time for internal LaTeX bookkeeping;
     // they appear on distant pages and would cause incorrect forward-search jumps.
     const visible = friends.filter((n) => n.width > 0 || !isBox(n))
-    if (visible.length === 0) return null
+    if (visible.length === 0) return []
 
     // Choose the target page ONCE from the full visible set (the earliest page with any
     // representation of the line). The non-box-first preference then governs only precision
@@ -667,8 +679,8 @@ export class SynctexParser {
     // First pass: non-box nodes only (reference: exclude_box=YES)
     const nonBox = onPage.filter((n) => !isBox(n))
     if (nonBox.length > 0) {
-      const result = this.forwardFromNodes(nonBox)
-      if (result) return result
+      const results = this.forwardFromNodes(nonBox)
+      if (results.length > 0) return results
     }
 
     // Second pass: include all nodes (reference: exclude_box=NO)
@@ -676,11 +688,11 @@ export class SynctexParser {
   }
 
   /** Compute forward search result from matched nodes */
-  private forwardFromNodes(nodes: SynctexNode[]): PdfLocation | null {
+  private forwardFromNodes(nodes: SynctexNode[]): PdfLocation[] {
     // Filter to first page
     const firstPage = nodes[0]!.page
     const pageNodes = nodes.filter((n) => n.page === firstPage)
-    if (pageNodes.length === 0) return null
+    if (pageNodes.length === 0) return []
 
     // For leaf nodes, resolve to ancestor hbox for proper bounds
     const resolvedBoxes = new Set<SynctexNode>()
@@ -698,16 +710,18 @@ export class SynctexParser {
       }
     }
 
-    // Prefer resolved boxes from leaves (more precise — matches actual content)
+    // Prefer resolved boxes from leaves (more precise — matches actual content).
+    // Preserve each result: SyncTeX's reference query is an iterator, and one
+    // source line may legitimately map to disjoint boxes across columns.
     if (resolvedBoxes.size > 0) {
-      return this.bboxFromNodes([...resolvedBoxes], firstPage)
+      return this.locationsFromNodes([...resolvedBoxes], firstPage)
     }
     if (directBoxes.length > 0) {
-      return this.bboxFromNodes(directBoxes, firstPage)
+      return this.locationsFromNodes(directBoxes, firstPage)
     }
 
     // Fallback: use whatever we have
-    return this.bboxFromNodes(pageNodes, firstPage)
+    return this.locationsFromNodes(pageNodes, firstPage)
   }
 
   /** Point-in-box test (reference: _synctex_point_in_box_v2) */
@@ -926,6 +940,41 @@ export class SynctexParser {
       current = current.parent
     }
     return null
+  }
+
+  /**
+   * Convert result nodes to distinct regions without allowing structural page or
+   * column boxes to swallow their more precise descendants.
+   */
+  private locationsFromNodes(nodes: SynctexNode[], page: number): PdfLocation[] {
+    const candidates = [...new Set(nodes)]
+    const candidateSet = new Set(candidates)
+    const containers = new Set<SynctexNode>()
+
+    // Walk each parent chain once rather than comparing every pair. Friend
+    // buckets are unbounded in real documents, so an O(n²) containment pass
+    // would turn a large but valid source line into a main-thread stall.
+    for (const node of candidates) {
+      let parent = node.parent
+      while (parent) {
+        if (candidateSet.has(parent)) containers.add(parent)
+        parent = parent.parent
+      }
+    }
+
+    const preciseNodes = candidates.filter((candidate) => !containers.has(candidate))
+    const locations: PdfLocation[] = []
+    const seenGeometry = new Set<string>()
+
+    for (const node of preciseNodes) {
+      const location = this.bboxFromNodes([node], page)
+      const geometryKey = `${location.x}:${location.y}:${location.width}:${location.height}`
+      if (seenGeometry.has(geometryKey)) continue
+      seenGeometry.add(geometryKey)
+      locations.push(location)
+    }
+
+    return locations
   }
 
   /** Compute a bounding box enclosing the given nodes */

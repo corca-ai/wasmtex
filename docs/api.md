@@ -734,6 +734,13 @@ const data = new SynctexParser(synctexBytes).parse()      // { ...SynctexData }
 const mapper = new TextMapper(data)
 ```
 
+`SynctexParser.forwardLookup(data, file, line)` returns the primary PDF region for
+hosts that paint one marker. Use `forwardLookupAll(data, file, line)` to preserve
+every distinct region. A single source line can map to separated boxes, such as the
+bottom of the left column and the top of the right column in a two-column document;
+combining those boxes into one bounding rectangle would cover unrelated page content.
+The built-in viewer paints all returned regions.
+
 | Export | Purpose |
 |--------|---------|
 | `SynctexParser` | Parses raw (or gzipped) `.synctex` bytes into `SynctexData`. |

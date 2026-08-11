@@ -84,7 +84,16 @@ export declare class SynctexParser {
      */
     inverseLookup(data: SynctexData, page: number, x: number, y: number): SourceLocation | null;
     /**
-     * Forward search: source line → PDF region.
+     * Forward search: source line → primary PDF region.
+     *
+     * Use `forwardLookupAll` when the host can paint every match. A source line can
+     * produce disjoint boxes (most visibly when text crosses a column boundary),
+     * so collapsing all matches into one bounding rectangle can cover most of a
+     * page. This compatibility method returns the first display result instead.
+     */
+    forwardLookup(data: SynctexData, file: string, line: number): PdfLocation | null;
+    /**
+     * Forward search: source line → all PDF regions on the selected page.
      * Port of synctex_iterator_new_display from reference.
      *
      * Algorithm:
@@ -94,7 +103,7 @@ export declare class SynctexParser {
      * 4. For each line: non-box nodes first (reference: exclude_box=YES),
      *    then include boxes as fallback
      */
-    forwardLookup(data: SynctexData, file: string, line: number): PdfLocation | null;
+    forwardLookupAll(data: SynctexData, file: string, line: number): PdfLocation[];
     /** Forward search for a specific line. Two-pass: non-box first, then all. */
     private forwardForLine;
     /** Compute forward search result from matched nodes */
@@ -127,6 +136,11 @@ export declare class SynctexParser {
     private closestDeepChild;
     /** Walk up from a leaf to find the nearest ancestor hbox */
     private findAncestorHbox;
+    /**
+     * Convert result nodes to distinct regions without allowing structural page or
+     * column boxes to swallow their more precise descendants.
+     */
+    private locationsFromNodes;
     /** Compute a bounding box enclosing the given nodes */
     private bboxFromNodes;
 }
