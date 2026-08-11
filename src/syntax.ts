@@ -707,8 +707,12 @@ const NON_PROSE_COMMAND_GROUPS = new Map<string, readonly ProseArgumentKind[]>([
 
 const CITATION_COMMANDS = new Set(CITE_CMDS.split('|'))
 const CITATION_ARGUMENTS: readonly ProseArgumentKind[] = ['optional', 'optional', 'required']
+const DOCUMENT_FIELD_COMMANDS = new Set(['title', 'author', 'keywords'] as const)
 for (const command of CITATION_COMMANDS) {
   NON_PROSE_COMMAND_GROUPS.set(command, CITATION_ARGUMENTS)
+}
+for (const command of DOCUMENT_FIELD_COMMANDS) {
+  NON_PROSE_COMMAND_GROUPS.set(command, ['required'])
 }
 
 function buildDocumentSyntax(
@@ -839,16 +843,50 @@ function proseAnnotations(
 ): LatexProseAnnotation[] {
   const annotations: LatexProseAnnotation[] = []
   for (const token of tokens) {
-    if (token.type !== 'command' || !CITATION_COMMANDS.has(token.value)) continue
-    const invocation = scanCommandInvocation(document.content, token.end, CITATION_ARGUMENTS)
-    annotations.push({
-      kind: 'citation',
-      name: token.value,
-      range: { startOffset: token.start, endOffset: invocation.end },
-      state: invocation.complete ? 'complete' : 'incomplete',
-    })
+    if (token.type !== 'command') continue
+    if (CITATION_COMMANDS.has(token.value)) {
+      const invocation = scanCommandInvocation(document.content, token.end, CITATION_ARGUMENTS)
+      annotations.push({
+        kind: 'citation',
+        name: token.value,
+        range: { startOffset: token.start, endOffset: invocation.end },
+        state: invocation.complete ? 'complete' : 'incomplete',
+      })
+      continue
+    }
+    if (isDocumentFieldCommand(token.value)) {
+      annotations.push(documentFieldAnnotation(document, token))
+    }
   }
   return annotations
+}
+
+function isDocumentFieldCommand(value: string): value is 'title' | 'author' | 'keywords' {
+  return DOCUMENT_FIELD_COMMANDS.has(value as 'title' | 'author' | 'keywords')
+}
+
+function documentFieldAnnotation(document: LatexDocumentInput, token: Token): LatexProseAnnotation {
+  let cursor = token.end
+  while (/\s/.test(document.content[cursor] ?? '')) cursor++
+  if (document.content[cursor] !== '{') {
+    return {
+      kind: 'document-field',
+      name: token.value as 'title' | 'author' | 'keywords',
+      range: { startOffset: token.start, endOffset: token.end },
+      state: 'incomplete',
+    }
+  }
+  const group = balancedDelimiter(document.content, cursor, '{', '}')
+  return {
+    kind: 'document-field',
+    name: token.value as 'title' | 'author' | 'keywords',
+    range: { startOffset: token.start, endOffset: group.end },
+    valueRange: {
+      startOffset: cursor + 1,
+      endOffset: Math.max(cursor + 1, group.end - (group.complete ? 1 : 0)),
+    },
+    state: group.complete ? 'complete' : 'incomplete',
+  }
 }
 
 function mergeSpans(

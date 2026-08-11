@@ -33,7 +33,7 @@ describe('LatexSyntaxService', () => {
     )
     expect(() => assertLatexSyntaxSchemaVersion(syntax)).not.toThrow()
     expect(() => assertLatexSyntaxSchemaVersion({ schemaVersion: 3 })).toThrow(
-      'Unsupported LaTeX syntax schema 3; expected 6',
+      'Unsupported LaTeX syntax schema 3; expected 7',
     )
     expect(new LatexSyntaxService().getStats()).toMatchObject({
       notationNodes: 0,
@@ -390,6 +390,45 @@ describe('LatexSyntaxService', () => {
     expect(prose).not.toContain('smith')
     expect(prose).not.toContain('{doe}')
     expect(prose).not.toContain('oops')
+  })
+
+  it('publishes neutral document fields without treating their values as prose', () => {
+    const content = [
+      '\\title{Optimization with random matrices}',
+      '\\author{James Maxwell}',
+      '\\keywords{control systems, stability}',
+      'Visible abstract prose.',
+      '\\title{unfinished',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const fields = syntax.proseAnnotations.filter(
+      (annotation) => annotation.kind === 'document-field',
+    )
+
+    expect(
+      fields.map((field) => ({
+        name: field.name,
+        state: field.state,
+        value:
+          field.valueRange === undefined
+            ? null
+            : content.slice(field.valueRange.startOffset, field.valueRange.endOffset),
+      })),
+    ).toEqual([
+      { name: 'title', state: 'complete', value: 'Optimization with random matrices' },
+      { name: 'author', state: 'complete', value: 'James Maxwell' },
+      { name: 'keywords', state: 'complete', value: 'control systems, stability' },
+      { name: 'title', state: 'incomplete', value: 'unfinished' },
+    ])
+    const prose = syntax.visibleProse
+      .map(({ range }) => content.slice(range.startOffset, range.endOffset))
+      .join(' ')
+    expect(prose).toBe('Visible abstract prose.')
   })
 
   it('records nested section and environment scope spans with recovery', () => {

@@ -5,7 +5,7 @@ import { MathCommandArgumentRole, TexMathClass } from './math-command-spec';
  * The contract describes observable TeX structure. Mathematical meaning is
  * deliberately left to downstream semantic engines.
  */
-export declare const LATEX_SYNTAX_SCHEMA_VERSION: 6;
+export declare const LATEX_SYNTAX_SCHEMA_VERSION: 7;
 export interface LatexSyntaxRange {
     startOffset: number;
     endOffset: number;
@@ -78,13 +78,20 @@ export interface LatexVisibleProseSpan {
     state: 'complete';
 }
 /** Observable source annotation adjacent to visible prose. */
-export interface LatexProseAnnotation {
+export type LatexProseAnnotation = {
     kind: 'citation';
     /** Bare control-sequence name, without the leading backslash. */
     name: string;
     range: LatexSyntaxRange;
     state: 'complete' | 'incomplete';
-}
+} | {
+    /** Neutral document metadata. Downstream consumers decide whether it is relevant. */
+    kind: 'document-field';
+    name: 'title' | 'author' | 'keywords';
+    range: LatexSyntaxRange;
+    valueRange?: LatexSyntaxRange;
+    state: 'complete' | 'incomplete';
+};
 export type LatexScopeKind = 'document' | 'section' | 'environment';
 export interface LatexSyntaxScope {
     kind: LatexScopeKind;
