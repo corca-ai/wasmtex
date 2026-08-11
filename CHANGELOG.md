@@ -19,6 +19,11 @@ Keep them user-facing and concise. Example:
   - Server-side xindy backend for index generation.
 -->
 
+### Added
+
+- Document Syntax Snapshot v8 exposes bounded, non-overlapping source-order blocks so
+  downstream semantic engines can reason about adjacency without rescanning TeX.
+
 ## [0.1.0] - 2026-07
 
 Initial development snapshot. WasmTex is an embeddable, browser-based LaTeX editor with

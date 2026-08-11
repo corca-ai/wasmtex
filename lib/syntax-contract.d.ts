@@ -5,7 +5,7 @@ import { MathCommandArgumentRole, TexMathClass } from './math-command-spec';
  * The contract describes observable TeX structure. Mathematical meaning is
  * deliberately left to downstream semantic engines.
  */
-export declare const LATEX_SYNTAX_SCHEMA_VERSION: 7;
+export declare const LATEX_SYNTAX_SCHEMA_VERSION: 8;
 export interface LatexSyntaxRange {
     startOffset: number;
     endOffset: number;
@@ -102,6 +102,21 @@ export interface LatexSyntaxScope {
     level?: 'part' | 'chapter' | 'section' | 'subsection' | 'subsubsection' | 'paragraph';
     source?: LatexSyntaxSourceRef;
 }
+/**
+ * One neutral source-order content block. Array order is document order, so
+ * consumers can inspect adjacency without reconstructing source lines.
+ */
+export interface LatexSyntaxBlock {
+    kind: 'heading' | 'paragraph' | 'display-math' | 'list-item' | 'caption' | 'table-row' | 'resource-entry';
+    /** Revision-local index into `scopes`. */
+    parentScope: number;
+    range: LatexSyntaxRange;
+    state: 'complete' | 'incomplete';
+    /** Content after a neutral marker or delimiter, when structurally known. */
+    contentRange?: LatexSyntaxRange;
+    /** Neutral source spelling such as a heading level or declaration kind. */
+    name?: string;
+}
 export type LatexStructuralDeclaration = {
     kind: 'class' | 'package';
     name: string;
@@ -169,6 +184,8 @@ export interface LatexDocumentSyntaxSnapshot {
     visibleProse: readonly LatexVisibleProseSpan[];
     proseAnnotations: readonly LatexProseAnnotation[];
     scopes: readonly LatexSyntaxScope[];
+    /** Non-overlapping leaf blocks ordered by source range. */
+    blocks: readonly LatexSyntaxBlock[];
     declarations: readonly LatexStructuralDeclaration[];
 }
 export declare function assertLatexSyntaxSchemaVersion(value: unknown): asserts value is {

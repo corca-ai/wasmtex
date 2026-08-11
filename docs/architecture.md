@@ -140,9 +140,10 @@ lookups remain backed by inverted indexes.
 
 `LatexSyntaxService` is the parser/index owner for composed authoring runtimes. A host
 passes the same instance to `LatexLanguageService`; each stable document update then
-produces Document Syntax Snapshot v7 and updates LSP symbols from one token stream.
+produces Document Syntax Snapshot v8 and updates LSP symbols from one token stream.
 The snapshot is the single source-preserving boundary for notation roots, visible
-prose, citation annotations, scopes, macros, includes, and neutral structural declarations. Its notation
+prose, citation annotations, scopes, source-order blocks, macros, includes, and neutral
+structural declarations. Its notation
 arena uses revision-local indices; consumers must not persist them as cross-edit
 identity. Unknown and malformed TeX remains bounded as opaque or incomplete structure.
 Markdown contributes math, visible prose, and ATX or setext section scopes
@@ -191,10 +192,13 @@ strictly one-way: a semantic engine may depend on `wasmtex/syntax`; WasmTex neve
 depends on a semantic engine or an editor host.
 
 Visible prose deliberately excludes citation invocations and the values of `title`,
-`author`, and `keywords` commands. Snapshot v7 publishes their exact source ranges,
+`author`, and `keywords` commands. Snapshot v8 publishes their exact source ranges,
 value ranges, and completeness as neutral `proseAnnotations`; section and environment
-containers remain represented by `scopes`. Attribution, rhetorical role, domain
-relevance, and whether a claim is established are downstream semantic decisions.
+containers remain represented by `scopes`. Its non-overlapping `blocks` sequence exposes
+only observed heading, paragraph, display-math, list-item, table-row, caption, and
+glossary/acronym entry boundaries. Each block has a revision-local parent scope and
+optional content range; attribution, rhetorical role, domain relevance, and whether a
+claim is established remain downstream semantic decisions.
 
 ### Rename (F2)
 Rename functionality uses `ProjectIndex.findAllOccurrences()` to find symbols in both `.tex` and `.bib` files. It handles:
