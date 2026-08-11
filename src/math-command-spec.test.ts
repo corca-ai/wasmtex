@@ -92,6 +92,39 @@ describe('MathCommandSpec registry', () => {
     )
   })
 
+  it('publishes common comparison and set commands as neutral relations', () => {
+    const names = [
+      'ge',
+      'geq',
+      'in',
+      'le',
+      'leq',
+      'ne',
+      'neq',
+      'notin',
+      'subset',
+      'subseteq',
+      'supset',
+      'supseteq',
+    ]
+    const content = `$${names.map((name) => `a \\${name} b`).join(', ')}$`
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'relations',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    for (const name of names) {
+      expect(syntax.nodes.find((node) => node.name === name)).toMatchObject({
+        kind: 'command',
+        mathClass: 'relation',
+        name,
+        state: 'complete',
+      })
+    }
+  })
+
   it('keeps styles and package DSLs structurally restrained', () => {
     const content = '$\\symbf{ECE}+\\mathrm{ECE}+\\text{ECE}+\\qty{3}{m}+ECE$'
     const syntax = new LatexSyntaxService().upsert({
