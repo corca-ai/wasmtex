@@ -33,7 +33,7 @@ describe('LatexSyntaxService', () => {
     )
     expect(() => assertLatexSyntaxSchemaVersion(syntax)).not.toThrow()
     expect(() => assertLatexSyntaxSchemaVersion({ schemaVersion: 3 })).toThrow(
-      'Unsupported LaTeX syntax schema 3; expected 7',
+      'Unsupported LaTeX syntax schema 3; expected 8',
     )
     expect(new LatexSyntaxService().getStats()).toMatchObject({
       notationNodes: 0,
@@ -283,11 +283,15 @@ describe('LatexSyntaxService', () => {
     expect(stats.lastTransferBytes).toBe(stats.snapshotBytes)
   })
 
-  it('produces equivalent clean and incrementally replaced notation snapshots', () => {
+  it('produces equivalent clean and incrementally replaced syntax snapshots', () => {
     const input = {
       fileId: 'stable',
       path: 'main.tex',
-      content: '$\\operatorname{ECE}=\\hat y_i$',
+      content: [
+        '\\section{Calibration}',
+        'For held-out data, use ECE.',
+        '\\[\\operatorname{ECE}=\\hat y_i\\]',
+      ].join('\n'),
       documentVersion: 2,
     }
     const incremental = new LatexSyntaxService()
@@ -502,6 +506,103 @@ describe('LatexSyntaxService', () => {
     expect(second.parent).toBe(0)
     expect(content.slice(first.range.startOffset, first.range.endOffset)).not.toContain('Two\n===')
     expect(content.slice(second.range.startOffset, second.range.endOffset)).toContain('gamma')
+  })
+
+  it('publishes neutral source-order blocks without assigning semantic scope', () => {
+    const content = [
+      '# Dynamics',
+      'Let $x$ be introduced.',
+      '',
+      '$$x_{k+1}=Ax_k+Bu_k$$',
+      '',
+      '- $x_k$ | sampled state',
+      '| $u_k$ | control input |',
+      '',
+      'A final paragraph uses $x_k$.',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'blocks',
+      path: 'paper.md',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(syntax.blocks.map((block) => block.kind)).toEqual([
+      'heading',
+      'paragraph',
+      'display-math',
+      'list-item',
+      'table-row',
+      'paragraph',
+    ])
+    expect(
+      syntax.blocks.map((block) => content.slice(block.range.startOffset, block.range.endOffset)),
+    ).toEqual([
+      '# Dynamics',
+      'Let $x$ be introduced.',
+      '$$x_{k+1}=Ax_k+Bu_k$$',
+      '- $x_k$ | sampled state',
+      '| $u_k$ | control input |',
+      'A final paragraph uses $x_k$.',
+    ])
+    expect(syntax.blocks.every((block) => block.parentScope === 1)).toBe(true)
+  })
+
+  it('keeps environment, caption, item, and resource boundaries neutral and bounded', () => {
+    const content = [
+      '\\newglossaryentry{state}{name=state}',
+      '\\begin{figure}',
+      '\\caption{Response of $x$}',
+      '\\end{figure}',
+      '\\begin{itemize}',
+      '\\item first entry',
+      '\\end{itemize}',
+      '\\caption{unfinished',
+    ].join('\n')
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'latex-blocks',
+      path: 'paper.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(syntax.blocks.map((block) => [block.kind, block.state])).toEqual([
+      ['resource-entry', 'complete'],
+      ['caption', 'complete'],
+      ['list-item', 'complete'],
+      ['caption', 'incomplete'],
+    ])
+    const caption = syntax.blocks.find(
+      (block) => block.kind === 'caption' && block.state === 'complete',
+    )!
+    const figure = syntax.scopes.findIndex(
+      (scope) => scope.kind === 'environment' && scope.name === 'figure',
+    )
+    expect(caption.parentScope).toBe(figure)
+    expect(content.slice(caption.range.startOffset, caption.range.endOffset)).toBe(
+      '\\caption{Response of $x$}',
+    )
+  })
+
+  it('preserves prose on both sides of a same-line display as adjacent blocks', () => {
+    const content = 'Before the relation $$x=y$$ where the symbols are introduced.'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'adjacent',
+      path: 'paper.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    expect(
+      syntax.blocks.map((block) => [
+        block.kind,
+        content.slice(block.range.startOffset, block.range.endOffset),
+      ]),
+    ).toEqual([
+      ['paragraph', 'Before the relation'],
+      ['display-math', '$$x=y$$'],
+      ['paragraph', 'where the symbols are introduced.'],
+    ])
   })
 
   it('exposes neutral declarations without downstream semantic vocabulary', () => {

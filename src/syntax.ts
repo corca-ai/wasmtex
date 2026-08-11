@@ -19,6 +19,7 @@ import {
   type LatexNotationNode,
   type LatexProseAnnotation,
   type LatexStructuralDeclaration,
+  type LatexSyntaxBlock,
   type LatexSyntaxRange,
   type LatexSyntaxScope,
   type LatexSyntaxSourceRef,
@@ -723,14 +724,19 @@ function buildDocumentSyntax(
   cancellationToken?: LatexSyntaxCancellationToken,
 ): LatexDocumentSyntaxSnapshot {
   const tokensByStart = new Map(tokens.map((token) => [token.start, token]))
+  const notation = buildNotationCst(document, tokens, mathRegions, () =>
+    throwIfSyntaxCancelled(cancellationToken),
+  )
+  const visibleProse = visibleProseSpans(document, tokens, mathRegions)
+  const scopes = syntaxScopes(document, tokens, tokensByStart, symbols)
+  const declarations = structuralDeclarations(document, tokens, tokensByStart, symbols)
   return {
-    ...buildNotationCst(document, tokens, mathRegions, () =>
-      throwIfSyntaxCancelled(cancellationToken),
-    ),
-    visibleProse: visibleProseSpans(document, tokens, mathRegions),
+    ...notation,
+    visibleProse,
     proseAnnotations: proseAnnotations(document, tokens),
-    scopes: syntaxScopes(document, tokens, tokensByStart, symbols),
-    declarations: structuralDeclarations(document, tokens, tokensByStart, symbols),
+    scopes,
+    blocks: syntaxBlocks(document, tokens, mathRegions, visibleProse, scopes, declarations),
+    declarations,
   }
 }
 
@@ -1173,6 +1179,336 @@ function deepestContainingSection(scopes: readonly LatexSyntaxScope[], offset: n
       return index
   }
   return 0
+}
+
+interface SourceLine {
+  start: number
+  end: number
+  contentEnd: number
+}
+
+type UnscopedSyntaxBlock = Omit<LatexSyntaxBlock, 'parentScope'>
+
+function syntaxBlocks(
+  document: LatexDocumentInput,
+  tokens: readonly Token[],
+  mathRegions: readonly LatexMathRegion[],
+  visibleProse: readonly LatexVisibleProseSpan[],
+  scopes: readonly LatexSyntaxScope[],
+  declarations: readonly LatexStructuralDeclaration[],
+): LatexSyntaxBlock[] {
+  const lines = sourceLines(document.content)
+  const explicit = nonOverlappingBlocks([
+    ...headingBlocks(document.content, lines, scopes),
+    ...displayMathBlocks(mathRegions),
+    ...latexCommandBlocks(document.content, lines, tokens),
+    ...resourceBlocks(declarations),
+    ...(document.language === 'markdown' ? markdownBlocks(document.content, lines) : []),
+  ])
+  const paragraphs = paragraphBlocks(document.content, lines, explicit, visibleProse, mathRegions)
+  return nonOverlappingBlocks([...explicit, ...paragraphs]).map((block) => ({
+    ...block,
+    parentScope: deepestContainingScope(scopes, block.range.startOffset),
+  }))
+}
+
+function headingBlocks(
+  source: string,
+  lines: readonly SourceLine[],
+  scopes: readonly LatexSyntaxScope[],
+): UnscopedSyntaxBlock[] {
+  return scopes.flatMap((scope) => {
+    if (scope.kind !== 'section') return []
+    const line = lineAt(lines, scope.range.startOffset)
+    if (!line) return []
+    return [
+      {
+        kind: 'heading',
+        range: trimmedLineRange(source, line),
+        state: scope.state,
+        ...(scope.level ? { name: scope.level } : {}),
+      },
+    ]
+  })
+}
+
+function displayMathBlocks(regions: readonly LatexMathRegion[]): UnscopedSyntaxBlock[] {
+  return regions
+    .filter((region) => region.delimiter !== '$' && region.delimiter !== '\\(')
+    .map((region) => ({
+      kind: 'display-math',
+      range: region.fullRange,
+      contentRange: region.contentRange,
+      state: region.closed ? 'complete' : 'incomplete',
+      name: region.delimiter,
+    }))
+}
+
+function latexCommandBlocks(
+  source: string,
+  lines: readonly SourceLine[],
+  tokens: readonly Token[],
+): UnscopedSyntaxBlock[] {
+  return tokens.flatMap((token) => {
+    if (token.type !== 'command') return []
+    if (token.value === 'caption') return [captionBlock(source, token)]
+    if (token.value !== 'item') return []
+    const line = lineAt(lines, token.start)
+    return line ? [latexItemBlock(source, token, line)] : []
+  })
+}
+
+function captionBlock(source: string, token: Token): UnscopedSyntaxBlock {
+  const invocation = scanCommandInvocation(source, token.end, ['optional', 'required'])
+  return {
+    kind: 'caption',
+    range: { startOffset: token.start, endOffset: invocation.end },
+    state: invocation.complete ? 'complete' : 'incomplete',
+    name: token.value,
+  }
+}
+
+function latexItemBlock(source: string, token: Token, line: SourceLine): UnscopedSyntaxBlock {
+  return {
+    kind: 'list-item',
+    range: trimmedLineRange(source, line),
+    contentRange: {
+      startOffset: skipWhitespace(source, token.end, line.contentEnd),
+      endOffset: trimEnd(source, line.start, line.contentEnd),
+    },
+    state: 'complete',
+    name: 'item',
+  }
+}
+
+function resourceBlocks(
+  declarations: readonly LatexStructuralDeclaration[],
+): UnscopedSyntaxBlock[] {
+  return declarations.flatMap((declaration) =>
+    declaration.kind === 'glossary' || declaration.kind === 'acronym'
+      ? [
+          {
+            kind: 'resource-entry',
+            range: declaration.source.range,
+            state: declaration.state ?? 'complete',
+            name: declaration.kind,
+          },
+        ]
+      : [],
+  )
+}
+
+function markdownBlocks(source: string, lines: readonly SourceLine[]): UnscopedSyntaxBlock[] {
+  const excluded = markdownExcludedSpans(source)
+  return lines.flatMap<UnscopedSyntaxBlock>((line) => {
+    if (inside(line.start, excluded)) return []
+    const range = trimmedLineRange(source, line)
+    const text = source.slice(range.startOffset, range.endOffset)
+    const listMarker = markdownListMarkerLength(text)
+    if (listMarker > 0) {
+      return [
+        {
+          kind: 'list-item',
+          range,
+          contentRange: {
+            startOffset: range.startOffset + listMarker,
+            endOffset: range.endOffset,
+          },
+          state: 'complete',
+          name: 'markdown',
+        },
+      ]
+    }
+    return markdownTableRow(text)
+      ? [{ kind: 'table-row', range, state: 'complete', name: 'markdown' }]
+      : []
+  })
+}
+
+function paragraphBlocks(
+  source: string,
+  lines: readonly SourceLine[],
+  explicit: readonly UnscopedSyntaxBlock[],
+  visibleProse: readonly LatexVisibleProseSpan[],
+  mathRegions: readonly LatexMathRegion[],
+): UnscopedSyntaxBlock[] {
+  const inlineMath = mathRegions.filter(isInlineMathRegion)
+  const exclusions = explicit.map((block) => block.range)
+  const pieces: LatexSyntaxRange[] = []
+  for (const line of lines) {
+    const range = trimmedLineRange(source, line)
+    if (range.startOffset === range.endOffset) continue
+    for (const piece of subtractRanges(range, exclusions)) {
+      const trimmed = {
+        startOffset: skipWhitespace(source, piece.startOffset, piece.endOffset),
+        endOffset: trimEnd(source, piece.startOffset, piece.endOffset),
+      }
+      if (isParagraphPiece(trimmed, visibleProse, inlineMath)) pieces.push(trimmed)
+    }
+  }
+  return mergeParagraphPieces(source, pieces, explicit).map((range) => ({
+    kind: 'paragraph',
+    range,
+    state: 'complete',
+  }))
+}
+
+function isInlineMathRegion(region: LatexMathRegion): boolean {
+  return region.delimiter === '$' || region.delimiter === '\\('
+}
+
+function isParagraphPiece(
+  range: LatexSyntaxRange,
+  prose: readonly LatexVisibleProseSpan[],
+  inlineMath: readonly LatexMathRegion[],
+): boolean {
+  return (
+    range.startOffset < range.endOffset &&
+    (prose.some((span) => rangesOverlap(span.range, range)) ||
+      inlineMath.some((region) => rangesOverlap(region.fullRange, range)))
+  )
+}
+
+function sourceLines(source: string): SourceLine[] {
+  const lines: SourceLine[] = []
+  let start = 0
+  for (let index = 0; index <= source.length; index++) {
+    if (index !== source.length && source[index] !== '\n') continue
+    const contentEnd = index > start && source[index - 1] === '\r' ? index - 1 : index
+    lines.push({ start, end: Math.min(source.length, index + 1), contentEnd })
+    start = index + 1
+  }
+  return lines
+}
+
+function lineAt(lines: readonly SourceLine[], offset: number): SourceLine | undefined {
+  return lines.find((line) => line.start <= offset && offset < line.end)
+}
+
+function trimmedLineRange(source: string, line: SourceLine): LatexSyntaxRange {
+  const startOffset = skipWhitespace(source, line.start, line.contentEnd)
+  return { startOffset, endOffset: trimEnd(source, startOffset, line.contentEnd) }
+}
+
+function skipWhitespace(source: string, start: number, end: number): number {
+  while (start < end && /\s/u.test(source[start]!)) start++
+  return start
+}
+
+function trimEnd(source: string, start: number, end: number): number {
+  while (end > start && /\s/u.test(source[end - 1]!)) end--
+  return end
+}
+
+function markdownListMarkerLength(value: string): number {
+  const unordered = /^(?:[-+*])[ \t]+/u.exec(value)
+  if (unordered) return unordered[0].length
+  const ordered = /^\d+[.)][ \t]+/u.exec(value)
+  return ordered?.[0].length ?? 0
+}
+
+function markdownTableRow(value: string): boolean {
+  return value.includes('|') && value.split('|').length >= 3
+}
+
+function deepestContainingScope(scopes: readonly LatexSyntaxScope[], offset: number): number {
+  let selected = 0
+  let selectedDepth = 0
+  for (let index = 1; index < scopes.length; index++) {
+    const scope = scopes[index]!
+    if (scope.range.startOffset <= offset && offset < scope.range.endOffset) {
+      const depth = scopeDepth(scopes, index)
+      if (depth > selectedDepth) {
+        selected = index
+        selectedDepth = depth
+      }
+    }
+  }
+  return selected
+}
+
+function scopeDepth(scopes: readonly LatexSyntaxScope[], index: number): number {
+  let depth = 0
+  const visited = new Set<number>()
+  while (index > 0 && !visited.has(index)) {
+    visited.add(index)
+    depth++
+    index = scopes[index]?.parent ?? 0
+  }
+  return depth
+}
+
+function compareBlocks(left: UnscopedSyntaxBlock, right: UnscopedSyntaxBlock): number {
+  return (
+    left.range.startOffset - right.range.startOffset ||
+    left.range.endOffset - right.range.endOffset ||
+    left.kind.localeCompare(right.kind)
+  )
+}
+
+function nonOverlappingBlocks(blocks: readonly UnscopedSyntaxBlock[]): UnscopedSyntaxBlock[] {
+  const output: UnscopedSyntaxBlock[] = []
+  for (const block of [...blocks].sort(compareBlocks)) {
+    const previous = output.at(-1)
+    if (!previous || !rangesOverlap(previous.range, block.range)) output.push(block)
+  }
+  return output
+}
+
+function rangesOverlap(left: LatexSyntaxRange, right: LatexSyntaxRange): boolean {
+  return left.startOffset < right.endOffset && right.startOffset < left.endOffset
+}
+
+function subtractRanges(
+  source: LatexSyntaxRange,
+  exclusions: readonly LatexSyntaxRange[],
+): LatexSyntaxRange[] {
+  let pieces = [source]
+  for (const exclusion of exclusions) {
+    const next: LatexSyntaxRange[] = []
+    for (const piece of pieces) {
+      if (!rangesOverlap(piece, exclusion)) {
+        next.push(piece)
+        continue
+      }
+      if (piece.startOffset < exclusion.startOffset) {
+        next.push({
+          startOffset: piece.startOffset,
+          endOffset: Math.min(piece.endOffset, exclusion.startOffset),
+        })
+      }
+      if (exclusion.endOffset < piece.endOffset) {
+        next.push({
+          startOffset: Math.max(piece.startOffset, exclusion.endOffset),
+          endOffset: piece.endOffset,
+        })
+      }
+    }
+    pieces = next
+  }
+  return pieces
+}
+
+function mergeParagraphPieces(
+  source: string,
+  pieces: readonly LatexSyntaxRange[],
+  explicit: readonly UnscopedSyntaxBlock[],
+): LatexSyntaxRange[] {
+  const output: LatexSyntaxRange[] = []
+  for (const piece of pieces) {
+    const previous = output[output.length - 1]
+    if (!previous) {
+      output.push({ ...piece })
+      continue
+    }
+    const gap = { startOffset: previous.endOffset, endOffset: piece.startOffset }
+    const separated =
+      /\n[ \t\r]*\n/u.test(source.slice(gap.startOffset, gap.endOffset)) ||
+      explicit.some((block) => rangesOverlap(block.range, gap))
+    if (separated) output.push({ ...piece })
+    else previous.endOffset = piece.endOffset
+  }
+  return output
 }
 
 function structuralDeclarations(

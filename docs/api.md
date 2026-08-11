@@ -190,9 +190,12 @@ Markdown documents expose math regions plus ATX and setext section scopes, but
 do not contribute LaTeX symbols to the project index. `getStats()` reports
 parse passes for integration budgets.
 
-Document Syntax Snapshot schema 5 is the singular source-preserving contract for
-notation roots, visible prose, section/environment scopes, neutral declarations,
-macros, and includes. The notation arena uses revision-local numeric node IDs with
+Document Syntax Snapshot schema 8 is the singular source-preserving contract for
+notation roots, visible prose, section/environment scopes, neutral source-order blocks,
+declarations, macros, and includes. Blocks expose non-overlapping heading, paragraph,
+display-math, list-item, table-row, caption, and glossary/acronym entry boundaries with
+their revision-local parent scope. They intentionally do not classify discourse or
+mathematical meaning. The notation arena uses revision-local numeric node IDs with
 parent/child references and exact UTF-16 ranges. IDs are not stable across edits.
 Malformed or unknown TeX remains representable through incomplete and opaque states;
 `assertLatexSyntaxSchemaVersion` rejects incompatible wire versions explicitly.
