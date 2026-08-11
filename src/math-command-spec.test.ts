@@ -41,6 +41,8 @@ describe('MathCommandSpec registry', () => {
       'quad',
       'limits',
       '\\',
+      'norm',
+      'pdv',
       'tensor',
       'qty',
       'ce',
@@ -162,6 +164,51 @@ describe('MathCommandSpec registry', () => {
     expect(content.slice(combining.ranges.full.startOffset, combining.ranges.full.endOffset)).toBe(
       '̂',
     )
+  })
+
+  it('owns aligned rows and cells while retaining separator leaves', () => {
+    const content = String.raw`\begin{align}a&=b\\c+d&=e\end{align}`
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const root = syntax.nodes[syntax.mathRoots[0]!.node]!
+    const rows = root.children.map((node) => syntax.nodes[node]!)
+
+    expect(rows.map((row) => [row.kind, row.name])).toEqual([
+      ['alignment', 'row'],
+      ['alignment', 'row'],
+    ])
+    expect(
+      rows.map(
+        (row) =>
+          row.children
+            .map((node) => syntax.nodes[node]!)
+            .filter((node) => node.kind === 'alignment' && node.name === 'cell').length,
+      ),
+    ).toEqual([2, 2])
+    expect(
+      syntax.nodes.filter(
+        (node) => node.kind === 'alignment' && (node.text === '&' || node.name === '\\'),
+      ),
+    ).toHaveLength(3)
+  })
+
+  it('exposes reviewed physics-package argument structure without derivative semantics', () => {
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content: String.raw`$\norm{x}+\pdv[2]{f}{x}$`,
+      documentVersion: 1,
+    })
+    const command = (name: string) => syntax.nodes.find((node) => node.name === name)!
+
+    expect(command('norm').kind).toBe('modifier')
+    expect(argumentRoles(command('norm'))).toEqual(['nucleus'])
+    expect(argumentRoles(command('pdv'))).toEqual(['degree', 'body', 'index'])
+    expect(command('pdv').state).toBe('complete')
   })
 
   it('keeps every specified argument linked to its child and exact source range', () => {

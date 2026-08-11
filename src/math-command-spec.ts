@@ -75,6 +75,7 @@ const LATEX = { source: 'latex-kernel', confidence: 'exact' } as const
 const AMS = { source: 'amsmath', package: 'amsmath', confidence: 'curated' } as const
 const AMSFONTS = { source: 'package', package: 'amsfonts', confidence: 'curated' } as const
 const MATHTOOLS = { source: 'mathtools', package: 'mathtools', confidence: 'curated' } as const
+const PHYSICS = { source: 'package', package: 'physics', confidence: 'curated' } as const
 const UNICODE_MATH = {
   source: 'unicode-math',
   package: 'unicode-math',
@@ -342,6 +343,12 @@ const AUTHORED_SPECS: MathCommandSpec[] = [
   }),
   ...family(['\\', 'cr'], 'alignment', TEX),
   ...family(['substack'], 'alignment', AMS, [required('body')]),
+  ...family(['abs', 'norm', 'eval'], 'modifier', PHYSICS, [required('nucleus')]),
+  ...family(['dv', 'pdv'], 'atom', PHYSICS, [
+    optional('degree'),
+    required('body'),
+    required('index'),
+  ]),
   ...family(
     ['tensor'],
     'opaque',

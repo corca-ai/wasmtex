@@ -47,6 +47,30 @@ interface RawGroup {
   complete: boolean
 }
 
+const ALIGNED_ENVIRONMENTS = new Set([
+  'align',
+  'align*',
+  'alignat',
+  'alignat*',
+  'aligned',
+  'alignedat',
+  'array',
+  'cases',
+  'flalign',
+  'flalign*',
+  'gather',
+  'gather*',
+  'gathered',
+  'matrix',
+  'multline',
+  'multline*',
+  'pmatrix',
+  'smallmatrix',
+  'split',
+  'vmatrix',
+  'Vmatrix',
+])
+
 const MAX_DOCUMENT_NODES = 10_000
 const MAX_PARSE_DEPTH = 128
 const MAX_OPAQUE_ARGUMENTS = 8
@@ -71,7 +95,7 @@ export function buildNotationCst(
       nodes,
       checkCancelled,
     )
-    const node = parser.parseRoot(region.contentRange)
+    const node = parser.parseRoot(region.contentRange, region.delimiter)
     mathRoots.push({
       node,
       delimiter: region.delimiter,
@@ -133,8 +157,11 @@ class NotationParser {
     private readonly checkCancelled: () => void,
   ) {}
 
-  parseRoot(range: LatexSyntaxRange): LatexSyntaxNodeId {
-    const children = this.parseSequence(0)
+  parseRoot(range: LatexSyntaxRange, delimiter: string): LatexSyntaxNodeId {
+    const parsed = this.parseSequence(0)
+    const children = ALIGNED_ENVIRONMENTS.has(environmentName(delimiter))
+      ? this.groupAlignment(parsed)
+      : parsed
     return this.addNode({ kind: 'sequence', children, range, state: 'complete' })
   }
 
@@ -370,9 +397,12 @@ class NotationParser {
       startOffset: command.range.startOffset,
       endOffset: closing?.range.endOffset ?? this.lastEnd(opening.range.endOffset, children),
     }
+    const structuredChildren = ALIGNED_ENVIRONMENTS.has(opening.text)
+      ? this.groupAlignment(children)
+      : children
     const node = this.addNode({
       kind: 'environment',
-      children,
+      children: structuredChildren,
       range,
       state: closing ? 'complete' : 'incomplete',
       name: opening.text,
@@ -380,6 +410,64 @@ class NotationParser {
       nameRange: opening.innerRange,
     })
     return { node, range }
+  }
+
+  /**
+   * Preserve row and cell ownership without assigning meaning to the contents.
+   * Separator leaves remain siblings, so every source code unit keeps one exact
+   * path and downstream consumers can either use or transparently ignore the
+   * additional containers.
+   */
+  private groupAlignment(children: readonly LatexSyntaxNodeId[]): LatexSyntaxNodeId[] {
+    const separators = children.filter((child) => this.isAlignmentSeparator(child)).length
+    if (separators === 0 || this.nodes.length + separators * 2 + 2 > MAX_DOCUMENT_NODES) {
+      return [...children]
+    }
+    const rows: LatexSyntaxNodeId[] = []
+    let row: LatexSyntaxNodeId[] = []
+    let cell: LatexSyntaxNodeId[] = []
+    const finishCell = (): void => {
+      if (cell.length === 0) return
+      row.push(this.containerFromChildren('cell', cell))
+      cell = []
+    }
+    const finishRow = (): void => {
+      finishCell()
+      if (row.length === 0) return
+      rows.push(this.containerFromChildren('row', row))
+      row = []
+    }
+    for (const child of children) {
+      const node = this.nodes[child]!
+      if (node.kind !== 'alignment') {
+        cell.push(child)
+        continue
+      }
+      finishCell()
+      row.push(child)
+      if (node.name === '\\') finishRow()
+    }
+    finishRow()
+    return rows
+  }
+
+  private isAlignmentSeparator(nodeId: LatexSyntaxNodeId): boolean {
+    const node = this.nodes[nodeId]
+    return node?.kind === 'alignment' && (node.name === '\\' || node.text === '&')
+  }
+
+  private containerFromChildren(name: 'cell' | 'row', children: readonly LatexSyntaxNodeId[]) {
+    const first = this.nodes[children[0]!]!.ranges.full
+    const last = this.nodes[children[children.length - 1]!]!.ranges.full
+    return this.addNode({
+      kind: 'alignment',
+      children: [...children],
+      range: { startOffset: first.startOffset, endOffset: last.endOffset },
+      state: children.every((child) => this.nodes[child]!.state === 'complete')
+        ? 'complete'
+        : 'incomplete',
+      name,
+    })
   }
 
   private environmentEnd(name: string): RawGroup | null {
@@ -610,6 +698,11 @@ function notationKind(spec: MathCommandSpec): LatexNotationNode['kind'] {
   if (spec.behavior === 'delimiter') return 'delimiter'
   if (spec.behavior === 'alignment') return 'alignment'
   return 'command'
+}
+
+function environmentName(delimiter: string): string {
+  const match = /^\\begin\{([^{}]+)\}$/u.exec(delimiter)
+  return match?.[1] ?? ''
 }
 
 function commandNameRange(command: Lexeme): LatexSyntaxRange {
