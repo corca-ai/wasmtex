@@ -227,6 +227,58 @@ test.describe('SyncTeX E2E Verification', () => {
     }
   })
 
+  test('forward search keeps two-column matches as separate highlights', async ({ page }) => {
+    const beforeCompile = await page.evaluate(() => (window as any).__compileCount ?? 0)
+    await page.evaluate(() => {
+      const boundary = 'Boundary content on one source line crosses the column. '.repeat(45)
+      ;(window as any).__editor.setValue(
+        [
+          '\\documentclass[10pt,twocolumn]{article}',
+          '\\usepackage[margin=1in]{geometry}',
+          '\\begin{document}',
+          '\\vspace*{390pt}',
+          '\\section{Boundary Section}',
+          boundary,
+          '\\end{document}',
+          '',
+        ].join('\n'),
+      )
+    })
+
+    await page.waitForFunction(
+      (count) => ((window as any).__compileCount ?? 0) > count,
+      beforeCompile,
+      { timeout: 15_000 },
+    )
+    await expect(page.locator('#status')).toHaveText('Ready', { timeout: 15_000 })
+
+    const result = await page.evaluate(() => {
+      const viewer = (window as any).__pdfViewer
+      const data = viewer.synctexData
+      const file = [...data.inputs.values()].find(
+        (name: string) => name === 'main.tex' || name.endsWith('/main.tex'),
+      )
+      const regions = viewer.synctexParser.forwardLookupAll(data, file, 6)
+      viewer.forwardSearch(file, 6)
+
+      return {
+        highlightCount: document.querySelectorAll('.forward-search-highlight').length,
+        primary: viewer.synctexParser.forwardLookup(data, file, 6),
+        regions,
+      }
+    })
+
+    expect(result.regions.length).toBeGreaterThan(2)
+    expect(result.primary).toEqual(result.regions[0])
+    expect(result.highlightCount).toBe(result.regions.length)
+    expect(result.regions.some((region: { x: number }) => region.x < 300)).toBe(true)
+    expect(result.regions.some((region: { x: number }) => region.x > 300)).toBe(true)
+    for (const region of result.regions) {
+      expect(region.width).toBeLessThan(300)
+      expect(region.height).toBeLessThan(50)
+    }
+  })
+
   test('lookup performance < 50ms', async ({ page }) => {
     // Use the default (richer) document for a realistic benchmark
     await page.waitForTimeout(1_500)

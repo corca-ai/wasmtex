@@ -925,6 +925,94 @@ Count:0
   })
 
   describe('forwardLookup', () => {
+    it('preserves disjoint regions when one source line crosses columns', () => {
+      const pageBox: SynctexNode = {
+        type: 'hbox',
+        input: 1,
+        line: 5,
+        column: 0,
+        page: 1,
+        h: 50,
+        v: 750,
+        width: 500,
+        height: 700,
+        depth: 0,
+        parent: null,
+        children: [],
+      }
+      const leftColumnLine: SynctexNode = {
+        type: 'hbox',
+        input: 1,
+        line: 5,
+        column: 0,
+        page: 1,
+        h: 70,
+        v: 700,
+        width: 220,
+        height: 12,
+        depth: 3,
+        parent: pageBox,
+        children: [],
+      }
+      const rightColumnLine: SynctexNode = {
+        type: 'hbox',
+        input: 1,
+        line: 5,
+        column: 0,
+        page: 1,
+        h: 310,
+        v: 100,
+        width: 220,
+        height: 12,
+        depth: 3,
+        parent: pageBox,
+        children: [],
+      }
+      const leaf = (parent: SynctexNode): SynctexNode => ({
+        type: 'glue',
+        input: 1,
+        line: 5,
+        column: 0,
+        page: 1,
+        h: parent.h,
+        v: parent.v,
+        width: 0,
+        height: 0,
+        depth: 0,
+        parent,
+        children: [],
+      })
+      const leftLeaf = leaf(leftColumnLine)
+      const rightLeaf = leaf(rightColumnLine)
+      const outputRoutineLeaf = leaf(pageBox)
+      leftColumnLine.children.push(leftLeaf)
+      rightColumnLine.children.push(rightLeaf)
+      pageBox.children.push(leftColumnLine, rightColumnLine, outputRoutineLeaf)
+
+      const data: SynctexData = {
+        inputs: new Map([[1, 'main.tex']]),
+        pages: new Map([[1, [pageBox, leftColumnLine, leftLeaf, rightColumnLine, rightLeaf]]]),
+        pageRoots: new Map([[1, [pageBox]]]),
+        friendIndex: new Map([[`1:5`, [leftLeaf, rightLeaf, outputRoutineLeaf]]]),
+        magnification: 1000,
+        unit: 1,
+        xOffset: 0,
+        yOffset: 0,
+      }
+
+      expect(parser.forwardLookupAll(data, 'main.tex', 5)).toEqual([
+        { page: 1, x: 70, y: 688, width: 220, height: 15 },
+        { page: 1, x: 310, y: 88, width: 220, height: 15 },
+      ])
+      expect(parser.forwardLookup(data, 'main.tex', 5)).toEqual({
+        page: 1,
+        x: 70,
+        y: 688,
+        width: 220,
+        height: 15,
+      })
+    })
+
     it('finds PDF position for a source line', () => {
       const data = parser.parseText(FIXTURE_BASIC)
 
