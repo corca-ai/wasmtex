@@ -192,7 +192,15 @@ describe('LatexSyntaxService', () => {
       content.slice(environment.ranges.name?.startOffset, environment.ranges.name?.endOffset),
     ).toBe('matrix')
     expect(
-      environment.children.filter((child) => syntax.nodes[child]!.kind === 'alignment'),
+      environment.children.map((child) => [syntax.nodes[child]!.kind, syntax.nodes[child]!.name]),
+    ).toEqual([
+      ['alignment', 'row'],
+      ['alignment', 'row'],
+    ])
+    expect(
+      syntax.nodes.filter(
+        (node) => node.kind === 'alignment' && (node.text === '&' || node.name === '\\'),
+      ),
     ).toHaveLength(3)
     assertArenaInvariants(syntax.nodes)
   })
