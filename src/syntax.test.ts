@@ -33,13 +33,36 @@ describe('LatexSyntaxService', () => {
     )
     expect(() => assertLatexSyntaxSchemaVersion(syntax)).not.toThrow()
     expect(() => assertLatexSyntaxSchemaVersion({ schemaVersion: 3 })).toThrow(
-      'Unsupported LaTeX syntax schema 3; expected 5',
+      'Unsupported LaTeX syntax schema 3; expected 6',
     )
     expect(new LatexSyntaxService().getStats()).toMatchObject({
       notationNodes: 0,
       recoveredNodes: 0,
       lastInvalidatedDocuments: 0,
     })
+  })
+
+  it('classifies literal equation tokens without assigning mathematical meaning', () => {
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'stable',
+      path: 'main.tex',
+      content: '$-x/2=y,z$',
+      documentVersion: 1,
+    })
+    const literals = syntax.nodes
+      .filter((node) => node.kind === 'token')
+      .map((node) => [node.text, node.lexicalClass, node.mathClass])
+
+    expect(literals).toEqual([
+      ['-', 'operator', 'binary'],
+      ['x', 'identifier', 'ordinary'],
+      ['/', 'operator', 'binary'],
+      ['2', 'number', 'ordinary'],
+      ['=', 'operator', 'relation'],
+      ['y', 'identifier', 'ordinary'],
+      [',', 'punctuation', 'punctuation'],
+      ['z', 'identifier', 'ordinary'],
+    ])
   })
 
   it('keeps an unbraced modifier and its nucleus on one source path', () => {

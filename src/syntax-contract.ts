@@ -7,7 +7,7 @@ import type { MathCommandArgumentRole, TexMathClass } from './math-command-spec'
  * deliberately left to downstream semantic engines.
  */
 
-export const LATEX_SYNTAX_SCHEMA_VERSION = 5 as const
+export const LATEX_SYNTAX_SCHEMA_VERSION = 6 as const
 
 export interface LatexSyntaxRange {
   startOffset: number
@@ -42,6 +42,9 @@ export type LatexNotationNodeKind =
   | 'named-operator'
   | 'opaque'
   | 'error'
+
+/** Neutral lexical category from the authoritative TeX token stream. */
+export type LatexLexicalClass = 'identifier' | 'number' | 'operator' | 'punctuation' | 'other'
 
 /** Revision-local node index. It is never stable across document updates. */
 export type LatexSyntaxNodeId = number
@@ -85,6 +88,7 @@ export interface LatexNotationNode {
   name?: string
   text?: string
   arguments?: readonly LatexNotationArgument[]
+  lexicalClass?: LatexLexicalClass
   mathClass?: TexMathClass
   /**
    * Omitted for an editable node copied directly from this snapshot's file.

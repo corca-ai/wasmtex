@@ -7,6 +7,7 @@ import {
 } from './math-command-spec'
 import type {
   LatexDocumentSyntaxSnapshot,
+  LatexLexicalClass,
   LatexMathRoot,
   LatexNotationArgument,
   LatexNotationNode,
@@ -469,7 +470,18 @@ class NotationParser {
     text: string,
     state: LatexNotationNode['state'] = 'complete',
   ): ParsedAtom {
-    return { node: this.addNode({ kind, children: [], range, state, text }), range }
+    const lexical = kind === 'token' ? classifyLiteral(text) : undefined
+    return {
+      node: this.addNode({
+        kind,
+        children: [],
+        range,
+        state,
+        text,
+        ...(lexical ? { lexicalClass: lexical.lexicalClass, mathClass: lexical.mathClass } : {}),
+      }),
+      range,
+    }
   }
 
   private opaque(range: LatexSyntaxRange, state: 'truncated'): ParsedAtom {
@@ -487,6 +499,7 @@ class NotationParser {
     nameRange?: LatexSyntaxRange
     nucleus?: LatexSyntaxRange
     arguments?: readonly LatexNotationArgument[]
+    lexicalClass?: LatexLexicalClass
     mathClass?: TexMathClass
   }): LatexSyntaxNodeId {
     const node = this.nodes.length
@@ -504,6 +517,7 @@ class NotationParser {
       ...(input.name === undefined ? {} : { name: input.name }),
       ...(input.text === undefined ? {} : { text: input.text }),
       ...(input.arguments === undefined ? {} : { arguments: input.arguments }),
+      ...(input.lexicalClass === undefined ? {} : { lexicalClass: input.lexicalClass }),
       ...(input.mathClass === undefined ? {} : { mathClass: input.mathClass }),
     })
     for (const child of input.children) this.nodes[child]!.parent = node
@@ -518,6 +532,28 @@ class NotationParser {
   private checkpoint(): void {
     if ((this.operations++ & 255) === 0) this.checkCancelled()
   }
+}
+
+function classifyLiteral(text: string): {
+  lexicalClass: LatexLexicalClass
+  mathClass: TexMathClass
+} {
+  if (/^[0-9.]+$/u.test(text) && /[0-9]/u.test(text)) {
+    return { lexicalClass: 'number', mathClass: 'ordinary' }
+  }
+  if (/\p{L}/u.test(text)) {
+    return { lexicalClass: 'identifier', mathClass: 'ordinary' }
+  }
+  if ('=<>'.includes(text)) {
+    return { lexicalClass: 'operator', mathClass: 'relation' }
+  }
+  if ('+-*/'.includes(text)) {
+    return { lexicalClass: 'operator', mathClass: 'binary' }
+  }
+  if (',:;'.includes(text)) {
+    return { lexicalClass: 'punctuation', mathClass: 'punctuation' }
+  }
+  return { lexicalClass: 'other', mathClass: 'ordinary' }
 }
 
 function lexemes(

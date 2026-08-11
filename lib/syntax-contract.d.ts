@@ -5,7 +5,7 @@ import { MathCommandArgumentRole, TexMathClass } from './math-command-spec';
  * The contract describes observable TeX structure. Mathematical meaning is
  * deliberately left to downstream semantic engines.
  */
-export declare const LATEX_SYNTAX_SCHEMA_VERSION: 5;
+export declare const LATEX_SYNTAX_SCHEMA_VERSION: 6;
 export interface LatexSyntaxRange {
     startOffset: number;
     endOffset: number;
@@ -17,6 +17,8 @@ export interface LatexSyntaxSourceRef {
 }
 export type LatexSyntaxState = 'complete' | 'incomplete' | 'ambiguous' | 'opaque' | 'cyclic' | 'truncated';
 export type LatexNotationNodeKind = 'token' | 'sequence' | 'group' | 'command' | 'script' | 'delimiter' | 'alignment' | 'environment' | 'modifier' | 'style' | 'named-operator' | 'opaque' | 'error';
+/** Neutral lexical category from the authoritative TeX token stream. */
+export type LatexLexicalClass = 'identifier' | 'number' | 'operator' | 'punctuation' | 'other';
 /** Revision-local node index. It is never stable across document updates. */
 export type LatexSyntaxNodeId = number;
 export interface LatexNotationNodeRanges {
@@ -55,6 +57,7 @@ export interface LatexNotationNode {
     name?: string;
     text?: string;
     arguments?: readonly LatexNotationArgument[];
+    lexicalClass?: LatexLexicalClass;
     mathClass?: TexMathClass;
     /**
      * Omitted for an editable node copied directly from this snapshot's file.

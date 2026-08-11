@@ -73,6 +73,7 @@ export interface LatexGeneratedNotationNode {
     role: LatexNotationArgument['role']
     syntax: LatexNotationArgument['syntax']
   }[]
+  lexicalClass?: LatexNotationNode['lexicalClass']
   mathClass?: LatexNotationNode['mathClass']
 }
 
@@ -505,7 +506,14 @@ function expandedCallNode(
     node: node.children[index]!,
     range: syntax.nodes[node.children[index]!]!.ranges.full,
   }))
-  const { name: _name, text: _text, arguments: _arguments, mathClass: _mathClass, ...base } = node
+  const {
+    name: _name,
+    text: _text,
+    arguments: _arguments,
+    lexicalClass: _lexicalClass,
+    mathClass: _mathClass,
+    ...base
+  } = node
   const { editable: _editable, ...ranges } = node.ranges
   const callSite = node.provenance?.source ?? {
     fileId: syntax.fileId,
@@ -518,6 +526,7 @@ function expandedCallNode(
     state: shape.state,
     ...(shape.name === undefined ? {} : { name: shape.name }),
     ...(shape.text === undefined ? {} : { text: shape.text }),
+    ...(shape.lexicalClass === undefined ? {} : { lexicalClass: shape.lexicalClass }),
     ...(shape.mathClass === undefined ? {} : { mathClass: shape.mathClass }),
     ...(arguments_.length === 0 ? {} : { arguments: arguments_ }),
     ranges,
@@ -537,6 +546,7 @@ function expandedNotationShape(surface: string): {
   name?: string
   text?: string
   arguments: readonly LatexNotationArgument[]
+  lexicalClass?: LatexNotationNode['lexicalClass']
   mathClass?: LatexNotationNode['mathClass']
 } | null {
   const notation = buildNotationCst(
@@ -568,6 +578,7 @@ function expandedNotationShape(surface: string): {
     arguments: node.arguments ?? [],
     ...(node.name === undefined ? {} : { name: node.name }),
     ...(node.text === undefined ? {} : { text: node.text }),
+    ...(node.lexicalClass === undefined ? {} : { lexicalClass: node.lexicalClass }),
     ...(node.mathClass === undefined ? {} : { mathClass: node.mathClass }),
   }
 }
@@ -592,6 +603,7 @@ function generatedNotationTree(surface: string): LatexGeneratedNotationTree {
       state: node.state,
       ...(node.name === undefined ? {} : { name: node.name }),
       ...(node.text === undefined ? {} : { text: node.text }),
+      ...(node.lexicalClass === undefined ? {} : { lexicalClass: node.lexicalClass }),
       ...(node.arguments === undefined
         ? {}
         : {
