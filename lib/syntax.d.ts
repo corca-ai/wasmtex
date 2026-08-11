@@ -44,6 +44,7 @@ export interface LatexGeneratedNotationNode {
         role: LatexNotationArgument['role'];
         syntax: LatexNotationArgument['syntax'];
     }[];
+    lexicalClass?: LatexNotationNode['lexicalClass'];
     mathClass?: LatexNotationNode['mathClass'];
 }
 export interface LatexMacroArgument {

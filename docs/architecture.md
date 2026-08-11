@@ -140,7 +140,7 @@ lookups remain backed by inverted indexes.
 
 `LatexSyntaxService` is the parser/index owner for composed authoring runtimes. A host
 passes the same instance to `LatexLanguageService`; each stable document update then
-produces Document Syntax Snapshot v5 and updates LSP symbols from one token stream.
+produces Document Syntax Snapshot v6 and updates LSP symbols from one token stream.
 The snapshot is the single source-preserving boundary for notation roots, visible
 prose, citation annotations, scopes, macros, includes, and neutral structural declarations. Its notation
 arena uses revision-local indices; consumers must not persist them as cross-edit
@@ -153,7 +153,9 @@ language-server process.
 The notation arena is an error-tolerant CST built from that same token stream. It
 preserves sequences, groups, commands and consumed groups, scripts, delimiters,
 alignments, nested environments, modifiers, styles, and explicit named-operator
-surfaces. Parent/child paths retain composition order and UTF-16 ranges. A changed
+surfaces. Literal nodes also carry their neutral lexical category and TeX math
+class, so consumers do not independently classify relation, binary, punctuation,
+number, and identifier tokens. Parent/child paths retain composition order and UTF-16 ranges. A changed
 document replaces its revision-local arena atomically; clean and incremental builds
 are equivalent. `findLatexNotationPath` binary-searches math roots and ordered children
 instead of serializing a second interval tree. Node count, depth, and opaque argument
@@ -188,7 +190,7 @@ resolution belong to downstream semantic consumers. The dependency is therefore
 strictly one-way: a semantic engine may depend on `wasmtex/syntax`; WasmTex never
 depends on a semantic engine or an editor host.
 
-Visible prose deliberately excludes citation invocations. Snapshot v5 publishes their exact
+Visible prose deliberately excludes citation invocations. Snapshot v6 publishes their exact
 source ranges and completeness as neutral `proseAnnotations`; section and environment
 containers remain represented by `scopes`. Attribution, rhetorical role, and whether a claim
 is established are downstream semantic decisions.
