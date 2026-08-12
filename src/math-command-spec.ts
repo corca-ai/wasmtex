@@ -255,6 +255,13 @@ const AUTHORED_SPECS: MathCommandSpec[] = [
     expansion: 'structural',
     mathClass: 'operator',
   }),
+  ...family(
+    ['cap', 'cdot', 'circ', 'cup', 'otimes', 'oplus', 'setminus', 'times', 'vee', 'wedge'],
+    'atom',
+    TEX,
+    [],
+    { expansion: 'structural', mathClass: 'binary' },
+  ),
   ...family(['mathord'], 'atom', TEX, [required('nucleus')], {
     expansion: 'structural',
     mathClass: 'ordinary',
@@ -278,6 +285,7 @@ const AUTHORED_SPECS: MathCommandSpec[] = [
       'in',
       'le',
       'leq',
+      'mid',
       'ne',
       'neq',
       'notin',
