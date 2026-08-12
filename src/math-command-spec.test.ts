@@ -125,6 +125,41 @@ describe('MathCommandSpec registry', () => {
     }
   })
 
+  it('publishes math-class wrappers with one neutral nucleus argument', () => {
+    const content = '$a\\mathbin{\\cdot}b,\\mathord{x},\\mathop{f},\\mathrel{\\sim}$'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'wrappers',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+
+    for (const [name, mathClass] of [
+      ['mathbin', 'binary'],
+      ['mathord', 'ordinary'],
+      ['mathop', 'operator'],
+      ['mathrel', 'relation'],
+    ] as const) {
+      const wrapper = syntax.nodes.find((node) => node.name === name)!
+      expect(wrapper).toMatchObject({
+        kind: 'command',
+        mathClass,
+        state: 'complete',
+      })
+      expect(wrapper.arguments).toHaveLength(1)
+      expect(wrapper.arguments?.[0]).toMatchObject({
+        node: wrapper.children[0],
+        role: 'nucleus',
+        syntax: 'required',
+      })
+    }
+    expect(syntax.nodes.find((node) => node.name === 'cdot')).toMatchObject({
+      kind: 'command',
+      mathClass: 'binary',
+      state: 'complete',
+    })
+  })
+
   it('keeps styles and package DSLs structurally restrained', () => {
     const content = '$\\symbf{ECE}+\\mathrm{ECE}+\\text{ECE}+\\qty{3}{m}+ECE$'
     const syntax = new LatexSyntaxService().upsert({
