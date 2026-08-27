@@ -388,7 +388,7 @@ export type EngineStatus = 'unloaded' | 'loading' | 'ready' | 'compiling' | 'err
 export type AppStatus = EngineStatus | 'rendering'
 
 /** Supported TeX Live versions. */
-export type TexliveVersion = '2025'
+export type TexliveVersion = '2025' | '2026'
 
 // --- Warmup / preload types ---
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BaseWorkerEngine } from './base-worker-engine'
+import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
 import type { EngineWorker } from './worker-host'
 
 /** Minimal concrete subclass with a fake worker, to exercise the request/response
@@ -51,5 +51,16 @@ describe('BaseWorkerEngine in-flight cancellation (issue #59)', () => {
     const engine = new TestEngine()
     engine.attachFakeWorker()
     expect(() => engine.terminate()).not.toThrow()
+  })
+})
+
+describe('TeX Live mirror year binding', () => {
+  it('accepts the selected annual mirror and rejects an obvious cross-year mix', () => {
+    expect(resolveTexliveUrl('https://texlive.example/snapshots/rev/2026', '2026')).toBe(
+      'https://texlive.example/snapshots/rev/2026/',
+    )
+    expect(() => resolveTexliveUrl('https://texlive.example/2025/', '2026')).toThrow(
+      /2026 engine cannot use a 2025 mirror/,
+    )
   })
 })

@@ -1,6 +1,13 @@
 name: WASM Build
 on:
   workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: TeX Live engine year
+        required: true
+        type: choice
+        default: '2025'
+        options: ['2025', '2026']
   push:
     branches: [main, 'iter4-*', 'feat/semantic-trace', 'feat/texlive-2025-upgrade']
     # This builds pdfTeX + BibTeX only. Exclude the other engines' glue so a
@@ -15,18 +22,23 @@ on:
       - 'scripts/gen-engine-build-receipt.mjs'
       - 'scripts/lib/engine-build-receipt.mjs'
       - 'scripts/corresponding-source-2025.json'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/check-annual-engine-source.mjs'
+      - 'scripts/lib/annual-engine-source.mjs'
 
 jobs:
   build-wasm:
     runs-on: ubuntu-latest
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
-        run: node scripts/check-license-compliance.mjs 2025
+        run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"
 
-      - name: Refuse uncleared artifacts in a public repository
-        if: github.event.repository.visibility == 'public'
+      - name: Verify release policy for the established 2025 line
+        if: env.TEXLIVE_YEAR == '2025' && github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
       - uses: docker/setup-buildx-action@v4
@@ -42,7 +54,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --load \
-            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            --build-arg TEXLIVE_REF=$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref") \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
             -t pdftex-wasm \
@@ -70,13 +82,13 @@ jobs:
         run: |
           npm ci
           npx playwright install-deps chromium
-          mkdir -p public/wasmtex/2025
+          mkdir -p "public/wasmtex/$TEXLIVE_YEAR"
           cp wasm-build/dist/wasmtex-pdftex.js \
              wasm-build/dist/wasmtex-pdftex.worker.js \
              wasm-build/dist/wasmtex-pdftex.wasm \
-             wasm-build/dist/wasmtex-kpse-resolve.js public/wasmtex/2025/
-          node scripts/extract-format.mjs 2025
-          cp public/wasmtex/2025/wasmtex-pdftex.fmt \
+             wasm-build/dist/wasmtex-kpse-resolve.js "public/wasmtex/$TEXLIVE_YEAR/"
+          node scripts/extract-format.mjs "$TEXLIVE_YEAR"
+          cp "public/wasmtex/$TEXLIVE_YEAR/wasmtex-pdftex.fmt" \
              wasm-build/dist/wasmtex-pdftex.fmt
           ls -lh wasm-build/dist/wasmtex-pdftex.fmt
 
@@ -99,7 +111,6 @@ jobs:
           "
 
       - name: Smoke test BibTeX WASM
-        continue-on-error: true
         id: bibtex-smoke
         run: |
           node -e "
@@ -124,7 +135,6 @@ jobs:
             wasmtex-kpse-resolve.js wasmtex-pdftex.fmt
 
       - name: Record exact BibTeX build inputs and outputs
-        if: steps.bibtex-smoke.outcome == 'success'
         run: |
           node scripts/gen-engine-build-receipt.mjs \
             bibtex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.bibtex.json \
@@ -133,7 +143,7 @@ jobs:
       - name: Upload pdfTeX WASM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-pdftex
+          name: ${{ env.TEXLIVE_YEAR == '2025' && 'wasm-pdftex' || 'wasm-pdftex-2026' }}
           path: |
             wasm-build/dist/wasmtex-pdftex.js
             wasm-build/dist/wasmtex-pdftex.worker.js
@@ -144,10 +154,9 @@ jobs:
           retention-days: 90
 
       - name: Upload BibTeX WASM artifacts
-        if: steps.bibtex-smoke.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-bibtex
+          name: ${{ env.TEXLIVE_YEAR == '2025' && 'wasm-bibtex' || 'wasm-bibtex-2026' }}
           path: |
             wasm-build/dist/wasmtex-bibtex.js
             wasm-build/dist/wasmtex-bibtex.worker.js

@@ -342,7 +342,7 @@ export interface VirtualFile {
 export type EngineStatus = 'unloaded' | 'loading' | 'ready' | 'compiling' | 'error';
 export type AppStatus = EngineStatus | 'rendering';
 /** Supported TeX Live versions. */
-export type TexliveVersion = '2025';
+export type TexliveVersion = '2025' | '2026';
 export interface TexliveFileEntry {
     format: number;
     filename: string;

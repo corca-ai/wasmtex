@@ -625,7 +625,8 @@ const pdftexWorkflow = readFileSync(resolve(root, '.github/workflows/wasm-build.
 for (const required of [
   'extract-format.mjs',
   'wasmtex-pdftex.fmt',
-  'wasmtex-kpse-resolve.js public/wasmtex/2025/',
+  'wasmtex-kpse-resolve.js',
+  'public/wasmtex/$TEXLIVE_YEAR/',
 ]) {
   if (!pdftexWorkflow.includes(required)) {
     fail(`pdfTeX workflow does not bind its generated format dependency: ${required}`)

@@ -29,7 +29,7 @@ mkdir -p "$REPO_ROOT/$OUT_DIR"
 
 echo "Building LuaHBTeX build image (Phase 1 native is cached) ..."
 docker build --platform linux/amd64 \
-  --build-arg TEXLIVE_REF="$(cat "$REPO_ROOT/wasm-build/texlive-source.ref")" \
+  --build-arg TEXLIVE_REF="$(cat "$REPO_ROOT/wasm-build/texlive-source-${TEXLIVE_YEAR:-2025}.ref")" \
   -f "$REPO_ROOT/wasm-build/Dockerfile.luatex" \
   -t "$IMAGE" \
   "$REPO_ROOT/wasm-build" || { echo "LuaHBTeX image build failed"; exit 1; }

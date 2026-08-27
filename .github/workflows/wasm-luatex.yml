@@ -11,6 +11,13 @@ name: WASM LuaTeX (from source)
 # (e.g. the worker controller), so a glue change to the engine actually ships.
 on:
   workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: TeX Live engine year
+        required: true
+        type: choice
+        default: '2025'
+        options: ['2025', '2026']
   push:
     branches: [main]
     paths:
@@ -25,22 +32,28 @@ on:
       - 'wasm-build/pdf-backend/wtpdf-smoke.cc'
       - 'wasm-build/sha2/**'
       - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/texlive-source-*.ref'
       - 'scripts/gen-engine-build-receipt.mjs'
       - 'scripts/lib/engine-build-receipt.mjs'
       - 'scripts/corresponding-source-2025.json'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/check-annual-engine-source.mjs'
+      - 'scripts/lib/annual-engine-source.mjs'
       - '.github/workflows/wasm-luatex.yml'
 
 jobs:
   build-luatex:
     runs-on: ubuntu-latest
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
-        run: node scripts/check-license-compliance.mjs 2025
+        run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"
 
-      - name: Refuse uncleared artifacts in a public repository
-        if: github.event.repository.visibility == 'public'
+      - name: Verify release policy for the established 2025 line
+        if: env.TEXLIVE_YEAR == '2025' && github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
       - uses: docker/setup-buildx-action@v4
@@ -56,7 +69,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --load \
-            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            --build-arg TEXLIVE_REF=$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref") \
             --cache-from type=local,src=/tmp/.buildx-cache-luatex \
             --cache-to type=local,dest=/tmp/.buildx-cache-luatex-new,mode=max \
             -f wasm-build/Dockerfile.luatex \
@@ -95,14 +108,14 @@ jobs:
         run: |
           npm ci
           npx playwright install-deps chromium
-          mkdir -p public/wasmtex/2025
+          mkdir -p "public/wasmtex/$TEXLIVE_YEAR"
           cp wasm-build/dist-luatex/wasmtex-luatex.js \
              wasm-build/dist-luatex/wasmtex-luatex.worker.js \
-             wasm-build/dist-luatex/wasmtex-luatex.wasm public/wasmtex/2025/
-          node scripts/extract-luatex-format.mjs 2025
+             wasm-build/dist-luatex/wasmtex-luatex.wasm "public/wasmtex/$TEXLIVE_YEAR/"
+          node scripts/extract-luatex-format.mjs "$TEXLIVE_YEAR"
           # Ship the format gzipped (consistent with XeLaTeX; the engine prefers
           # `.fmt.gz` and decompresses in-browser). ~5.5 MB → ~2 MB.
-          gzip -n -9 -c public/wasmtex/2025/wasmtex-luatex.fmt \
+          gzip -n -9 -c "public/wasmtex/$TEXLIVE_YEAR/wasmtex-luatex.fmt" \
             > wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
           ls -lh wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
 
@@ -140,7 +153,7 @@ jobs:
       - name: Upload LuaTeX WASM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-luatex
+          name: ${{ env.TEXLIVE_YEAR == '2025' && 'wasm-luatex' || 'wasm-luatex-2026' }}
           path: |
             wasm-build/dist-luatex/wasmtex-luatex.js
             wasm-build/dist-luatex/wasmtex-luatex.worker.js

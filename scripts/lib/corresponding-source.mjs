@@ -108,7 +108,7 @@ export function checkCorrespondingSourceDirectory({ directory, config, assetMani
     const sourceRoot = `source/wasmtex/${source.commit}`
     requireDirectory(directory, sourceRoot, failures)
     for (const required of [
-      'wasm-build/texlive-source.ref',
+      config.texliveSource.commitFile,
       'wasm-build/patches/texlive-wtpdf.patch',
       'wasm-build/pdf-backend/wtpdf.h',
       'wasm-build/pdf-backend/wtpdf-xpdf.cc',

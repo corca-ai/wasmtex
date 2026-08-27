@@ -43,7 +43,7 @@ let lastDiagnostics: PanelDiagnostic[] = []
 
 const DEFAULT_TEXLIVE = '2025' as const
 const DEFAULT_PROJECT = 'default' as const
-type DemoTexliveVersion = '2025'
+type DemoTexliveVersion = '2025' | '2026'
 type DemoProject = 'default' | 'sample'
 
 const SAMPLE_FILES = ['main.tex', 'introduction.tex', 'refs.bib']
@@ -60,7 +60,7 @@ interface DemoConfig {
 function readDemoConfig(): DemoConfig {
   const urlParams = new URLSearchParams(window.location.search)
   const tlParam = urlParams.get('tl')
-  const texliveVersion = tlParam === '2025' ? tlParam : DEFAULT_TEXLIVE
+  const texliveVersion = tlParam === '2025' || tlParam === '2026' ? tlParam : DEFAULT_TEXLIVE
   const projParam = urlParams.get('proj')
   const project = projParam === 'sample' ? 'sample' : DEFAULT_PROJECT
   const persistentCache = urlParams.get('cache') === '1'

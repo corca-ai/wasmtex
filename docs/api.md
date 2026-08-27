@@ -47,8 +47,8 @@ or a CSS selector string.
 |--------|------|---------|-------------|
 | `editor` | `IStandaloneCodeEditor` | - | External Monaco editor instance. WasmTex will use it instead of creating one and will **not** dispose it on cleanup. |
 | `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine. `'auto'` detects it from the main file — a `% !TEX program = …` magic comment, or `fontspec`/`unicode-math`/CJK (`xeCJK`)/`\directlua` in the preamble — falling back to pdfLaTeX. See [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex). |
-| `texliveVersion` | `'2025'` | `'2025'` | TeX Live engine/assets version. The option remains versioned for future TeX Live releases. |
-| `texliveUrl` | `string` | Public CDN | TexLive server endpoint. Defaults to `https://d1jectpaw0dlvl.cloudfront.net/{version}/` |
+| `texliveVersion` | `'2025' \| '2026'` | `'2025'` | Exact TeX Live engine/assets year. The selected year namespaces engine files, formats, caches, and mirror requests together. |
+| `texliveUrl` | `string` | Public CDN | Exact profile mirror endpoint. A 2026 engine must receive a 2026 mirror URL and matching completion profile. |
 | `resourceCatalog` | `TexResourceCatalogProvider` | - | Exact completion catalog for the selected compile profile. Custom `texliveUrl` hosts should inject their matching provider; without one, resource completion is project-local only. |
 | `semanticCatalog` | `TexSemanticCatalogProvider` | - | Versioned class/package options, key families, and typed command/environment metadata for the same compile profile. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable identity attached to compile-observed completion snapshots. Catalog-backed hosts should use the catalog's exact mirror revision. |
@@ -295,7 +295,7 @@ const result = await compiler.compile()
 | `files` | `Record<string, string \| Uint8Array>` | `{}` | Initial project files. |
 | `mainFile` | `string` | `'main.tex'` | Main TeX file. |
 | `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine; `'auto'` detects from the main file. See [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex). |
-| `texliveVersion` | `'2025'` | `'2025'` | TeX Live engine/assets version. The option remains versioned for future TeX Live releases. |
+| `texliveVersion` | `'2025' \| '2026'` | `'2025'` | Exact TeX Live engine/assets year; keep it aligned with the selected mirror profile. |
 | `texliveUrl` | `string` | Public CDN | TeX Live package endpoint. |
 | `assetBaseUrl` | `string` | `'/'` | Base URL for WasmTex WASM assets (`wasmtex/...`). |
 | `skipFormatPreload` | `boolean` | `false` | Skip `.fmt` preload during engine bootstrap. |

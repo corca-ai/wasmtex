@@ -32,7 +32,7 @@ OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 # 1) wasmtex-xetex — from texlive-source (Dockerfile.xetex: Phase 1 native +
 #    Phase 2 emcc). Build context is wasm-build/ (the Dockerfile COPYs the glue).
 # =============================================================================
-TEXLIVE_REF="$(cat wasm-build/texlive-source.ref)"
+TEXLIVE_REF="$(cat "wasm-build/texlive-source-${TEXLIVE_YEAR:-2025}.ref")"
 echo "Building wasmtex-xetex from texlive-source ($TEXLIVE_REF) ..."
 docker build -f wasm-build/Dockerfile.xetex --platform linux/amd64 \
   --build-arg TEXLIVE_REF="$TEXLIVE_REF" -t wasmtex-xetex-wasm wasm-build/

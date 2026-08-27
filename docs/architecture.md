@@ -100,7 +100,8 @@ slot. Wrap any backend with `withCache`
 
 - **Frontend**: Vanilla TypeScript + Vite (No framework).
 - **Editor**: Monaco Editor with custom LSP implementation.
-- **Engine**: pdfTeX 1.40.28 and BibTeX (WASM), from TeX Live 2025. The engine is
+- **Engine**: versioned pdfTeX/BibTeX, XeTeX/dvipdfmx, and LuaHBTeX WASM lines from
+  immutable TeX Live 2025 and 2026 source pins. The engine is
   auto-selected per document (pdfLaTeX / XeLaTeX / LuaLaTeX); see the
   [multi-engine support guide](engine.md#multi-engine-support-xelatex--lualatex) for routing details.
 - **Viewer**: PDF.js.

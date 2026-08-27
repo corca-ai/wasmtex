@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "texliveYear": "2025",
+  "texliveYear": "2026",
   "wasmtex": {
     "repository": "https://github.com/corca-ai/wasmtex.git"
   },
   "texliveSource": {
     "repository": "https://github.com/TeX-Live/texlive-source.git",
-    "commitFile": "wasm-build/texlive-source-2025.ref"
+    "commitFile": "wasm-build/texlive-source-2026.ref"
   },
   "emscripten": {
     "version": "3.1.46",

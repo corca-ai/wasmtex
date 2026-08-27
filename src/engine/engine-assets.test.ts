@@ -12,5 +12,11 @@ describe('engine asset URLs', () => {
     expect(engineFormatUrl('/assets/', '2025', 'luatex')).toBe(
       '/assets/wasmtex/2025/wasmtex-luatex.fmt',
     )
+    expect(engineWorkerUrl('/assets/', '2026', 'pdftex')).toBe(
+      '/assets/wasmtex/2026/wasmtex-pdftex.worker.js',
+    )
+    expect(engineFormatUrl('/assets/', '2026', 'xetex')).toBe(
+      '/assets/wasmtex/2026/wasmtex-xetex.fmt',
+    )
   })
 })
