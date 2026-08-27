@@ -119,7 +119,7 @@
     "@types/node": "^24.13.2",
     "@typescript/native-preview": "^7.0.0-dev.20260219.1",
     "@vitest/coverage-v8": "^4.1.10",
-    "jscpd": "^4.0.8",
+    "jscpd": "^5.0.14",
     "lefthook": "^2.1.1",
     "monaco-editor": "^0.55.1",
     "pdf-lib": "^1.17.1",
