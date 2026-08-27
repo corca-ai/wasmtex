@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2026",
+  "distributionProfileId": "2026-initial",
+  "discovery": {
+    "name": "2026-latest",
+    "profileId": "2026-20260826",
+    "frozenAtFinal": false
+  },
+  "profiles": [
+    {
+      "id": "2026-initial",
+      "label": "TeX Live 2026 initial (2026-03-01)",
+      "snapshot": "initial",
+      "snapshotDate": "2026-03-01",
+      "mirror": {
+        "revision": "2026-b4f6befbe7732169",
+        "url": "https://texlive.corca.ai/snapshots/2026-b4f6befbe7732169/2026/",
+        "provenanceSha256": "e3de2b970525f1a39e5d97da4ce1c3bbee4c16ecc78b9cc6fe1131c3020f5307",
+        "objects": 164849
+      },
+      "engine": {
+        "releaseId": "2026-e4bc65275123982c",
+        "tag": "engine-2026-e4bc65275123982c",
+        "sourceRevision": "2f9ed38431af364ee8c10c6a7dcb06e185423534",
+        "correspondingSourceSha256": "bfdd129742502944ae9b0a260eba403a1138e76cde3bfa73c4d8b21828091a97",
+        "buildRuns": [33067203361, 33067205526, 33067207758, 33067209911, 33067211879]
+      },
+      "qualification": {
+        "browserGoldens": 7,
+        "nodeBrowserParity": 7,
+        "representativeEngines": ["pdflatex", "xelatex", "lualatex"]
+      }
+    },
+    {
+      "id": "2026-20260826",
+      "label": "TeX Live 2026 dated (2026-08-26)",
+      "snapshot": "2026-08-26",
+      "snapshotDate": "2026-08-26",
+      "mirror": {
+        "revision": "2026-ba38749b8714505a",
+        "url": "https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/",
+        "provenanceSha256": "7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00",
+        "objects": 168942
+      },
+      "engine": {
+        "releaseId": "2026-df228a6f964a208a",
+        "tag": "engine-2026-df228a6f964a208a",
+        "sourceRevision": "87132ab3fc15533bf39c6812ed1ce7cd0da2d243",
+        "correspondingSourceSha256": "c6587a2fa11b2520254265d70b32c9b6bb114ba9d0473663b5dd57381def4620",
+        "buildRuns": [33063076566, 33063078826, 33063080975, 33063082862, 33063085213]
+      },
+      "qualification": {
+        "browserGoldens": 7,
+        "nodeBrowserParity": 7,
+        "representativeEngines": ["pdflatex", "xelatex", "lualatex"]
+      }
+    }
+  ],
+  "finalization": {
+    "status": "pending-texlive-2027-release",
+    "source": "systems/texlive/2026/tlnet-final",
+    "freezeDiscoveryAtFinal": true
+  }
+}

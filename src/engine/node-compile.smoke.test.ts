@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { smokeTexliveProfile } from './smoke-texlive-profile'
 
 /**
  * Node compile smoke (#121): proves the same WASM pdfTeX engine runs off-browser via the
@@ -9,6 +10,8 @@ import { describe, expect, it } from 'vitest'
  *
  *   NODE_COMPILE_SMOKE=1 npx vitest run src/engine/node-compile.smoke.test.ts
  *
+ * Set `WASMTEX_SMOKE_TEXLIVE_VERSION=2026` together with the matching immutable
+ * `WASMTEX_SMOKE_TEXLIVE_URL` to qualify the annual 2026 line.
  * Set `WASMTEX_SMOKE_PUBLIC_DIR` to exercise locally rebuilt assets without replacing the
  * checked-in release artifacts under `public/`.
  */
@@ -21,6 +24,7 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
 
     const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
     const ASSET = 'http://assets.local/'
+    const texliveProfile = smokeTexliveProfile()
     installNodeWorkerHost({
       publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
       assetBaseUrl: ASSET,
@@ -45,8 +49,8 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
     const compiler = new WasmTexCompiler({
       engine: 'pdflatex',
       assetBaseUrl: ASSET,
-      texliveUrl:
-        process.env.WASMTEX_SMOKE_TEXLIVE_URL ?? 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+      texliveVersion: texliveProfile.version,
+      texliveUrl: texliveProfile.url,
       files: { 'main.tex': doc },
     })
     try {

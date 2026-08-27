@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2026",
+  "sourceType": "release-archives",
+  "snapshot": "initial",
+  "texmfArchive": {
+    "filename": "texlive-20260301-texmf.tar.xz",
+    "url": "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2026/texlive-20260301-texmf.tar.xz",
+    "sha512": "0b8f87622e4b9e31d4bd8c7720376aa9685e5ee299c896e3e1660459546a31e11508946f2c40a71671944c8b467483e5d4d859ff17698d239c7d5aced65d4a6b"
+  },
+  "metadataArchive": {
+    "filename": "texlive-20260301-extra.tar.xz",
+    "url": "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2026/texlive-20260301-extra.tar.xz",
+    "sha512": "bde992edb7cbaa119c79bfc73697203dfb6bb7d04488d8e50085c06ebbe241f9ef3d161afb996a814c3d1e35bc2cbfe6a957beb5dfcdcfcc7e0cc827b32c5fc3"
+  },
+  "tlpdb": {
+    "archiveMember": "texlive-20260301-extra/tlpkg/texlive.tlpdb",
+    "sha256": "ae33f319ba29c515079f5e8ef0a9b33e08ecb41dcc57c1c65e04d7b906acfb90"
+  }
+}

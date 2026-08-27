@@ -10,6 +10,12 @@ side by side. Hosts select an exact profile and pass both its `texliveVersion` a
 mirror URL; engine assets, formats, cache namespaces, catalogs, and mirror bytes
 must all name the same year.
 
+The published 2026 initial/dated profiles and the post-2027 `tlnet-final`
+procedure are recorded in
+[`texlive-2026-snapshot-lifecycle.md`](texlive-2026-snapshot-lifecycle.md).
+Machine consumers use `scripts/texlive-profiles-2026.json`; every entry names
+an immutable package mirror and its matching engine release.
+
 ### 1. WASM Engine & File Lookup
 The WASM engine uses a customized `kpathsea` library. When the C code attempts to find a file (style, font, etc.), it follows this flow:
 1. **Local Check (MEMFS)**: It first looks in the Emscripten virtual filesystem (including the pre-loaded `/tex` cache).

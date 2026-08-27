@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import { BIBTEX_FILES, docFor, MAKEINDEX_FILES, pdfImportFiles } from '../../e2e/golden-corpus'
+import { smokeTexliveProfile } from './smoke-texlive-profile'
 
 /**
  * Cross-host parity (S4 / #111, execution-model principle 5): the determinism contract.
@@ -14,6 +15,8 @@ import { BIBTEX_FILES, docFor, MAKEINDEX_FILES, pdfImportFiles } from '../../e2e
  *
  *   CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
  *
+ * Set `WASMTEX_SMOKE_TEXLIVE_VERSION=2026` together with the matching immutable
+ * `WASMTEX_SMOKE_TEXLIVE_URL` to qualify the annual 2026 line.
  * Set `WASMTEX_SMOKE_PUBLIC_DIR` to exercise locally rebuilt assets without replacing the
  * checked-in release artifacts under `public/`.
  */
@@ -27,8 +30,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 // test (e2e/golden-corpus.ts) so both compare against the same e2e/goldens/*.
 const ENGINES = ['pdflatex', 'lualatex', 'xelatex'] as const
 const ASSET = 'http://assets.local/'
-const TEXLIVE =
-  process.env.WASMTEX_SMOKE_TEXLIVE_URL ?? 'https://d1jectpaw0dlvl.cloudfront.net/2025/'
+const TEXLIVE_PROFILE = smokeTexliveProfile()
+const TEXLIVE_VERSION = TEXLIVE_PROFILE.version
+const GOLDEN_DIR = join(ROOT, 'e2e/goldens', TEXLIVE_VERSION === '2026' ? '2026' : '')
+const TEXLIVE = TEXLIVE_PROFILE.url
 
 /** Compile `files` under the Node host and assert the structural signature equals the
  *  committed browser golden `e2e/goldens/<goldenName>`. */
@@ -47,6 +52,7 @@ async function assertParity(
   const compiler = new WasmTexCompiler({
     engine,
     assetBaseUrl: ASSET,
+    texliveVersion: TEXLIVE_VERSION,
     texliveUrl: TEXLIVE,
     files,
   })
@@ -71,7 +77,7 @@ async function assertParity(
           }
         : null,
     }
-    const golden = JSON.parse(readFileSync(join(ROOT, 'e2e/goldens', goldenName), 'utf8'))
+    const golden = JSON.parse(readFileSync(join(GOLDEN_DIR, goldenName), 'utf8'))
     // The crux of the hybrid: the Node host reproduces the browser's output exactly.
     expect(signature).toEqual(golden)
   } finally {
@@ -98,14 +104,14 @@ describe.runIf(RUN)('cross-host parity (#111, #113, #114)', () => {
   // Index (pdfLaTeX + makeindex, M3 #115/#134): the makeindex stage runs under Node too.
   // Skipped until the browser golden is generated (`GOLDEN_UPDATE=1 playwright test
   // golden-output`), so an opt-in run before that doesn't hard-fail on a missing file.
-  it.runIf(existsSync(join(ROOT, 'e2e/goldens/makeindex.json')))(
+  it.runIf(existsSync(join(GOLDEN_DIR, 'makeindex.json')))(
     'makeindex: Node output equals the browser-generated golden',
     () => assertParity('pdflatex', MAKEINDEX_FILES, 'makeindex.json'),
     180_000,
   )
 
   for (const engine of ['xelatex', 'lualatex'] as const) {
-    it.runIf(existsSync(join(ROOT, 'e2e/goldens', `pdf-import-${engine}.json`)))(
+    it.runIf(existsSync(join(GOLDEN_DIR, `pdf-import-${engine}.json`)))(
       `${engine}: graphicx/pdfpages/TikZ PDF import equals the browser golden`,
       () => assertParity(engine, pdfImportFiles(engine), `pdf-import-${engine}.json`),
       180_000,
