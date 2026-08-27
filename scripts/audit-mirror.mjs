@@ -13,10 +13,10 @@
  *
  * Writes compat/mirror-coverage.md and prints a summary.
  */
-import { execSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
@@ -55,9 +55,11 @@ const CURATED_PACKAGES = [
 ]
 
 function parseArgs(argv) {
-  const args = { bucket: 'corca-fastlatex-texlib', year: '2025', check: false }
+  const args = { year: '2025', check: false }
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--bucket') args.bucket = argv[++i]
+    if (argv[i] === '--bucket') process.env.TEXLIVE_OBJECT_BUCKET = argv[++i]
+    else if (argv[i] === '--endpoint') process.env.TEXLIVE_OBJECT_ENDPOINT = argv[++i]
+    else if (argv[i] === '--prefix') process.env.TEXLIVE_OBJECT_PREFIX = argv[++i]
     else if (argv[i] === '--year') args.year = argv[++i]
     else if (argv[i] === '--check') args.check = true
   }
@@ -66,22 +68,24 @@ function parseArgs(argv) {
 
 /** Verify each curated package's file is present in dir 26. Returns the missing
  *  set. Lists dir 26 once (filenames are the last whitespace field). */
-function checkCuratedPackages(bucket, year) {
+function checkCuratedPackages(store, year) {
   const present = new Set()
-  for (const line of sh(`aws s3 ls s3://${bucket}/${year}/pdftex/26/`).split('\n')) {
+  for (const line of list(store, year, '26').split('\n')) {
     const name = line.trim().split(/\s+/).pop()
     if (name) present.add(name)
   }
   return CURATED_PACKAGES.filter((f) => !present.has(f))
 }
 
-function sh(cmd) {
-  return execSync(cmd, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+function list(store, year, ...parts) {
+  return runObjectStore(store, ['s3', 'ls', `${objectUri(store, year, 'pdftex', ...parts)}/`], {
+    encoding: 'utf8', maxBuffer: 256 * 1024 * 1024,
+  })
 }
 
 /** Top-level "PRE <id>/" entries under the pdftex prefix. */
-function listFormats(bucket, year) {
-  const out = sh(`aws s3 ls s3://${bucket}/${year}/pdftex/`)
+function listFormats(store, year) {
+  const out = list(store, year)
   const ids = []
   for (const line of out.split('\n')) {
     const m = line.match(/PRE\s+([^/]+)\//)
@@ -91,8 +95,10 @@ function listFormats(bucket, year) {
 }
 
 /** { objects, bytes } for one format prefix, via `aws s3 ls --summarize`. */
-function summarize(bucket, year, fmt) {
-  const out = sh(`aws s3 ls s3://${bucket}/${year}/pdftex/${fmt}/ --recursive --summarize`)
+function summarize(store, year, fmt) {
+  const out = runObjectStore(store,
+    ['s3', 'ls', `${objectUri(store, year, 'pdftex', fmt)}/`, '--recursive', '--summarize'],
+    { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
   const objs = out.match(/Total Objects:\s*(\d+)/)
   const size = out.match(/Total Size:\s*(\d+)/)
   return { objects: objs ? Number(objs[1]) : 0, bytes: size ? Number(size[1]) : 0 }
@@ -110,10 +116,11 @@ function humanBytes(n) {
 }
 
 function main() {
-  const { bucket, year, check } = parseArgs(process.argv.slice(2))
-  console.log(`Auditing s3://${bucket}/${year}/pdftex/ ...`)
+  const { year, check } = parseArgs(process.argv.slice(2))
+  const store = objectStoreConfig()
+  console.log(`Auditing ${objectUri(store, year, 'pdftex')}/ ...`)
 
-  const presentIds = new Set(listFormats(bucket, year))
+  const presentIds = new Set(listFormats(store, year))
   const rows = []
   let totalObjects = 0
   let totalBytes = 0
@@ -132,14 +139,14 @@ function main() {
       rows.push({ fmt, name, objects: 0, bytes: 0, present: false })
       continue
     }
-    const { objects, bytes } = summarize(bucket, year, fmt)
+    const { objects, bytes } = summarize(store, year, fmt)
     totalObjects += objects
     totalBytes += bytes
     rows.push({ fmt, name, objects, bytes, present: true })
     console.log(`  fmt ${fmt.padStart(2)}: ${String(objects).padStart(7)} objs  ${humanBytes(bytes).padStart(9)}  ${name}`)
   }
 
-  const md = renderMarkdown({ bucket, year, rows, totalObjects, totalBytes })
+  const md = renderMarkdown({ store, year, rows, totalObjects, totalBytes })
   const outDir = join(root, 'compat')
   mkdirSync(outDir, { recursive: true })
   const outPath = join(outDir, 'mirror-coverage.md')
@@ -159,7 +166,7 @@ function main() {
   }
 
   // Curated common-package coverage gate.
-  const missingPkgs = checkCuratedPackages(bucket, year)
+  const missingPkgs = checkCuratedPackages(store, year)
   if (missingPkgs.length) {
     console.log(`\n⚠ Curated packages MISSING from the mirror: ${missingPkgs.join(', ')}`)
   } else {
@@ -173,11 +180,11 @@ function main() {
   }
 }
 
-function renderMarkdown({ bucket, year, rows, totalObjects, totalBytes }) {
+function renderMarkdown({ store, year, rows, totalObjects, totalBytes }) {
   const lines = []
   lines.push('# TeX Live mirror coverage', '')
-  lines.push(`- Bucket: \`s3://${bucket}/${year}/pdftex/\``)
-  lines.push(`- Served by: \`d1jectpaw0dlvl.cloudfront.net/${year}/\``)
+  lines.push(`- Object prefix: \`${objectUri(store, year, 'pdftex')}/\``)
+  if (process.env.TEXLIVE_DEPLOYED_URL) lines.push(`- Served by: \`${process.env.TEXLIVE_DEPLOYED_URL}\``)
   lines.push(`- Total: **${totalObjects} objects**, **${humanBytes(totalBytes)}**`)
   lines.push('')
   lines.push('| fmt | kpathsea format | objects | size | status |')

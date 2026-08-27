@@ -17,8 +17,8 @@ The WASM engine uses a customized `kpathsea` library. When the C code attempts t
 2. **JS Fallback**: If not found, a wrapper (`wasm-build/kpse-hook.c`) intercepts the call and triggers the JS fallback `kpse_find_file_js` (`wasm-build/library.js`), which calls into the authored worker controller (for pdfTeX, `wasm-build/pdftex-worker.js`).
 3. **Synchronous XHR**: The JS worker performs a **synchronous XMLHttpRequest** to the TeX Live CDN. Synchronous calls are used because the C-side `kpathsea` lookup is blocking.
 
-### 2. S3/CDN Package Structure
-Packages are hosted on S3 (served via CloudFront) in a flattened structure based on kpathsea format IDs:
+### 2. Object-store/CDN package structure
+Packages are hosted in an S3-compatible object store and served through a CDN in a flattened structure based on kpathsea format IDs. The production migration target is R2 at `texlive.corca.ai`:
 - `pdftex/26/`: TeX sources (`.sty`, `.cls`, `.tex`)
 - `pdftex/3/`: TFM font metrics
 - `pdftex/32/`: Type1 fonts (`.pfb`)
@@ -121,9 +121,9 @@ the from-source build mechanics.
 > TeX Live 2025 is the current baseline. These steps apply when adding a future
 > year; substitute the new year throughout while keeping 2025 available until cutover.
 
-Upgrading requires updating the WASM engine, the S3 package repository, and the base format file.
+Upgrading requires updating the WASM engine, the object-store package repository, and the base format file.
 
-### Step 1: Update S3 Packages
+### Step 1: Update mirror packages
 
 Provision the new year's full official TeX Live distribution under a new versioned
 CDN prefix and preserve the copying, package-license, and source materials shipped by
@@ -131,7 +131,7 @@ that distribution. Record the release year and CDN base URL used by the engine. 
 CDN operation is independent of the WasmTex engine release checklist; the engine
 manifest does not wait for a package-by-package override review.
 
-The repository's `sync-texlive-s3.sh`, `texlive-provenance`, and catalog tools remain
+The repository's `sync-texlive-mirror.sh`, `texlive-provenance`, and catalog tools remain
 available for anyone intentionally constructing a transformed or flattened subset.
 That workflow generates `catalog/<mirrorRevision>/` from the final selected inventory,
 then extracts and checks `semantic/<mirrorRevision>/` from those exact `.cls`/`.sty`
@@ -151,7 +151,8 @@ expected but absent, such as OpenType/TrueType fonts required by XeLaTeX and
 LuaLaTeX:
 
 ```bash
-AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket <bucket> --year <year>
+TEXLIVE_OBJECT_BUCKET=<bucket> TEXLIVE_OBJECT_ENDPOINT=<endpoint> \
+  node scripts/audit-mirror.mjs --year <year>
 ```
 
 Before enabling exact resource completion for the new profile:
@@ -241,12 +242,12 @@ must be on the mirror + in the bloom). See [WASM Engine & TeX Live](engine.md).
 When adding a future TeX Live release, keep the existing 2025 environment
 operational during validation by using versioned paths.
 
-### 1. Versioned S3 Structure
-Instead of overwriting the root `pdftex/` folder, use versioned prefixes in your S3 bucket:
-- `s3://your-bucket/2025/pdftex/...` (Current)
-- `s3://your-bucket/<new-year>/pdftex/...` (New; for example, `2026`)
+### 1. Immutable object-store structure
+Instead of overwriting `pdftex/`, use an immutable snapshot prefix in the object store:
+- `s3://your-bucket/snapshots/<mirrorRevision>/2025/pdftex/...`
+- `s3://your-bucket/snapshots/<mirrorRevision>/2026/pdftex/...`
 
-Update your `scripts/sync-texlive-s3.sh` or manual `aws s3 sync` commands to include the version prefix.
+Set `TEXLIVE_OBJECT_PREFIX` and use `scripts/sync-texlive-mirror.sh`; see [mirror operations](texlive-mirror-operations.md).
 
 ### 2. Client-Side Switching
 

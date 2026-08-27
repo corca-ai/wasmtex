@@ -21,15 +21,17 @@
  * Hash: FNV-1a double hashing — h_i = (h1 + i * h2) mod m
  */
 
-import { execSync } from 'child_process'
 import { writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-const S3_BUCKET = 's3://corca-fastlatex-texlib'
-const S3_PREFIX = '2025/pdftex/'
+import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store.mjs'
+
+const STORE = objectStoreConfig()
+const YEAR = process.env.TEXLIVE_YEAR || '2025'
+const MIRROR_ROOT = objectUri(STORE, YEAR, 'pdftex')
 const OUTPUT_FILE = join(__dirname, '..', 'bloom-filter.bin')
 
 // Bloom filter parameters
@@ -52,10 +54,10 @@ function fnv1a(str) {
 
 // --- S3 file listing ---------------------------------------------------------
 
-function listS3Files() {
-  console.log(`Listing files from ${S3_BUCKET}/${S3_PREFIX}...`)
+function listMirrorFiles() {
+  console.log(`Listing files from ${MIRROR_ROOT}/...`)
 
-  const raw = execSync(`aws s3 ls ${S3_BUCKET}/${S3_PREFIX} --recursive`, {
+  const raw = runObjectStore(STORE, ['s3', 'ls', `${MIRROR_ROOT}/`, '--recursive'], {
     encoding: 'utf8',
     maxBuffer: 50 * 1024 * 1024,
   })
@@ -68,7 +70,8 @@ function listS3Files() {
 
     const fullKey = match[1]
     // Extract format/filename from "2025/pdftex/FORMAT/FILENAME"
-    const rel = fullKey.replace(/^2025\/pdftex\//, '')
+    const marker = `${YEAR}/pdftex/`
+    const rel = fullKey.slice(fullKey.indexOf(marker) + marker.length)
 
     // Skip pk/ directory (PK fonts are rare and managed separately)
     if (rel.startsWith('pk/')) continue
@@ -140,7 +143,7 @@ function serializeBloomFilter({ bits, m, k }) {
 // --- Main --------------------------------------------------------------------
 
 function main() {
-  const keys = listS3Files()
+  const keys = listMirrorFiles()
   console.log(`Found ${keys.length} files (excluding pk/)`)
 
   if (keys.length === 0) {
@@ -156,12 +159,10 @@ function main() {
 
   // Upload if --upload flag is set
   if (process.argv.includes('--upload')) {
-    const s3Dest = `${S3_BUCKET}/2025/bloom-filter.bin`
+    const s3Dest = objectUri(STORE, YEAR, 'bloom-filter.bin')
     console.log(`\nUploading to ${s3Dest}...`)
-    execSync(
-      `aws s3 cp ${OUTPUT_FILE} ${s3Dest} --content-type application/octet-stream --cache-control "public, max-age=86400"`,
-      { stdio: 'inherit' },
-    )
+    runObjectStore(STORE, ['s3', 'cp', OUTPUT_FILE, s3Dest, '--content-type',
+      'application/octet-stream', '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
     console.log('Upload complete.')
   }
 }
