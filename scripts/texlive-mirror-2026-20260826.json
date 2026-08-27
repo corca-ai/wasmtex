@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2026",
+  "sourceType": "tlnet-repository",
+  "repository": {
+    "snapshot": "2026-08-26",
+    "url": "https://texlive.info/tlnet-archive/2026/08/26/tlnet/",
+    "frozen": true
+  },
+  "installer": {
+    "filename": "install-tl-unx.tar.gz",
+    "url": "https://texlive.info/tlnet-archive/2026/08/26/tlnet/install-tl-unx.tar.gz",
+    "sha512": "34af39e99ae9f88992d1829e796de92424da29f78d8411a40d5fcd31d9120daf53afc485a8043425bb38d34c0d60105bd321720d0122ce649e66a62bed0354ff"
+  },
+  "tlpdb": {
+    "url": "https://texlive.info/tlnet-archive/2026/08/26/tlnet/tlpkg/texlive.tlpdb",
+    "sha256": "9d2208c4cafad4572eb27f89112d98ddb9127cafa496568b1ebf3f06a20ec610"
+  }
+}

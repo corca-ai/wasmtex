@@ -1,0 +1,1413 @@
+{
+  "schemaVersion": 1,
+  "fileOwners": {},
+  "packageLicenses": {
+"00texlive.image": {
+    "licenseIds": [
+      "LicenseRef-TeX-Live-Mixed-Free-Software"
+    ],
+    "evidence": [
+      "https://tug.org/texlive/LICENSE.TL",
+      "texmf-dist/README"
+    ],
+    "noticePaths": [
+      "texmf-dist/README"
+    ],
+    "reviewed": true
+  },
+  "afm2pl": {
+    "licenseIds": [
+      "LicenseRef-TeX-Live-Free-Redistribution"
+    ],
+    "evidence": [
+      "https://tug.org/texlive/LICENSE.TL",
+      "texmf-dist/tex/fontinst/afm2pl/README"
+    ],
+    "noticePaths": [
+      "texmf-dist/tex/fontinst/afm2pl/README"
+    ],
+    "reviewed": true
+  },
+  "c90": {
+    "licenseIds": [
+      "GPL-2.0-or-later"
+    ],
+    "evidence": [
+      "texmf-dist/source/fonts/enc/c90/c90.mtx"
+    ],
+    "noticePaths": [
+      "texmf-dist/source/fonts/enc/c90/c90.mtx"
+    ],
+    "reviewed": true
+  },
+  "cmexb": {
+    "licenseIds": [
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/doc/fonts/cmexb/README-cmexb"
+    ],
+    "noticePaths": [
+      "texmf-dist/doc/fonts/cmexb/README-cmexb"
+    ],
+    "reviewed": true
+  },
+  "context-legacy": {
+    "licenseIds": [
+      "LicenseRef-ConTeXt-Mixed-Free-Software"
+    ],
+    "evidence": [
+      "https://wiki.contextgarden.net/ConTeXt_License",
+      "texmf-dist/metapost/context/base/mpii/mp-txts.mpii"
+    ],
+    "noticePaths": [
+      "texmf-dist/metapost/context/base/mpii/mp-txts.mpii"
+    ],
+    "reviewed": true
+  },
+  "cweb-old": {
+    "licenseIds": [
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/tex/plain/cweb-old/README"
+    ],
+    "noticePaths": [
+      "texmf-dist/tex/plain/cweb-old/README"
+    ],
+    "reviewed": true
+  },
+  "euxm": {
+    "licenseIds": [
+      "LicenseRef-AMS-Fonts"
+    ],
+    "evidence": [
+      "texmf-dist/fonts/source/public/euxm/eubase.mf"
+    ],
+    "noticePaths": [
+      "texmf-dist/fonts/source/public/euxm/eubase.mf"
+    ],
+    "reviewed": true
+  },
+  "garuda-c90": {
+    "licenseIds": [
+      "GPL-2.0-or-later"
+    ],
+    "evidence": [
+      "texmf-dist/source/fonts/garuda-c90/garuda-c90.fontinst"
+    ],
+    "noticePaths": [
+      "texmf-dist/source/fonts/garuda-c90/garuda-c90.fontinst"
+    ],
+    "reviewed": true
+  },
+  "glyphlist": {
+    "licenseIds": [
+      "Apache-2.0"
+    ],
+    "evidence": [
+      "texmf-dist/fonts/map/glyphlist/glyphlist.txt"
+    ],
+    "noticePaths": [
+      "texmf-dist/fonts/map/glyphlist/glyphlist.txt"
+    ],
+    "reviewed": true
+  },
+  "gustlib": {
+    "licenseIds": [
+      "LicenseRef-GUSTLIB-Mixed-Free-Software"
+    ],
+    "evidence": [
+      "texmf-dist/doc/plain/gustlib/readme.plbtx993",
+      "texmf-dist/bibtex/bib/gustlib/plbib.bib"
+    ],
+    "noticePaths": [
+      "texmf-dist/doc/plain/gustlib/readme.plbtx993",
+      "texmf-dist/bibtex/bib/gustlib/plbib.bib"
+    ],
+    "reviewed": true
+  },
+  "jmn": {
+    "licenseIds": [
+      "LicenseRef-GUST-Font-License"
+    ],
+    "evidence": [
+      "https://www.gust.org.pl/projects/e-foundry/licenses",
+      "texmf-dist/fonts/type1/jmn/hans/hans.pfb"
+    ],
+    "noticePaths": [
+      "texmf-dist/fonts/type1/jmn/hans/hans.pfb"
+    ],
+    "reviewed": true
+  },
+  "kluwer": {
+    "licenseIds": [
+      "LicenseRef-Kluwer-Class-Source-Distribution"
+    ],
+    "evidence": [
+      "texmf-dist/source/latex/kluwer/kluwer.dtx",
+      "texmf-dist/tex/latex/kluwer/kluwer.cls"
+    ],
+    "noticePaths": [
+      "texmf-dist/source/latex/kluwer/kluwer.dtx",
+      "texmf-dist/tex/latex/kluwer/kluwer.cls"
+    ],
+    "reviewed": true
+  },
+  "latexconfig": {
+    "licenseIds": [
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg"
+    ],
+    "noticePaths": [
+      "texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg"
+    ],
+    "reviewed": true
+  },
+  "mflua": {
+    "licenseIds": [
+      "LGPL-2.1-or-later"
+    ],
+    "evidence": [
+      "texmf-dist/doc/man/man1/mflua.1"
+    ],
+    "noticePaths": [
+      "texmf-dist/doc/man/man1/mflua.1"
+    ],
+    "reviewed": true
+  },
+  "norasi-c90": {
+    "licenseIds": [
+      "GPL-2.0-or-later"
+    ],
+    "evidence": [
+      "texmf-dist/source/fonts/norasi-c90/norasi-c90.fontinst"
+    ],
+    "noticePaths": [
+      "texmf-dist/source/fonts/norasi-c90/norasi-c90.fontinst"
+    ],
+    "reviewed": true
+  },
+  "otibet": {
+    "licenseIds": [
+      "GPL-2.0-or-later",
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/fonts/source/public/otibet/bzrsetup.mf",
+      "texmf-dist/fonts/source/public/otibet/tibetan.mf"
+    ],
+    "noticePaths": [
+      "texmf-dist/fonts/source/public/otibet/bzrsetup.mf",
+      "texmf-dist/fonts/source/public/otibet/tibetan.mf"
+    ],
+    "reviewed": true
+  },
+  "pdfwin": {
+    "licenseIds": [
+      "LPPL-1.2-or-later"
+    ],
+    "evidence": [
+      "texmf-dist/tex/latex/pdfwin/pdfwin.sty"
+    ],
+    "noticePaths": [
+      "texmf-dist/tex/latex/pdfwin/pdfwin.sty"
+    ],
+    "reviewed": true
+  },
+  "qpxqtx": {
+    "licenseIds": [
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/doc/fonts/qpxqtx/00README",
+      "texmf-dist/tex/generic/qpxqtx/qpxmath.sty"
+    ],
+    "noticePaths": [
+      "texmf-dist/doc/fonts/qpxqtx/00README",
+      "texmf-dist/tex/generic/qpxqtx/qpxmath.sty"
+    ],
+    "reviewed": true
+  },
+  "texlive-scripts": {
+    "licenseIds": [
+      "GPL-2.0-or-later",
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/scripts/texlive/updmap.pl",
+      "texmf-dist/dvips/tetex/config.builtin35"
+    ],
+    "noticePaths": [
+      "texmf-dist/scripts/texlive/updmap.pl",
+      "texmf-dist/dvips/tetex/config.builtin35"
+    ],
+    "reviewed": true
+  },
+  "ttfutils": {
+    "licenseIds": [
+      "LicenseRef-TeX-Live-Free-Redistribution"
+    ],
+    "evidence": [
+      "https://tug.org/texlive/LICENSE.TL",
+      "texmf-dist/doc/support/ttf2pk/ttf2pk.doc"
+    ],
+    "noticePaths": [
+      "texmf-dist/doc/support/ttf2pk/ttf2pk.doc"
+    ],
+    "reviewed": true
+  },
+  "xetexconfig": {
+    "licenseIds": [
+      "LicenseRef-Public-Domain"
+    ],
+    "evidence": [
+      "texmf-dist/tex/xelatex/xetexconfig/crop.cfg"
+    ],
+    "noticePaths": [
+      "texmf-dist/tex/xelatex/xetexconfig/crop.cfg"
+    ],
+    "reviewed": true
+  }
+    ,
+    "tlgs.windows": {
+      "licenseIds": [
+        "LicenseRef-Free-Use-Modify-Distribute"
+      ],
+      "evidence": [
+        "texmf-dist/scripts/tlgs/pdf2ps.lua",
+        "texmf-dist/scripts/tlgs/ps2pdf.lua"
+      ],
+      "noticePaths": [
+        "texmf-dist/scripts/tlgs/pdf2ps.lua",
+        "texmf-dist/scripts/tlgs/ps2pdf.lua"
+      ],
+      "reviewed": true
+    },
+    "hyphen-afrikaans": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-af.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-af.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-af.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-af.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-albanian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sq.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sq.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sq.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sq.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-ancientgreek": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-grc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-grc.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-grc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-grc.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-arabic": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ar.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ar.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-armenian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-hy.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-hy.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-hy.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-hy.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-base": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/config/language.dat",
+        "texmf-dist/tex/generic/config/language.us"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/config/language.dat",
+        "texmf-dist/tex/generic/config/language.us"
+      ],
+      "reviewed": true
+    },
+    "hyphen-belarusian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-be.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-be.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-be.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-be.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-bulgarian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-bg.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-bg.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-bg.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-bg.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-catalan": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ca.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ca.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ca.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ca.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-chinese": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-zh-latn-pinyin.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex-8bit/hyph-zh-latn-pinyin.ec.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-zh-latn-pinyin.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-zh-latn-pinyin.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex-8bit/hyph-zh-latn-pinyin.ec.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-zh-latn-pinyin.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-churchslavonic": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cu.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cu.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cu.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cu.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-coptic": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cop.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cop.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cop.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cop.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-czech": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cs.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cs.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cs.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cs.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-english": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-en-gb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-en-us.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-en-gb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-en-us.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-en-gb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-en-us.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-en-gb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-en-us.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-esperanto": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-eo.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-eo.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-eo.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-eo.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-estonian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-et.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-et.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-et.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-et.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-ethiopic": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mul-ethi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mul-ethi.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mul-ethi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mul-ethi.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-farsi": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-fa.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-fa.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-french": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-fr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-fr.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-fr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-fr.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-friulan": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-fur.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-fur.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-fur.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-fur.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-galician": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-gl.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-gl.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-gl.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-gl.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-georgian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ka.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ka.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ka.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ka.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-german": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-de-1901.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-de-1996.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-de-ch-1901.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-de-1901.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-de-1996.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-de-ch-1901.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-de-1901.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-de-1996.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-de-ch-1901.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-de-1901.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-de-1996.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-de-ch-1901.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-hebrew": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-he.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-he.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-indic": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-as.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-bn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-gu.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-hi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-kn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ml.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-or.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pa.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ta.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-te.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-as.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-bn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-gu.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-hi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-kn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ml.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-or.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pa.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ta.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-te.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-as.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-bn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-gu.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-hi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-kn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ml.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-or.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pa.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ta.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-te.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-as.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-bn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-gu.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-hi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-kn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ml.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-or.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pa.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pi.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ta.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-te.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-indonesian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-id.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-id.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-id.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-id.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-interlingua": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ia.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ia.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ia.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ia.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-irish": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ga.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ga.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ga.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ga.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-kurmanji": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-kmr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-kmr.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-kmr.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-kmr.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-latvian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-lv.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-lv.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-lv.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-lv.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-lithuanian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-lt.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-lt.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-lt.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-lt.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-macedonian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mk.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mk.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-mongolian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mn-cyrl-x-lmc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mn-cyrl.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mn-cyrl-x-lmc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mn-cyrl.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mn-cyrl-x-lmc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-mn-cyrl.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mn-cyrl-x-lmc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-mn-cyrl.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-norwegian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-nb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-nn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-nb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-nn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-no.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-nb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-nn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-nb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-nn.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-no.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-occitan": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-oc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-oc.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-oc.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-oc.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-piedmontese": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pms.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pms.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pms.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pms.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-portuguese": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pt.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pt.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-pt.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-pt.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-romanian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ro.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ro.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ro.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ro.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-romansh": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-rm.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-rm.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-rm.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-rm.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-russian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ru.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ru.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-ru.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-ru.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-sanskrit": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sa.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sa.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sa.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sa.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-slovak": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sk.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sk.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-slovenian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sl.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sl.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sl.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sl.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-swedish": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sv.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sv.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-sv.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-sv.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-thai": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-th.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-th.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-th.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-th.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-turkmen": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-tk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-tk.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-tk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-tk.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-ukrainian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-uk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-uk.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-uk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-uk.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-uppersorbian": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-hsb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-hsb.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-hsb.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-hsb.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-vietnamese": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-vi.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-vi.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-welsh": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cy.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cy.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-cy.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-cy.tex"
+      ],
+      "reviewed": true
+    },
+    "hyphen-kazakh": {
+      "licenseIds": [
+        "LicenseRef-Hyph-UTF8-Per-File"
+      ],
+      "evidence": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-kk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-kk.tex"
+      ],
+      "noticePaths": [
+        "texmf-dist/tex/generic/hyph-utf8/loadhyph/loadhyph-kk.tex",
+        "texmf-dist/tex/generic/hyph-utf8/patterns/tex/hyph-kk.tex"
+      ],
+      "reviewed": true
+    }
+  },
+  "collisions": {
+    "pdftex/11/lm-ec.map": {
+      "selectedSource": "texmf-dist/fonts/map/dvipdfm/lm/lm-ec.map",
+      "rejectedSources": [
+        "texmf-dist/fonts/map/dvips/lm/lm-ec.map"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/11/lm-math.map": {
+      "selectedSource": "texmf-dist/fonts/map/dvipdfm/lm/lm-math.map",
+      "rejectedSources": [
+        "texmf-dist/fonts/map/dvips/lm/lm-math.map"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/11/lm-rm.map": {
+      "selectedSource": "texmf-dist/fonts/map/dvipdfm/lm/lm-rm.map",
+      "rejectedSources": [
+        "texmf-dist/fonts/map/dvips/lm/lm-rm.map"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/11/lm-texnansi.map": {
+      "selectedSource": "texmf-dist/fonts/map/dvipdfm/lm/lm-texnansi.map",
+      "rejectedSources": [
+        "texmf-dist/fonts/map/dvips/lm/lm-texnansi.map"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/Edge.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/model/Edge.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/deprecated/Edge.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/README": {
+      "selectedSource": "texmf-dist/tex/latex/lhcyr/lhcyrwin/README",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/dehyph/README",
+        "texmf-dist/tex/generic/t2/cyrfinst/README",
+        "texmf-dist/tex/latex/lhcyr/lhcyralt/README",
+        "texmf-dist/tex/latex/lhcyr/lhcyrkoi/README",
+        "texmf-dist/tex/plain/cweb-old/README",
+        "texmf-dist/tex/plain/cyrplain/README"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/afoot.sty": {
+      "selectedSource": "texmf-dist/tex/latex/arabtex/afoot.sty",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/ledmac/afoot.sty"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/doc.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/experimental/evolving/doc.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/circular/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/control/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/force/jedi/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/trees/doc.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/etex.src": {
+      "selectedSource": "texmf-dist/tex/plain/etex/etex.src",
+      "rejectedSources": [
+        "texmf-dist/tex/luatex/hyph-utf8/etex.src"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/fithesis-czech.def": {
+      "selectedSource": "texmf-dist/tex/latex/fithesis/locale/fithesis-czech.def",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/fithesis/locale/mu/econ/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fi/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fsps/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fss/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/law/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/med/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/ped/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/pharm/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/phil/fithesis-czech.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/sci/fithesis-czech.def"
+      ],
+      "rationale": "Preserves the source-path choice used by the previously qualified 2025 flattened mirror while accepting the pinned 2026 upstream revision."
+    },
+    "pdftex/26/fithesis-english.def": {
+      "selectedSource": "texmf-dist/tex/latex/fithesis/locale/mu/ped/fithesis-english.def",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/fithesis/locale/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/econ/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fi/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fsps/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fss/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/law/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/med/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/pharm/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/phil/fithesis-english.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/sci/fithesis-english.def"
+      ],
+      "rationale": "Preserves the source-path choice used by the previously qualified 2025 flattened mirror while accepting the pinned 2026 upstream revision."
+    },
+    "pdftex/26/fithesis-slovak.def": {
+      "selectedSource": "texmf-dist/tex/latex/fithesis/locale/mu/ped/fithesis-slovak.def",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/fithesis/locale/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/econ/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fi/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fsps/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/fss/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/law/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/med/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/pharm/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/phil/fithesis-slovak.def",
+        "texmf-dist/tex/latex/fithesis/locale/mu/sci/fithesis-slovak.def"
+      ],
+      "rationale": "Preserves the source-path choice used by the previously qualified 2025 flattened mirror while accepting the pinned 2026 upstream revision."
+    },
+    "pdftex/26/functions.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/libraries/luamath/pgf/luamath/functions.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgfplots/lua/pgfplotsoldpgfsupp/luamath/functions.lua"
+      ],
+      "rationale": "Preserves the source-path choice used by the previously qualified 2025 flattened mirror while accepting the pinned 2026 upstream revision."
+    },
+    "pdftex/26/layered.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/layered.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/doc/ogdf/layered.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/experimental/evolving/layered.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/library.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/experimental/evolving/library.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/circular/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/control/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/examples/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/force/jedi/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/force/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/layered/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/model/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/ogdf/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/pedigrees/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/phylogenetics/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/planar/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/routing/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/trees/library.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/ot1.cmap": {
+      "selectedSource": "texmf-dist/tex/latex/mmap/ot1.cmap",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/cmap/ot1.cmap"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/parser.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/libraries/luamath/pgf/luamath/parser.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgfplots/lua/pgfplotsoldpgfsupp/luamath/parser.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/pgfmanual.code.tex": {
+      "selectedSource": "texmf-dist/tex/latex/tikz-dependency/pgfmanual.code.tex",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/pgf/doc/pgfmanual.code.tex"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/pgfmanual.pdflinks.code.tex": {
+      "selectedSource": "texmf-dist/tex/latex/tikz-dependency/pgfmanual.pdflinks.code.tex",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/pgf/doc/pgfmanual.pdflinks.code.tex"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/pgfmanual.prettyprinter.code.tex": {
+      "selectedSource": "texmf-dist/tex/latex/tikz-dependency/pgfmanual.prettyprinter.code.tex",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/pgf/doc/pgfmanual.prettyprinter.code.tex"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/pstricks.con": {
+      "selectedSource": "texmf-dist/tex/generic/pstricks/pstricks.con",
+      "rejectedSources": [
+        "texmf-dist/tex/xelatex/xetex-pstricks/pstricks.con",
+        "texmf-dist/tex/xetex/xetex-pstricks/pstricks.con"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/26/t1.cmap": {
+      "selectedSource": "texmf-dist/tex/latex/mmap/t1.cmap",
+      "rejectedSources": [
+        "texmf-dist/tex/latex/cmap/t1.cmap"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/32/md-utrma.pfb": {
+      "selectedSource": "texmf-dist/fonts/type1/public/mathdesign/mdput/md-utrma.pfb",
+      "rejectedSources": [
+        "texmf-dist/fonts/type1/public/mathdesign/mdpgd/md-utrma.pfb"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/4/fourier-ms.afm": {
+      "selectedSource": "texmf-dist/fonts/afm/public/fouriernc/fourier-ms.afm",
+      "rejectedSources": [
+        "texmf-dist/fonts/afm/public/fourier/fourier-ms.afm"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_5xld5w.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/alfaslabone/a_5xld5w.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/archivo/a_5xld5w.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_d2anrk.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/oswald/a_d2anrk.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/alfaslabone/a_d2anrk.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_lzhlbi.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/cascadia-code/a_lzhlbi.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/alfaslabone/a_lzhlbi.enc",
+        "texmf-dist/fonts/enc/dvips/archivo/a_lzhlbi.enc",
+        "texmf-dist/fonts/enc/dvips/nunito/a_lzhlbi.enc",
+        "texmf-dist/fonts/enc/dvips/raleway/a_lzhlbi.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_nwf7uv.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/droid/a_nwf7uv.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/opensans/a_nwf7uv.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_rymxky.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/oswald/a_rymxky.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/alfaslabone/a_rymxky.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_vqpkf5.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/cascadia-code/a_vqpkf5.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/alfaslabone/a_vqpkf5.enc",
+        "texmf-dist/fonts/enc/dvips/archivo/a_vqpkf5.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/44/a_zn43lu.enc": {
+      "selectedSource": "texmf-dist/fonts/enc/dvips/charissil/a_zn43lu.enc",
+      "rejectedSources": [
+        "texmf-dist/fonts/enc/dvips/andika/a_zn43lu.enc"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/51/Edge.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/model/Edge.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/deprecated/Edge.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/51/doc.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/experimental/evolving/doc.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/circular/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/control/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/force/jedi/doc.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/trees/doc.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/51/functions.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/libraries/luamath/pgf/luamath/functions.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgfplots/lua/pgfplotsoldpgfsupp/luamath/functions.lua"
+      ],
+      "rationale": "Preserves the source-path choice used by the previously qualified 2025 flattened mirror while accepting the pinned 2026 upstream revision."
+    },
+    "pdftex/51/l3backend-luatex.lua": {
+      "selectedSource": "texmf-dist/tex/latex/l3backend/l3backend-luatex.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/latex-dev/l3backend/l3backend-luatex.lua"
+      ],
+      "rationale": "Selects the stable LaTeX runtime over the parallel latex-dev copy for the production profile."
+    },
+    "pdftex/51/layered.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/layered.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/doc/ogdf/layered.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/experimental/evolving/layered.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/51/library.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/experimental/evolving/library.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/circular/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/control/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/examples/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/force/jedi/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/force/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/layered/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/model/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/ogdf/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/pedigrees/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/phylogenetics/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/planar/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/routing/library.lua",
+        "texmf-dist/tex/generic/pgf/graphdrawing/lua/pgf/gd/trees/library.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/51/ltluatex.lua": {
+      "selectedSource": "texmf-dist/tex/latex/base/ltluatex.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/latex-dev/base/ltluatex.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    },
+    "pdftex/51/parser.lua": {
+      "selectedSource": "texmf-dist/tex/generic/pgf/libraries/luamath/pgf/luamath/parser.lua",
+      "rejectedSources": [
+        "texmf-dist/tex/generic/pgfplots/lua/pgfplotsoldpgfsupp/luamath/parser.lua"
+      ],
+      "rationale": "Preserves the previously qualified 2025 flattened-mirror byte for this key; candidate identity was matched by SHA-256."
+    }
+  }
+}
