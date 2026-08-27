@@ -16,7 +16,7 @@
     "wasmtex-luatex.js": 180000,
     "wasmtex-luatex.wasm": 7200000,
     "wasmtex-luatex.worker.js": 60000,
-    "wasmtex-luatex.fmt.gz": 4000000
+    "wasmtex-luatex.fmt.gz": 4100000
   },
   "runtime": {
     "pdflatex": {
