@@ -109,6 +109,6 @@ jobs:
             "scripts/corresponding-source-$TEXLIVE_YEAR.json"
       - uses: actions/upload-artifact@v7
         with:
-          name: corresponding-source-${{ inputs.texlive_year }}
+          name: corresponding-source-${{ inputs.texlive_year || '2026' }}
           path: source-release/
           retention-days: 90
