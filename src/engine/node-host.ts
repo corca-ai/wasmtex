@@ -77,7 +77,11 @@ globalThis.XMLHttpRequest = class {
       // matching the browser's XHR. Without it, a gzip-encoded CDN asset (e.g. the ICU data
       // file icudt68l.dat) reaches the engine still gzipped → ICU udata_setCommonData fails
       // ("cannot read font names") and XeLaTeX can't resolve fonts by name.
-      const body = execFileSync('curl', ['-fsSL', '--compressed', '-D', hf, this._url], { maxBuffer: 512 * 1024 * 1024 })
+      const body = execFileSync(
+        'curl',
+        ['-fsSL', '--compressed', '--retry', '3', '--retry-delay', '1', '-D', hf, this._url],
+        { maxBuffer: 512 * 1024 * 1024 },
+      )
       this.status = 200
       this.response = this._rt === 'arraybuffer'
         ? body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
@@ -89,9 +93,23 @@ globalThis.XMLHttpRequest = class {
           if (i > 0) this._headers[t.slice(0, i).trim().toLowerCase()] = t.slice(i + 1).trim()
         }
       } catch (_h) {}
-    } catch (_e) {
-      this.status = 404
-      this.response = null
+    } catch (error) {
+      // Cloudflare may reset an HTTP/2 stream after sending an error response,
+      // in which case curl exits 56 rather than 22. Trust an actual HTTP status
+      // captured in the response headers, never the transport exit code alone.
+      let httpStatus = null
+      try {
+        for (const line of readFileSync(hf, 'utf8').split(String.fromCharCode(10))) {
+          const match = /^HTTP\\/\\S+ (\\d{3})/.exec(line.trim())
+          if (match) httpStatus = Number(match[1])
+        }
+      } catch (_h) {}
+      if (httpStatus !== null && httpStatus >= 400) {
+        this.status = httpStatus
+        this.response = null
+      } else {
+        throw error
+      }
     } finally {
       try { unlinkSync(hf) } catch (_u) {}
     }
