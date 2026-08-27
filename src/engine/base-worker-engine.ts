@@ -161,15 +161,31 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
 
 const CLOUDFRONT_BASE = 'https://d1jectpaw0dlvl.cloudfront.net/'
 
+function assertMirrorYear(url: string, version: TexliveVersion): void {
+  const years = new URL(url, 'https://wasmtex.invalid').pathname
+    .split('/')
+    .filter(Boolean)
+    .filter((part) => part === '2025' || part === '2026')
+  if (years.some((year) => year !== version)) {
+    throw new Error(`TeX Live ${version} engine cannot use a ${years.join('/')} mirror URL`)
+  }
+}
+
 /** Resolve the TexLive server URL from an override, env var, or current origin. */
 export function resolveTexliveUrl(
   override: string | null,
   version: TexliveVersion = '2025',
 ): string {
-  if (override) return override.endsWith('/') ? override : `${override}/`
+  if (override) {
+    assertMirrorYear(override, version)
+    return override.endsWith('/') ? override : `${override}/`
+  }
 
   const envUrl = import.meta.env.VITE_TEXLIVE_URL
-  if (envUrl) return envUrl.endsWith('/') ? envUrl : `${envUrl}/`
+  if (envUrl) {
+    assertMirrorYear(envUrl, version)
+    return envUrl.endsWith('/') ? envUrl : `${envUrl}/`
+  }
 
   // Consistent versioned path: https://.../{version}/
   return `${CLOUDFRONT_BASE}${version}/`

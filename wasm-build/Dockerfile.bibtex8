@@ -6,13 +6,13 @@
 #
 # Usage:
 #   docker build --platform linux/amd64 -f Dockerfile.bibtex8 \
-#     --build-arg TEXLIVE_REF=$(cat texlive-source.ref) -t bibtex8-wasm .
+#     --build-arg TEXLIVE_REF=$(cat texlive-source-2026.ref) -t bibtex8-wasm .
 #   docker run --platform linux/amd64 -v $(pwd)/dist-bibtex8:/dist bibtex8-wasm
 # =============================================================================
 
 FROM emscripten/emsdk:3.1.46@sha256:2491bc4bf6caf8c41993660822341bc72759cb577363dfe0781f0a2d05f7d357
 
-LABEL description="bibtex8 WASM build environment (TeX Live 2025)"
+LABEL description="bibtex8 WASM build environment (annually pinned TeX Live source)"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

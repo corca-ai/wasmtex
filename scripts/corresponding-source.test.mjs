@@ -46,7 +46,7 @@ function fixture() {
   put(root, 'RELINK.md')
   put(root, 'release/ENGINE-COMPONENTS.json', '{}\n')
   for (const path of [
-    'wasm-build/texlive-source.ref',
+    'wasm-build/texlive-source-2025.ref',
     'wasm-build/patches/texlive-wtpdf.patch',
     'wasm-build/pdf-backend/wtpdf.h',
     'wasm-build/pdf-backend/wtpdf-xpdf.cc',
@@ -62,6 +62,7 @@ function fixture() {
   const portBytes = 'zlib source\n'
   put(root, 'source/ports/zlib.tar.gz', portBytes)
   const config = {
+    texliveSource: { commitFile: 'wasm-build/texlive-source-2025.ref' },
     emscripten: { commit: COMMIT },
     ports: [{ name: 'zlib', filename: 'zlib.tar.gz', sha512: sha('sha512', portBytes) }],
   }

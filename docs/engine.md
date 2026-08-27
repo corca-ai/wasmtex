@@ -288,7 +288,7 @@ built from source.
 > Notes: we ship the **plain `.lua`**, not the compiled `.luc` — Lua bytecode bakes in
 > pointer/int widths and isn't portable from the x86_64 generator to the wasm32 engine.
 > The DB is version-coupled to the engine's luaotfload; bump `EXPECTED_*` in the
-> generator (and regenerate) when `wasm-build/texlive-source.ref` is bumped.
+> generator (and regenerate) when `wasm-build/texlive-source-<year>.ref` is bumped.
 >
 > The DB is generated against **exactly** the mirror's fonts (`--fonts-dir`):
 > the generator wipes the image's texmf fonts and `/usr/share/fonts` (urw-base35 etc.,

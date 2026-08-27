@@ -11,6 +11,7 @@ import { collectFormatRequests, writeFormatInputEvidence } from './lib/format-in
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 const version = process.argv[2] ?? '2025'
+const texliveUrl = process.env.TEXLIVE_URL ?? `https://d1jectpaw0dlvl.cloudfront.net/${version}/`
 const outPath = join(root, `public/wasmtex/${version}/wasmtex-pdftex.fmt`)
 
 async function main() {
@@ -40,12 +41,12 @@ async function main() {
     await page.goto(`${url}/sample/main.tex`)
     console.log('Building pdflatex format with the freshly staged engine...')
 
-    const b64Data = await page.evaluate(async (v) => {
+    const b64Data = await page.evaluate(async ({ v, endpoint }) => {
       const { WasmTexPdftexEngine } = await import('/src/engine/wasmtex-engine.ts')
       const engine = new WasmTexPdftexEngine({
         assetBaseUrl: '/',
         texliveVersion: v,
-        texliveUrl: `https://d1jectpaw0dlvl.cloudfront.net/${v}/`,
+        texliveUrl: endpoint,
         skipFormatPreload: true,
       })
       try {
@@ -59,7 +60,7 @@ async function main() {
       } finally {
         engine.terminate()
       }
-    }, version)
+    }, { v: version, endpoint: texliveUrl })
 
     const buffer = Buffer.from(b64Data, 'base64')
     mkdirSync(dirname(outPath), { recursive: true })

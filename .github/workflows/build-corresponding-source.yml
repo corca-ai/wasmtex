@@ -1,0 +1,114 @@
+name: Build corresponding source
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/build-corresponding-source.yml'
+      - 'LICENSES/**'
+      - 'docs/license-evidence/**'
+      - 'public/wasmtex/2026/LICENSE-MANIFEST.json'
+      - 'scripts/build-corresponding-source.mjs'
+      - 'scripts/check-corresponding-source.mjs'
+      - 'scripts/check-license-compliance.mjs'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/engine-components-2026.json'
+  workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: Annual TeX Live engine line
+        required: true
+        type: choice
+        options: ['2026']
+        default: '2026'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2026' }}
+      ARTIFACT_BRANCH: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Download pdfTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-build.yml
+          name: wasm-pdftex-2026
+          path: public/wasmtex/2026
+          branch: ${{ env.ARTIFACT_BRANCH }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download BibTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-build.yml
+          name: wasm-bibtex-2026
+          path: public/wasmtex/2026
+          branch: ${{ env.ARTIFACT_BRANCH }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download BibTeX8
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-bibtex8.yml
+          name: wasm-bibtex8-2026
+          path: public/wasmtex/2026
+          branch: ${{ env.ARTIFACT_BRANCH }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download MakeIndex
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-makeindex.yml
+          name: wasm-makeindex-2026
+          path: public/wasmtex/2026
+          branch: ${{ env.ARTIFACT_BRANCH }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download XeTeX and dvipdfmx
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-xetex.yml
+          name: wasm-xetex-2026
+          path: public/wasmtex/2026
+          branch: ${{ env.ARTIFACT_BRANCH }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download LuaHBTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-luatex.yml
+          name: wasm-luatex-2026
+          path: public/wasmtex/2026
+          branch: ${{ env.ARTIFACT_BRANCH }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Verify release inputs
+        run: |
+          npm run check:licenses:2026
+          node scripts/gen-asset-manifest.mjs "$TEXLIVE_YEAR"
+          node scripts/check-release-notices.mjs --assets "public/wasmtex/$TEXLIVE_YEAR"
+      - name: Build and verify complete corresponding source
+        run: |
+          mkdir -p source-release
+          node scripts/build-corresponding-source.mjs \
+            --assets "public/wasmtex/$TEXLIVE_YEAR" \
+            --output-dir source-release \
+            --config "scripts/corresponding-source-$TEXLIVE_YEAR.json"
+          archive="source-release/wasmtex-$(jq -r .releaseId public/wasmtex/$TEXLIVE_YEAR/manifest.json)-source.tar.xz"
+          xz --test "$archive"
+          node scripts/check-corresponding-source.mjs \
+            "$archive" "public/wasmtex/$TEXLIVE_YEAR/manifest.json" \
+            "scripts/corresponding-source-$TEXLIVE_YEAR.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: corresponding-source-${{ inputs.texlive_year || '2026' }}
+          path: source-release/
+          retention-days: 90

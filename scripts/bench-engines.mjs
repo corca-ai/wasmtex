@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 import { createServer } from 'vite'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const texliveVersion = process.env.TEXLIVE_VERSION ?? '2025'
+const texliveUrl = process.env.TEXLIVE_URL
 
 const LOREM = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.'
 const sec = (i) =>
@@ -31,21 +33,24 @@ try {
     try {
       await page.goto(`http://localhost:${port}`)
       const r = await page.evaluate(
-        async ({ e, heavy, trivial }) => {
+        async ({ e, heavy, trivial, texliveVersion, texliveUrl }) => {
           const { WasmTexCompiler } = await import('/src/headless.ts')
           const run = async (doc) => {
             const c = new WasmTexCompiler({
-              texliveVersion: '2025',
+              texliveVersion,
+              ...(texliveUrl ? { texliveUrl } : {}),
               engine: e,
               files: { 'main.tex': doc },
             })
             try {
               await c.init()
               const t0 = performance.now()
-              await c.compile()
+              const coldResult = await c.compile()
+              if (!coldResult.success) throw new Error(`${e} cold compile failed: ${coldResult.log}`)
               const cold = Math.round(performance.now() - t0)
               const t1 = performance.now()
-              await c.compile()
+              const warmResult = await c.compile()
+              if (!warmResult.success) throw new Error(`${e} warm compile failed: ${warmResult.log}`)
               return { cold, warm: Math.round(performance.now() - t1) }
             } finally {
               c.dispose()
@@ -55,7 +60,7 @@ try {
           const b = await run(trivial)
           return { cold: h.cold, warm: h.warm, base: b.warm }
         },
-        { e, heavy: heavy(e), trivial: trivial(e) },
+        { e, heavy: heavy(e), trivial: trivial(e), texliveVersion, texliveUrl },
       )
       console.log(
         `${e.padEnd(10)} ${String(r.cold).padStart(5)}ms ${String(r.warm).padStart(5)}ms ${String(r.base).padStart(8)}ms`,

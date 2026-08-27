@@ -82,6 +82,14 @@ fi
 }
 
 echo "=== Phase 2c.1: WTPDF WebAssembly smoke test ==="
+EXPECTED_XPDF_VERSION=4.04
+if [ "${TEXLIVE_YEAR:-2025}" = 2026 ]; then EXPECTED_XPDF_VERSION=4.06; fi
+ACTUAL_XPDF_VERSION=$(sed -n 's/^#define xpdfVersion[[:space:]]*"\([^"]*\)"/\1/p' \
+  "$SRC/libs/xpdf/xpdf-src/xpdf/config.h")
+[ "$ACTUAL_XPDF_VERSION" = "$EXPECTED_XPDF_VERSION" ] || {
+  echo "unexpected TeX Live $TEXLIVE_YEAR Xpdf version: $ACTUAL_XPDF_VERSION" >&2
+  exit 1
+}
 XPDF_INCLUDES=(
   -I"$GLUE/pdf-backend"
   -I"$SRC/libs/xpdf"
@@ -91,6 +99,7 @@ XPDF_INCLUDES=(
   -I"$WB/libs/xpdf"
 )
 em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
+  -DWTPDF_EXPECTED_BACKEND_VERSION=\"$EXPECTED_XPDF_VERSION\" \
   "${XPDF_INCLUDES[@]}" \
   "$GLUE/pdf-backend/wtpdf-xpdf.cc" \
   "$GLUE/pdf-backend/wtpdf-smoke.cc" \
@@ -165,12 +174,25 @@ if [ "${WASMTEX_LUATEX_PROFILE_NAMES:-0}" = "1" ]; then
   # optimization, so a browser trap can be mapped back to the linked routine.
   LUATEX_DEBUG_FLAGS=(--profiling-funcs)
 fi
+LUATEX_HARFBUZZ_ARCHIVES=(libluaharfbuzz.a)
+if [ "${TEXLIVE_YEAR:-2025}" = "2026" ]; then
+  [ -f libluaharfbuzzsubset.a ] || {
+    echo "ERROR: TeX Live 2026 LuaHBTeX did not produce libluaharfbuzzsubset.a" >&2
+    exit 1
+  }
+  LUATEX_HARFBUZZ_ARCHIVES+=(libluaharfbuzzsubset.a)
+elif [ -f libluaharfbuzzsubset.a ]; then
+  # Keep the relink step forward-compatible if an accepted annual source pin
+  # introduces the split subset binding before its year-specific gate lands.
+  LUATEX_HARFBUZZ_ARCHIVES+=(libluaharfbuzzsubset.a)
+fi
 em++ -O2 "${LUATEX_DEBUG_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   luatex-entry.o kpse-hook.o \
   luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
   -Wl,--wrap=kpse_find_file \
-  libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a libluaharfbuzz.a \
+  libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a \
+  "${LUATEX_HARFBUZZ_ARCHIVES[@]}" \
   "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a \
   "$WB"/libs/zziplib/libzzip.a "$WB"/libs/libpng/libpng.a \
   "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a \

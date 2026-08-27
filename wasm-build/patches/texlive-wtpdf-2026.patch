@@ -1,0 +1,70 @@
+diff --git a/texk/web2c/ac/web2c.ac b/texk/web2c/ac/web2c.ac
+--- a/texk/web2c/ac/web2c.ac
++++ b/texk/web2c/ac/web2c.ac
+@@ -36,15 +36,15 @@ m4_define([kpse_tex_progs], [dnl
+ [[aleph],     [yes], [],    [Aleph],      []],
+ [[hitex],     [yes], [],    [HiTeX],      [harfbuzz zlib]],
+ [[pdftex],    [yes], [yes], [pdfTeX],     [xpdf libpng zlib]],
+-[[luatex],    [yes], [],    [LuaTeX],     [pplib libpng zziplib lua53]],
+-[[luajittex], [yes], [],    [LuaJITTeX],  [pplib libpng zziplib luajit]],
+-[[luahbtex],    [yes], [],    [LuaHBTeX],     [pplib libpng zziplib lua53 harfbuzz]],
+-[[luajithbtex], [yes], [],    [LuaHBJITTeX],  [pplib libpng zziplib luajit harfbuzz]],
++[[luatex],    [yes], [],    [LuaTeX],     [xpdf libpng zziplib lua53]],
++[[luajittex], [yes], [],    [LuaJITTeX],  [xpdf libpng zziplib luajit]],
++[[luahbtex],    [yes], [],    [LuaHBTeX],     [xpdf libpng zziplib lua53 harfbuzz]],
++[[luajithbtex], [yes], [],    [LuaHBJITTeX],  [xpdf libpng zziplib luajit harfbuzz]],
+ [[mp],        [yes], [],    [MetaPost],   [mpfi mpfr cairo libpng]],
+ [[pmp],       [yes], [],    [pMetaPost],  [mpfi mpfr cairo libpng ptexenc]],
+ [[texprof],   [yes], [],    [TeXprof],    []],
+ [[upmp],      [yes], [],    [upMetaPost], [mpfi mpfr cairo libpng ptexenc]],
+-[[xetex],     [yes], [yes], [XeTeX],      [pplib libpng freetype2 teckit harfbuzz]],
++[[xetex],     [yes], [yes], [XeTeX],      [xpdf libpng freetype2 teckit harfbuzz]],
+ ])[]dnl
+ m4_foreach([Kpse_Prog], [kpse_tex_progs],
+            [m4_ifset([Kpse_Prog],
+diff --git a/texk/web2c/luatexdir/am/luatex.am b/texk/web2c/luatexdir/am/luatex.am
+--- a/texk/web2c/luatexdir/am/luatex.am
++++ b/texk/web2c/luatexdir/am/luatex.am
+@@ -64,12 +64,12 @@ nodist_EXTRA_luahbtex_SOURCES = dummy.cxx
+ nodist_EXTRA_luajithbtex_SOURCES = dummy.cxx
+ 
+ 
+-luatex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(PPLIB_INCLUDES)
++luatex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(XPDF_INCLUDES)
+ luatex_postflags = -I$(srcdir)/libmd5 -DpdfTeX -I$(srcdir)/luatexdir -I$(srcdir)/mplibdir
+ luatex_postflags += -Dextra_version_info=`date +-%Y%m%d%H`
+ luatex_postflags += -I$(srcdir)/synctexdir -DSYNCTEX_ENGINE_H='<synctex-luatex.h>'
+ 
+-luahbtex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(HARFBUZZ_INCLUDES) $(PPLIB_INCLUDES)
++luahbtex_preflags = $(AM_CPPFLAGS) $(ZLIB_INCLUDES) $(LIBPNG_INCLUDES) $(HARFBUZZ_INCLUDES) $(XPDF_INCLUDES)
+ luahbtex_postflags = -I$(srcdir)/libmd5 -DpdfTeX -I$(srcdir)/luatexdir -I$(srcdir)/mplibdir
+ luahbtex_postflags += -Dextra_version_info=`date +-%Y%m%d%H`
+ luahbtex_postflags += -DLUATEX_HARFBUZZ_ENABLED
+@@ -95,11 +95,11 @@ luahbtex_LDFLAGS = -export-dynamic
+ luajithbtex_LDFLAGS = -export-dynamic $(LUAJIT_LDEXTRA)
+ 
+ luatex_postldadd = libmplibcore.a
+-luatex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(PPLIB_LIBS) $(ZLIB_LIBS)
++luatex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(XPDF_LIBS) $(ZLIB_LIBS)
+ luatex_postldadd += $(LDADD) libmputil.a libunilib.a libmd5.a $(lua_socketlibs)
+ 
+ luahbtex_postldadd = libmplibcore.a
+-luahbtex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(HARFBUZZ_LIBS) $(GRAPHITE2_LIBS) $(PPLIB_LIBS) $(ZLIB_LIBS)
++luahbtex_postldadd += $(ZZIPLIB_LIBS) $(LIBPNG_LIBS) $(HARFBUZZ_LIBS) $(GRAPHITE2_LIBS) $(XPDF_LIBS) $(ZLIB_LIBS)
+ luahbtex_postldadd += $(LDADD) libmputil.a libunilib.a libmd5.a $(lua_socketlibs)
+ 
+ 
+@@ -114,11 +114,11 @@ luajithbtex_LDADD = libluajittex.a libluajithbtexspecific.a libluajittex.a libff
+ #LIBTOOLFLAGS += --preserve-dup-deps
+ 
+ 
+-luatex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) libmputil.a libmd5.a
++luatex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) $(XPDF_DEPEND) libmputil.a libmd5.a
+ luatex_DEPENDENCIES = $(luatex_depend) libluatex.a libluatexspecific.a
+ luajittex_DEPENDENCIES = $(luatex_depend) libluajittex.a libluajittexspecific.a
+ 
+-luahbtex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) libmputil.a libmd5.a
++luahbtex_depend = $(proglib) $(KPATHSEA_DEPEND) $(LIBPNG_DEPEND) $(XPDF_DEPEND) libmputil.a libmd5.a
+ luahbtex_DEPENDENCIES = $(luahbtex_depend) libluatex.a libluahbtexspecific.a libluaharfbuzz.a libluaharfbuzzsubset.a
+ luajithbtex_DEPENDENCIES = $(luatex_depend) libluajittex.a libluajithbtexspecific.a libluajitharfbuzz.a libluajitharfbuzzsubset.a
+ 

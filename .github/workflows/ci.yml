@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm run check:licenses
+      - run: npm run check:licenses:2026
       # Plain `npm ci` (not --ignore-scripts): esbuild's postinstall fetches its binary,
       # which build:lib needs. `npm ci` also runs `prepare` (build:lib); the explicit run
       # below is idempotent and keeps the intent obvious.
@@ -60,6 +61,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm run check:licenses
+      - run: npm run check:licenses:2026
       - run: npm ci
       - name: Download latest WASM engine
         uses: dawidd6/action-download-artifact@v21
@@ -125,15 +127,77 @@ jobs:
           branch: main
           search_artifacts: true
           if_no_artifact_found: warn
+      # Annual artifacts are produced by workflow_dispatch. A pull request must
+      # qualify the artifacts built from its own head revision; after merge the
+      # same workflows are dispatched on main before the Pages deployment is
+      # retried.
+      - name: Download TeX Live 2026 pdfTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-build.yml
+          name: wasm-pdftex-2026
+          path: public/wasmtex/2026
+          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download TeX Live 2026 BibTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-build.yml
+          name: wasm-bibtex-2026
+          path: public/wasmtex/2026
+          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download TeX Live 2026 BibTeX8
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-bibtex8.yml
+          name: wasm-bibtex8-2026
+          path: public/wasmtex/2026
+          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download TeX Live 2026 MakeIndex
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-makeindex.yml
+          name: wasm-makeindex-2026
+          path: public/wasmtex/2026
+          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download TeX Live 2026 XeLaTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-xetex.yml
+          name: wasm-xetex-2026
+          path: public/wasmtex/2026
+          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          search_artifacts: true
+          if_no_artifact_found: fail
+      - name: Download TeX Live 2026 LuaLaTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-luatex.yml
+          name: wasm-luatex-2026
+          path: public/wasmtex/2026
+          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          search_artifacts: true
+          if_no_artifact_found: fail
       - run: npm run lint
       - run: npx tsgo --noEmit
       - run: npm run test
       - run: npm run test:license-tools
+      - run: npm run check:engine-performance
+      - run: npm run check:engine-performance:2026
       # Emit a content-hashed manifest of the (just-downloaded) engine assets so
       # `vite build` copies it into dist and consumers can sync/verify against it.
       - name: Generate development asset manifest
         if: github.ref != 'refs/heads/main'
-        run: node scripts/gen-asset-manifest.mjs 2025
+        run: |
+          node scripts/gen-asset-manifest.mjs 2025
+          node scripts/gen-asset-manifest.mjs 2026
       # A Pages deploy distributes the engine files to browsers. Refuse a main-branch
       # deploy until the per-version license manifest records complete
       # corresponding source and has no unresolved component-license blocker.
@@ -142,10 +206,13 @@ jobs:
         run: |
           node scripts/check-release-notices.mjs --assets public/wasmtex/2025 --release
           node scripts/gen-asset-manifest.mjs 2025 --release
+          node scripts/check-release-notices.mjs --assets public/wasmtex/2026 --release
+          node scripts/gen-asset-manifest.mjs 2026 --release
       - run: npx vite build
         env:
           BASE_URL: /${{ github.event.repository.name }}/
       - run: node scripts/check-release-notices.mjs --assets public/wasmtex/2025 --demo dist
+      - run: node scripts/check-release-notices.mjs --assets public/wasmtex/2026 --demo dist
       - uses: actions/upload-pages-artifact@v5
         if: github.ref == 'refs/heads/main'
         with: { path: dist }

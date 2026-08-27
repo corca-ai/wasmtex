@@ -10,6 +10,7 @@ import type {
   CompletionSnapshotProfile,
   CompletionSnapshotResource,
   CompletionSnapshotValue,
+  TexliveVersion,
 } from '../types'
 
 export const COMPLETION_SNAPSHOT_SCHEMA_VERSION = 1 as const
@@ -596,7 +597,7 @@ export function boundCompletionSnapshot(snapshot: CompletionSnapshot): Completio
     throw new Error('completion snapshot has an invalid engine')
   }
   const rawProfile = asRecord(rawIdentity.profile, 'profile')
-  if (rawProfile.texliveYear !== '2025') {
+  if (rawProfile.texliveYear !== '2025' && rawProfile.texliveYear !== '2026') {
     throw new Error('completion snapshot has an invalid TeX Live year')
   }
   const mirrorRevision =
@@ -612,7 +613,7 @@ export function boundCompletionSnapshot(snapshot: CompletionSnapshot): Completio
       root: requiredText(rawIdentity.root, LIMITS.pathLength, 'root path'),
       profile: {
         id: requiredText(rawProfile.id, LIMITS.pathLength, 'profile id'),
-        texliveYear: '2025',
+        texliveYear: rawProfile.texliveYear as TexliveVersion,
         mirrorRevision,
       },
     },

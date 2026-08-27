@@ -6,7 +6,8 @@
   },
   "texliveSource": {
     "repository": "https://github.com/TeX-Live/texlive-source.git",
-    "commitFile": "wasm-build/texlive-source.ref"
+    "commitFile": "wasm-build/texlive-source-2025.ref",
+    "xpdfVersion": "4.04"
   },
   "emscripten": {
     "version": "3.1.46",

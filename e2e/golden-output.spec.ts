@@ -24,7 +24,13 @@ import { BIBTEX_FILES, docFor, MAKEINDEX_FILES, pdfImportFiles } from './golden-
  */
 
 const APP_URL = 'http://localhost:6001'
-const GOLDEN_DIR = join(dirname(fileURLToPath(import.meta.url)), 'goldens')
+const TEXLIVE_VERSION = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
+const TEXLIVE_URL = process.env.TEXLIVE_URL
+const GOLDEN_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  'goldens',
+  TEXLIVE_VERSION === '2025' ? '' : TEXLIVE_VERSION,
+)
 const UPDATE = process.env.GOLDEN_UPDATE === '1'
 
 const ENGINES = ['pdflatex', 'xelatex', 'lualatex'] as const
@@ -52,10 +58,11 @@ for (const engine of ENGINES) {
     // The compile runs in the browser (the engine is WASM); PDF parsing happens back in
     // Node (pdf-lib doesn't resolve as a bare specifier inside `page.evaluate`).
     const raw = await page.evaluate(
-      async ({ engine, doc }) => {
+      async ({ engine, doc, texliveVersion, texliveUrl }) => {
         const { WasmTexCompiler } = await import('/src/headless.ts')
         const c = new WasmTexCompiler({
-          texliveVersion: '2025',
+          texliveVersion,
+          ...(texliveUrl ? { texliveUrl } : {}),
           engine: engine as 'pdflatex' | 'xelatex' | 'lualatex',
           files: { 'main.tex': doc },
         })
@@ -65,6 +72,7 @@ for (const engine of ENGINES) {
           const g = r.telemetry?.geometry
           return {
             success: r.success,
+            log: r.log,
             errorCount: r.errors.length,
             diagnosticCodes: [
               ...new Set((r.telemetry?.diagnostics ?? []).map((d) => d.code)),
@@ -83,7 +91,7 @@ for (const engine of ENGINES) {
           c.dispose()
         }
       },
-      { engine, doc: docFor(engine) },
+      { engine, doc: docFor(engine), texliveVersion: TEXLIVE_VERSION, texliveUrl: TEXLIVE_URL },
     )
 
     // Page count via pdf-lib (handles PDF 1.5+ compressed object streams, where
@@ -101,7 +109,7 @@ for (const engine of ENGINES) {
     }
 
     // A golden is only meaningful if the compile itself succeeded.
-    expect(sig.success, `${engine} compile failed`).toBe(true)
+    expect(sig.success, `${engine} compile failed:\n${raw.log}`).toBe(true)
     expect(sig.pages, `${engine} produced no pages`).toBeGreaterThan(0)
 
     if (UPDATE) {
@@ -118,6 +126,11 @@ for (const engine of ENGINES) {
 
 for (const engine of ['xelatex', 'lualatex'] as const) {
   test(`golden output — ${engine} PDF import packages`, async ({ page }) => {
+    // The first 2026 LuaHBTeX compile loads the engine, format, font database,
+    // and PDF backend before it can exercise the imported document. Keep the
+    // default timeout for the smaller corpus, but allow this deliberately cold,
+    // integration-heavy case to finish on CI runners.
+    test.setTimeout(120_000)
     const file = join(GOLDEN_DIR, `pdf-import-${engine}.json`)
     test.skip(
       !UPDATE && !existsSync(file),
@@ -127,10 +140,11 @@ for (const engine of ['xelatex', 'lualatex'] as const) {
     await page.goto(APP_URL)
     const files = pdfImportFiles(engine)
     const raw = await page.evaluate(
-      async ({ engine, source, figure }) => {
+      async ({ engine, source, figure, texliveVersion, texliveUrl }) => {
         const { WasmTexCompiler } = await import('/src/headless.ts')
         const c = new WasmTexCompiler({
-          texliveVersion: '2025',
+          texliveVersion,
+          ...(texliveUrl ? { texliveUrl } : {}),
           engine,
           files: { 'main.tex': source, 'figure.pdf': Uint8Array.from(figure) },
         })
@@ -162,6 +176,8 @@ for (const engine of ['xelatex', 'lualatex'] as const) {
         engine,
         source: files['main.tex'] as string,
         figure: Array.from(files['figure.pdf'] as Uint8Array),
+        texliveVersion: TEXLIVE_VERSION,
+        texliveUrl: TEXLIVE_URL,
       },
     )
     const pages = raw.pdfBytes.length
@@ -195,9 +211,14 @@ test('golden output — bibtex', async ({ page }) => {
   )
 
   await page.goto(APP_URL)
-  const raw = await page.evaluate(async ({ files }) => {
+  const raw = await page.evaluate(async ({ files, texliveVersion, texliveUrl }) => {
     const { WasmTexCompiler } = await import('/src/headless.ts')
-    const c = new WasmTexCompiler({ texliveVersion: '2025', engine: 'pdflatex', files })
+    const c = new WasmTexCompiler({
+      texliveVersion,
+      ...(texliveUrl ? { texliveUrl } : {}),
+      engine: 'pdflatex',
+      files,
+    })
     try {
       await c.init()
       const r = await c.compile()
@@ -210,7 +231,7 @@ test('golden output — bibtex', async ({ page }) => {
     } finally {
       c.dispose()
     }
-  }, { files: BIBTEX_FILES })
+  }, { files: BIBTEX_FILES, texliveVersion: TEXLIVE_VERSION, texliveUrl: TEXLIVE_URL })
 
   const pages = raw.pdfBytes.length
     ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()
@@ -247,9 +268,14 @@ test('golden output — makeindex', async ({ page }) => {
   )
 
   await page.goto(APP_URL)
-  const raw = await page.evaluate(async ({ files }) => {
+  const raw = await page.evaluate(async ({ files, texliveVersion, texliveUrl }) => {
     const { WasmTexCompiler } = await import('/src/headless.ts')
-    const c = new WasmTexCompiler({ texliveVersion: '2025', engine: 'pdflatex', files })
+    const c = new WasmTexCompiler({
+      texliveVersion,
+      ...(texliveUrl ? { texliveUrl } : {}),
+      engine: 'pdflatex',
+      files,
+    })
     try {
       await c.init()
       const r = await c.compile()
@@ -262,7 +288,7 @@ test('golden output — makeindex', async ({ page }) => {
     } finally {
       c.dispose()
     }
-  }, { files: MAKEINDEX_FILES })
+  }, { files: MAKEINDEX_FILES, texliveVersion: TEXLIVE_VERSION, texliveUrl: TEXLIVE_URL })
 
   const pages = raw.pdfBytes.length
     ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()

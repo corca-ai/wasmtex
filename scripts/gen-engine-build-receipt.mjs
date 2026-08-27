@@ -8,6 +8,8 @@ import { createBuildReceipt } from './lib/engine-build-receipt.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const [family, directoryArg, outputArg, ...filenames] = process.argv.slice(2)
+const texliveYear = process.env.TEXLIVE_YEAR ?? '2025'
+if (!/^(2025|2026)$/.test(texliveYear)) throw new Error(`unsupported TEXLIVE_YEAR: ${texliveYear}`)
 if (!family || !directoryArg || !outputArg || filenames.length === 0) {
   console.error(
     'usage: node scripts/gen-engine-build-receipt.mjs <family> <artifact-dir> ' +
@@ -18,7 +20,7 @@ if (!family || !directoryArg || !outputArg || filenames.length === 0) {
 
 try {
   const config = JSON.parse(
-    readFileSync(resolve(root, 'scripts/corresponding-source-2025.json'), 'utf8'),
+    readFileSync(resolve(root, `scripts/corresponding-source-${texliveYear}.json`), 'utf8'),
   )
   const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: root,

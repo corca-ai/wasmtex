@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2026",
+  "wasmtex": {
+    "repository": "https://github.com/corca-ai/wasmtex.git"
+  },
+  "texliveSource": {
+    "repository": "https://github.com/TeX-Live/texlive-source.git",
+    "commitFile": "wasm-build/texlive-source-2026.ref",
+    "xpdfVersion": "4.06"
+  },
+  "emscripten": {
+    "version": "3.1.46",
+    "repository": "https://github.com/emscripten-core/emscripten.git",
+    "commit": "19607820c447a13fd8d0b7680c56148427d6e1b8",
+    "dockerImage": "emscripten/emsdk:3.1.46@sha256:2491bc4bf6caf8c41993660822341bc72759cb577363dfe0781f0a2d05f7d357"
+  },
+  "ports": [
+    {
+      "name": "freetype",
+      "version": "emscripten-port-version_1",
+      "filename": "freetype-version_1.zip",
+      "url": "https://github.com/emscripten-ports/FreeType/archive/version_1.zip",
+      "sha512": "0d0b1280ba0501ad0a23cf1daa1f86821c722218b59432734d3087a89acd22aabd5c3e5e1269700dcd41e87073046e906060f167c032eb91a3ac8c5808a02783"
+    },
+    {
+      "name": "icu",
+      "version": "68.2",
+      "filename": "icu4c-68_2-src.zip",
+      "url": "https://github.com/unicode-org/icu/releases/download/release-68-2/icu4c-68_2-src.zip",
+      "sha512": "12c3db5966c234c94e7918fb8acc8bd0838edc36a620f3faa788e7ff27b06f1aa431eb117401026e3963622b9323212f444b735d5c9dd3d0b82d772a4834b993"
+    },
+    {
+      "name": "libpng",
+      "version": "1.6.39",
+      "filename": "libpng-1.6.39.tar.gz",
+      "url": "https://storage.googleapis.com/webassembly/emscripten-ports/libpng-1.6.39.tar.gz",
+      "sha512": "19851afffbe2ffde62d918f7e9017dec778a7ce9c60c75cdc65072f086e6cdc9d9895eb7b207535a84cb5f4ead77ebc2aa9d80025f153662903023e1f7ab9bae"
+    },
+    {
+      "name": "zlib",
+      "version": "1.2.13",
+      "filename": "zlib-1.2.13.tar.gz",
+      "url": "https://github.com/madler/zlib/archive/refs/tags/v1.2.13.tar.gz",
+      "sha512": "44b834fbfb50cca229209b8dbe1f96b258f19a49f5df23b80970b716371d856a4adf525edb4c6e0e645b180ea949cb90f5365a1d896160f297f56794dd888659"
+    }
+  ]
+}

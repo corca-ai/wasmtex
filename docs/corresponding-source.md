@@ -43,7 +43,8 @@ The builder may use `--cache`, `--texlive-repository`, and
 `--emscripten-repository` to reuse verified local inputs. Otherwise it fetches the
 exact recorded Git commits and source archives. Downloaded Emscripten port archives
 are checked against the SHA-512 values in
-`scripts/corresponding-source-2025.json`.
+`scripts/corresponding-source-<year>.json`. Each annual config points to its
+own immutable `wasm-build/texlive-source-<year>.ref`.
 
 The resulting archive contains:
 

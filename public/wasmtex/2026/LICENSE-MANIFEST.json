@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "texliveVersion": "2026",
+  "texliveSourceCommit": "fb6158926661cb7a7246b3a94a0cb170a9624d5a",
+  "emscriptenVersion": "3.1.46",
+  "sdkLicense": "MIT",
+  "releaseStatus": "release-cleared",
+  "noticePath": "../../../THIRD_PARTY_NOTICES.md",
+  "licenseDirectoryPath": "../../../LICENSES/",
+  "requirementsPath": "../../../docs/licensing.md",
+  "componentInventoryPath": "../../../scripts/engine-components-2026.json",
+  "correspondingSource": {
+    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2026-dd8ba19bc500cbb3/wasmtex-2026-dd8ba19bc500cbb3-source.tar.xz",
+    "sha256": "6c5eaea74ee14d812fe3f158d9a00cea0f3df04fcb7a0898582017026ac3c263"
+  },
+  "requiredBuildFamilies": [
+    "pdftex",
+    "bibtex",
+    "bibtex8",
+    "makeindex",
+    "xetex",
+    "luahbtex"
+  ],
+  "artifactFamilies": [
+    {
+      "name": "pdftex",
+      "patterns": ["wasmtex-pdftex.js", "wasmtex-pdftex.wasm", "wasmtex-pdftex.worker.js"],
+      "distributionTerms": ["GPL-2.0-only", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "xetex",
+      "patterns": ["wasmtex-xetex.js", "wasmtex-xetex.wasm", "wasmtex-xetex.worker.js"],
+      "distributionTerms": [
+        "GPL-2.0-only",
+        "LicenseRef-XeTeX",
+        "MIT",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "dvipdfmx",
+      "patterns": ["wasmtex-dvipdfm.js", "wasmtex-dvipdfm.wasm", "wasmtex-dvipdfm.worker.js"],
+      "distributionTerms": ["GPL-2.0-or-later", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "luahbtex",
+      "patterns": ["wasmtex-luatex.js", "wasmtex-luatex.wasm", "wasmtex-luatex.worker.js"],
+      "distributionTerms": ["GPL-2.0-only", "MIT", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "latex-formats",
+      "patterns": ["*.fmt", "*.fmt.gz"],
+      "distributionTerms": ["LicenseRef-TeXLive-Format-Inputs"]
+    },
+    {
+      "name": "bibtex",
+      "patterns": ["wasmtex-bibtex.*"],
+      "distributionTerms": [
+        "LicenseRef-BibTeX-Web2C-Notices",
+        "LGPL-2.1-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "bibtex8",
+      "patterns": ["wasmtex-bibtex8.*"],
+      "distributionTerms": ["GPL-2.0-or-later", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "makeindex",
+      "patterns": ["wasmtex-makeindex.*"],
+      "distributionTerms": [
+        "LicenseRef-MakeIndex-Distribution-Notice",
+        "LGPL-2.1-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "wasmtex-runtime-helper",
+      "patterns": ["wasmtex-kpse-resolve.js"],
+      "distributionTerms": ["MIT"]
+    }
+  ],
+  "releaseBlockers": []
+}

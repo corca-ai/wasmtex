@@ -14,6 +14,36 @@ import {
 const profile = { id: 'test-profile', texliveYear: '2025' as const, mirrorRevision: 'rev-1' }
 
 describe('runtime completion snapshots', () => {
+  it('preserves each supported TeX Live year across the RPC boundary', async () => {
+    for (const texliveYear of ['2025', '2026'] as const) {
+      const snapshot = await createCompletionSnapshot({
+        engine: 'pdflatex',
+        root: 'main.tex',
+        profile: {
+          id: `profile-${texliveYear}`,
+          texliveYear,
+          mirrorRevision: `rev-${texliveYear}`,
+        },
+        projectFiles: [{ path: 'main.tex', content: 'Hello' }],
+      })
+      expect(boundCompletionSnapshot(snapshot).identity.profile.texliveYear).toBe(texliveYear)
+    }
+  })
+
+  it('rejects unsupported TeX Live years at the RPC boundary', async () => {
+    const snapshot = await createCompletionSnapshot({
+      engine: 'pdflatex',
+      root: 'main.tex',
+      profile,
+      projectFiles: [{ path: 'main.tex', content: 'Hello' }],
+    })
+    const hostile = structuredClone(snapshot) as unknown as {
+      identity: { profile: { texliveYear: string } }
+    }
+    hostile.identity.profile.texliveYear = 'latest'
+    expect(() => boundCompletionSnapshot(hostile as never)).toThrow(/invalid TeX Live year/)
+  })
+
   it('binds a deterministic revision to paths, content kinds, and bytes', async () => {
     const files = [
       { path: 'main.tex', content: '\\documentclass{book}' },

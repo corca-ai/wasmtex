@@ -45,7 +45,7 @@ The root `import { warmup } from 'wasmtex'` above remains for the all-in-one edi
 
 ```ts
 interface WarmupOptions {
-  texliveVersion?: '2025'           // default: '2025'; versioned for future releases
+  texliveVersion?: '2025' | '2026'  // default: '2025'; must match the mirror profile
   texliveUrl?: string               // override CDN endpoint
   concurrency?: number              // max parallel fetches (default: 6)
   signal?: AbortSignal              // cancellation

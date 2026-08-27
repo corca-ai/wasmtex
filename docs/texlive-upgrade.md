@@ -3,13 +3,12 @@
 This document explains the TeX Live system (the kpathsea fallback and CDN
 structure) and the steps required to upgrade to a new TeX Live year.
 
-## Current System (TeX Live 2025)
+## Supported annual lines
 
-The default engine is **pdfTeX 1.40.28** and **BibTeX 0.99d** from the TeX Live
-2025 distribution. TeX Live **2025 is the only supported release**
-(`texliveVersion: '2025'`, the default). The versioned option, asset paths, CDN
-resolution, and cache namespaces remain in place so a future release can be added
-alongside 2025 without redesigning the runtime.
+TeX Live 2025 remains the compatibility default while TeX Live 2026 is supported
+side by side. Hosts select an exact profile and pass both its `texliveVersion` and
+mirror URL; engine assets, formats, cache namespaces, catalogs, and mirror bytes
+must all name the same year.
 
 ### 1. WASM Engine & File Lookup
 The WASM engine uses a customized `kpathsea` library. When the C code attempts to find a file (style, font, etc.), it follows this flow:
@@ -78,14 +77,14 @@ That's a localized one-shim fix, not a re-patch of the engine.
   → `--wrap`/glue/entry-shim → (last resort) a tracked `wasm-build/patches/*.patch`
   applied at build time so it **fails loudly** when upstream drifts. Never a forked
   source tree.
-- **Pin upstream to an immutable ref, in one place.**
-  `wasm-build/texlive-source.ref` holds an immutable `texlive-source` commit (not a
+- **Pin upstream to one immutable ref per annual line.**
+  `wasm-build/texlive-source-<year>.ref` holds an immutable `texlive-source` commit (not a
   moving branch), passed as `--build-arg TEXLIVE_REF` to every engine build
   (pdfTeX `Dockerfile`, LuaTeX `Dockerfile.luatex`, via `wasm-build.yml` /
   `wasm-luatex.yml` / `build-luatex-fromsource.sh`). The Dockerfiles have no
   default and fail loudly if it's unset. Bumping the TeX Live source = update that
   one file (resolve a new commit with `git ls-remote …/texlive-source.git
-  refs/heads/branch<YEAR>`). XeTeX builds from the **same** `texlive-source.ref` /
+  refs/heads/branch<YEAR>`). XeTeX builds from the **same year-specific ref** /
   `TEXLIVE_REF` (with this project's own controller and glue — see
   `wasm-build/Dockerfile.xetex` and `scripts/build-xetex-fromsource.sh`); only ICU
   data is built separately (`scripts/build-icu-data.sh`).
@@ -108,7 +107,7 @@ That's a localized one-shim fix, not a re-patch of the engine.
   timestamp-bearing PDF bytes), run weekly by `.github/workflows/golden-canary.yml`.
   Regenerate after an intentional change with `npm run update:golden`.
 - **Bump deliberately, not reflexively.** TeX Live is annual and assets are
-  versioned side-by-side (`2025` plus future releases), so upgrade on need
+  versioned side-by-side (`2025` and `2026`), so upgrade on need
   (security, a package users want, a fix) — not on every release.
 
 The [engine guide](engine.md#building-the-unicode-engine-from-source) also covers
@@ -116,10 +115,21 @@ the from-source build mechanics.
 
 ---
 
-## Upgrade Guide (to a new TeX Live year)
+## Annual engine release procedure
 
-> TeX Live 2025 is the current baseline. These steps apply when adding a future
-> year; substitute the new year throughout while keeping 2025 available until cutover.
+The 2026 line is pinned to `fb6158926661cb7a7246b3a94a0cb170a9624d5a`, the
+reviewed `branch2026` tip selected on 2026-08-27. It includes the annual release
+and accepted branch fixes as of the mid-cycle qualification point. Moving this
+pin requires a new engine receipt and structural-golden review.
+
+The 2026 structural-golden review ran the same seven browser cases as the 2025
+line: pdfLaTeX, XeLaTeX, LuaLaTeX, Xe/Lua PDF import, BibTeX, and MakeIndex.
+All seven signatures are unchanged: compile success, page count, diagnostic
+codes, and XeTeX XDV geometry match 2025 exactly. The separate files under
+`e2e/goldens/2026/` are intentional even with equal contents: they prevent a
+future annual change from silently redefining the 2025 compatibility baseline.
+The weekly canary runs both annual corpora against their matching engine
+artifacts and immutable mirror URLs.
 
 Upgrading requires updating the WASM engine, the object-store package repository, and the base format file.
 
@@ -172,20 +182,20 @@ Before enabling exact resource completion for the new profile:
 ### Step 2: Build New WASM Engine
 The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.
 
-1. Update the pinned source commit in `wasm-build/texlive-source.ref` (resolve the
+1. Add or update `wasm-build/texlive-source-<year>.ref` (resolve the
    new TeX Live year's `branch<YEAR>` tip to a commit SHA — see *Upstream
    maintenance* above).
 2. Build each engine. The Docker image bakes Phase 1 (native codegen); `build.sh` is
    the container ENTRYPOINT that runs Phase 2 (Emscripten) — don't run it on the host.
    Pass the pinned ref as `--build-arg TEXLIVE_REF` (CI does this via
-   `wasm-build/texlive-source.ref`):
+   year-specific ref):
    ```bash
    cd <wasmtex-build-checkout>
    git checkout <exact-source-commit>
 
    # pdfTeX + BibTeX (see .github/workflows/wasm-build.yml)
    docker buildx build --platform linux/amd64 \
-     --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+     --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source-2026.ref) \
      -t pdftex-wasm wasm-build/
    docker run --platform linux/amd64 -v "$PWD/wasm-build/dist:/dist" pdftex-wasm
 

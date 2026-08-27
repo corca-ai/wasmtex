@@ -11,12 +11,23 @@ name: WASM XeTeX (from source)
 # texlive-source (same Docker image, own controller and glue).
 on:
   workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: TeX Live engine year
+        required: true
+        type: choice
+        default: '2025'
+        options: ['2025', '2026']
+      texlive_url:
+        description: Exact immutable package-mirror URL used to build formats
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
       - 'wasm-build/Dockerfile.xetex'
       - 'wasm-build/build-xetex2.sh'
-      - 'wasm-build/patches/texlive-wtpdf.patch'
+      - 'wasm-build/patches/texlive-wtpdf*.patch'
       - 'wasm-build/pdf-backend/**'
       - 'wasm-build/xetex-entry.c'
       - 'wasm-build/xetex-worker.js'
@@ -25,7 +36,7 @@ on:
       - 'wasm-build/fontconfig-shim.c'
       - 'wasm-build/fontconfig-shim.h'
       - 'wasm-build/kpse-hook.c'
-      - 'wasm-build/texlive-source.ref'
+      - 'wasm-build/texlive-source-*.ref'
       - 'wasm-build/dvipdfm-worker.js'
       - 'wasm-build/xetex-dvipdfm-library.js'
       - 'wasm-build/build-dvipdfm2.sh'
@@ -37,19 +48,24 @@ on:
       - 'scripts/gen-engine-build-receipt.mjs'
       - 'scripts/lib/engine-build-receipt.mjs'
       - 'scripts/corresponding-source-2025.json'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/check-annual-engine-source.mjs'
+      - 'scripts/lib/annual-engine-source.mjs'
       - '.github/workflows/wasm-xetex.yml'
 
 jobs:
   build-xetex:
     runs-on: ubuntu-latest
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
-        run: node scripts/check-license-compliance.mjs 2025
+        run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"
 
-      - name: Refuse uncleared artifacts in a public repository
-        if: github.event.repository.visibility == 'public'
+      - name: Verify release policy for the established 2025 line
+        if: env.TEXLIVE_YEAR == '2025' && github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
       - uses: actions/setup-node@v7
@@ -100,6 +116,25 @@ jobs:
             console.log('own glue OK');
           "
 
+      - name: Record and upload raw 2026 XeTeX build evidence
+        if: env.TEXLIVE_YEAR == '2026'
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            xetex wasm-build/dist-xetex wasm-build/dist-xetex/BUILD-RECEIPT.xetex-raw.json \
+            wasmtex-xetex.js wasmtex-xetex.worker.js wasmtex-xetex.wasm \
+            wasmtex-dvipdfm.js wasmtex-dvipdfm.worker.js wasmtex-dvipdfm.wasm
+
+      - name: Upload raw 2026 XeTeX build evidence
+        if: env.TEXLIVE_YEAR == '2026'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-xetex-2026-raw
+          path: |
+            wasm-build/dist-xetex/wasmtex-xetex.*
+            wasm-build/dist-xetex/wasmtex-dvipdfm.*
+            wasm-build/dist-xetex/BUILD-RECEIPT.xetex-raw.json
+          retention-days: 90
+
       - name: Extract + compress prebuilt XeLaTeX format (.fmt.gz)
         # Run the freshly-built engine's `xetex -ini xelatex.ini` once and capture
         # the .fmt so the app preloads it instead of rebuilding the format on every
@@ -109,15 +144,16 @@ jobs:
         timeout-minutes: 10
         env:
           PLAYWRIGHT_CHANNEL: chrome
+          TEXLIVE_URL: ${{ inputs.texlive_url }}
         run: |
           npm ci
           npx playwright install-deps chromium
-          mkdir -p public/wasmtex/2025
+          mkdir -p "public/wasmtex/$TEXLIVE_YEAR"
           cp wasm-build/dist-xetex/wasmtex-xetex.js \
              wasm-build/dist-xetex/wasmtex-xetex.worker.js \
-             wasm-build/dist-xetex/wasmtex-xetex.wasm public/wasmtex/2025/
-          node scripts/extract-xetex-format.mjs 2025
-          gzip -n -9 -c public/wasmtex/2025/wasmtex-xetex.fmt \
+             wasm-build/dist-xetex/wasmtex-xetex.wasm "public/wasmtex/$TEXLIVE_YEAR/"
+          node scripts/extract-xetex-format.mjs "$TEXLIVE_YEAR"
+          gzip -n -9 -c "public/wasmtex/$TEXLIVE_YEAR/wasmtex-xetex.fmt" \
             > wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
           ls -lh wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
 
@@ -132,7 +168,7 @@ jobs:
       - name: Upload XeLaTeX WASM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-xetex
+          name: ${{ env.TEXLIVE_YEAR == '2025' && 'wasm-xetex' || 'wasm-xetex-2026' }}
           path: |
             wasm-build/dist-xetex/wasmtex-xetex.js
             wasm-build/dist-xetex/wasmtex-xetex.worker.js
