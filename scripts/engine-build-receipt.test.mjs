@@ -15,6 +15,11 @@ import {
 } from './lib/release-assets.mjs'
 
 const COMMIT = '1234567890abcdef1234567890abcdef12345678'
+const MIRROR = {
+  revision: '2025-0123456789abcdef',
+  provenanceSha256: 'c'.repeat(64),
+  url: 'https://tex.example/snapshots/2025-0123456789abcdef/2025/',
+}
 const temporary = []
 afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true })
@@ -66,6 +71,7 @@ test('creates a deterministic receipt and verifies the exact artifact bytes', ()
     filenames: ['engine.wasm', 'engine.js'],
     sourceRevision: COMMIT,
     texliveSourceCommit: COMMIT,
+    mirror: MIRROR,
     config,
   })
   const second = createBuildReceipt({
@@ -74,6 +80,7 @@ test('creates a deterministic receipt and verifies the exact artifact bytes', ()
     filenames: ['engine.wasm', 'engine.js'],
     sourceRevision: COMMIT,
     texliveSourceCommit: COMMIT,
+    mirror: MIRROR,
     config,
   })
   assert.deepEqual(receipt, second)
@@ -96,6 +103,7 @@ test('refuses artifacts containing a legacy pplib marker', () => {
         filenames: ['engine.js'],
         sourceRevision: COMMIT,
         texliveSourceCommit: COMMIT,
+        mirror: MIRROR,
         config,
       }),
     /forbidden legacy dependency marker/,
@@ -110,6 +118,7 @@ test('binds every release file to one receipt and one license family', () => {
     filenames: ['engine.wasm', 'engine.js'],
     sourceRevision: COMMIT,
     texliveSourceCommit: COMMIT,
+    mirror: MIRROR,
     config,
   })
   writeFileSync(join(artifacts, 'BUILD-RECEIPT.pdftex.json'), `${JSON.stringify(receipt)}\n`)
@@ -159,6 +168,7 @@ test('rejects missing build families and mixed source revisions', () => {
     filenames: ['engine.js'],
     sourceRevision: COMMIT,
     texliveSourceCommit: COMMIT,
+    mirror: MIRROR,
     config,
   })
   writeFileSync(join(artifacts, 'other.wasm'), Buffer.from([0, 97, 115, 109, 1]))
@@ -168,6 +178,7 @@ test('rejects missing build families and mixed source revisions', () => {
     filenames: ['other.wasm'],
     sourceRevision: 'f'.repeat(40),
     texliveSourceCommit: COMMIT,
+    mirror: { ...MIRROR, revision: '2025-fedcba9876543210', url: 'https://tex.example/snapshots/2025-fedcba9876543210/2025/' },
     config,
   })
   writeFileSync(join(artifacts, 'BUILD-RECEIPT.pdftex.json'), `${JSON.stringify(pdftex)}\n`)
@@ -187,4 +198,34 @@ test('rejects missing build families and mixed source revisions', () => {
   })
   assert.match(inspected.errors.join('\n'), /missing required build receipt: makeindex/)
   assert.match(inspected.errors.join('\n'), /do not share one WasmTex source revision/)
+  assert.match(inspected.errors.join('\n'), /do not share one mirror identity/)
+})
+
+test('rejects a missing or mutable mirror identity', () => {
+  const { artifacts, config } = fixture()
+  assert.throws(
+    () =>
+      createBuildReceipt({
+        family: 'pdftex',
+        directory: artifacts,
+        filenames: ['engine.js'],
+        sourceRevision: COMMIT,
+        texliveSourceCommit: COMMIT,
+        config,
+      }),
+    /mirror revision/,
+  )
+  assert.throws(
+    () =>
+      createBuildReceipt({
+        family: 'pdftex',
+        directory: artifacts,
+        filenames: ['engine.js'],
+        sourceRevision: COMMIT,
+        texliveSourceCommit: COMMIT,
+        mirror: { ...MIRROR, url: 'https://tex.example/latest/2025/' },
+        config,
+      }),
+    /immutable mirror revision/,
+  )
 })

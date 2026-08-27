@@ -5,7 +5,10 @@ import { WasmTexCompiler, installNodeWorkerHost } from '../lib/node.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ASSET = 'http://assets.local/'
-installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
+installNodeWorkerHost({
+  publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
+  assetBaseUrl: ASSET,
+})
 
 const doc = '\\documentclass{article}\n\\begin{document}\nHello from Node + WASM. $E=mc^2$.\n\\end{document}\n'
 const c = new WasmTexCompiler({

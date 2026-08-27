@@ -71,6 +71,7 @@ export function createBuildReceipt({
   filenames,
   sourceRevision,
   texliveSourceCommit,
+  mirror,
   config,
 }) {
   validateSourceConfig(config)
@@ -78,6 +79,15 @@ export function createBuildReceipt({
   if (!GIT_COMMIT.test(sourceRevision ?? '')) throw new Error('sourceRevision must be a Git commit')
   if (!GIT_COMMIT.test(texliveSourceCommit ?? '')) {
     throw new Error('texliveSourceCommit must be a Git commit')
+  }
+  if (!new RegExp(`^${config.texliveYear}-[a-f0-9]{16}$`).test(mirror?.revision ?? '')) {
+    throw new Error('mirror revision must match the TeX Live year')
+  }
+  if (!SHA256.test(mirror?.provenanceSha256 ?? '')) {
+    throw new Error('mirror provenance SHA-256 is required')
+  }
+  if (!/^https:\/\//.test(mirror?.url ?? '') || !mirror.url.includes(`/${mirror.revision}/`)) {
+    throw new Error('mirror URL must be HTTPS and contain the immutable mirror revision')
   }
   if (!Array.isArray(filenames) || filenames.length === 0) {
     throw new Error('at least one artifact filename is required')
@@ -109,6 +119,7 @@ export function createBuildReceipt({
     texliveSourceCommit,
     emscriptenCommit: config.emscripten.commit,
     dockerImage: config.emscripten.dockerImage,
+    mirror,
     files,
   }
   return {
@@ -118,6 +129,7 @@ export function createBuildReceipt({
     family,
     sourceRevision,
     texliveSourceCommit,
+    mirror,
     toolchain: {
       emscriptenVersion: config.emscripten.version,
       emscriptenCommit: config.emscripten.commit,
@@ -144,6 +156,18 @@ export function validateBuildReceipt(receipt, { config, actualDirectory = null }
     fail('receipt texliveSourceCommit is invalid')
   }
   if (receipt.texliveYear !== config.texliveYear) fail('receipt TeX Live year mismatch')
+  if (!new RegExp(`^${config.texliveYear}-[a-f0-9]{16}$`).test(receipt.mirror?.revision ?? '')) {
+    fail('receipt mirror revision is invalid')
+  }
+  if (!SHA256.test(receipt.mirror?.provenanceSha256 ?? '')) {
+    fail('receipt mirror provenance SHA-256 is invalid')
+  }
+  if (
+    !/^https:\/\//.test(receipt.mirror?.url ?? '') ||
+    !receipt.mirror.url.includes(`/${receipt.mirror.revision}/`)
+  ) {
+    fail('receipt mirror URL does not contain its immutable revision')
+  }
   if (receipt.toolchain?.emscriptenVersion !== config.emscripten.version) {
     fail('receipt Emscripten version mismatch')
   }
@@ -194,6 +218,7 @@ export function validateBuildReceipt(receipt, { config, actualDirectory = null }
       texliveSourceCommit: receipt.texliveSourceCommit,
       emscriptenCommit: receipt.toolchain?.emscriptenCommit,
       dockerImage: receipt.toolchain?.dockerImage,
+      mirror: receipt.mirror,
       files: receipt.files,
     }),
   )

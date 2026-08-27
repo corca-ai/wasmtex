@@ -11,11 +11,14 @@ All publication, audit, bloom, and font-database tools use the same variables:
 
 | variable | meaning |
 |---|---|
+| `TEXLIVE_MIRROR_CONFIG` | pinned annual snapshot configuration |
+| `TEXLIVE_MIRROR_OVERRIDES` | reviewed package ownership, licensing, and collision decisions for that snapshot |
 | `TEXLIVE_OBJECT_BUCKET` | destination bucket |
 | `TEXLIVE_OBJECT_ENDPOINT` | S3-compatible endpoint; R2 uses `https://<account-id>.r2.cloudflarestorage.com` |
 | `TEXLIVE_OBJECT_PREFIX` | optional prefix before the year/snapshot |
 | `TEXLIVE_OBJECT_PROFILE` | optional local AWS CLI profile |
 | `TEXLIVE_DEPLOYED_URL` | public base URL used for byte verification |
+| `TEXLIVE_MIRROR_ROOT` | optional verified local release root used to generate bloom data without listing a remote store |
 
 The AWS CLI is only the S3-protocol client. R2 calls must set the endpoint and
 use region `auto` in the selected profile. Publisher credentials need object
@@ -39,19 +42,69 @@ node scripts/audit-mirror.mjs --year 2025 --check
 The legacy `S3_BUCKET` variable and `sync-texlive-s3.sh` entrypoint remain as
 compatibility aliases. New automation uses the provider-neutral names.
 
+## Frozen tlnet snapshots
+
+The initial annual DVD state uses the two official release archives. A dated
+repository state or `tlnet-final` instead uses `sourceType=tlnet-repository`.
+Materialize it before generation so the official installer verifies every
+package container against the pinned, frozen TLPDB:
+
+```bash
+export TEXLIVE_MIRROR_CONFIG=$PWD/scripts/texlive-mirror-2025-final.json
+# TEXLIVE_REPOSITORY_URL may select a byte-identical historic mirror when the
+# canonical archive is slow; the installer and TLPDB digests still must match.
+export TEXLIVE_REPOSITORY_URL=https://mirrors.nju.edu.cn/tex-historic/systems/texlive/2025/tlnet-final
+export WORK_DIR=/verified/texlive-2025-final
+./scripts/prepare-tlnet-snapshot.sh
+```
+
+The preparation installs source and documentation as evidence as well as runtime
+files and emits a materialization receipt for the exact installed tree. Export the
+printed `TEXMF_DIST`, `TEXLIVE_TLPDB`, and `TEXLIVE_MATERIALIZATION_RECEIPT`
+values together when running the mirror sync; generation recomputes the tree hash
+and refuses a missing or stale receipt. Mirror generation still emits only the
+supported flattened runtime surface.
+The provenance manifest records the canonical frozen repository, installer digest,
+pinned TLPDB digest, every selected source path, and the byte-derived mirror identity.
+
+Generate snapshot-coupled runtime data from that verified local release before
+publication. `XETEX_FONTLIST_OUTPUT`, `LUAOTFLOAD_NAMES_OUTPUT`, and
+`TEXLIVE_BLOOM_OUTPUT` let an isolated release workspace receive the outputs
+without modifying the checkout. Luaotfload DB generation normalizes its two
+wall-clock fields and per-font mtimes; two runs over the same font bytes must
+produce the same SHA-256.
+
+After copying `icudt68l.dat`, copying the exact install's generated
+`texmf-var/fonts/map/pdftex/updmap/pdftex.map` to `pdftex/11/pdftex.map`, and
+generating the three other artifacts, run
+`node scripts/snapshot-artifacts.mjs --release-root <release>` and repeat it
+with `--check`. The resulting `snapshot-artifacts.json` binds their exact size
+and SHA-256, plus the provenance hash, to the snapshot's mirror revision. The
+core provenance checker continues to own the flattened upstream package files;
+the artifact checker owns these five generated/runtime files. When that artifact
+manifest is present, the provenance checker accepts its three `pdftex/` supplemental
+files only after checking their declared size and digest; any other unrecorded
+file still fails the exact-inventory gate.
+
 ## R2 serving configuration
 
 Use separate production and non-production buckets. Attach
 `texlive.corca.ai` to the production bucket as an R2 custom domain; do not
-enable `r2.dev`. Configure bucket CORS for `GET` and `HEAD` from CorTeX origins,
-expose `ETag`, and set a suitable preflight age. Objects beneath immutable
+enable `r2.dev`. Configure bucket CORS for `GET` and `HEAD` from the production
+and staging CorTeX origins plus the exact local qualification origins
+`http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:6001`, and
+`http://127.0.0.1:6001`. The local origins are required because format extraction
+uses Vite's development port and the browser qualification corpus uses its isolated
+test port. Allow `Range`; expose `ETag`, `Content-Length`, `Content-Range`, and
+`Accept-Ranges`; and set a suitable preflight age. Objects beneath immutable
 snapshot prefixes use `Cache-Control: public, max-age=31536000, immutable`.
 Do not cache missing-object responses across publication: verify representative
 404-to-200 paths or purge the affected negative cache before qualification.
 
 ## Migration and verification
 
-1. Generate or recover the exact current 2025 release and its provenance.
+1. Generate or recover the exact current 2025 release and its provenance. For a
+   host-only migration, copy the source inventory unchanged instead of regenerating it.
 2. Publish it to a new immutable R2 prefix. Do not use `--replace-existing` for
    an already qualified prefix.
 3. `sync-texlive-mirror.sh` runs `verify-object-mirror.mjs` after upload to compare

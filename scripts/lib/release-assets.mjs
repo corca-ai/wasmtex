@@ -108,6 +108,11 @@ export function inspectReleaseAssets({ directory, legal, sourceConfig }) {
   if (sourceRevisions.size > 1) {
     errors.push('build receipts do not share one WasmTex source revision')
   }
+  const mirrorIdentities = new Set(
+    receipts.map((receipt) => JSON.stringify(receipt.value.mirror ?? null)),
+  )
+  if (mirrorIdentities.size > 1) errors.push('build receipts do not share one mirror identity')
+  if (mirrorIdentities.has('null')) errors.push('build receipts are missing mirror identity')
   return { files, receiptFiles, buildReceipts, receipts, errors }
 }
 

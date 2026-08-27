@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * Generate a bloom filter from the TeX Live CDN file listing.
+ * Generate a bloom filter from a TeX Live mirror file listing.
  *
  * The bloom filter lets the WASM worker skip sync XHR for files that
  * definitely don't exist on the CDN, eliminating 403 console errors.
  *
  * Usage:
- *   node scripts/gen-bloom-filter.mjs                  # generate bloom-filter.bin
- *   node scripts/gen-bloom-filter.mjs --upload          # generate + upload to S3
+ *   node scripts/gen-bloom-filter.mjs                  # list the configured object store
+ *   TEXLIVE_MIRROR_ROOT=/release node scripts/gen-bloom-filter.mjs
+ *   node scripts/gen-bloom-filter.mjs --upload
  *
  * Prerequisites:
  *   AWS CLI configured with access to the texlive S3 bucket.
@@ -21,8 +22,8 @@
  * Hash: FNV-1a double hashing — h_i = (h1 + i * h2) mod m
  */
 
-import { writeFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { readdirSync, writeFileSync } from 'fs'
+import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -32,7 +33,8 @@ import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store
 const STORE = objectStoreConfig()
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 const MIRROR_ROOT = objectUri(STORE, YEAR, 'pdftex')
-const OUTPUT_FILE = join(__dirname, '..', 'bloom-filter.bin')
+const LOCAL_MIRROR_ROOT = process.env.TEXLIVE_MIRROR_ROOT
+const OUTPUT_FILE = process.env.TEXLIVE_BLOOM_OUTPUT || join(__dirname, '..', 'bloom-filter.bin')
 
 // Bloom filter parameters
 const FALSE_POSITIVE_RATE = 0.01
@@ -55,6 +57,24 @@ function fnv1a(str) {
 // --- S3 file listing ---------------------------------------------------------
 
 function listMirrorFiles() {
+  if (LOCAL_MIRROR_ROOT) {
+    const pdftexRoot = join(LOCAL_MIRROR_ROOT, 'pdftex')
+    console.log(`Listing files from ${pdftexRoot}/...`)
+    const keys = []
+    const visit = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) visit(path)
+        else if (entry.isFile()) {
+          const key = relative(pdftexRoot, path).split('\\').join('/')
+          if (!key.startsWith('pk/')) keys.push(key)
+        }
+      }
+    }
+    visit(pdftexRoot)
+    return keys.sort()
+  }
+
   console.log(`Listing files from ${MIRROR_ROOT}/...`)
 
   const raw = runObjectStore(STORE, ['s3', 'ls', `${MIRROR_ROOT}/`, '--recursive'], {
@@ -147,7 +167,7 @@ function main() {
   console.log(`Found ${keys.length} files (excluding pk/)`)
 
   if (keys.length === 0) {
-    console.error('No files found. Check AWS credentials and bucket access.')
+    console.error('No files found. Check the local mirror root or object-store access.')
     process.exit(1)
   }
 

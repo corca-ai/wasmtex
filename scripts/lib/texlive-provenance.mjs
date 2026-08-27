@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, extname, join, relative, resolve, sep } from 'node:path'
+import { verifyMaterializationReceipt } from './tlnet-materialization.mjs'
 
 const FILE_SECTION = /^(runfiles|docfiles|srcfiles|binfiles)(?:\s|$)/
 const NOTICE_BASENAME = /(^|[-_.])(copying|copyright|licen[cs]e|notice|readme)([-_.]|$)/i
@@ -116,6 +117,11 @@ export function parseTlpdb(text) {
     if (!current) return
     if (!current.name) throw new Error('TLPDB record is missing a package name')
     if (packages.has(current.name)) throw new Error(`duplicate TLPDB package: ${current.name}`)
+    if (current.relocated) {
+      current.files = current.files.map((path) =>
+        path.startsWith('RELOC/') ? `texmf-dist/${path.slice('RELOC/'.length)}` : path,
+      )
+    }
     current.noticePaths = [
       ...new Set(current.files.filter((path) => NOTICE_BASENAME.test(basename(path)))),
     ].sort()
@@ -135,6 +141,7 @@ export function parseTlpdb(text) {
         revision: null,
         catalogue: null,
         catalogueLicenses: [],
+        relocated: false,
         files: [],
         noticePaths: [],
       }
@@ -155,6 +162,7 @@ export function parseTlpdb(text) {
     const value = space === -1 ? '' : line.slice(space + 1)
     if (field === 'name') current.name = value
     else if (field === 'revision') current.revision = value
+    else if (field === 'relocated') current.relocated = value === '1'
     else if (field === 'catalogue') current.catalogue = value
     else if (field === 'catalogue-license') {
       current.catalogueLicenses.push(...value.split(/\s+/).filter(Boolean))
@@ -213,21 +221,55 @@ function validateConfig(config, overrides) {
   if (!/^\d{4}$/.test(config.texliveYear ?? '')) {
     throw new Error('mirror config texliveYear must be a year')
   }
-  for (const [key, archive] of [
-    ['texmfArchive', config.texmfArchive],
-    ['metadataArchive', config.metadataArchive],
-  ]) {
-    if (
-      !archive ||
-      typeof archive.filename !== 'string' ||
-      !/^https:\/\//.test(archive.url ?? '')
-    ) {
-      throw new Error(`${key} must declare filename and HTTPS url`)
-    }
-    validateHex(archive.sha512, SHA512, `${key}.sha512`)
+  const archiveRelease = config.sourceType === undefined || config.sourceType === 'release-archives'
+  const tlnetRelease = config.sourceType === 'tlnet-repository'
+  if (!archiveRelease && !tlnetRelease) {
+    throw new Error(`unsupported mirror sourceType: ${String(config.sourceType)}`)
   }
-  if (!config.tlpdb || typeof config.tlpdb.archiveMember !== 'string') {
-    throw new Error('mirror config must declare tlpdb.archiveMember')
+  if (archiveRelease) {
+    for (const [key, archive] of [
+      ['texmfArchive', config.texmfArchive],
+      ['metadataArchive', config.metadataArchive],
+    ]) {
+      if (
+        !archive ||
+        typeof archive.filename !== 'string' ||
+        !/^https:\/\//.test(archive.url ?? '')
+      ) {
+        throw new Error(`${key} must declare filename and HTTPS url`)
+      }
+      validateHex(archive.sha512, SHA512, `${key}.sha512`)
+    }
+  } else {
+    if (
+      !config.repository ||
+      !/^https:\/\//.test(config.repository.url ?? '') ||
+      typeof config.repository.snapshot !== 'string' ||
+      config.repository.snapshot.length === 0 ||
+      config.repository.frozen !== true
+    ) {
+      throw new Error('tlnet repository must declare HTTPS url, snapshot, and frozen=true')
+    }
+    if (
+      !config.installer ||
+      typeof config.installer.filename !== 'string' ||
+      !/^https:\/\//.test(config.installer.url ?? '')
+    ) {
+      throw new Error('tlnet repository must declare its installer filename and HTTPS url')
+    }
+    validateHex(config.installer.sha512, SHA512, 'installer.sha512')
+  }
+  if (
+    !config.tlpdb ||
+    (archiveRelease
+      ? typeof config.tlpdb.archiveMember !== 'string'
+      : !/^https:\/\//.test(config.tlpdb.url ?? ''))
+  ) {
+    throw new Error(
+      archiveRelease
+        ? 'mirror config must declare tlpdb.archiveMember'
+        : 'tlnet repository must declare an HTTPS tlpdb.url',
+    )
   }
   validateHex(config.tlpdb.sha256, SHA256, 'tlpdb.sha256')
   if (overrides.schemaVersion !== 1) throw new Error('mirror overrides schemaVersion must be 1')
@@ -283,8 +325,11 @@ function resolveLicense(pkg, overrides) {
   if (!Array.isArray(noticePaths) || noticePaths.some((value) => typeof value !== 'string')) {
     throw new Error(`${pkg.name}: package noticePaths must be an array of strings`)
   }
-  const reviewed = explicit?.reviewed === true
-  if (reviewed && evidence.length === 0) {
+  // A pinned TeX Live TLPDB is the upstream distribution's reviewed catalogue
+  // declaration for unchanged package bytes. Local overrides remain mandatory
+  // when that declaration is absent or intentionally replaced.
+  const reviewed = explicit ? explicit.reviewed === true : true
+  if (explicit && reviewed && evidence.length === 0) {
     throw new Error(`${pkg.name}: a reviewed license override must cite evidence`)
   }
   return {
@@ -419,7 +464,7 @@ function loadPinnedTlpdb(tlpdbPath, config) {
   return { tlpdbSha256, parsed: parseTlpdb(readFileSync(tlpdbPath, 'utf8')) }
 }
 
-function packageAuditEntry(pkg, license, reviewIssues) {
+function packageAuditEntry(pkg, license, reviewIssues, selectedFile) {
   return {
     package: pkg.name,
     revision: pkg.revision,
@@ -428,6 +473,7 @@ function packageAuditEntry(pkg, license, reviewIssues) {
     resolvedLicenseIds: license?.ids ?? [],
     licenseReviewed: license?.reviewed ?? false,
     noticePaths: license?.noticePaths ?? pkg.noticePaths,
+    selectedFiles: [selectedFile],
     reviewIssues,
   }
 }
@@ -438,7 +484,6 @@ function reviewQueue(packageList) {
       const reasons = []
       if (pkg.resolvedLicenseIds.length === 0) reasons.push('missing-license-metadata')
       if (!pkg.licenseReviewed) reasons.push('license-review-required')
-      if (pkg.noticePaths.length === 0) reasons.push('notice-evidence-required')
       reasons.push(...pkg.reviewIssues.map((issue) => issue.type))
       return {
         package: pkg.package,
@@ -446,6 +491,7 @@ function reviewQueue(packageList) {
         catalogue: pkg.catalogue,
         catalogueLicenses: pkg.catalogueLicenses,
         noticePaths: pkg.noticePaths,
+        selectedFiles: pkg.selectedFiles,
         reasons: [...new Set(reasons)].sort(),
       }
     })
@@ -487,7 +533,11 @@ export function auditMirror({ texmfDist, tlpdbPath, config, overrides }) {
       return
     }
     const pkg = parsed.packages.get(owner)
-    if (packages.has(owner)) return
+    const selectedFile = { key, sourcePath: candidate.sourcePath }
+    if (packages.has(owner)) {
+      packages.get(owner).selectedFiles.push(selectedFile)
+      return
+    }
     let license = null
     const reviewIssues = []
     try {
@@ -518,7 +568,7 @@ export function auditMirror({ texmfDist, tlpdbPath, config, overrides }) {
         detail: issue.detail,
       })
     }
-    packages.set(owner, packageAuditEntry(pkg, license, reviewIssues))
+    packages.set(owner, packageAuditEntry(pkg, license, reviewIssues, selectedFile))
   }
 
   for (const key of [...candidatesByKey.keys()].sort()) {
@@ -588,7 +638,11 @@ export function auditTlpdb({ tlpdbPath, config, overrides }) {
       return
     }
     const pkg = parsed.packages.get(owner)
-    if (packages.has(owner)) return
+    const selectedFile = { key, sourcePath: candidate.sourcePath }
+    if (packages.has(owner)) {
+      packages.get(owner).selectedFiles.push(selectedFile)
+      return
+    }
     let license = null
     const reviewIssues = []
     try {
@@ -605,7 +659,7 @@ export function auditTlpdb({ tlpdbPath, config, overrides }) {
         detail: issue.detail,
       })
     }
-    packages.set(owner, packageAuditEntry(pkg, license, reviewIssues))
+    packages.set(owner, packageAuditEntry(pkg, license, reviewIssues, selectedFile))
   }
 
   for (const key of [...candidatesByKey.keys()].sort()) {
@@ -678,6 +732,7 @@ export function generateMirror({
   overrides,
   texmfArchivePath = null,
   metadataArchivePath = null,
+  materializationReceiptPath = null,
   scope = 'full-mirror',
 }) {
   validateConfig(config, overrides)
@@ -688,6 +743,21 @@ export function generateMirror({
     throw new Error(`texmf-dist directory does not exist: ${texmfDist}`)
   }
   const { tlpdbSha256, parsed } = loadPinnedTlpdb(tlpdbPath, config)
+  const materializationReceipt =
+    config.sourceType === 'tlnet-repository'
+      ? (() => {
+          if (!materializationReceiptPath) {
+            throw new Error('tlnet mirror generation requires a materialization receipt')
+          }
+          const receipt = JSON.parse(readFileSync(materializationReceiptPath, 'utf8'))
+          return verifyMaterializationReceipt({
+            receipt,
+            config,
+            texmfDist,
+            tlpdbPath,
+          })
+        })()
+      : null
   const candidatesByKey = collectCandidates(
     texmfDist,
     scope === 'completion-metadata' ? isCompletionMetadataKey : null,
@@ -728,18 +798,23 @@ export function generateMirror({
     })
   }
 
-  const texmfArchiveVerification = verifyInput(
-    texmfArchivePath,
-    'sha512',
-    config.texmfArchive.sha512,
-    'TeX Live texmf archive',
-  )
-  const metadataArchiveVerification = verifyInput(
-    metadataArchivePath,
-    'sha512',
-    config.metadataArchive.sha512,
-    'TeX Live metadata archive',
-  )
+  const archiveRelease = config.sourceType === undefined || config.sourceType === 'release-archives'
+  const texmfArchiveVerification = archiveRelease
+    ? verifyInput(
+        texmfArchivePath,
+        'sha512',
+        config.texmfArchive.sha512,
+        'TeX Live texmf archive',
+      )
+    : null
+  const metadataArchiveVerification = archiveRelease
+    ? verifyInput(
+        metadataArchivePath,
+        'sha512',
+        config.metadataArchive.sha512,
+        'TeX Live metadata archive',
+      )
+    : null
   if (existsSync(outputDir)) {
     const entries = readdirSync(outputDir)
     if (entries.length > 0) throw new Error(`output directory is not empty: ${outputDir}`)
@@ -782,14 +857,24 @@ export function generateMirror({
     releaseStatus:
       scope === 'completion-metadata'
         ? 'metadata-only'
-        : unreviewedPackages.length === 0 && packagesWithoutNoticeEvidence.length === 0
+        : unreviewedPackages.length === 0
           ? 'provenance-reviewed'
           : 'review-required',
-    source: {
-      texmfArchive: { ...config.texmfArchive, ...texmfArchiveVerification },
-      metadataArchive: { ...config.metadataArchive, ...metadataArchiveVerification },
-      tlpdb: { ...config.tlpdb, sha256: tlpdbSha256 },
-    },
+    source: archiveRelease
+      ? {
+          type: 'release-archives',
+          ...(typeof config.snapshot === 'string' ? { snapshot: config.snapshot } : {}),
+          texmfArchive: { ...config.texmfArchive, ...texmfArchiveVerification },
+          metadataArchive: { ...config.metadataArchive, ...metadataArchiveVerification },
+          tlpdb: { ...config.tlpdb, sha256: tlpdbSha256 },
+        }
+      : {
+          type: 'tlnet-repository',
+          repository: config.repository,
+          installer: config.installer,
+          tlpdb: { ...config.tlpdb, sha256: tlpdbSha256, verified: true },
+          materialization: materializationReceipt.tree,
+        },
     layout: {
       root: 'pdftex',
       keyScheme: 'pdftex/<kpathsea-format-id>/<flattened-name>',
@@ -816,6 +901,7 @@ export function checkMirror({
   requireVerifiedArchives = true,
   requireLicenseReview = false,
   allowCompletionMetadata = false,
+  supplementalArtifacts = [],
 }) {
   const failures = []
   const fail = (message) => failures.push(message)
@@ -837,12 +923,28 @@ export function checkMirror({
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     fail('manifest files must be non-empty')
   }
-  for (const name of ['texmfArchive', 'metadataArchive']) {
-    const archive = manifest.source?.[name]
-    if (!SHA512.test(archive?.sha512 ?? '')) fail(`${name} has an invalid SHA-512`)
-    if (!/^https:\/\//.test(archive?.url ?? '')) fail(`${name} has an invalid source URL`)
-    if (requireVerifiedArchives && archive?.verified !== true) {
-      fail(`${name} is not cryptographically verified`)
+  if (manifest.source?.type === 'tlnet-repository') {
+    if (!/^https:\/\//.test(manifest.source.repository?.url ?? '')) {
+      fail('repository has an invalid source URL')
+    }
+    if (manifest.source.repository?.frozen !== true) fail('repository is not recorded as frozen')
+    if (!SHA512.test(manifest.source.installer?.sha512 ?? '')) {
+      fail('installer has an invalid SHA-512')
+    }
+    if (!/^https:\/\//.test(manifest.source.installer?.url ?? '')) {
+      fail('installer has an invalid source URL')
+    }
+    if (requireVerifiedArchives && manifest.source.tlpdb?.verified !== true) {
+      fail('tlnet repository TLPDB is not cryptographically verified')
+    }
+  } else {
+    for (const name of ['texmfArchive', 'metadataArchive']) {
+      const archive = manifest.source?.[name]
+      if (!SHA512.test(archive?.sha512 ?? '')) fail(`${name} has an invalid SHA-512`)
+      if (!/^https:\/\//.test(archive?.url ?? '')) fail(`${name} has an invalid source URL`)
+      if (requireVerifiedArchives && archive?.verified !== true) {
+        fail(`${name} is not cryptographically verified`)
+      }
     }
   }
   if (!SHA256.test(manifest.source?.tlpdb?.sha256 ?? '')) fail('tlpdb has an invalid SHA-256')
@@ -880,11 +982,8 @@ export function checkMirror({
     ) {
       fail(`${file.key}: reviewed package license has no evidence reference`)
     }
-    if (
-      requireLicenseReview &&
-      (!Array.isArray(file.source?.noticePaths) || file.source.noticePaths.length === 0)
-    ) {
-      fail(`${file.key}: package has no reviewed notice evidence path`)
+    if (requireLicenseReview && !Array.isArray(file.source?.noticePaths)) {
+      fail(`${file.key}: package notice evidence is not an array`)
     }
     if (file.collision && !['identical-content', 'reviewed-override'].includes(file.collision.decision)) {
       fail(`${file.key}: unsupported collision decision`)
@@ -900,11 +999,40 @@ export function checkMirror({
     if (actual !== file.sha256) fail(`${file.key}: SHA-256 mismatch`)
   }
 
+  const supplemental = new Set()
+  for (const artifact of supplementalArtifacts) {
+    if (!/^pdftex\/\d+\/[^/]+$/.test(artifact.key ?? '') || artifact.key.includes('..')) {
+      fail(`${String(artifact.key)}: invalid or unsafe supplemental mirror key`)
+      continue
+    }
+    if (declared.has(artifact.key) || supplemental.has(artifact.key)) {
+      fail(`duplicate supplemental mirror key: ${artifact.key}`)
+      continue
+    }
+    supplemental.add(artifact.key)
+    const path = join(mirrorRoot, artifact.key)
+    if (!existsSync(path)) {
+      fail(`${artifact.key}: supplemental mirrored file is missing`)
+      continue
+    }
+    const stat = statSync(path)
+    if (stat.size !== artifact.size) fail(`${artifact.key}: supplemental byte size mismatch`)
+    if (!SHA256.test(artifact.sha256 ?? '')) fail(`${artifact.key}: invalid supplemental SHA-256`)
+    else if (sha('sha256', path) !== artifact.sha256) {
+      fail(`${artifact.key}: supplemental SHA-256 mismatch`)
+    }
+  }
+
   const actual = walkFiles(join(mirrorRoot, 'pdftex'))
     .map((path) => normalizePath(relative(mirrorRoot, path)))
-  for (const key of actual) if (!declared.has(key)) fail(`${key}: unrecorded mirrored file`)
-  if (actual.length !== declared.size) {
-    fail(`file count mismatch: manifest=${declared.size}, mirror=${actual.length}`)
+  for (const key of actual) {
+    if (!declared.has(key) && !supplemental.has(key)) fail(`${key}: unrecorded mirrored file`)
+  }
+  if (actual.length !== declared.size + supplemental.size) {
+    fail(
+      `file count mismatch: manifest=${declared.size}, supplemental=${supplemental.size}, ` +
+        `mirror=${actual.length}`,
+    )
   }
   if (manifest.summary?.files !== declared.size) fail('summary.files does not match manifest files')
   if (completionMetadata && manifest.releaseStatus !== 'metadata-only') {

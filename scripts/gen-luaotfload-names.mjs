@@ -56,7 +56,7 @@ import { fileURLToPath } from 'node:url'
 import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const OUT = join(root, 'luaotfload-names.lua')
+const OUT = process.env.LUAOTFLOAD_NAMES_OUTPUT || join(root, 'luaotfload-names.lua')
 const STORE = objectStoreConfig()
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 // Must match the engine's bundled luaotfload (see wasm-build/texlive-source.ref).
@@ -88,7 +88,33 @@ function runDockerGenerate(script, mounts) {
   )
   writeFileSync(`${OUT}.gz`, gz)
   execSync(`gunzip -f ${OUT}.gz`, { stdio: 'inherit' })
+  normalize(OUT)
   console.log(`Wrote ${OUT} (${(statSync(OUT).size / 1024 / 1024).toFixed(2)} MB)`)
+}
+
+/** Remove wall-clock and copied-file mtimes that luaotfload records but does not
+ * use when WasmTex loads this read-only database. Font identity and metadata stay
+ * unchanged, while rebuilding the same mirror yields byte-identical output. */
+function normalize(path) {
+  const before = readFileSync(path, 'utf8')
+  let metadataDates = 0
+  let fileTimestamps = 0
+  const after = before
+    .replace(/\["(?:created|modified)"\]="[^"]+"/g, (value) => {
+      metadataDates++
+      return value.replace(/="[^"]+"$/, '="1970-01-01 00:00:00"')
+    })
+    .replace(/\["timestamp"\]=\d+/g, () => {
+      fileTimestamps++
+      return '["timestamp"]=0'
+    })
+  if (metadataDates !== 2 || fileTimestamps === 0) {
+    throw new Error(
+      `Unexpected luaotfload DB metadata: dates=${metadataDates}, timestamps=${fileTimestamps}`,
+    )
+  }
+  writeFileSync(path, after)
+  console.log(`Normalized ${metadataDates} metadata dates and ${fileTimestamps} font mtimes.`)
 }
 
 /** Generate the names DB. With `fontsDir` (the mirror fonts: opentype/*.otf +
@@ -191,6 +217,7 @@ function main() {
   }
   if (flag('--generate')) generate(optVal('--fonts-dir'))
   const dbPath = optVal('--db') || OUT
+  if (flag('--normalize') && !flag('--generate')) normalize(dbPath)
   verify(dbPath)
   if (flag('--upload')) upload(dbPath)
 }

@@ -6,6 +6,13 @@ revision in its name; they are records, not living documents — supersede them
 with a new snapshot instead of editing history. `npm run check:licenses`
 requires the load-bearing set to stay tracked.
 
+## TeX Live 2025 final profile (`e7cfc9d`)
+
+| File | What it evidences |
+| --- | --- |
+| `engine-release-2025-final-e7cfc9d.md` | The receipt-bound x86_64 build, immutable final mirror, and browser/Node qualification |
+| `corresponding-source-2025-e7cfc9d.md` | The deterministic source archive, official checker result, publication, and public hash binding |
+
 ## TeX Live 2026 engine line (`9b43b39`)
 
 | File | What it evidences |

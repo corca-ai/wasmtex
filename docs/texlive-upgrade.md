@@ -231,15 +231,21 @@ The Unicode engines resolve fonts **by human name** from prebuilt databases that
 silently fall back (XeLaTeX) / mismatch and rescan (LuaLaTeX):
 
 ```bash
-# XeLaTeX: scans the mirrored fonts with fc-scan (see scripts/gen-xetexfontlist.mjs)
-AWS_PROFILE=cc node scripts/gen-xetexfontlist.mjs --upload
+# XeLaTeX: scans the verified local mirror with fc-scan.
+XETEX_FONTLIST_OUTPUT=<release>/pdftex/26/xetexfontlist.txt \
+  node scripts/gen-xetexfontlist.mjs <release>/pdftex
 
 # LuaLaTeX: luaotfload names DB. Set EXPECTED_LUAOTFLOAD / EXPECTED_DB_VERSION to the new
 # TeX Live year's luaotfload (env vars, or edit the defaults '3.29' / '6' in the script);
 # the upload step rejects a DB whose schema version mismatches, so the engine never rescans.
 # Use --fonts-dir for the exact-mirror DB; bare --generate is the quick, non-exact mode.
 node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>   # in a Docker environment
-AWS_PROFILE=cc node scripts/gen-luaotfload-names.mjs --db ./luaotfload-names.lua --upload
+LUAOTFLOAD_NAMES_OUTPUT=<release>/pdftex/51/luaotfload-names.lua \
+  node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>
+
+# Include the generated DB keys in a deterministic local bloom filter.
+TEXLIVE_MIRROR_ROOT=<release> TEXLIVE_BLOOM_OUTPUT=<release>/bloom-filter.bin \
+  node scripts/gen-bloom-filter.mjs
 ```
 
 Then regenerate the bloom filter and invalidate the CDN (the fonts these DBs reference
