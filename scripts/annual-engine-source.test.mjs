@@ -35,5 +35,10 @@ test('2026 XeTeX and LuaTeX builds select the rebased WTPDF patch', () => {
   assert.match(luatexWorkflow, /--build-arg TEXLIVE_YEAR="\$TEXLIVE_YEAR"/)
   for (const workflow of [pdftexWorkflow, xetexWorkflow, luatexWorkflow]) {
     assert.match(workflow, /BUILD-RECEIPT\.[a-z0-9-]+-raw\.json/)
+    assert.match(workflow, /texlive_url:/)
+    assert.match(workflow, /TEXLIVE_URL: \$\{\{ inputs\.texlive_url \}\}/)
+  }
+  for (const script of ['extract-format.mjs', 'extract-xetex-format.mjs', 'extract-luatex-format.mjs']) {
+    assert.match(readFileSync(resolve(root, 'scripts', script), 'utf8'), /process\.env\.TEXLIVE_URL/)
   }
 })

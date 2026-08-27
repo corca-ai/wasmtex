@@ -27,6 +27,7 @@ import { collectFormatRequests, writeFormatInputEvidence } from './lib/format-in
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 const version = process.argv[2] ?? '2025'
+const texliveUrl = process.env.TEXLIVE_URL ?? `https://d1jectpaw0dlvl.cloudfront.net/${version}/`
 const outPath = join(root, `public/wasmtex/${version}/wasmtex-luatex.fmt`)
 const enginePath = join(root, `public/wasmtex/${version}/wasmtex-luatex.worker.js`)
 
@@ -64,9 +65,9 @@ async function main() {
 
     // Bound the in-browser build so a stalled worker/CDN fetch fails loudly in CI
     // instead of hanging the job indefinitely.
-    const evalPromise = page.evaluate(async (v) => {
+    const evalPromise = page.evaluate(async ({ v, endpoint }) => {
       const { createCompileWorker } = await import('/src/engine/tex-fmt-engine.ts')
-      const tex = createCompileWorker('luatex', { texliveVersion: v })
+      const tex = createCompileWorker('luatex', { texliveVersion: v, texliveUrl: endpoint })
       try {
         await tex.init()
         const r = await tex.run('compileformat')
@@ -79,7 +80,7 @@ async function main() {
       } finally {
         tex.terminate()
       }
-    }, version)
+    }, { v: version, endpoint: texliveUrl })
     let timeout
     try {
       b64 = await Promise.race([

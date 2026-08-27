@@ -18,6 +18,10 @@ on:
         type: choice
         default: '2025'
         options: ['2025', '2026']
+      texlive_url:
+        description: Exact immutable package-mirror URL used to build formats
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
@@ -140,6 +144,7 @@ jobs:
         timeout-minutes: 10
         env:
           PLAYWRIGHT_CHANNEL: chrome
+          TEXLIVE_URL: ${{ inputs.texlive_url }}
         run: |
           npm ci
           npx playwright install-deps chromium
