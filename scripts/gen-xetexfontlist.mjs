@@ -21,13 +21,14 @@ import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const FONT_ROOT =
   process.argv.find((a) => !a.startsWith('--') && a.endsWith('pdftex')) || '/tmp/texlive-s3/pdftex'
 const FONT_DIRS = ['47', '36', '32'] // opentype, truetype, type1
 const OUT = join(root, 'xetexfontlist.txt')
-const S3_BUCKET = process.env.S3_BUCKET || 'corca-fastlatex-texlib'
+const STORE = objectStoreConfig()
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 
 const SEP = '\x1f' // ASCII unit separator — won't appear in font metadata
@@ -133,12 +134,10 @@ function main() {
   console.log(`\nScanned ${scanned} faces, wrote ${fontId} font records to ${OUT}`)
 
   if (process.argv.includes('--upload')) {
-    const dest = `s3://${S3_BUCKET}/${YEAR}/pdftex/26/xetexfontlist.txt`
+    const dest = objectUri(STORE, YEAR, 'pdftex', '26', 'xetexfontlist.txt')
     console.log(`Uploading to ${dest} ...`)
-    execSync(
-      `aws s3 cp ${OUT} ${dest} --content-type text/plain --cache-control "public, max-age=3600"`,
-      { stdio: 'inherit' },
-    )
+    runObjectStore(STORE, ['s3', 'cp', OUT, dest, '--content-type', 'text/plain',
+      '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
     console.log('Upload complete. Regenerate the bloom filter + invalidate the CDN next.')
   }
 }

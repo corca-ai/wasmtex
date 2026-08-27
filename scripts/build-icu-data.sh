@@ -14,7 +14,7 @@
 #
 # Usage:
 #   scripts/build-icu-data.sh                 # build icudt68l.dat into /tmp/icu-data/
-#   scripts/build-icu-data.sh --upload        # build + gzip + upload to the CDN (needs AWS)
+#   scripts/build-icu-data.sh --upload        # build + gzip + upload through S3 protocol
 #
 # CDN target: s3://corca-fastlatex-texlib/<year>/icudt68l.dat (gzip Content-Encoding,
 # so the worker's XHR transparently decompresses). The worker fetches it at
@@ -23,8 +23,11 @@ set -euo pipefail
 
 ICU_VER="68_2"          # must match emscripten's ICU port (tools/ports/icu.py TAG)
 ICU_MAJOR="68"
-YEAR="${YEAR:-2025}"
-S3_BUCKET="${S3_BUCKET:-corca-fastlatex-texlib}"
+YEAR="${TEXLIVE_YEAR:-${YEAR:-2025}}"
+OBJECT_BUCKET="${TEXLIVE_OBJECT_BUCKET:-${S3_BUCKET:-corca-fastlatex-texlib}}"
+OBJECT_ENDPOINT="${TEXLIVE_OBJECT_ENDPOINT:-}"
+OBJECT_PREFIX="${TEXLIVE_OBJECT_PREFIX:-}"
+OBJECT_PROFILE="${TEXLIVE_OBJECT_PROFILE:-}"
 EMSDK_IMAGE="${EMSDK_IMAGE:-emscripten/emsdk:3.1.46}"
 WORK="${WORK_DIR:-/tmp/icu-data}"
 UPLOAD=0
@@ -66,11 +69,18 @@ DAT="$WORK/icudt${ICU_MAJOR}l.dat"
 echo "Built $DAT ($(wc -c < "$DAT") bytes)"
 
 if [ "$UPLOAD" = 1 ]; then
-  : "${AWS_PROFILE:?set AWS_PROFILE (e.g. cc) to upload}"
   gzip -9 -c "$DAT" > "$DAT.gz"
-  echo "Uploading to s3://$S3_BUCKET/$YEAR/icudt${ICU_MAJOR}l.dat (gzip) ..."
-  aws s3 cp "$DAT.gz" "s3://$S3_BUCKET/$YEAR/icudt${ICU_MAJOR}l.dat" \
+  OBJECT_PREFIX="${OBJECT_PREFIX#/}"; OBJECT_PREFIX="${OBJECT_PREFIX%/}"
+  if [ -n "$OBJECT_PREFIX" ]; then
+    DEST="s3://$OBJECT_BUCKET/$OBJECT_PREFIX/$YEAR/icudt${ICU_MAJOR}l.dat"
+  else
+    DEST="s3://$OBJECT_BUCKET/$YEAR/icudt${ICU_MAJOR}l.dat"
+  fi
+  set -- aws ${OBJECT_PROFILE:+--profile "$OBJECT_PROFILE"} \
+    ${OBJECT_ENDPOINT:+--endpoint-url "$OBJECT_ENDPOINT"} s3 cp "$DAT.gz" "$DEST"
+  echo "Uploading to $DEST (gzip) ..."
+  "$@" \
     --content-encoding gzip --content-type application/octet-stream \
-    --cache-control "public, max-age=31536000"
-  echo "Uploaded. (New object — no CloudFront invalidation needed.)"
+    --cache-control "public, max-age=31536000, immutable"
+  echo "Uploaded immutable ICU data."
 fi

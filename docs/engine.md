@@ -2,6 +2,10 @@
 
 This document details the LaTeX/BibTeX engine internals and the on-demand package system.
 
+Production package bytes will be served from immutable Cloudflare R2 prefixes at
+`texlive.corca.ai` after the qualified origin cutover. Publication and migration are documented in
+[TeX Live mirror operations](texlive-mirror-operations.md).
+
 ## Engine Setup
 
 The runtime needs each engine's authored controller (`*.worker.js`), generated

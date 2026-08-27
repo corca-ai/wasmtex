@@ -14,7 +14,11 @@
 #   TEXMF_ARCHIVE             Exact texmf archive used for TEXMF_DIST
 #   TEXLIVE_TLPDB             Existing texlive.tlpdb (optional)
 #   TEXLIVE_METADATA_ARCHIVE  Exact extra archive containing TEXLIVE_TLPDB
-#   S3_BUCKET                 Bucket served by the runtime CDN
+#   TEXLIVE_OBJECT_BUCKET     Destination bucket (S3_BUCKET is a legacy alias)
+#   TEXLIVE_OBJECT_ENDPOINT   S3-compatible endpoint; required for R2
+#   TEXLIVE_OBJECT_PREFIX     Optional immutable prefix before the snapshot
+#   TEXLIVE_OBJECT_PROFILE    Optional AWS CLI profile
+#   TEXLIVE_RUNTIME_ASSETS_DIR Directory containing bloom-filter.bin and icudt68l.dat
 #   TEXLIVE_DEPLOYED_URL      Existing CDN base URL checked by --catalog-only
 #   WORK_DIR                  Working directory (default: /tmp/texlive-s3)
 
@@ -44,11 +48,25 @@ METADATA_URL=$(json_value metadataArchive.url)
 METADATA_SHA512=$(json_value metadataArchive.sha512)
 TLPDB_MEMBER=$(json_value tlpdb.archiveMember)
 
-S3_BUCKET="${S3_BUCKET:-corca-fastlatex-texlib}"
+OBJECT_BUCKET="${TEXLIVE_OBJECT_BUCKET:-${S3_BUCKET:-corca-fastlatex-texlib}}"
+OBJECT_ENDPOINT="${TEXLIVE_OBJECT_ENDPOINT:-}"
+OBJECT_PREFIX="${TEXLIVE_OBJECT_PREFIX:-}"
+OBJECT_PROFILE="${TEXLIVE_OBJECT_PROFILE:-}"
 WORK_DIR="${WORK_DIR:-/tmp/texlive-s3}"
 RELEASE_ROOT="$WORK_DIR/release"
-S3_YEAR_ROOT="s3://$S3_BUCKET/$TEXLIVE_YEAR"
+OBJECT_PREFIX="${OBJECT_PREFIX#/}"
+OBJECT_PREFIX="${OBJECT_PREFIX%/}"
+if [ -n "$OBJECT_PREFIX" ]; then
+  OBJECT_YEAR_ROOT="s3://$OBJECT_BUCKET/$OBJECT_PREFIX/$TEXLIVE_YEAR"
+else
+  OBJECT_YEAR_ROOT="s3://$OBJECT_BUCKET/$TEXLIVE_YEAR"
+fi
 DEPLOYED_TEXLIVE_URL="${TEXLIVE_DEPLOYED_URL:-https://d1jectpaw0dlvl.cloudfront.net/$TEXLIVE_YEAR/}"
+
+object_store() {
+  set -- aws ${OBJECT_PROFILE:+--profile "$OBJECT_PROFILE"} ${OBJECT_ENDPOINT:+--endpoint-url "$OBJECT_ENDPOINT"} "$@"
+  "$@"
+}
 
 DO_UPLOAD=false
 REPLACE_EXISTING=false
@@ -251,6 +269,26 @@ echo "Mirror ready: $RELEASE_ROOT"
 echo "Provenance SHA-256: $PROVENANCE_SHA256"
 
 if [ "$DO_UPLOAD" = true ]; then
+  if [ "${TEXLIVE_REQUIRE_IMMUTABLE:-false}" = true ]; then
+    case "/$OBJECT_PREFIX/" in
+      *"/$MIRROR_REVISION/"*) ;;
+      *) echo "TEXLIVE_OBJECT_PREFIX must contain mirror revision $MIRROR_REVISION" >&2; exit 1 ;;
+    esac
+    if [ "$REPLACE_EXISTING" = true ]; then
+      echo "--replace-existing is forbidden for immutable publication" >&2
+      exit 1
+    fi
+    : "${TEXLIVE_RUNTIME_ASSETS_DIR:?set TEXLIVE_RUNTIME_ASSETS_DIR for immutable publication}"
+    for asset in bloom-filter.bin icudt68l.dat; do
+      [ -f "$TEXLIVE_RUNTIME_ASSETS_DIR/$asset" ] || {
+        echo "required runtime asset is missing: $TEXLIVE_RUNTIME_ASSETS_DIR/$asset" >&2
+        exit 1
+      }
+      cp "$TEXLIVE_RUNTIME_ASSETS_DIR/$asset" "$RELEASE_ROOT/$asset"
+    done
+    cp "$RELEASE_ROOT/texlive-provenance.json" \
+      "$RELEASE_ROOT/catalog/$MIRROR_REVISION/texlive-provenance.json"
+  fi
   cd "$PROJECT_ROOT"
   if [ "$CATALOG_ONLY" = true ]; then
     node "$SCRIPT_DIR/check-texlive-provenance.mjs" \
@@ -274,29 +312,42 @@ if [ "$DO_UPLOAD" = true ]; then
     --catalog "$RELEASE_ROOT/semantic/$MIRROR_REVISION"
 
   if [ "$CATALOG_ONLY" != true ]; then
-    existing=$(aws s3 ls "$S3_YEAR_ROOT/pdftex/" | sed -n '1p')
+    existing=$(object_store s3 ls "$OBJECT_YEAR_ROOT/pdftex/" | sed -n '1p')
     if [ -n "$existing" ] && [ "$REPLACE_EXISTING" != true ]; then
-      echo "Refusing to modify existing prefix: $S3_YEAR_ROOT/pdftex/" >&2
+      echo "Refusing to modify existing prefix: $OBJECT_YEAR_ROOT/pdftex/" >&2
       echo "Use a new version prefix, or rerun with the explicit --replace-existing flag." >&2
       exit 1
     fi
 
     if [ "$REPLACE_EXISTING" = true ]; then
-      aws s3 sync "$RELEASE_ROOT/pdftex/" "$S3_YEAR_ROOT/pdftex/" --delete
+      object_store s3 sync "$RELEASE_ROOT/pdftex/" "$OBJECT_YEAR_ROOT/pdftex/" --delete \
+        --cache-control "public, max-age=31536000, immutable"
     else
-      aws s3 sync "$RELEASE_ROOT/pdftex/" "$S3_YEAR_ROOT/pdftex/"
+      object_store s3 sync "$RELEASE_ROOT/pdftex/" "$OBJECT_YEAR_ROOT/pdftex/" \
+        --cache-control "public, max-age=31536000, immutable"
     fi
   fi
-  aws s3 sync "$RELEASE_ROOT/catalog/" "$S3_YEAR_ROOT/catalog/"
-  aws s3 sync "$RELEASE_ROOT/semantic/" "$S3_YEAR_ROOT/semantic/"
-  aws s3 cp \
+  object_store s3 sync "$RELEASE_ROOT/catalog/" "$OBJECT_YEAR_ROOT/catalog/" \
+    --cache-control "public, max-age=31536000, immutable"
+  object_store s3 sync "$RELEASE_ROOT/semantic/" "$OBJECT_YEAR_ROOT/semantic/" \
+    --cache-control "public, max-age=31536000, immutable"
+  object_store s3 cp \
     "$RELEASE_ROOT/texlive-provenance.json" \
-    "$S3_YEAR_ROOT/catalog/$MIRROR_REVISION/texlive-provenance.json"
+    "$OBJECT_YEAR_ROOT/catalog/$MIRROR_REVISION/texlive-provenance.json" \
+    --cache-control "public, max-age=31536000, immutable"
   if [ "$CATALOG_ONLY" = true ]; then
-    echo "Uploaded completion metadata to $S3_YEAR_ROOT/"
+    echo "Uploaded completion metadata to $OBJECT_YEAR_ROOT/"
   else
-    aws s3 cp "$RELEASE_ROOT/texlive-provenance.json" "$S3_YEAR_ROOT/texlive-provenance.json"
-    echo "Uploaded provenance-bound mirror to $S3_YEAR_ROOT/"
+    object_store s3 cp "$RELEASE_ROOT/texlive-provenance.json" "$OBJECT_YEAR_ROOT/texlive-provenance.json" \
+      --cache-control "public, max-age=31536000, immutable"
+    if [ "${TEXLIVE_REQUIRE_IMMUTABLE:-false}" = true ]; then
+      for asset in bloom-filter.bin icudt68l.dat; do
+        object_store s3 cp "$RELEASE_ROOT/$asset" "$OBJECT_YEAR_ROOT/$asset" \
+          --cache-control "public, max-age=31536000, immutable"
+      done
+      node "$SCRIPT_DIR/verify-object-mirror.mjs" --local-root "$RELEASE_ROOT" --year "$TEXLIVE_YEAR"
+    fi
+    echo "Uploaded provenance-bound mirror to $OBJECT_YEAR_ROOT/"
   fi
 else
   if [ "$CATALOG_ONLY" = true ]; then

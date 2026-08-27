@@ -23,7 +23,9 @@ describe('TeX Live mirror sync script', () => {
     expect(source).toContain('verify_archive')
     expect(source).not.toContain('| tar xJ')
     expect(source).not.toContain('--size-only')
-    expect(source).toMatch(/aws s3 sync .* --delete/)
+    expect(source).toMatch(/object_store s3 sync .* --delete/)
+    expect(source).toContain('TEXLIVE_OBJECT_ENDPOINT')
+    expect(source).toContain('TEXLIVE_OBJECT_PREFIX')
     // Staging is delegated to the provenance generator + checker, so an upload
     // can never bypass the per-file provenance manifest.
     expect(source).toContain('gen-texlive-provenance.mjs')
@@ -59,7 +61,7 @@ describe('TeX Live mirror sync script', () => {
     }
   })
 
-  it('refuses an empty upload before invoking aws s3 sync', () => {
+  it('refuses an empty upload before invoking the object store CLI', () => {
     const temp = mkdtempSync(join(tmpdir(), 'wasmtex-empty-mirror-'))
     const texmf = join(temp, 'texmf-dist')
     const work = join(temp, 'work')

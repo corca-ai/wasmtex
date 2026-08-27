@@ -53,10 +53,11 @@ import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, statSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(root, 'luaotfload-names.lua')
-const S3_BUCKET = process.env.S3_BUCKET || 'corca-fastlatex-texlib'
+const STORE = objectStoreConfig()
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 // Must match the engine's bundled luaotfload (see wasm-build/texlive-source.ref).
 // TeX Live 2025 → luaotfload 3.29 → names DB schema version 6.
@@ -172,13 +173,11 @@ function verify(path) {
 }
 
 function upload(path) {
-  const dest = `s3://${S3_BUCKET}/${YEAR}/pdftex/51/luaotfload-names.lua`
+  const dest = objectUri(STORE, YEAR, 'pdftex', '51', 'luaotfload-names.lua')
   console.log(`Uploading to ${dest} ...`)
   // Plain Lua text; CloudFront gzip-compresses it on the wire (~240 KB).
-  execSync(
-    `aws s3 cp ${path} ${dest} --content-type text/plain --cache-control "public, max-age=3600"`,
-    { stdio: 'inherit' },
-  )
+  runObjectStore(STORE, ['s3', 'cp', path, dest, '--content-type', 'text/plain',
+    '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
   console.log(
     'Upload complete. The DB is fetched directly by the worker (no bloom entry needed). ' +
       'Invalidate the CDN path /' + YEAR + '/pdftex/51/luaotfload-names.lua for immediate effect.',
