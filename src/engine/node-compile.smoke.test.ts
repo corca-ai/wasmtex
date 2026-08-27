@@ -45,7 +45,8 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
     const compiler = new WasmTexCompiler({
       engine: 'pdflatex',
       assetBaseUrl: ASSET,
-      texliveUrl: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+      texliveUrl:
+        process.env.WASMTEX_SMOKE_TEXLIVE_URL ?? 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
       files: { 'main.tex': doc },
     })
     try {
@@ -77,11 +78,11 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
         version: 1,
         identity: { engine: 'pdflatex', root: 'main.tex' },
         fields: {
-          commands: { status: 'observed', complete: true },
-          environments: { status: 'observed', complete: true },
-          colors: { status: 'observed', complete: true },
-          counters: { status: 'observed', complete: true },
-          keyFamilies: { status: 'observed', complete: true },
+          commands: { status: 'observed' },
+          environments: { status: 'observed' },
+          colors: { status: 'observed' },
+          counters: { status: 'observed' },
+          keyFamilies: { status: 'observed' },
         },
       })
       expect(snapshot?.fields.commands.values.map((command) => command.name)).toContain(

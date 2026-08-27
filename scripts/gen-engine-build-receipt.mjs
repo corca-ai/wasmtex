@@ -30,12 +30,18 @@ try {
     resolve(root, config.texliveSource.commitFile),
     'utf8',
   ).trim()
+  const mirror = {
+    revision: process.env.TEXLIVE_MIRROR_REVISION,
+    provenanceSha256: process.env.TEXLIVE_PROVENANCE_SHA256,
+    url: process.env.TEXLIVE_URL,
+  }
   const receipt = createBuildReceipt({
     family,
     directory: resolve(directoryArg),
     filenames,
     sourceRevision,
     texliveSourceCommit,
+    mirror,
     config,
   })
   writeFileSync(resolve(outputArg), `${JSON.stringify(receipt, null, 2)}\n`)

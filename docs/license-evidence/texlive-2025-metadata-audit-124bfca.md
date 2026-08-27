@@ -5,6 +5,14 @@ current TeX Live 2025 mirror rules. It is not release clearance. It uses only th
 digest-pinned TLPDB, so notice-file existence and candidate file bytes still require
 the full archive audit.
 
+> Historical note (2026-08-27): the counts below describe the audit policy at
+> commit `124bfca`. The release policy now accepts a pinned TeX Live
+> `catalogue-license` declaration as the upstream review for unchanged package bytes.
+> Local review remains required for the 73 packages without that declaration and for
+> differing flattened-name collisions. Packages without a filename-matched notice
+> are reported but are not rejected merely because no universal notice requirement
+> exists.
+
 ## Fixed inputs
 
 | Input | Value |
@@ -143,9 +151,8 @@ files are byte-identical or which differing file is correct for the flattened ke
    `--texmf-dist` instead of `--metadata-only`.
 2. Record identical-content collisions automatically and add a reviewed exact-path
    selection and rationale for each differing-content collision.
-3. Review the license and actual notice evidence for every package retained in the
-   production mirror. Add an explicit override; do not convert TLPDB metadata into
-   approval automatically.
+3. Review the license evidence for each retained package that lacks pinned TLPDB
+   `catalogue-license` metadata and add an explicit evidenced override.
 4. If reviewing the current broad mirror is not operationally feasible, define and
    compatibility-test a product package allowlist before reducing scope. Do not
    silently drop packages merely to reduce review counts.

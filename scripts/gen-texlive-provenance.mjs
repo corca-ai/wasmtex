@@ -37,6 +37,9 @@ try {
     overrides: JSON.parse(readFileSync(overridesPath, 'utf8')),
     texmfArchivePath: value['texmf-archive'] ? resolve(value['texmf-archive']) : null,
     metadataArchivePath: value['metadata-archive'] ? resolve(value['metadata-archive']) : null,
+    materializationReceiptPath: value['materialization-receipt']
+      ? resolve(value['materialization-receipt'])
+      : null,
     scope: value.scope ?? 'full-mirror',
   })
   console.log(

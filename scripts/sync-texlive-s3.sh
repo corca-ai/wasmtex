@@ -10,7 +10,10 @@
 #   ./scripts/sync-texlive-s3.sh --upload --replace-existing
 #
 # Environment variables:
-#   TEXMF_DIST                Existing texmf-dist directory (optional)
+#   TEXLIVE_MIRROR_CONFIG     Snapshot config (default: initial 2025 release)
+#   TEXLIVE_MIRROR_OVERRIDES  Snapshot-specific review decisions
+#   TEXLIVE_SEMANTIC_OVERRIDES Snapshot-specific semantic supplements
+#   TEXMF_DIST                Existing texmf-dist directory (optional for release archives)
 #   TEXMF_ARCHIVE             Exact texmf archive used for TEXMF_DIST
 #   TEXLIVE_TLPDB             Existing texlive.tlpdb (optional)
 #   TEXLIVE_METADATA_ARCHIVE  Exact extra archive containing TEXLIVE_TLPDB
@@ -26,9 +29,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
-CONFIG="$SCRIPT_DIR/texlive-mirror-2025.json"
-OVERRIDES="$SCRIPT_DIR/texlive-mirror-overrides-2025.json"
-COMPLETION_DEPLOYMENT="$SCRIPT_DIR/texlive-completion-deployment-2025.json"
+CONFIG="${TEXLIVE_MIRROR_CONFIG:-$SCRIPT_DIR/texlive-mirror-2025.json}"
 
 json_value() {
   node -e '
@@ -40,13 +41,23 @@ json_value() {
 }
 
 TEXLIVE_YEAR=$(json_value texliveYear)
-TEXMF_TARBALL=$(json_value texmfArchive.filename)
-TEXMF_URL=$(json_value texmfArchive.url)
-TEXMF_SHA512=$(json_value texmfArchive.sha512)
-METADATA_TARBALL=$(json_value metadataArchive.filename)
-METADATA_URL=$(json_value metadataArchive.url)
-METADATA_SHA512=$(json_value metadataArchive.sha512)
-TLPDB_MEMBER=$(json_value tlpdb.archiveMember)
+SOURCE_TYPE=$(json_value sourceType 2>/dev/null || printf '%s' release-archives)
+CONFIG_NAME=$(basename "$CONFIG" .json)
+CONFIG_SUFFIX=${CONFIG_NAME#texlive-mirror-}
+OVERRIDES="${TEXLIVE_MIRROR_OVERRIDES:-$SCRIPT_DIR/texlive-mirror-overrides-$CONFIG_SUFFIX.json}"
+COMPLETION_DEPLOYMENT="${TEXLIVE_COMPLETION_DEPLOYMENT:-$SCRIPT_DIR/texlive-completion-deployment-$TEXLIVE_YEAR.json}"
+if [ "$SOURCE_TYPE" = release-archives ]; then
+  TEXMF_TARBALL=$(json_value texmfArchive.filename)
+  TEXMF_URL=$(json_value texmfArchive.url)
+  TEXMF_SHA512=$(json_value texmfArchive.sha512)
+  METADATA_TARBALL=$(json_value metadataArchive.filename)
+  METADATA_URL=$(json_value metadataArchive.url)
+  METADATA_SHA512=$(json_value metadataArchive.sha512)
+  TLPDB_MEMBER=$(json_value tlpdb.archiveMember)
+elif [ "$SOURCE_TYPE" != tlnet-repository ]; then
+  echo "Unsupported mirror sourceType: $SOURCE_TYPE" >&2
+  exit 1
+fi
 
 OBJECT_BUCKET="${TEXLIVE_OBJECT_BUCKET:-${S3_BUCKET:-corca-fastlatex-texlib}}"
 OBJECT_ENDPOINT="${TEXLIVE_OBJECT_ENDPOINT:-}"
@@ -141,7 +152,16 @@ download_archive() {
 
 mkdir -p "$WORK_DIR"
 
-if [ -n "${TEXMF_DIST:-}" ]; then
+if [ "$SOURCE_TYPE" = tlnet-repository ]; then
+  if [ -z "${TEXMF_DIST:-}" ] || [ -z "${TEXLIVE_TLPDB:-}" ]; then
+    echo "A tlnet snapshot must be materialized before mirror generation." >&2
+    echo "Run TEXLIVE_MIRROR_CONFIG=$CONFIG ./scripts/prepare-tlnet-snapshot.sh first," >&2
+    echo "then provide its TEXMF_DIST and TEXLIVE_TLPDB paths." >&2
+    exit 1
+  fi
+  TEXMF="$TEXMF_DIST"
+  TLPDB="$TEXLIVE_TLPDB"
+elif [ -n "${TEXMF_DIST:-}" ]; then
   TEXMF="$TEXMF_DIST"
   if [ -z "${TEXMF_ARCHIVE:-}" ]; then
     echo "TEXMF_ARCHIVE is required when TEXMF_DIST is supplied" >&2
@@ -159,7 +179,9 @@ else
 fi
 [ -d "$TEXMF" ] || { echo "texmf-dist not found at $TEXMF" >&2; exit 1; }
 
-if [ -n "${TEXLIVE_TLPDB:-}" ]; then
+if [ "$SOURCE_TYPE" = tlnet-repository ]; then
+  : "${TEXLIVE_MATERIALIZATION_RECEIPT:?set TEXLIVE_MATERIALIZATION_RECEIPT to the receipt emitted by prepare-tlnet-snapshot.sh}"
+elif [ -n "${TEXLIVE_TLPDB:-}" ]; then
   TLPDB="$TEXLIVE_TLPDB"
   if [ -z "${TEXLIVE_METADATA_ARCHIVE:-}" ]; then
     echo "TEXLIVE_METADATA_ARCHIVE is required when TEXLIVE_TLPDB is supplied" >&2
@@ -199,16 +221,26 @@ if [ "$CATALOG_ONLY" = true ]; then
   PROVENANCE_SCOPE="completion-metadata"
 fi
 
-node "$SCRIPT_DIR/gen-texlive-provenance.mjs" \
-  --texmf-dist "$TEXMF" \
-  --tlpdb "$TLPDB" \
-  --texmf-archive "$TEXMF_ARCHIVE" \
-  --metadata-archive "$TEXLIVE_METADATA_ARCHIVE" \
-  --config "$CONFIG" \
-  --overrides "$OVERRIDES" \
-  --output "$STAGING_ROOT" \
-  --manifest "$STAGING_ROOT/texlive-provenance.json" \
+PROVENANCE_ARGS=(
+  --texmf-dist "$TEXMF"
+  --tlpdb "$TLPDB"
+  --config "$CONFIG"
+  --overrides "$OVERRIDES"
+  --output "$STAGING_ROOT"
+  --manifest "$STAGING_ROOT/texlive-provenance.json"
   --scope "$PROVENANCE_SCOPE"
+)
+if [ "$SOURCE_TYPE" = release-archives ]; then
+  PROVENANCE_ARGS+=(
+    --texmf-archive "$TEXMF_ARCHIVE"
+    --metadata-archive "$TEXLIVE_METADATA_ARCHIVE"
+  )
+else
+  PROVENANCE_ARGS+=(
+    --materialization-receipt "$TEXLIVE_MATERIALIZATION_RECEIPT"
+  )
+fi
+node "$SCRIPT_DIR/gen-texlive-provenance.mjs" "${PROVENANCE_ARGS[@]}"
 
 if [ "$CATALOG_ONLY" = true ]; then
   node "$SCRIPT_DIR/reconcile-deployed-completion.mjs" \
@@ -239,7 +271,7 @@ node "$SCRIPT_DIR/check-texlive-catalog.mjs" \
   "$STAGING_ROOT/texlive-provenance.json" \
   "$CATALOG_ROOT"
 SEMANTIC_ROOT="$STAGING_ROOT/semantic/$MIRROR_REVISION"
-SEMANTIC_OVERRIDES="$SCRIPT_DIR/tex-semantic-overrides-$TEXLIVE_YEAR.json"
+SEMANTIC_OVERRIDES="${TEXLIVE_SEMANTIC_OVERRIDES:-$SCRIPT_DIR/tex-semantic-overrides-$TEXLIVE_YEAR.json}"
 node "$SCRIPT_DIR/gen-tex-semantic-catalog.mjs" \
   --manifest "$STAGING_ROOT/texlive-provenance.json" \
   --mirror-root "$STAGING_ROOT" \

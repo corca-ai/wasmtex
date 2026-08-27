@@ -300,6 +300,18 @@ deployment selects, modifies, or repackages TeX Live files instead of mirroring
 the full distribution, review that distribution as a separate project before
 publishing it.
 
+For an unchanged file selected from a digest-pinned official TeX Live snapshot,
+the package's `catalogue-license` declaration in the pinned TLPDB is the recorded
+upstream redistribution review. The manifest links the corresponding CTAN license
+identifier and retains any package-owned notice candidates; an empty notice-candidate
+list is evidence, not proof that a notice is legally required or missing. A package
+without `catalogue-license` metadata still fails closed until a local reviewed
+override cites the package's own license evidence. Differing flattened basenames also
+fail closed until byte comparison or a reviewed exact-path decision resolves them.
+`LicenseRef-Hyph-UTF8-Per-File` means that the TeX Live package groups several
+hyphenation works under different embedded terms; every cited core pattern/loader is
+the authoritative per-file notice, rather than one invented package-wide license.
+
 Completion catalogs are generated only from that deployment's final provenance
 manifest. They contain file/package identity, hashes, selected source paths,
 collision decisions, and optional CTAN documentation links; CTAN is enrichment,

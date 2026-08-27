@@ -44,7 +44,10 @@ npm run dev               # Start dev server
 | `npm run test:license-tools` | Test provenance, catalog, release, and licensing scripts with Node's test runner |
 | `npm run sync-engine-assets -- --from <baseUrl>` | Download and SHA-256-verify a complete versioned engine set into `public/wasmtex/<version>/` |
 | `npm run compat` | Compatibility harness — compile a corpus and bucket failures (`node scripts/compat/run.mjs`; writes `compat/report.{json,md}`) |
-| `node scripts/gen-bloom-filter.mjs` | Generate bloom filter for CDN file existence checks (requires AWS CLI) |
+| `node scripts/gen-bloom-filter.mjs` | Generate bloom data from the configured object store, or from `TEXLIVE_MIRROR_ROOT` for an unpublished release |
+
+Set `WASMTEX_SMOKE_TEXLIVE_URL` to an exact immutable snapshot URL when the
+opt-in Node, cross-host, or incremental smoke suites qualify a new mirror.
 
 ## The committed `lib/` bundle
 

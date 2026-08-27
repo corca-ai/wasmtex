@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2025",
+  "sourceType": "tlnet-repository",
+  "repository": {
+    "snapshot": "tlnet-final",
+    "url": "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final/",
+    "frozen": true
+  },
+  "installer": {
+    "filename": "install-tl-unx.tar.gz",
+    "url": "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final/install-tl-unx.tar.gz",
+    "sha512": "a307d7d11bcbd1f054ad0b0d476f7f12bc1a40d07445020edef8713b44453831d18a2f1722c3d2b0ea2e4fe6c06183a79d1c4049495113f412a9f5a570a8614d"
+  },
+  "tlpdb": {
+    "url": "https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final/tlpkg/texlive.tlpdb",
+    "sha256": "74b5744d2ff1386138d5361d3af49179f921dbbc953e449324d99448af092f41"
+  }
+}

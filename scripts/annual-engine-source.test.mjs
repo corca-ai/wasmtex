@@ -38,7 +38,9 @@ test('2026 XeTeX and LuaTeX builds select the rebased WTPDF patch', () => {
   for (const workflow of [pdftexWorkflow, xetexWorkflow, luatexWorkflow]) {
     assert.match(workflow, /BUILD-RECEIPT\.[a-z0-9-]+-raw\.json/)
     assert.match(workflow, /texlive_url:/)
-    assert.match(workflow, /TEXLIVE_URL: \$\{\{ inputs\.texlive_url \}\}/)
+    assert.match(workflow, /TEXLIVE_URL: \$\{\{ inputs\.texlive_url \|\|/)
+    assert.match(workflow, /TEXLIVE_MIRROR_REVISION: \$\{\{ inputs\.mirror_revision \|\|/)
+    assert.match(workflow, /TEXLIVE_PROVENANCE_SHA256: \$\{\{ inputs\.provenance_sha256 \|\|/)
   }
   for (const script of ['extract-format.mjs', 'extract-xetex-format.mjs', 'extract-luatex-format.mjs']) {
     assert.match(readFileSync(resolve(root, 'scripts', script), 'utf8'), /process\.env\.TEXLIVE_URL/)
@@ -55,7 +57,12 @@ test('all engine workflows bind builds and receipts to the selected annual sourc
   ]) {
     const workflow = readFileSync(resolve(root, '.github/workflows', name), 'utf8')
     assert.match(workflow, /texlive_year:/, name)
+    assert.match(workflow, /texlive_url:/, name)
+    assert.match(workflow, /mirror_revision:/, name)
+    assert.match(workflow, /provenance_sha256:/, name)
     assert.match(workflow, /TEXLIVE_YEAR: \$\{\{ inputs\.texlive_year \|\| '2025' \}\}/, name)
+    assert.match(workflow, /TEXLIVE_MIRROR_REVISION:/, name)
+    assert.match(workflow, /TEXLIVE_PROVENANCE_SHA256:/, name)
     assert.match(workflow, /check-annual-engine-source\.mjs "\$TEXLIVE_YEAR"/, name)
   }
 

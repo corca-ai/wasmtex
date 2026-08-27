@@ -27,7 +27,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 // test (e2e/golden-corpus.ts) so both compare against the same e2e/goldens/*.
 const ENGINES = ['pdflatex', 'lualatex', 'xelatex'] as const
 const ASSET = 'http://assets.local/'
-const TEXLIVE = 'https://d1jectpaw0dlvl.cloudfront.net/2025/'
+const TEXLIVE =
+  process.env.WASMTEX_SMOKE_TEXLIVE_URL ?? 'https://d1jectpaw0dlvl.cloudfront.net/2025/'
 
 /** Compile `files` under the Node host and assert the structural signature equals the
  *  committed browser golden `e2e/goldens/<goldenName>`. */
