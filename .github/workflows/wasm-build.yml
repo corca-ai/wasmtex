@@ -75,6 +75,30 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 24 }
 
+      - name: Record raw 2026 pdfTeX and BibTeX build evidence
+        if: env.TEXLIVE_YEAR == '2026'
+        run: |
+          node -e "const fs=require('fs'); for (const name of ['wasmtex-pdftex','wasmtex-bibtex']) { const bytes=fs.readFileSync('wasm-build/dist/'+name+'.wasm'); if (!WebAssembly.validate(bytes)) process.exit(1); }"
+          node scripts/gen-engine-build-receipt.mjs \
+            pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex-raw.json \
+            wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
+            wasmtex-kpse-resolve.js
+          node scripts/gen-engine-build-receipt.mjs \
+            bibtex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.bibtex-raw.json \
+            wasmtex-bibtex.js wasmtex-bibtex.worker.js wasmtex-bibtex.wasm
+
+      - name: Upload raw 2026 pdfTeX and BibTeX build evidence
+        if: env.TEXLIVE_YEAR == '2026'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-pdftex-bibtex-2026-raw
+          path: |
+            wasm-build/dist/wasmtex-pdftex.*
+            wasm-build/dist/wasmtex-bibtex.*
+            wasm-build/dist/wasmtex-kpse-resolve.js
+            wasm-build/dist/BUILD-RECEIPT.*-raw.json
+          retention-days: 90
+
       - name: Extract prebuilt pdfLaTeX format (.fmt)
         timeout-minutes: 10
         env:

@@ -112,6 +112,25 @@ jobs:
             console.log('own glue OK');
           "
 
+      - name: Record and upload raw 2026 XeTeX build evidence
+        if: env.TEXLIVE_YEAR == '2026'
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            xetex wasm-build/dist-xetex wasm-build/dist-xetex/BUILD-RECEIPT.xetex-raw.json \
+            wasmtex-xetex.js wasmtex-xetex.worker.js wasmtex-xetex.wasm \
+            wasmtex-dvipdfm.js wasmtex-dvipdfm.worker.js wasmtex-dvipdfm.wasm
+
+      - name: Upload raw 2026 XeTeX build evidence
+        if: env.TEXLIVE_YEAR == '2026'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-xetex-2026-raw
+          path: |
+            wasm-build/dist-xetex/wasmtex-xetex.*
+            wasm-build/dist-xetex/wasmtex-dvipdfm.*
+            wasm-build/dist-xetex/BUILD-RECEIPT.xetex-raw.json
+          retention-days: 90
+
       - name: Extract + compress prebuilt XeLaTeX format (.fmt.gz)
         # Run the freshly-built engine's `xetex -ini xelatex.ini` once and capture
         # the .fmt so the app preloads it instead of rebuilding the format on every

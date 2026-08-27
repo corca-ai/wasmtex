@@ -21,7 +21,9 @@ test('2026 XeTeX and LuaTeX builds select the rebased WTPDF patch', () => {
   const xetexDockerfile = readFileSync(resolve(root, 'wasm-build/Dockerfile.xetex'), 'utf8')
   const luatexDockerfile = readFileSync(resolve(root, 'wasm-build/Dockerfile.luatex'), 'utf8')
   const xetexBuild = readFileSync(resolve(root, 'scripts/build-xetex-fromsource.sh'), 'utf8')
+  const xetexWorkflow = readFileSync(resolve(root, '.github/workflows/wasm-xetex.yml'), 'utf8')
   const luatexWorkflow = readFileSync(resolve(root, '.github/workflows/wasm-luatex.yml'), 'utf8')
+  const pdftexWorkflow = readFileSync(resolve(root, '.github/workflows/wasm-build.yml'), 'utf8')
 
   for (const dockerfile of [xetexDockerfile, luatexDockerfile]) {
     assert.match(dockerfile, /ARG TEXLIVE_YEAR=2025/)
@@ -31,4 +33,7 @@ test('2026 XeTeX and LuaTeX builds select the rebased WTPDF patch', () => {
   }
   assert.match(xetexBuild, /--build-arg TEXLIVE_YEAR=/)
   assert.match(luatexWorkflow, /--build-arg TEXLIVE_YEAR="\$TEXLIVE_YEAR"/)
+  for (const workflow of [pdftexWorkflow, xetexWorkflow, luatexWorkflow]) {
+    assert.match(workflow, /BUILD-RECEIPT\.[a-z0-9-]+-raw\.json/)
+  }
 })
