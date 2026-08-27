@@ -22,6 +22,20 @@ requires the load-bearing set to stay tracked.
 | `corresponding-source-2026-9b43b39.md` | Native x86_64 source assembly, verification, publication, and public hash binding |
 | `engine-performance-2026-9b43b39.json` | Cold Node-host runtime measurements checked against the 2026 artifact/runtime budgets |
 
+## TeX Live 2026 dated profile (`df228a6`)
+
+| File | What it evidences |
+| --- | --- |
+| `engine-release-2026-dated-df228a6.md` | The mirror-bound x86_64 builds and dated R2 qualification |
+| `corresponding-source-2026-dated-df228a6.md` | The checked source archive, publication, and public SHA-256 binding |
+
+## TeX Live 2026 initial mirror-bound profile (`e4bc652`)
+
+| File | What it evidences |
+| --- | --- |
+| `engine-release-2026-initial-e4bc652.md` | The exact initial mirror identity, native builds, and browser/Node qualification |
+| `corresponding-source-2026-initial-e4bc652.md` | The checked initial source archive, publication, and public SHA-256 binding |
+
 ## Current release (`57ad3e9`)
 
 | File | What it evidences |
