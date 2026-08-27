@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "texliveVersion": "2026",
+  "texliveSourceCommit": "fb6158926661cb7a7246b3a94a0cb170a9624d5a",
+  "emscriptenVersion": "3.1.46",
+  "sdkLicense": "MIT",
+  "releaseStatus": "development-only",
+  "noticePath": "../../../THIRD_PARTY_NOTICES.md",
+  "licenseDirectoryPath": "../../../LICENSES/",
+  "requirementsPath": "../../../docs/licensing.md",
+  "componentInventoryPath": "../../../scripts/engine-components-2026.json",
+  "requiredBuildFamilies": [
+    "pdftex",
+    "bibtex",
+    "bibtex8",
+    "makeindex",
+    "xetex",
+    "luahbtex"
+  ],
+  "artifactFamilies": [
+    {
+      "name": "pdftex",
+      "patterns": ["wasmtex-pdftex.js", "wasmtex-pdftex.wasm", "wasmtex-pdftex.worker.js"],
+      "distributionTerms": ["GPL-2.0-only", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "xetex",
+      "patterns": ["wasmtex-xetex.js", "wasmtex-xetex.wasm", "wasmtex-xetex.worker.js"],
+      "distributionTerms": [
+        "GPL-2.0-only",
+        "LicenseRef-XeTeX",
+        "MIT",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "dvipdfmx",
+      "patterns": ["wasmtex-dvipdfm.js", "wasmtex-dvipdfm.wasm", "wasmtex-dvipdfm.worker.js"],
+      "distributionTerms": ["GPL-2.0-or-later", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "luahbtex",
+      "patterns": ["wasmtex-luatex.js", "wasmtex-luatex.wasm", "wasmtex-luatex.worker.js"],
+      "distributionTerms": ["GPL-2.0-only", "MIT", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "latex-formats",
+      "patterns": ["*.fmt", "*.fmt.gz"],
+      "distributionTerms": ["LicenseRef-TeXLive-Format-Inputs"]
+    },
+    {
+      "name": "bibtex",
+      "patterns": ["wasmtex-bibtex.*"],
+      "distributionTerms": [
+        "LicenseRef-BibTeX-Web2C-Notices",
+        "LGPL-2.1-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "bibtex8",
+      "patterns": ["wasmtex-bibtex8.*"],
+      "distributionTerms": ["GPL-2.0-or-later", "LicenseRef-Linked-Component-Notices"]
+    },
+    {
+      "name": "makeindex",
+      "patterns": ["wasmtex-makeindex.*"],
+      "distributionTerms": [
+        "LicenseRef-MakeIndex-Distribution-Notice",
+        "LGPL-2.1-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "wasmtex-runtime-helper",
+      "patterns": ["wasmtex-kpse-resolve.js"],
+      "distributionTerms": ["MIT"]
+    }
+  ],
+  "releaseBlockers": [
+    {
+      "id": "corresponding-source-publication",
+      "detail": "Build and verify the 2026 corresponding-source archive on the native x86_64 release runner, then publish and bind its SHA-256."
+    }
+  ]
+}

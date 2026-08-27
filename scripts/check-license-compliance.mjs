@@ -27,6 +27,10 @@ function readJson(relativePath) {
   }
 }
 
+function readJsonIfExists(relativePath) {
+  return existsSync(resolve(root, relativePath)) ? readJson(relativePath) : null
+}
+
 function requirePath(relativePath) {
   if (!existsSync(resolve(root, relativePath))) fail(`missing required path: ${relativePath}`)
 }
@@ -123,11 +127,14 @@ for (const path of [
 const packageJson = readJson('package.json')
 const manifestRelativePath = `public/wasmtex/${version}/LICENSE-MANIFEST.json`
 const manifest = readJson(manifestRelativePath)
-const mirrorConfig = readJson(`scripts/texlive-mirror-${version}.json`)
-const mirrorOverrides = readJson(`scripts/texlive-mirror-overrides-${version}.json`)
-const semanticOverrides = readJson(`scripts/tex-semantic-overrides-${version}.json`)
+const mirrorConfig = readJsonIfExists(`scripts/texlive-mirror-${version}.json`)
+const mirrorOverrides = readJsonIfExists(`scripts/texlive-mirror-overrides-${version}.json`)
+const semanticOverrides = readJsonIfExists(`scripts/tex-semantic-overrides-${version}.json`)
 const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
-const linkInventory = readJson('docs/license-evidence/link-inventory-57ad3e9.json')
+const componentInventory = readJson(`scripts/engine-components-${version}.json`)
+const linkInventory = componentInventory?.linkInventory
+  ? readJson(componentInventory.linkInventory)
+  : null
 const manifestDir = resolve(root, `public/wasmtex/${version}`)
 
 if (semanticOverrides) {
@@ -250,7 +257,9 @@ try {
       resolve(root, 'scripts/gen-engine-sbom.mjs'),
       version,
       '--check',
-      'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json',
+      version === '2025'
+        ? 'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json'
+        : `docs/license-evidence/engine-sbom-${version}-${componentInventory.linkInventorySourceRevision.slice(0, 7)}.spdx.json`,
     ],
     { cwd: root, stdio: 'pipe' },
   )
@@ -343,9 +352,13 @@ if (packageJson && manifest) {
     fail('license manifest texliveSourceCommit must be a 40-character Git commit')
   }
 
-  const pinnedRef = readFileSync(resolve(root, 'wasm-build/texlive-source.ref'), 'utf8').trim()
+  const annualRef = resolve(root, `wasm-build/texlive-source-${version}.ref`)
+  const pinnedRef = readFileSync(
+    existsSync(annualRef) ? annualRef : resolve(root, 'wasm-build/texlive-source.ref'),
+    'utf8',
+  ).trim()
   if (manifest.texliveSourceCommit !== pinnedRef) {
-    fail('license manifest texliveSourceCommit does not match wasm-build/texlive-source.ref')
+    fail(`license manifest texliveSourceCommit does not match the ${version} source ref`)
   }
 
   for (const field of [

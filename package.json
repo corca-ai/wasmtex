@@ -72,6 +72,7 @@
     "test:e2e": "playwright test",
     "test:golden": "playwright test golden-output",
     "check:licenses": "node scripts/check-license-compliance.mjs 2025",
+    "check:licenses:2026": "node scripts/check-license-compliance.mjs 2026",
     "check:engine-license-inventory": "node scripts/check-engine-license-inventory.mjs 2025",
     "check:release-notices": "node scripts/check-release-notices.mjs",
     "check:engine-performance": "node scripts/check-engine-performance-budget.mjs 2025",

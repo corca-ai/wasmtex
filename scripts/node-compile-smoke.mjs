@@ -10,8 +10,11 @@ installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
 const doc = '\\documentclass{article}\n\\begin{document}\nHello from Node + WASM. $E=mc^2$.\n\\end{document}\n'
 const c = new WasmTexCompiler({
   engine: 'pdflatex',
+  texliveVersion: process.env.WASMTEX_SMOKE_TEXLIVE_VERSION ?? '2025',
   assetBaseUrl: ASSET,
-  texliveUrl: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+  texliveUrl:
+    process.env.WASMTEX_SMOKE_TEXLIVE_URL ??
+    'https://d1jectpaw0dlvl.cloudfront.net/2025/',
   files: { 'main.tex': doc },
 })
 const t0 = Date.now()

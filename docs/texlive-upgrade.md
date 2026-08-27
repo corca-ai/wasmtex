@@ -122,6 +122,15 @@ reviewed `branch2026` tip selected on 2026-08-27. It includes the annual release
 and accepted branch fixes as of the mid-cycle qualification point. Moving this
 pin requires a new engine receipt and structural-golden review.
 
+The 2026 structural-golden review ran the same seven browser cases as the 2025
+line: pdfLaTeX, XeLaTeX, LuaLaTeX, Xe/Lua PDF import, BibTeX, and MakeIndex.
+All seven signatures are unchanged: compile success, page count, diagnostic
+codes, and XeTeX XDV geometry match 2025 exactly. The separate files under
+`e2e/goldens/2026/` are intentional even with equal contents: they prevent a
+future annual change from silently redefining the 2025 compatibility baseline.
+The weekly canary runs both annual corpora against their matching engine
+artifacts and immutable mirror URLs.
+
 Upgrading requires updating the WASM engine, the object-store package repository, and the base format file.
 
 ### Step 1: Update mirror packages

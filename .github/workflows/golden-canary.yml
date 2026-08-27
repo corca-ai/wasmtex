@@ -4,7 +4,7 @@ name: Golden Canary
 # and keep our interposition glue (#50); this proves the *rendered output* of a small
 # reference corpus has not silently drifted (CDN content, committed engine assets, a
 # font-DB regen, an Emscripten bump). Runs the `e2e/golden-output.spec.ts` corpus against
-# the committed `public/wasmtex/2025/` engines + the live TeX Live mirror.
+# each annual engine artifact set and its matching immutable TeX Live mirror.
 #
 # A heavier "upstream canary" — bump `wasm-build/texlive-source.ref` to the latest
 # branch<YEAR> tip, rebuild the engine, re-extract the format, then run this corpus — is
@@ -18,6 +18,17 @@ on:
 jobs:
   golden:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - texlive_year: '2025'
+            texlive_url: https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/
+          - texlive_year: '2026'
+            texlive_url: https://texlive.corca.ai/snapshots/2026-b4f6befbe7732169/2026/
+    env:
+      TEXLIVE_VERSION: ${{ matrix.texlive_year }}
+      TEXLIVE_URL: ${{ matrix.texlive_url }}
     steps:
       - uses: actions/checkout@v7
 
@@ -27,6 +38,66 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download pdfTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-build.yml
+          name: ${{ matrix.texlive_year == '2025' && 'wasm-pdftex' || 'wasm-pdftex-2026' }}
+          path: public/wasmtex/${{ matrix.texlive_year }}
+          branch: main
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download BibTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-build.yml
+          name: ${{ matrix.texlive_year == '2025' && 'wasm-bibtex' || 'wasm-bibtex-2026' }}
+          path: public/wasmtex/${{ matrix.texlive_year }}
+          branch: main
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download BibTeX8
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-bibtex8.yml
+          name: ${{ matrix.texlive_year == '2025' && 'wasm-bibtex8' || 'wasm-bibtex8-2026' }}
+          path: public/wasmtex/${{ matrix.texlive_year }}
+          branch: main
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download MakeIndex
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-makeindex.yml
+          name: ${{ matrix.texlive_year == '2025' && 'wasm-makeindex' || 'wasm-makeindex-2026' }}
+          path: public/wasmtex/${{ matrix.texlive_year }}
+          branch: main
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download XeTeX and dvipdfmx
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-xetex.yml
+          name: ${{ matrix.texlive_year == '2025' && 'wasm-xetex' || 'wasm-xetex-2026' }}
+          path: public/wasmtex/${{ matrix.texlive_year }}
+          branch: main
+          search_artifacts: true
+          if_no_artifact_found: fail
+
+      - name: Download LuaHBTeX
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          workflow: wasm-luatex.yml
+          name: ${{ matrix.texlive_year == '2025' && 'wasm-luatex' || 'wasm-luatex-2026' }}
+          path: public/wasmtex/${{ matrix.texlive_year }}
+          branch: main
+          search_artifacts: true
+          if_no_artifact_found: fail
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
@@ -34,13 +105,14 @@ jobs:
         run: npx playwright test golden-output
 
       - name: Cross-host parity (Node host ≡ browser golden) — S4 #111
+        if: matrix.texlive_year == '2025'
         run: CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: golden-canary-report
+          name: golden-canary-report-${{ matrix.texlive_year }}
           path: |
             playwright-report/
             test-results/
