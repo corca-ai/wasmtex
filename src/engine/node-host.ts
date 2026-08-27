@@ -94,12 +94,18 @@ globalThis.XMLHttpRequest = class {
         }
       } catch (_h) {}
     } catch (error) {
-      // curl 22 means --fail received an HTTP error response, which the kpse
-      // fallback treats as a missing candidate. Transport failures must remain
-      // failures: caching a reset/timeout as 404 makes a present TeX file look
-      // permanently absent for the rest of the compile.
-      if (error && error.status === 22) {
-        this.status = 404
+      // Cloudflare may reset an HTTP/2 stream after sending an error response,
+      // in which case curl exits 56 rather than 22. Trust an actual HTTP status
+      // captured in the response headers, never the transport exit code alone.
+      let httpStatus = null
+      try {
+        for (const line of readFileSync(hf, 'utf8').split(String.fromCharCode(10))) {
+          const match = /^HTTP\\/\\S+ (\\d{3})/.exec(line.trim())
+          if (match) httpStatus = Number(match[1])
+        }
+      } catch (_h) {}
+      if (httpStatus !== null && httpStatus >= 400) {
+        this.status = httpStatus
         this.response = null
       } else {
         throw error
