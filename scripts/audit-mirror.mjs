@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Audit the TeX Live S3 mirror coverage, by kpathsea format id.
+ * Audit the TeX Live R2 mirror coverage, by kpathsea format id.
  *
  * Turns "we don't know how complete the mirror is" into a snapshot: object count
  * and size per format, with the human name of each format and a flag for formats
  * that are expected but absent (e.g. OpenType/TrueType fonts, which the XeLaTeX /
  * LuaLaTeX engines in Stage 2 will need).
  *
- * Read-only. Requires AWS credentials:
- *   AWS_PROFILE=cc node scripts/audit-mirror.mjs
- *   AWS_PROFILE=cc node scripts/audit-mirror.mjs --bucket corca-fastlatex-texlib --year 2025
+ * Read-only. Requires a configured R2 endpoint and credentials:
+ *   TEXLIVE_OBJECT_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com \
+ *     node scripts/audit-mirror.mjs --bucket corca-texlive-production --year 2025
  *
  * Writes compat/mirror-coverage.md and prints a summary.
  */

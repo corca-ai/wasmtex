@@ -11,7 +11,7 @@
  *   node scripts/gen-bloom-filter.mjs --upload
  *
  * Prerequisites:
- *   AWS CLI configured with access to the texlive S3 bucket.
+ *   A scoped CLI profile configured for the TeX Live R2 bucket.
  *
  * Binary format:
  *   [4 bytes] magic "BF01"
@@ -54,7 +54,7 @@ function fnv1a(str) {
   return [h1 >>> 0, h2 >>> 0]
 }
 
-// --- S3 file listing ---------------------------------------------------------
+// --- R2 file listing ---------------------------------------------------------
 
 function listMirrorFiles() {
   if (LOCAL_MIRROR_ROOT) {
@@ -179,9 +179,9 @@ function main() {
 
   // Upload if --upload flag is set
   if (process.argv.includes('--upload')) {
-    const s3Dest = objectUri(STORE, YEAR, 'bloom-filter.bin')
-    console.log(`\nUploading to ${s3Dest}...`)
-    runObjectStore(STORE, ['s3', 'cp', OUTPUT_FILE, s3Dest, '--content-type',
+    const objectDest = objectUri(STORE, YEAR, 'bloom-filter.bin')
+    console.log(`\nUploading to ${objectDest}...`)
+    runObjectStore(STORE, ['s3', 'cp', OUTPUT_FILE, objectDest, '--content-type',
       'application/octet-stream', '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
     console.log('Upload complete.')
   }

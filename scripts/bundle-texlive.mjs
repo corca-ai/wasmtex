@@ -37,17 +37,13 @@ async function main() {
   }
   const provenanceByKey = new Map(provenance.files.map((file) => [file.key, file]))
   const texliveUrl = process.env.VITE_TEXLIVE_URL || 'http://localhost:5001/'
-  const isCloudFront = texliveUrl.includes('cloudfront.net')
 
-  // Check texlive server (unless cloudfront)
-  if (!isCloudFront) {
-    try {
-      const r = await fetch(texliveUrl + 'pdftex/26/article.cls')
-      if (!r.ok) throw new Error(`status ${r.status}`)
-    } catch {
-      console.error('Texlive server not responding. Run: docker compose up texlive')
-      process.exit(1)
-    }
+  try {
+    const r = await fetch(texliveUrl + 'pdftex/26/article.cls')
+    if (!r.ok) throw new Error(`status ${r.status}`)
+  } catch {
+    console.error('Texlive mirror not responding. Start the local mirror or check VITE_TEXLIVE_URL.')
+    process.exit(1)
   }
 
   console.log('Starting Vite dev server...')
@@ -67,7 +63,7 @@ async function main() {
   const captured = new Map()
   page.on('response', async (response) => {
     const reqUrl = response.url()
-    // Pattern matches both local /texlive/ and CloudFront /2025/
+    // The marker is stable across local and public R2 mirror paths.
     const pdftexMarker = '/pdftex/'
     const markerIndex = reqUrl.indexOf(pdftexMarker)
     if (markerIndex === -1) return

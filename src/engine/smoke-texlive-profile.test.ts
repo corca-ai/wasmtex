@@ -5,7 +5,7 @@ describe('smokeTeXLiveProfile', () => {
   it('uses the established 2025 profile when no override is provided', () => {
     expect(smokeTexliveProfile({})).toEqual({
       version: '2025',
-      url: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+      url: 'https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/',
     })
   })
 

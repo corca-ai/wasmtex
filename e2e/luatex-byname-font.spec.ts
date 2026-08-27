@@ -16,7 +16,7 @@ import { expect, test } from '@playwright/test'
  */
 
 const APP_URL = 'http://localhost:6001'
-const CDN_HOST = 'd1jectpaw0dlvl.cloudfront.net'
+const MIRROR_HOST = 'texlive.corca.ai'
 
 const BYNAME_DOC = [
   '% !TEX program = lualatex',
@@ -38,7 +38,7 @@ test.describe('LuaLaTeX by-name font resolution (#61)', () => {
     const cdnUrls: string[] = []
     page.on('response', (resp) => {
       const url = resp.url()
-      if (url.includes(CDN_HOST) && resp.status() === 200) cdnUrls.push(url)
+      if (url.includes(MIRROR_HOST) && resp.status() === 200) cdnUrls.push(url)
     })
 
     await page.goto(APP_URL)
@@ -59,7 +59,7 @@ test.describe('LuaLaTeX by-name font resolution (#61)', () => {
       `[byname] ok=${r.ok} dbFetched=${dbFetched} lmFetched=${lmFetched}\n` +
         cdnUrls
           .filter((u) => /luaotfload-names|lmroman|cmr|cmmi/i.test(u))
-          .map((u) => '  ' + u.split(CDN_HOST)[1])
+          .map((u) => '  ' + u.split(MIRROR_HOST)[1])
           .join('\n'),
     )
 
@@ -90,7 +90,7 @@ test.describe('LuaLaTeX by-name font resolution (#61)', () => {
     const cdnUrls: string[] = []
     page.on('response', (resp) => {
       const url = resp.url()
-      if (url.includes(CDN_HOST) && resp.status() === 200) cdnUrls.push(url)
+      if (url.includes(MIRROR_HOST) && resp.status() === 200) cdnUrls.push(url)
     })
 
     await page.goto(APP_URL)

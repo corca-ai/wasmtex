@@ -138,7 +138,7 @@ describe.runIf(REAL_ENDPOINT)('real Biber server e2e (opt-in, #175)', () => {
     const compiler = new WasmTexCompiler({
       engine: 'pdflatex',
       assetBaseUrl: ASSET,
-      texliveUrl: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+      texliveUrl: 'https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/',
       backends,
       files: {
         'main.tex': [

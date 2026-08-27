@@ -558,8 +558,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
     var xhr = tryFetch(reqname);
 
-    // If the request failed (CloudFront returns 403, not 404, for missing keys),
-    // be smart about extensions.
+    // If the request failed, be smart about extensions regardless of the
+    // mirror's missing-object status.
     if (xhr && xhr.status >= 400) {
         // Case 1: Request had extension, try without it
         if (reqname.includes(".")) {
@@ -747,7 +747,7 @@ function compileLaTeXRoutine() {
 
         console.log("[compile] Invoking INITEX to build base format...");
         // Re-add * prefix to enable e-TeX extensions (required by modern LaTeX)
-        // My JS fetcher fix will strip this '*' when downloading from S3.
+        // The JS fetcher strips this '*' before resolving the mirror object.
         var fmtStatus = runMain("pdfetex", ["-ini", "-interaction=nonstopmode", "*pdflatex.ini"]);
         console.log("[compile] INITEX finished with status: " + fmtStatus);
 

@@ -560,7 +560,7 @@ if (existsSync(luatexDockerfile)) {
   }
 }
 
-const mirrorSync = resolve(root, 'scripts/sync-texlive-s3.sh')
+const mirrorSync = resolve(root, 'scripts/sync-texlive-mirror.sh')
 if (existsSync(mirrorSync)) {
   const text = readFileSync(mirrorSync, 'utf8')
   for (const required of [

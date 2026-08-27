@@ -10,9 +10,8 @@ side by side. Hosts select an exact profile and pass both its `texliveVersion` a
 mirror URL; engine assets, formats, cache namespaces, catalogs, and mirror bytes
 must all name the same year.
 
-The published 2026 initial/dated profiles and the post-2027 `tlnet-final`
-procedure are recorded in
-[`texlive-2026-snapshot-lifecycle.md`](texlive-2026-snapshot-lifecycle.md).
+The [2026 snapshot lifecycle](texlive-2026-snapshot-lifecycle.md) records the
+published initial/dated profiles and the post-2027 `tlnet-final` procedure.
 Machine consumers use `scripts/texlive-profiles-2026.json`; every entry names
 an immutable package mirror and its matching engine release.
 
@@ -23,7 +22,8 @@ The WASM engine uses a customized `kpathsea` library. When the C code attempts t
 3. **Synchronous XHR**: The JS worker performs a **synchronous XMLHttpRequest** to the TeX Live CDN. Synchronous calls are used because the C-side `kpathsea` lookup is blocking.
 
 ### 2. Object-store/CDN package structure
-Packages are hosted in an S3-compatible object store and served through a CDN in a flattened structure based on kpathsea format IDs. The production migration target is R2 at `texlive.corca.ai`:
+Packages are hosted in Cloudflare R2 and served through `texlive.corca.ai` in a
+flattened structure based on kpathsea format IDs:
 - `pdftex/26/`: TeX sources (`.sty`, `.cls`, `.tex`)
 - `pdftex/3/`: TFM font metrics
 - `pdftex/32/`: Type1 fonts (`.pfb`)
@@ -155,7 +155,7 @@ bytes, the option-gated xcolor `.def` sources, and the year-specific override fi
 produce the same final-inventory manifest and immutable catalogs as part of that
 deployment rather than deriving completion from an upstream or pre-transform file list.
 
-For an existing separately operated mirror, use `sync-texlive-s3.sh --catalog-only`.
+For an existing separately operated mirror, use `sync-texlive-mirror.sh --catalog-only`.
 It keeps the mirror redistribution gate separate, inventories only completion and
 semantic inputs, and refuses publication unless every selected byte matches the
 deployed endpoint. `--catalog-only` never uploads the staged `pdftex/` files; it
@@ -254,7 +254,7 @@ TEXLIVE_MIRROR_ROOT=<release> TEXLIVE_BLOOM_OUTPUT=<release>/bloom-filter.bin \
   node scripts/gen-bloom-filter.mjs
 ```
 
-Then regenerate the bloom filter and invalidate the CDN (the fonts these DBs reference
+Then regenerate the bloom filter and purge the public mirror cache (the fonts these DBs reference
 must be on the mirror + in the bloom). See [WASM Engine & TeX Live](engine.md).
 
 ---
@@ -264,10 +264,10 @@ must be on the mirror + in the bloom). See [WASM Engine & TeX Live](engine.md).
 When adding a future TeX Live release, keep the existing 2025 environment
 operational during validation by using versioned paths.
 
-### 1. Immutable object-store structure
-Instead of overwriting `pdftex/`, use an immutable snapshot prefix in the object store:
-- `s3://your-bucket/snapshots/<mirrorRevision>/2025/pdftex/...`
-- `s3://your-bucket/snapshots/<mirrorRevision>/2026/pdftex/...`
+### 1. Immutable R2 structure
+Instead of overwriting `pdftex/`, use an immutable snapshot prefix in R2:
+- `<bucket>/snapshots/<mirrorRevision>/2025/pdftex/...`
+- `<bucket>/snapshots/<mirrorRevision>/2026/pdftex/...`
 
 Set `TEXLIVE_OBJECT_PREFIX` and use `scripts/sync-texlive-mirror.sh`; see [mirror operations](texlive-mirror-operations.md).
 
@@ -292,7 +292,7 @@ const editor2026 = new WasmTex(editorContainer, previewContainer, {
 ```
 
 ### 3. Verification & Cutover
-1. **Staging**: Deploy the new WASM engine and assets to a staging environment pointing to its versioned S3 prefix.
+1. **Staging**: Deploy the new WASM engine and assets to a staging environment pointing to its immutable R2 prefix.
 2. **Validation**: Run E2E tests and manual checks.
 3. **Cutover**: Once verified, update the production environment's `VITE_TEXLIVE_URL` or constructor options to point to the new path.
 

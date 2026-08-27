@@ -12,10 +12,10 @@
  *   / designSize / minSize / maxSize / subFamilyID
  *
  * Usage (needs fontconfig's fc-scan):
- *   node scripts/gen-xetexfontlist.mjs [FONT_ROOT]            # default /tmp/texlive-s3/pdftex
- *   AWS_PROFILE=cc node scripts/gen-xetexfontlist.mjs --upload
+ *   node scripts/gen-xetexfontlist.mjs [FONT_ROOT]            # default /tmp/texlive-r2/pdftex
+ *   node scripts/gen-xetexfontlist.mjs --upload
  *
- * Uploads to s3://<bucket>/<year>/pdftex/26/xetexfontlist.txt (kpse tex format).
+ * Uploads to the configured R2 prefix at <year>/pdftex/26/xetexfontlist.txt.
  */
 import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
@@ -25,7 +25,7 @@ import { objectStoreConfig, objectUri, runObjectStore } from './lib/object-store
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const FONT_ROOT =
-  process.argv.find((a) => !a.startsWith('--') && a.endsWith('pdftex')) || '/tmp/texlive-s3/pdftex'
+  process.argv.find((a) => !a.startsWith('--') && a.endsWith('pdftex')) || '/tmp/texlive-r2/pdftex'
 const FONT_DIRS = ['47', '36', '32'] // opentype, truetype, type1
 const OUT = process.env.XETEX_FONTLIST_OUTPUT || join(root, 'xetexfontlist.txt')
 const STORE = objectStoreConfig()
@@ -138,7 +138,7 @@ function main() {
     console.log(`Uploading to ${dest} ...`)
     runObjectStore(STORE, ['s3', 'cp', OUT, dest, '--content-type', 'text/plain',
       '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
-    console.log('Upload complete. Regenerate the bloom filter + invalidate the CDN next.')
+    console.log('Upload complete. Regenerate the bloom filter and purge the mirror path next.')
   }
 }
 

@@ -18,7 +18,7 @@ bin/
 /compat/report.json
 /compat/report.md
 
-# Generated, uploaded to S3 (not committed)
+# Generated, uploaded to R2 (not committed)
 bloom-filter.bin
 /xetexfontlist.txt
 

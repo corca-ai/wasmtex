@@ -18,8 +18,8 @@ const PUBLISHED_2025 = join(ROOT, 'public', 'wasmtex', '2025', 'wasmtex-bibtex.w
 const INVARIANTS: Array<[string, RegExp]> = [
   // Don't wrap .bbl output — long `%%%` .bst banners must stay on one line (acmart). #152
   ['max_print_line = 1000', /max_print_line = 1000/],
-  // Retry kpse lookups on any >=400 (CloudFront returns 403 for a missing key), so
-  // `ACM-Reference-Format` resolves to `.bst`. A bare `=== 404` never retried.
+  // Retry kpse lookups on any >=400 so `ACM-Reference-Format` resolves to `.bst`
+  // even when a mirror uses a non-404 missing-object response.
   ['status >= 400 retry', /status\s*>=\s*400/],
 ]
 

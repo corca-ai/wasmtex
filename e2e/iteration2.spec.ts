@@ -120,12 +120,12 @@ test.describe('Iteration 2 Verification', () => {
   test('4. Service Worker caches texlive requests', async ({ page, context }) => {
     await page.waitForFunction(() => navigator.serviceWorker.ready, { timeout: 10_000 })
 
-    // Count requests on a controlled second page. The app now fetches the public
-    // CloudFront CDN directly, so exercise the SW cache with a known TeX Live file.
+    // Count requests on a controlled second page. Exercise the service-worker
+    // cache against a known file on the public R2 mirror.
     const page2 = await context.newPage()
     const texliveRequests: string[] = []
     page2.on('request', (req) => {
-      if (req.url().includes('d1jectpaw0dlvl.cloudfront.net')) {
+      if (req.url().includes('texlive.corca.ai')) {
         texliveRequests.push(req.url())
       }
     })
@@ -133,7 +133,7 @@ test.describe('Iteration 2 Verification', () => {
     // Track which responses come from SW cache vs network
     const fromSW: string[] = []
     page2.on('response', (res) => {
-      if (res.url().includes('d1jectpaw0dlvl.cloudfront.net') && res.fromServiceWorker()) {
+      if (res.url().includes('texlive.corca.ai') && res.fromServiceWorker()) {
         fromSW.push(res.url())
       }
     })
@@ -143,7 +143,8 @@ test.describe('Iteration 2 Verification', () => {
     await page2.waitForFunction(() => navigator.serviceWorker.controller, { timeout: 10_000 })
 
     const statuses = await page2.evaluate(async () => {
-      const url = 'https://d1jectpaw0dlvl.cloudfront.net/2025/pdftex/7/plain.bst'
+      const url =
+        'https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/pdftex/7/plain.bst'
       const first = await fetch(url)
       const second = await fetch(url)
       return [first.status, second.status]

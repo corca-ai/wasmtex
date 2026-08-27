@@ -19,7 +19,7 @@ const page = await browser.newPage()
 const reqs = []
 page.on('response', (r) => {
   const u = r.url()
-  if (u.includes('cloudfront') || u.includes('/pdftex/')) reqs.push(`${r.status()} ${u.split('/').slice(-3).join('/')}`)
+  if (u.includes('/pdftex/')) reqs.push(`${r.status()} ${u.split('/').slice(-3).join('/')}`)
 })
 page.on('console', (m) => { if (m.type() === 'error') console.log('  [browser:error]', m.text().slice(0, 200)) })
 

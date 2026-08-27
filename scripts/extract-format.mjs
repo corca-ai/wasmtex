@@ -7,11 +7,12 @@ import { writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { collectFormatRequests, writeFormatInputEvidence } from './lib/format-input-evidence.mjs'
+import { defaultTexliveUrl } from './lib/default-texlive-mirrors.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 const version = process.argv[2] ?? '2025'
-const texliveUrl = process.env.TEXLIVE_URL ?? `https://d1jectpaw0dlvl.cloudfront.net/${version}/`
+const texliveUrl = process.env.TEXLIVE_URL ?? defaultTexliveUrl(version)
 const outPath = join(root, `public/wasmtex/${version}/wasmtex-pdftex.fmt`)
 
 async function main() {

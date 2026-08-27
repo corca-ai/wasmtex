@@ -55,6 +55,15 @@ describe('BaseWorkerEngine in-flight cancellation (issue #59)', () => {
 })
 
 describe('TeX Live mirror year binding', () => {
+  it('uses immutable R2 snapshots when no override is provided', () => {
+    expect(resolveTexliveUrl(null, '2025')).toBe(
+      'https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/',
+    )
+    expect(resolveTexliveUrl(null, '2026')).toBe(
+      'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/',
+    )
+  })
+
   it('accepts the selected annual mirror and rejects an obvious cross-year mix', () => {
     expect(resolveTexliveUrl('https://texlive.example/snapshots/rev/2026', '2026')).toBe(
       'https://texlive.example/snapshots/rev/2026/',

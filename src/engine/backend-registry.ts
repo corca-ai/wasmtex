@@ -1,5 +1,5 @@
 /**
- * Pluggable per-stage execution backends (S3 / #110, execution-model principle 3).
+ * Pluggable per-stage execution backends (#110, execution-model principle 3).
  *
  * A compile is a pipeline of stages — the TeX engine pass, bibliography
  * (bibtex/biber), index (makeindex/xindy), export, … Each stage resolves through a

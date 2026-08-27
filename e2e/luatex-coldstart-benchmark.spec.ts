@@ -20,7 +20,7 @@ import { expect, test } from '@playwright/test'
 
 const APP_URL = 'http://localhost:6001'
 const ITERATIONS = Number(process.env.LUA_BENCH_ITERS ?? 5)
-const CDN_HOST = 'd1jectpaw0dlvl.cloudfront.net'
+const CDN_HOST = 'texlive.corca.ai'
 
 const LUA_DOC = [
   '% !TEX program = lualatex',

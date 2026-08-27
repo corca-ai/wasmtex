@@ -1,8 +1,7 @@
 # TeX Live mirror operations
 
-WasmTex publishes immutable TeX Live snapshots to an S3-compatible object
-store. The production migration target is Cloudflare R2 and the public custom domain
-`https://texlive.corca.ai`; after qualification and cutover, mirror identity remains derived from object bytes and
+WasmTex publishes immutable TeX Live snapshots to Cloudflare R2 through the
+public custom domain `https://texlive.corca.ai`. Mirror identity remains derived from object bytes and
 does not contain either the bucket or public hostname.
 
 ## Destination contract
@@ -14,14 +13,15 @@ All publication, audit, bloom, and font-database tools use the same variables:
 | `TEXLIVE_MIRROR_CONFIG` | pinned annual snapshot configuration |
 | `TEXLIVE_MIRROR_OVERRIDES` | reviewed package ownership, licensing, and collision decisions for that snapshot |
 | `TEXLIVE_OBJECT_BUCKET` | destination bucket |
-| `TEXLIVE_OBJECT_ENDPOINT` | S3-compatible endpoint; R2 uses `https://<account-id>.r2.cloudflarestorage.com` |
+| `TEXLIVE_OBJECT_ENDPOINT` | required R2 endpoint, `https://<account-id>.r2.cloudflarestorage.com` |
 | `TEXLIVE_OBJECT_PREFIX` | optional prefix before the year/snapshot |
-| `TEXLIVE_OBJECT_PROFILE` | optional local AWS CLI profile |
+| `TEXLIVE_R2_PROFILE` | optional local CLI profile containing R2 credentials |
 | `TEXLIVE_DEPLOYED_URL` | public base URL used for byte verification |
 | `TEXLIVE_MIRROR_ROOT` | optional verified local release root used to generate bloom data without listing a remote store |
 
-The AWS CLI is only the S3-protocol client. R2 calls must set the endpoint and
-use region `auto` in the selected profile. Publisher credentials need object
+The publication tools use the AWS CLI only as a client for R2's compatibility
+endpoint. They reject a missing or non-R2 endpoint. The selected profile uses
+region `auto`. Publisher credentials need object
 read/write for the TeX Live bucket; bucket/DNS/CORS administration uses a
 separate administrative credential.
 
@@ -38,9 +38,6 @@ export TEXLIVE_RUNTIME_ASSETS_DIR=/verified/runtime-assets/2025
 ./scripts/sync-texlive-mirror.sh --upload
 node scripts/audit-mirror.mjs --year 2025 --check
 ```
-
-The legacy `S3_BUCKET` variable and `sync-texlive-s3.sh` entrypoint remain as
-compatibility aliases. New automation uses the provider-neutral names.
 
 ## Frozen tlnet snapshots
 
@@ -101,23 +98,20 @@ snapshot prefixes use `Cache-Control: public, max-age=31536000, immutable`.
 Do not cache missing-object responses across publication: verify representative
 404-to-200 paths or purge the affected negative cache before qualification.
 
-## Migration and verification
+## Publication and verification
 
-1. Generate or recover the exact current 2025 release and its provenance. For a
-   host-only migration, copy the source inventory unchanged instead of regenerating it.
-2. Publish it to a new immutable R2 prefix. Do not use `--replace-existing` for
-   an already qualified prefix.
+1. Generate or recover the exact annual release and its provenance.
+2. Publish it to a new immutable R2 prefix. The tool refuses an existing compiler-input prefix.
 3. `sync-texlive-mirror.sh` runs `verify-object-mirror.mjs` after upload to compare
    every key, size, and downloaded SHA-256 and reject stale objects. Also run
    `audit-mirror.mjs --check` through the R2 endpoint for format/package coverage.
 4. Fetch representative format, font, catalog, semantic, bloom, and provenance
    objects through `texlive.corca.ai`; check CORS, `ETag`, and immutable cache
    headers. Run headless and browser engine smokes with that exact public URL.
-5. Change CorTeX profile locators only after the byte identity matches. Keep the
-   old CloudFront origin during the rollback window.
-6. Retire CloudFront/S3 only after every qualified locator uses R2 and rollback
-   evidence is recorded. Recovery republishes the same manifest-bound bytes to
-   a new origin; it never changes `mirrorRevision` merely because the host moved.
+5. Change CorTeX profile locators only after the byte identity matches.
+6. Recovery republishes the same manifest-bound bytes to a new R2 prefix and
+   updates only the physical locator; it never changes `mirrorRevision` merely
+   because the host moved.
 
 The publication command refuses a non-empty compiler-input prefix unless the
 operator explicitly requests replacement. Catalog-only publication remains

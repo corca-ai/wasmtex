@@ -5,7 +5,7 @@ import { ToolBackend } from './backend-registry';
  * S4 #111), so an artifact can be keyed by a hash of its inputs and reused **anywhere**:
  * "compile once, instant everywhere." Either host populates it; both read it — the
  * substrate for the cold(server)→warm(client) handoff. A server-type backend's request
- * already carries an `x-wasmtex-cache-key` header (S3 #110) so a shared cache can dedupe.
+ * already carries an `x-wasmtex-cache-key` header (#110) so a shared cache can dedupe.
  *
  * Keep only deterministic, non-sensitive artifacts here (formats, `.bbl`/`.ind`, …), or
  * stay within the integrator's trust boundary — a cache that leaves the device is a
