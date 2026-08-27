@@ -35,7 +35,9 @@ OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 TEXLIVE_REF="$(cat "wasm-build/texlive-source-${TEXLIVE_YEAR:-2025}.ref")"
 echo "Building wasmtex-xetex from texlive-source ($TEXLIVE_REF) ..."
 docker build -f wasm-build/Dockerfile.xetex --platform linux/amd64 \
-  --build-arg TEXLIVE_REF="$TEXLIVE_REF" -t wasmtex-xetex-wasm wasm-build/
+  --build-arg TEXLIVE_REF="$TEXLIVE_REF" \
+  --build-arg TEXLIVE_YEAR="${TEXLIVE_YEAR:-2025}" \
+  -t wasmtex-xetex-wasm wasm-build/
 
 echo "Checking XeTeX PDF inclusion geometry ..."
 docker run --rm --platform linux/amd64 \

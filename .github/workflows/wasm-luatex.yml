@@ -26,7 +26,7 @@ on:
       - 'wasm-build/luatex-entry.c'
       - 'wasm-build/build-luatex.sh'
       - 'wasm-build/Dockerfile.luatex'
-      - 'wasm-build/patches/texlive-wtpdf.patch'
+      - 'wasm-build/patches/texlive-wtpdf*.patch'
       - 'wasm-build/pdf-backend/wtpdf.h'
       - 'wasm-build/pdf-backend/wtpdf-xpdf.cc'
       - 'wasm-build/pdf-backend/wtpdf-smoke.cc'
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: /tmp/.buildx-cache-luatex
-          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex', 'wasm-build/patches/texlive-wtpdf.patch', 'wasm-build/pdf-backend/wtpdf*', 'wasm-build/sha2/*') }}
+          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex', 'wasm-build/patches/texlive-wtpdf*.patch', 'wasm-build/pdf-backend/wtpdf*', 'wasm-build/sha2/*') }}
           restore-keys: luatex-docker-
 
       - name: Build image (Phase 1 native, cached)
@@ -70,6 +70,7 @@ jobs:
             --platform linux/amd64 \
             --load \
             --build-arg TEXLIVE_REF=$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref") \
+            --build-arg TEXLIVE_YEAR="$TEXLIVE_YEAR" \
             --cache-from type=local,src=/tmp/.buildx-cache-luatex \
             --cache-to type=local,dest=/tmp/.buildx-cache-luatex-new,mode=max \
             -f wasm-build/Dockerfile.luatex \

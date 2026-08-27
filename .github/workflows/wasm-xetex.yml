@@ -23,7 +23,7 @@ on:
     paths:
       - 'wasm-build/Dockerfile.xetex'
       - 'wasm-build/build-xetex2.sh'
-      - 'wasm-build/patches/texlive-wtpdf.patch'
+      - 'wasm-build/patches/texlive-wtpdf*.patch'
       - 'wasm-build/pdf-backend/**'
       - 'wasm-build/xetex-entry.c'
       - 'wasm-build/xetex-worker.js'
