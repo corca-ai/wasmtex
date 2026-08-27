@@ -9,6 +9,10 @@
 #include <string>
 #include <vector>
 
+#ifndef WTPDF_EXPECTED_BACKEND_VERSION
+#define WTPDF_EXPECTED_BACKEND_VERSION "4.04"
+#endif
+
 namespace {
 
 void require(bool condition, const char *message) {
@@ -591,7 +595,7 @@ void check_encryption() {
 int main() {
   require(wtpdf_abi_version() == WTPDF_ABI_VERSION, "ABI version mismatch");
   require(std::string(wtpdf_backend_name()) == "xpdf", "backend name mismatch");
-  require(std::string(wtpdf_backend_version()) == "4.04",
+  require(std::string(wtpdf_backend_version()) == WTPDF_EXPECTED_BACKEND_VERSION,
           "backend version mismatch");
 
   const std::string original = make_fixture();

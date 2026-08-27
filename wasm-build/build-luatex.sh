@@ -82,6 +82,14 @@ fi
 }
 
 echo "=== Phase 2c.1: WTPDF WebAssembly smoke test ==="
+EXPECTED_XPDF_VERSION=4.04
+if [ "${TEXLIVE_YEAR:-2025}" = 2026 ]; then EXPECTED_XPDF_VERSION=4.06; fi
+ACTUAL_XPDF_VERSION=$(sed -n 's/^#define xpdfVersion[[:space:]]*"\([^"]*\)"/\1/p' \
+  "$SRC/libs/xpdf/xpdf-src/xpdf/config.h")
+[ "$ACTUAL_XPDF_VERSION" = "$EXPECTED_XPDF_VERSION" ] || {
+  echo "unexpected TeX Live $TEXLIVE_YEAR Xpdf version: $ACTUAL_XPDF_VERSION" >&2
+  exit 1
+}
 XPDF_INCLUDES=(
   -I"$GLUE/pdf-backend"
   -I"$SRC/libs/xpdf"
@@ -91,6 +99,7 @@ XPDF_INCLUDES=(
   -I"$WB/libs/xpdf"
 )
 em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
+  -DWTPDF_EXPECTED_BACKEND_VERSION=\"$EXPECTED_XPDF_VERSION\" \
   "${XPDF_INCLUDES[@]}" \
   "$GLUE/pdf-backend/wtpdf-xpdf.cc" \
   "$GLUE/pdf-backend/wtpdf-smoke.cc" \
