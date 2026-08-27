@@ -4,6 +4,13 @@ name: WASM makeindex (from source)
 # Plain C — no native phase — so this is a single Docker build + run.
 on:
   workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: TeX Live engine year
+        required: true
+        type: choice
+        default: '2025'
+        options: ['2025', '2026']
   push:
     branches: [main]
     paths:
@@ -13,10 +20,12 @@ on:
       - 'wasm-build/makeindex-worker.js'
       - 'wasm-build/kpse-hook.c'
       - 'wasm-build/library.js'
-      - 'wasm-build/texlive-source.ref'
+      - 'wasm-build/texlive-source-*.ref'
       - 'scripts/gen-engine-build-receipt.mjs'
       - 'scripts/lib/engine-build-receipt.mjs'
       - 'scripts/corresponding-source-2025.json'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/check-annual-engine-source.mjs'
       - '.github/workflows/wasm-makeindex.yml'
   pull_request:
     paths:
@@ -26,20 +35,22 @@ on:
       - 'wasm-build/makeindex-worker.js'
       - 'wasm-build/kpse-hook.c'
       - 'wasm-build/library.js'
-      - 'wasm-build/texlive-source.ref'
+      - 'wasm-build/texlive-source-*.ref'
       - '.github/workflows/wasm-makeindex.yml'
 
 jobs:
   build-makeindex:
     runs-on: ubuntu-latest
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
-        run: node scripts/check-license-compliance.mjs 2025
+        run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"
 
-      - name: Refuse uncleared artifacts in a public repository
-        if: github.event.repository.visibility == 'public'
+      - name: Verify release policy for the established 2025 line
+        if: env.TEXLIVE_YEAR == '2025' && github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
       - uses: docker/setup-buildx-action@v4
@@ -50,7 +61,7 @@ jobs:
             --platform linux/amd64 \
             --load \
             -f wasm-build/Dockerfile.makeindex \
-            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            --build-arg TEXLIVE_REF=$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref") \
             -t makeindex-wasm \
             wasm-build/
 
@@ -93,7 +104,7 @@ jobs:
       - name: Upload makeindex WASM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-makeindex
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-makeindex-2026' || 'wasm-makeindex' }}
           path: |
             wasm-build/dist-makeindex/wasmtex-makeindex.js
             wasm-build/dist-makeindex/wasmtex-makeindex.worker.js
@@ -104,7 +115,7 @@ jobs:
       - name: Upload non-release makeindex link-map evidence
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-makeindex-link-map
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-makeindex-2026-link-map' || 'wasm-makeindex-link-map' }}
           path: wasm-build/dist-makeindex/wasmtex-makeindex.map
           retention-days: 90
 

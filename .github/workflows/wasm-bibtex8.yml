@@ -4,6 +4,13 @@ name: WASM bibtex8 (from source)
 # (#102). Plain C — no native phase — single Docker build + run.
 on:
   workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: TeX Live engine year
+        required: true
+        type: choice
+        default: '2025'
+        options: ['2025', '2026']
   push:
     branches: [main]
     paths:
@@ -13,10 +20,12 @@ on:
       - 'wasm-build/bibtex8-worker.js'
       - 'wasm-build/kpse-hook.c'
       - 'wasm-build/library.js'
-      - 'wasm-build/texlive-source.ref'
+      - 'wasm-build/texlive-source-*.ref'
       - 'scripts/gen-engine-build-receipt.mjs'
       - 'scripts/lib/engine-build-receipt.mjs'
       - 'scripts/corresponding-source-2025.json'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/check-annual-engine-source.mjs'
       - '.github/workflows/wasm-bibtex8.yml'
   pull_request:
     paths:
@@ -26,20 +35,22 @@ on:
       - 'wasm-build/bibtex8-worker.js'
       - 'wasm-build/kpse-hook.c'
       - 'wasm-build/library.js'
-      - 'wasm-build/texlive-source.ref'
+      - 'wasm-build/texlive-source-*.ref'
       - '.github/workflows/wasm-bibtex8.yml'
 
 jobs:
   build-bibtex8:
     runs-on: ubuntu-latest
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Verify source licensing policy
-        run: node scripts/check-license-compliance.mjs 2025
+        run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"
 
-      - name: Refuse uncleared artifacts in a public repository
-        if: github.event.repository.visibility == 'public'
+      - name: Verify release policy for the established 2025 line
+        if: env.TEXLIVE_YEAR == '2025' && github.event.repository.visibility == 'public'
         run: node scripts/check-license-compliance.mjs 2025 --release
 
       - uses: docker/setup-buildx-action@v4
@@ -50,7 +61,7 @@ jobs:
             --platform linux/amd64 \
             --load \
             -f wasm-build/Dockerfile.bibtex8 \
-            --build-arg TEXLIVE_REF=$(cat wasm-build/texlive-source.ref) \
+            --build-arg TEXLIVE_REF=$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref") \
             -t bibtex8-wasm \
             wasm-build/
 
@@ -92,7 +103,7 @@ jobs:
       - name: Upload bibtex8 WASM artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-bibtex8
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex8-2026' || 'wasm-bibtex8' }}
           path: |
             wasm-build/dist-bibtex8/wasmtex-bibtex8.js
             wasm-build/dist-bibtex8/wasmtex-bibtex8.worker.js
@@ -103,7 +114,7 @@ jobs:
       - name: Upload non-release BibTeX8 link-map evidence
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-bibtex8-link-map
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex8-2026-link-map' || 'wasm-bibtex8-link-map' }}
           path: wasm-build/dist-bibtex8/wasmtex-bibtex8.map
           retention-days: 90
 

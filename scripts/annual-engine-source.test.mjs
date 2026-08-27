@@ -44,3 +44,25 @@ test('2026 XeTeX and LuaTeX builds select the rebased WTPDF patch', () => {
     assert.match(readFileSync(resolve(root, 'scripts', script), 'utf8'), /process\.env\.TEXLIVE_URL/)
   }
 })
+
+test('all engine workflows bind builds and receipts to the selected annual source', () => {
+  for (const name of [
+    'wasm-build.yml',
+    'wasm-bibtex8.yml',
+    'wasm-makeindex.yml',
+    'wasm-xetex.yml',
+    'wasm-luatex.yml',
+  ]) {
+    const workflow = readFileSync(resolve(root, '.github/workflows', name), 'utf8')
+    assert.match(workflow, /texlive_year:/, name)
+    assert.match(workflow, /TEXLIVE_YEAR: \$\{\{ inputs\.texlive_year \|\| '2025' \}\}/, name)
+    assert.match(workflow, /check-annual-engine-source\.mjs "\$TEXLIVE_YEAR"/, name)
+  }
+
+  for (const name of ['wasm-bibtex8.yml', 'wasm-makeindex.yml']) {
+    const workflow = readFileSync(resolve(root, '.github/workflows', name), 'utf8')
+    assert.match(workflow, /texlive-source-\$TEXLIVE_YEAR\.ref/, name)
+    assert.match(workflow, /env\.TEXLIVE_YEAR == '2026'/, name)
+    assert.match(workflow, /gen-engine-build-receipt\.mjs/, name)
+  }
+})
