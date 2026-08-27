@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "texliveYear": "2026",
+  "environment": {
+    "host": "Node host adapter (installNodeWorkerHost), darwin arm64, Node v24.19.0",
+    "date": "2026-08-27",
+    "sourceRevision": "9b43b3959aba8f3f8b39a4190deb8ac653e2f687",
+    "mirrorRevision": "2026-b4f6befbe7732169",
+    "note": "Cold public-R2 measurement; peakRssMiB is process.resourceUsage().maxRSS/1024 for one process per engine."
+  },
+  "engines": {
+    "pdflatex": {
+      "engine": "pdflatex",
+      "success": true,
+      "pdfBytes": 48997,
+      "initMs": 2312,
+      "firstCompileMs": 9051,
+      "secondCompileMs": 215,
+      "peakRssMiB": 624
+    },
+    "xelatex": {
+      "engine": "xelatex",
+      "success": true,
+      "pdfBytes": 10416,
+      "initMs": 257,
+      "firstCompileMs": 48873,
+      "secondCompileMs": 1558,
+      "peakRssMiB": 2001
+    },
+    "lualatex": {
+      "engine": "lualatex",
+      "success": true,
+      "pdfBytes": 43065,
+      "initMs": 3346,
+      "firstCompileMs": 26010,
+      "secondCompileMs": 629,
+      "peakRssMiB": 1760
+    }
+  }
+}

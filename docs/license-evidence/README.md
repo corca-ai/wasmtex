@@ -13,6 +13,7 @@ requires the load-bearing set to stay tracked.
 | `link-inventory-2026-9b43b39.json` | The 82 archive occurrences selected by the seven 2026 linker maps |
 | `engine-sbom-2026-9b43b39.spdx.json` | The annual component inventory as a freshness-checked SPDX SBOM |
 | `corresponding-source-2026-9b43b39.md` | Native x86_64 source assembly, verification, publication, and public hash binding |
+| `engine-performance-2026-9b43b39.json` | Cold Node-host runtime measurements checked against the 2026 artifact/runtime budgets |
 
 ## Current release (`57ad3e9`)
 

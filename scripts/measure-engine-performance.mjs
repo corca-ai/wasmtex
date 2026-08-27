@@ -17,6 +17,12 @@ if (!['pdflatex', 'xelatex', 'lualatex'].includes(engine)) {
 
 const assetBaseUrl = 'http://assets.local/'
 const publicDir = process.env.WASMTEX_PUBLIC_DIR || join(root, 'public')
+const texliveVersion = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
+const texliveUrl =
+  process.env.TEXLIVE_URL ||
+  (texliveVersion === '2026'
+    ? 'https://texlive.corca.ai/snapshots/2026-b4f6befbe7732169/2026/'
+    : 'https://d1jectpaw0dlvl.cloudfront.net/2025/')
 installNodeWorkerHost({ publicDir, assetBaseUrl })
 const unicode = engine !== 'pdflatex'
 const source = [
@@ -33,9 +39,9 @@ const source = [
 
 const compiler = new WasmTexCompiler({
   engine,
-  texliveVersion: '2025',
+  texliveVersion,
   assetBaseUrl,
-  texliveUrl: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+  texliveUrl,
   files: { 'main.tex': source },
 })
 

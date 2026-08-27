@@ -189,6 +189,8 @@ jobs:
       - run: npx tsgo --noEmit
       - run: npm run test
       - run: npm run test:license-tools
+      - run: npm run check:engine-performance
+      - run: npm run check:engine-performance:2026
       # Emit a content-hashed manifest of the (just-downloaded) engine assets so
       # `vite build` copies it into dist and consumers can sync/verify against it.
       - name: Generate development asset manifest
