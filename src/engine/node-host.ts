@@ -77,7 +77,11 @@ globalThis.XMLHttpRequest = class {
       // matching the browser's XHR. Without it, a gzip-encoded CDN asset (e.g. the ICU data
       // file icudt68l.dat) reaches the engine still gzipped → ICU udata_setCommonData fails
       // ("cannot read font names") and XeLaTeX can't resolve fonts by name.
-      const body = execFileSync('curl', ['-fsSL', '--compressed', '-D', hf, this._url], { maxBuffer: 512 * 1024 * 1024 })
+      const body = execFileSync(
+        'curl',
+        ['-fsSL', '--compressed', '--retry', '3', '--retry-delay', '1', '-D', hf, this._url],
+        { maxBuffer: 512 * 1024 * 1024 },
+      )
       this.status = 200
       this.response = this._rt === 'arraybuffer'
         ? body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
@@ -89,9 +93,17 @@ globalThis.XMLHttpRequest = class {
           if (i > 0) this._headers[t.slice(0, i).trim().toLowerCase()] = t.slice(i + 1).trim()
         }
       } catch (_h) {}
-    } catch (_e) {
-      this.status = 404
-      this.response = null
+    } catch (error) {
+      // curl 22 means --fail received an HTTP error response, which the kpse
+      // fallback treats as a missing candidate. Transport failures must remain
+      // failures: caching a reset/timeout as 404 makes a present TeX file look
+      // permanently absent for the rest of the compile.
+      if (error && error.status === 22) {
+        this.status = 404
+        this.response = null
+      } else {
+        throw error
+      }
     } finally {
       try { unlinkSync(hf) } catch (_u) {}
     }
