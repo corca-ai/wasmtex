@@ -25,6 +25,15 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
     const ASSET = 'http://assets.local/'
     const texliveProfile = smokeTexliveProfile()
+    const mirrorRevision =
+      new URL(texliveProfile.url).pathname
+        .split('/')
+        .find((part) => part.startsWith(`${texliveProfile.version}-`)) ?? null
+    const completionProfile = {
+      id: `node-smoke-${mirrorRevision ?? texliveProfile.version}`,
+      mirrorRevision,
+      texliveYear: texliveProfile.version,
+    } as const
     installNodeWorkerHost({
       publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
       assetBaseUrl: ASSET,
@@ -49,6 +58,7 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
     const compiler = new WasmTexCompiler({
       engine: 'pdflatex',
       assetBaseUrl: ASSET,
+      completionProfile,
       texliveVersion: texliveProfile.version,
       texliveUrl: texliveProfile.url,
       files: { 'main.tex': doc },
@@ -61,6 +71,15 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
       )
       expect(result.success).toBe(true)
       expect(result.pdf?.length ?? 0).toBeGreaterThan(0)
+      expect(result.telemetry?.resolver).toMatchObject({
+        schemaVersion: 1,
+        profile: completionProfile,
+        complete: true,
+        dropped: 0,
+      })
+      expect(
+        result.telemetry?.resolver?.entries.some((entry) => entry.outcome === 'resolved'),
+      ).toBe(true)
       const snapshot = result.telemetry?.completionSnapshot
       if (snapshot) {
         console.log(
