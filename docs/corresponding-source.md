@@ -22,9 +22,12 @@ artifact bytes, and legacy `pplib` markers.
 
 Locally ignored files under `public/wasmtex/<version>/` are development inputs. Do
 not use an old directory merely because it contains runnable engines. Assemble the
-directory from the latest cleared receipt-bound artifact for each family. Rebuild
-only families whose owned source or build inputs changed; reuse the exact artifact
-and receipt together for every unaffected family.
+directory from the exact workflow runs in `scripts/engine-release-components.json`.
+That manifest is the promotion boundary: a successful build does not enter a release
+until its run ID is reviewed and pinned. Rebuild only families whose owned source or
+build inputs changed; reuse the exact artifact and receipt together for every
+unaffected family. The assembler rejects any receipt whose immutable TeX Live mirror
+differs from the annual mirror pinned beside those run IDs.
 
 ## Create and verify an archive
 

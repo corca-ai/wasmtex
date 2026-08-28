@@ -24,6 +24,8 @@ profile until a user changes it.
 The machine profile records `engine.sourceRevisions` as a sorted set. Most
 annual releases have one entry, while a release that replaces only an affected
 engine family records every revision named by its composed build receipts.
+`engine.buildRuns` records the same named workflow-run pins as
+`scripts/engine-release-components.json`; run order is not used as identity.
 
 ## Finalize after TeX Live 2027 releases
 

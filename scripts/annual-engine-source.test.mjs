@@ -38,9 +38,9 @@ test('2026 XeTeX and LuaTeX builds select the rebased WTPDF patch', () => {
   for (const workflow of [pdftexWorkflow, xetexWorkflow, luatexWorkflow]) {
     assert.match(workflow, /BUILD-RECEIPT\.[a-z0-9-]+-raw\.json/)
     assert.match(workflow, /texlive_url:/)
-    assert.match(workflow, /TEXLIVE_URL: \$\{\{ inputs\.texlive_url \|\|/)
-    assert.match(workflow, /TEXLIVE_MIRROR_REVISION: \$\{\{ inputs\.mirror_revision \|\|/)
-    assert.match(workflow, /TEXLIVE_PROVENANCE_SHA256: \$\{\{ inputs\.provenance_sha256 \|\|/)
+    assert.match(workflow, /INPUT_TEXLIVE_URL: \$\{\{ inputs\.texlive_url \}\}/)
+    assert.match(workflow, /INPUT_MIRROR_REVISION: \$\{\{ inputs\.mirror_revision \}\}/)
+    assert.match(workflow, /INPUT_PROVENANCE_SHA256: \$\{\{ inputs\.provenance_sha256 \}\}/)
   }
   for (const script of ['extract-format.mjs', 'extract-xetex-format.mjs', 'extract-luatex-format.mjs']) {
     assert.match(readFileSync(resolve(root, 'scripts', script), 'utf8'), /process\.env\.TEXLIVE_URL/)
@@ -61,8 +61,12 @@ test('all engine workflows bind builds and receipts to the selected annual sourc
     assert.match(workflow, /mirror_revision:/, name)
     assert.match(workflow, /provenance_sha256:/, name)
     assert.match(workflow, /TEXLIVE_YEAR: \$\{\{ inputs\.texlive_year \|\| '2025' \}\}/, name)
-    assert.match(workflow, /TEXLIVE_MIRROR_REVISION:/, name)
-    assert.match(workflow, /TEXLIVE_PROVENANCE_SHA256:/, name)
+    assert.match(workflow, /node scripts\/configure-engine-build-mirror\.mjs/, name)
+    assert.match(workflow, /INPUT_MIRROR_REVISION: \$\{\{ inputs\.mirror_revision \}\}/, name)
+    assert.match(workflow, /INPUT_PROVENANCE_SHA256: \$\{\{ inputs\.provenance_sha256 \}\}/, name)
+    assert.doesNotMatch(workflow, /2026-b4f6befbe7732169/, name)
+    assert.doesNotMatch(workflow, /- 'scripts\/engine-release-components\.json'/, name)
+    assert.doesNotMatch(workflow, new RegExp(`- '\\.github/workflows/${name}'`), name)
     assert.match(workflow, /check-annual-engine-source\.mjs "\$TEXLIVE_YEAR"/, name)
   }
 
@@ -80,10 +84,19 @@ test('corresponding-source workflow assembles the selected annual line', () => {
     'utf8',
   )
   assert.match(workflow, /options: \['2025', '2026'\]/)
-  assert.equal(
-    workflow.match(/path: public\/wasmtex\/\$\{\{ env\.TEXLIVE_YEAR \}\}/g)?.length,
-    6,
-  )
+  assert.match(workflow, /uses: \.\/\.github\/actions\/download-engine-release/)
+  assert.match(workflow, /texlive-year: \$\{\{ env\.TEXLIVE_YEAR \}\}/)
+  assert.match(workflow, /destination: public\/wasmtex\/\$\{\{ env\.TEXLIVE_YEAR \}\}/)
+  assert.doesNotMatch(workflow, /search_artifacts:/)
   assert.match(workflow, /check-license-compliance\.mjs "\$TEXLIVE_YEAR"/)
   assert.doesNotMatch(workflow, /path: public\/wasmtex\/2026/)
+})
+
+test('release consumers download only explicitly pinned component runs', () => {
+  for (const name of ['ci.yml', 'golden-canary.yml', 'build-corresponding-source.yml']) {
+    const workflow = readFileSync(resolve(root, '.github/workflows', name), 'utf8')
+    assert.match(workflow, /uses: \.\/\.github\/actions\/download-engine-release/, name)
+    assert.doesNotMatch(workflow, /dawidd6\/action-download-artifact/, name)
+    assert.doesNotMatch(workflow, /search_artifacts:/, name)
+  }
 })

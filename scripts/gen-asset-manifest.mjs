@@ -18,6 +18,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  buildRunsFor,
+  validateComposedEngineRelease,
+  validateEngineReleaseComponents,
+} from './lib/engine-release-components.mjs'
 import { inspectReleaseAssets, releaseIdFor } from './lib/release-assets.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -26,6 +31,7 @@ const requireReleaseCleared = process.argv.includes('--release')
 const dir = join(root, `public/wasmtex/${version}`)
 const licenseManifestPath = join(dir, 'LICENSE-MANIFEST.json')
 const sourceConfigPath = join(root, `scripts/corresponding-source-${version}.json`)
+const releaseComponentsPath = join(root, 'scripts/engine-release-components.json')
 
 if (!existsSync(dir)) {
   console.error(`No asset dir: ${dir}`)
@@ -43,6 +49,10 @@ if (!existsSync(sourceConfigPath)) {
 
 const legal = JSON.parse(readFileSync(licenseManifestPath, 'utf8'))
 const sourceConfig = JSON.parse(readFileSync(sourceConfigPath, 'utf8'))
+const releaseComponents = validateEngineReleaseComponents(
+  JSON.parse(readFileSync(releaseComponentsPath, 'utf8')),
+  version,
+)
 if (legal.texliveVersion !== version) {
   console.error(
     `License manifest version ${String(legal.texliveVersion)} does not match asset version ${version}`,
@@ -86,7 +96,11 @@ if (requireReleaseCleared && legal.releaseStatus !== 'release-cleared') {
 }
 
 const inspected = inspectReleaseAssets({ directory: dir, legal, sourceConfig })
-const { files, buildReceipts, errors: receiptErrors } = inspected
+const { files, buildReceipts } = inspected
+const receiptErrors = [
+  ...inspected.errors,
+  ...validateComposedEngineRelease(inspected, releaseComponents),
+]
 
 if (requireReleaseCleared && (buildReceipts.length === 0 || receiptErrors.length > 0)) {
   console.error('Refusing release manifest because build receipts are incomplete:')
@@ -106,6 +120,7 @@ const manifest = {
     correspondingSource: legal.correspondingSource,
     releaseBlockers: legal.releaseBlockers,
   },
+  buildRuns: buildRunsFor(releaseComponents),
   buildReceipts,
   files,
 }

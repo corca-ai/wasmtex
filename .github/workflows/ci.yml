@@ -64,128 +64,20 @@ jobs:
       - run: npm run check:licenses
       - run: npm run check:licenses:2026
       - run: npm ci
-      - name: Download latest WASM engine
-        uses: dawidd6/action-download-artifact@v21
+      # A release is an explicit composition of receipt-bound workflow runs.
+      # Never let an unrelated newer successful run silently replace a family.
+      - name: Download pinned TeX Live 2025 engine release
+        uses: ./.github/actions/download-engine-release
         with:
-          workflow: wasm-build.yml
-          name: wasm-pdftex
-          path: public/wasmtex/2025
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: warn
-      - name: Download latest BibTeX WASM
-        uses: dawidd6/action-download-artifact@v21
+          texlive-year: '2025'
+          destination: public/wasmtex/2025
+          github-token: ${{ github.token }}
+      - name: Download pinned TeX Live 2026 engine release
+        uses: ./.github/actions/download-engine-release
         with:
-          workflow: wasm-build.yml
-          name: wasm-bibtex
-          path: public/wasmtex/2025
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: warn
-      - name: Download latest BibTeX8 WASM
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-bibtex8.yml
-          name: wasm-bibtex8
-          path: public/wasmtex/2025
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: warn
-      - name: Download latest makeindex WASM
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-makeindex.yml
-          name: wasm-makeindex
-          path: public/wasmtex/2025
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: warn
-      - name: Download latest XeLaTeX WASM (xetex + dvipdfmx)
-        # Optional engine: XeLaTeX degrades to an actionable "engine unavailable"
-        # result when absent. continue-on-error also tolerates wasm-xetex.yml never
-        # having run yet (the API 404s listing runs, which `if_no_artifact_found`
-        # does not cover).
-        continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-xetex.yml
-          name: wasm-xetex
-          path: public/wasmtex/2025
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: warn
-      - name: Download latest LuaLaTeX WASM (luatex)
-        # Optional engine, same as XeLaTeX above. wasm-luatex.yml is a heavy,
-        # convergence-in-progress build, so the artifact may not exist yet —
-        # continue-on-error keeps the deploy green; LuaLaTeX then degrades to the
-        # actionable "requires LuaLaTeX" result.
-        continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-luatex.yml
-          name: wasm-luatex
-          path: public/wasmtex/2025
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: warn
-      # Annual artifacts are produced by workflow_dispatch rather than by every
-      # pull request. CI qualifies the latest successful main artifacts; an
-      # artifact-producing change is qualified by its own build workflow before
-      # its immutable release metadata is updated here.
-      - name: Download TeX Live 2026 pdfTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-build.yml
-          name: wasm-pdftex-2026
-          path: public/wasmtex/2026
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download TeX Live 2026 BibTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-build.yml
-          name: wasm-bibtex-2026
-          path: public/wasmtex/2026
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download TeX Live 2026 BibTeX8
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-bibtex8.yml
-          name: wasm-bibtex8-2026
-          path: public/wasmtex/2026
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download TeX Live 2026 MakeIndex
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-makeindex.yml
-          name: wasm-makeindex-2026
-          path: public/wasmtex/2026
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download TeX Live 2026 XeLaTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-xetex.yml
-          name: wasm-xetex-2026
-          path: public/wasmtex/2026
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download TeX Live 2026 LuaLaTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-luatex.yml
-          name: wasm-luatex-2026
-          path: public/wasmtex/2026
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
+          texlive-year: '2026'
+          destination: public/wasmtex/2026
+          github-token: ${{ github.token }}
       - run: npm run lint
       - run: npx tsgo --noEmit
       - run: npm run test

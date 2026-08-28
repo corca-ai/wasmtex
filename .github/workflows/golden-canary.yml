@@ -25,7 +25,7 @@ jobs:
           - texlive_year: '2025'
             texlive_url: https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/
           - texlive_year: '2026'
-            texlive_url: https://texlive.corca.ai/snapshots/2026-b4f6befbe7732169/2026/
+            texlive_url: https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/
     env:
       TEXLIVE_VERSION: ${{ matrix.texlive_year }}
       TEXLIVE_URL: ${{ matrix.texlive_url }}
@@ -38,65 +38,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Download pdfTeX
-        uses: dawidd6/action-download-artifact@v21
+      - name: Download pinned annual engine release
+        uses: ./.github/actions/download-engine-release
         with:
-          workflow: wasm-build.yml
-          name: ${{ matrix.texlive_year == '2025' && 'wasm-pdftex' || 'wasm-pdftex-2026' }}
-          path: public/wasmtex/${{ matrix.texlive_year }}
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-
-      - name: Download BibTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-build.yml
-          name: ${{ matrix.texlive_year == '2025' && 'wasm-bibtex' || 'wasm-bibtex-2026' }}
-          path: public/wasmtex/${{ matrix.texlive_year }}
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-
-      - name: Download BibTeX8
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-bibtex8.yml
-          name: ${{ matrix.texlive_year == '2025' && 'wasm-bibtex8' || 'wasm-bibtex8-2026' }}
-          path: public/wasmtex/${{ matrix.texlive_year }}
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-
-      - name: Download MakeIndex
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-makeindex.yml
-          name: ${{ matrix.texlive_year == '2025' && 'wasm-makeindex' || 'wasm-makeindex-2026' }}
-          path: public/wasmtex/${{ matrix.texlive_year }}
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-
-      - name: Download XeTeX and dvipdfmx
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-xetex.yml
-          name: ${{ matrix.texlive_year == '2025' && 'wasm-xetex' || 'wasm-xetex-2026' }}
-          path: public/wasmtex/${{ matrix.texlive_year }}
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
-
-      - name: Download LuaHBTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-luatex.yml
-          name: ${{ matrix.texlive_year == '2025' && 'wasm-luatex' || 'wasm-luatex-2026' }}
-          path: public/wasmtex/${{ matrix.texlive_year }}
-          branch: main
-          search_artifacts: true
-          if_no_artifact_found: fail
+          texlive-year: ${{ matrix.texlive_year }}
+          destination: public/wasmtex/${{ matrix.texlive_year }}
+          github-token: ${{ github.token }}
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
