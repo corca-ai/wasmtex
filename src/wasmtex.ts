@@ -1808,7 +1808,6 @@ export class WasmTex {
     const decision = this.rerunController.decide(result.log || '', signature)
 
     if (decision.rerun) {
-      console.log('[main] Log indicates references changed. Triggering automated rerun...')
       this.pendingRecompile = true
       // Small delay to ensure UI updates and VFS is stable
       this.rerunTimer = setTimeout(() => {
@@ -1848,7 +1847,6 @@ export class WasmTex {
     const hasBibFiles = this.fs.listFiles().some((f) => f.endsWith('.bib'))
     if (!hasBibFiles) return
 
-    console.log('[main] Triggering BibTeX run...')
     this.pendingBibtex = true
     const runId = ++this.bibtexRunId
 
@@ -1904,7 +1902,6 @@ export class WasmTex {
 
     this.bibtexDone = true
 
-    console.log(`[main] BibTeX produced .bbl (${bbl.length} bytes). Writing back to engine...`)
     await this.engine.writeFile(`${mainBase}.bbl`, bbl)
     if (!this.isCurrentBibtexRun(runId)) return
 

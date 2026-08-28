@@ -18,12 +18,10 @@ if (self.__wasmtexWasmBinary) Module["wasmBinary"] = self.__wasmtexWasmBinary;
 
 Module["print"] = function(a) {
   self.memlog += a + "\n";
-  console.log("[makeindex] " + a);
 };
 
 Module["printErr"] = function(a) {
   self.memlog += a + "\n";
-  console.warn("[makeindex-err] " + a);
 };
 
 Module["preRun"] = function() {
@@ -69,8 +67,6 @@ function allocateString(str) {
 // The common `\printindex` (default style) reads/writes purely local files.
 function kpse_find_file_impl(nameptr, format, _mustexist) {
   var reqname = UTF8ToString(nameptr);
-  console.log("[makeindex-kpse] REQUESTED: " + reqname + " (format: " + format + ")");
-
   if (reqname.startsWith("*") || reqname.startsWith("&")) {
     reqname = reqname.substring(1);
   }
@@ -99,7 +95,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   }
 
   var xhr = tryFetch(reqname);
-  // CloudFront answers a missing key with 403 (not 404); retry the bare name.
+  // Some object stores answer a missing key with 403 (not 404); retry the bare name.
   if (xhr && xhr.status >= 400 && reqname.includes(".")) {
     var bare = reqname.substring(0, reqname.lastIndexOf("."));
     var retryXhr = tryFetch(bare);
@@ -128,7 +124,6 @@ function writeTexmfCnf() {
 }
 
 function compileMakeindexRoutine() {
-  console.log("[makeindex] Starting for: " + self.mainfile);
   self.memlog = "";
   restoreHeapMemory();
 
@@ -154,7 +149,6 @@ function compileMakeindexRoutine() {
     }
   }
 
-  console.log("[makeindex] Finished with status: " + status);
   self.postMessage({
     "cmd": "compile",
     "result": status <= 1 ? "ok" : "error",

@@ -407,7 +407,7 @@ function buildPreambleFormat(preambleText) {
         if (self.memlog.includes("Fatal format file error") ||
             self.memlog.includes("I can\\'t go on")) {
             console.error("[preamble] build log contains fatal errors:");
-            console.log(self.memlog);
+            console.error(self.memlog);
             return null;
         }
         try {
@@ -419,7 +419,7 @@ function buildPreambleFormat(preambleText) {
         } catch(e) { return null; }
     } else {
         console.error("[preamble] format build failed. log below:");
-        console.log(self.memlog);
+        console.error(self.memlog);
     }
     return null;
 }
@@ -586,7 +586,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
     var xhr = tryFetch(reqname);
 
-    // If the request failed (CloudFront returns 403, not 404, for missing keys),
+    // If the request failed (some object stores return 403, not 404, for missing keys),
     // be smart about extensions.
     if (xhr && xhr.status >= 400) {
         // Case 1: Request had extension, try without it
@@ -594,7 +594,6 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
             var bare = reqname.substring(0, reqname.lastIndexOf("."));
             var retryXhr = tryFetch(bare);
             if (retryXhr && retryXhr.status === 200) {
-                console.log("[kpse] Found after removing extension: " + bare);
                 xhr = retryXhr;
                 reqname = bare;
             }
@@ -608,7 +607,6 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
                 if (reqname.endsWith(exts[i])) continue;
                 var retryXhr = tryFetch(reqname + exts[i]);
                 if (retryXhr && retryXhr.status === 200) {
-                    console.log("[kpse] Found after adding " + exts[i] + ": " + reqname);
                     xhr = retryXhr;
                     reqname += exts[i];
                     break;
@@ -649,11 +647,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
             UTF8ToString(nameptr).replace(/^[*&]/, ""), format, "resolved", resolverAttempts
         );
         var ptr = allocateString(savepath);
-        console.log("[kpse] Downloaded: " + reqname + " (" + format + ")");
         return ptr;
     } else {
-        var status = xhr ? xhr.status : "network error";
-        console.warn("[kpse] Failed: " + reqname + " (" + format + ") - status: " + status);
         var sawMirrorResponse = resolverAttempts.length > 0 && resolverAttempts.every(function(attempt) {
             return attempt.outcome === "not-found";
         });
@@ -704,12 +699,9 @@ function kpse_find_pk_impl(nameptr, dpi) {
     xhr.timeout = 150000;
     xhr.responseType = "arraybuffer";
 
-    console.log("Start downloading PK font " + remote_url);
-
     try {
         xhr.send();
     } catch(err) {
-        console.log("PK Font Download Failed " + remote_url);
         return 0;
     }
 
@@ -720,10 +712,8 @@ function kpse_find_pk_impl(nameptr, dpi) {
         var savepath = TEXCACHEROOT + "/" + fileid;
         FS.writeFile(savepath, new Uint8Array(arraybuffer));
         pk200_cache[cacheKey] = savepath;
-        console.log("[kpse] Downloaded PK: " + reqname + " (" + dpi + ")");
         return allocateString(savepath);
     } else {
-        console.warn("[kpse] Failed PK: " + reqname + " (" + dpi + ") - status: " + xhr.status);
         pk404_cache[cacheKey] = 1;
         return 0;
     }
@@ -764,7 +754,6 @@ function compileLaTeXRoutine() {
 
     // Build format file on first compilation.
     if (!self._fmtData) {
-        console.log("[compile] No preloaded format. Clearing caches and building initial format...");
         prepareExecutionContext();
         cleanDir(TEXCACHEROOT);
         cleanDir(WORKROOT);
@@ -790,24 +779,21 @@ function compileLaTeXRoutine() {
         // An incompatible stale format would leave 2025 INITEX "stymied".
         try { FS.unlink(WORKROOT + "/pdflatex.fmt"); } catch(e) {}
 
-        console.log("[compile] Invoking INITEX to build base format...");
         // Re-add * prefix to enable e-TeX extensions (required by modern LaTeX)
-        // My JS fetcher fix will strip this '*' when downloading from S3.
+        // The mirror resolver strips this '*' before requesting the format.
         var fmtStatus = runMain("pdfetex", ["-ini", "-interaction=nonstopmode", "*pdflatex.ini"]);
-        console.log("[compile] INITEX finished with status: " + fmtStatus);
 
         if (fmtStatus === 0) {
             try {
                 self._fmtData = builtFmt;
                 self._fmtBuiltThisSession = true;
                 self._fmtIsNative = true;
-                console.log("[compile] Initial format built successfully.");
             } catch(e) {
                 console.error("[compile] Format build succeeded but can't read output: " + e);
             }
         } else {
             console.error("[compile] Initial format build failed. log below:");
-            console.log(self.memlog);
+            console.error(self.memlog);
             self.postMessage({
                 "result": "failed",
                 "status": fmtStatus,
@@ -843,7 +829,6 @@ function compileLaTeXRoutine() {
             var fmtBuildMs = Math.round(performance.now() - fmtBuildStart);
             phaseTimings.preambleBuildMs += fmtBuildMs;
             if (fmt) {
-                console.log("[preamble] MISS — format built in " + fmtBuildMs + "ms");
                 self._preambleFmtData = fmt;
                 self._preambleHash = hash;
                 usedPreamble = true;
@@ -851,7 +836,6 @@ function compileLaTeXRoutine() {
                 prepareExecutionContext();
                 try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
             } else {
-                console.log("[preamble] MISS — format build failed (" + fmtBuildMs + "ms)");
                 prepareExecutionContext();
                 try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
             }
@@ -935,7 +919,6 @@ function compileLaTeXRoutine() {
         self.memlog.includes("Undefined control sequence")
     );
     if (usedPreamble && (status !== 0 || preambleHasCriticalErrors)) {
-        console.log("[preamble] fallback to full compile");
         self._preambleFmtData = null;
         self._preambleInputFiles = null;
         self._preambleHash = "";
@@ -976,7 +959,6 @@ function compileLaTeXRoutine() {
     }
 
     var postProcessStart = performance.now();
-    console.log("[compile] " + compileMs + "ms" + (usedPreamble ? " (preamble HIT)" : ""));
 
     // Semantic Trace: extract defined commands from pdfTeX hash table.
     // Run regardless of exit status — the hash table is populated even when
@@ -1083,9 +1065,7 @@ function compileLaTeXRoutine() {
         } catch(e) {
             try {
                 synctexData = FS.readFile(synctexGzPath, { encoding: "binary" });
-            } catch(e2) {
-                console.log("No synctex file found");
-            }
+            } catch(e2) {}
         }
 
         var response = {
@@ -1373,7 +1353,6 @@ self["onmessage"] = function(ev) {
     } else if (cmd === "loadformat") {
         // Pre-load a format file (.fmt).
         var fmtData = new Uint8Array(data["data"]);
-        console.log("[loadformat] received data, size: " + fmtData.length);
         self._fmtData = fmtData;
         self._fmtIsNative = true;
         self.postMessage({ "result": "ok", "cmd": "loadformat" });
@@ -1408,8 +1387,6 @@ self["onmessage"] = function(ev) {
                 bloom_m = (bloomData[5] << 24) | (bloomData[6] << 16) |
                           (bloomData[7] << 8) | bloomData[8];
                 bloom_bits = bloomData.subarray(9);
-                console.log("[bloom] loaded: m=" + bloom_m + " k=" + bloom_k +
-                            " (" + bloom_bits.length + " bytes)");
             } else {
                 console.warn("[bloom] invalid magic bytes, ignoring");
             }
@@ -1428,7 +1405,6 @@ self["onmessage"] = function(ev) {
         }
         self.postMessage({ "result": "ok", "cmd": "preload404", "msgId": msgId });
     } else if (cmd === "grace") {
-        console.error("Gracefully Close");
         self.close();
     } else if (cmd === "readfile") {
         // Read a file from the virtual filesystem and return its contents.
