@@ -24,7 +24,7 @@
 //
 // =============================================================================
 
-importScripts('wasmtex-resolver-evidence.js');
+importScripts('wasmtex-pdftex-resolver-evidence.js');
 
 // --- Constants ---------------------------------------------------------------
 

@@ -97,7 +97,7 @@ jobs:
           node scripts/gen-engine-build-receipt.mjs \
             pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex-raw.json \
             wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
-            wasmtex-kpse-resolve.js wasmtex-resolver-evidence.js
+            wasmtex-kpse-resolve.js wasmtex-pdftex-resolver-evidence.js
           node scripts/gen-engine-build-receipt.mjs \
             bibtex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.bibtex-raw.json \
             wasmtex-bibtex.js wasmtex-bibtex.worker.js wasmtex-bibtex.wasm
@@ -111,7 +111,7 @@ jobs:
             wasm-build/dist/wasmtex-pdftex.*
             wasm-build/dist/wasmtex-bibtex.*
             wasm-build/dist/wasmtex-kpse-resolve.js
-            wasm-build/dist/wasmtex-resolver-evidence.js
+            wasm-build/dist/wasmtex-pdftex-resolver-evidence.js
             wasm-build/dist/BUILD-RECEIPT.*-raw.json
           retention-days: 90
 
@@ -127,7 +127,7 @@ jobs:
              wasm-build/dist/wasmtex-pdftex.worker.js \
              wasm-build/dist/wasmtex-pdftex.wasm \
              wasm-build/dist/wasmtex-kpse-resolve.js \
-             wasm-build/dist/wasmtex-resolver-evidence.js "public/wasmtex/$TEXLIVE_YEAR/"
+             wasm-build/dist/wasmtex-pdftex-resolver-evidence.js "public/wasmtex/$TEXLIVE_YEAR/"
           node scripts/extract-format.mjs "$TEXLIVE_YEAR"
           cp "public/wasmtex/$TEXLIVE_YEAR/wasmtex-pdftex.fmt" \
              wasm-build/dist/wasmtex-pdftex.fmt
@@ -173,7 +173,7 @@ jobs:
           node scripts/gen-engine-build-receipt.mjs \
             pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex.json \
             wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
-            wasmtex-kpse-resolve.js wasmtex-resolver-evidence.js wasmtex-pdftex.fmt
+            wasmtex-kpse-resolve.js wasmtex-pdftex-resolver-evidence.js wasmtex-pdftex.fmt
 
       - name: Record exact BibTeX build inputs and outputs
         run: |
@@ -191,7 +191,7 @@ jobs:
             wasm-build/dist/wasmtex-pdftex.wasm
             wasm-build/dist/wasmtex-pdftex.fmt
             wasm-build/dist/wasmtex-kpse-resolve.js
-            wasm-build/dist/wasmtex-resolver-evidence.js
+            wasm-build/dist/wasmtex-pdftex-resolver-evidence.js
             wasm-build/dist/BUILD-RECEIPT.pdftex.json
           retention-days: 90
 

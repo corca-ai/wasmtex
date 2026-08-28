@@ -16,7 +16,7 @@
  *   - saved under the requested name (the CDN has no per-file `fileid` header).
  * ========================================================================== */
 
-importScripts('wasmtex-resolver-evidence.js')
+importScripts('wasmtex-xetex-resolver-evidence.js')
 
 const TEXCACHEROOT = '/tex'
 const WORKROOT = '/work'

@@ -135,7 +135,7 @@ jobs:
             xetex wasm-build/dist-xetex wasm-build/dist-xetex/BUILD-RECEIPT.xetex-raw.json \
             wasmtex-xetex.js wasmtex-xetex.worker.js wasmtex-xetex.wasm \
             wasmtex-dvipdfm.js wasmtex-dvipdfm.worker.js wasmtex-dvipdfm.wasm \
-            wasmtex-resolver-evidence.js
+            wasmtex-xetex-resolver-evidence.js
 
       - name: Upload raw 2026 XeTeX build evidence
         if: env.TEXLIVE_YEAR == '2026'
@@ -145,7 +145,7 @@ jobs:
           path: |
             wasm-build/dist-xetex/wasmtex-xetex.*
             wasm-build/dist-xetex/wasmtex-dvipdfm.*
-            wasm-build/dist-xetex/wasmtex-resolver-evidence.js
+            wasm-build/dist-xetex/wasmtex-xetex-resolver-evidence.js
             wasm-build/dist-xetex/BUILD-RECEIPT.xetex-raw.json
           retention-days: 90
 
@@ -165,7 +165,7 @@ jobs:
           cp wasm-build/dist-xetex/wasmtex-xetex.js \
              wasm-build/dist-xetex/wasmtex-xetex.worker.js \
              wasm-build/dist-xetex/wasmtex-xetex.wasm \
-             wasm-build/dist-xetex/wasmtex-resolver-evidence.js "public/wasmtex/$TEXLIVE_YEAR/"
+             wasm-build/dist-xetex/wasmtex-xetex-resolver-evidence.js "public/wasmtex/$TEXLIVE_YEAR/"
           node scripts/extract-xetex-format.mjs "$TEXLIVE_YEAR"
           gzip -n -9 -c "public/wasmtex/$TEXLIVE_YEAR/wasmtex-xetex.fmt" \
             > wasm-build/dist-xetex/wasmtex-xetex.fmt.gz
@@ -178,7 +178,7 @@ jobs:
             wasmtex-xetex.js wasmtex-xetex.worker.js wasmtex-xetex.wasm \
             wasmtex-xetex.fmt.gz \
             wasmtex-dvipdfm.js wasmtex-dvipdfm.worker.js wasmtex-dvipdfm.wasm \
-            wasmtex-resolver-evidence.js
+            wasmtex-xetex-resolver-evidence.js
 
       - name: Upload XeLaTeX WASM artifacts
         uses: actions/upload-artifact@v7
@@ -192,7 +192,7 @@ jobs:
             wasm-build/dist-xetex/wasmtex-dvipdfm.js
             wasm-build/dist-xetex/wasmtex-dvipdfm.worker.js
             wasm-build/dist-xetex/wasmtex-dvipdfm.wasm
-            wasm-build/dist-xetex/wasmtex-resolver-evidence.js
+            wasm-build/dist-xetex/wasmtex-xetex-resolver-evidence.js
             wasm-build/dist-xetex/BUILD-RECEIPT.xetex.json
           retention-days: 90
 

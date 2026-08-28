@@ -16,7 +16,7 @@
  * canonical extension for extension-less lookups — exactly like the XeTeX glue.
  * ========================================================================== */
 
-importScripts('wasmtex-resolver-evidence.js')
+importScripts('wasmtex-xetex-resolver-evidence.js')
 
 const TEXCACHEROOT = '/tex'
 const WORKROOT = '/work'

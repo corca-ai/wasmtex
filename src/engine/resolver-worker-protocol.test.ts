@@ -3,6 +3,20 @@ import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 describe('resolver worker protocol', () => {
+  it('packages one independently owned helper beside each engine family', () => {
+    const controllers = [
+      ['pdftex-worker.js', 'wasmtex-pdftex-resolver-evidence.js'],
+      ['xetex-worker.js', 'wasmtex-xetex-resolver-evidence.js'],
+      ['dvipdfm-worker.js', 'wasmtex-xetex-resolver-evidence.js'],
+      ['luatex-worker.js', 'wasmtex-luatex-resolver-evidence.js'],
+    ] as const
+
+    for (const [controller, helper] of controllers) {
+      const source = readFileSync(resolve('wasm-build', controller), 'utf8')
+      expect(source).toContain(`importScripts('${helper}')`)
+    }
+  })
+
   it('emits a bounded data-only message without remote side effects', () => {
     const source = readFileSync(resolve('wasm-build/resolver-evidence.js'), 'utf8')
     const postMessage = vi.fn()
