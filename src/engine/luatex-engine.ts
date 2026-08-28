@@ -31,6 +31,11 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
         notFound: LUATEX_KNOWN_404,
       },
       options.persistentCache ? { version } : undefined,
+      options.resolverProfile ?? {
+        id: `texlive-${version}`,
+        texliveYear: version,
+        mirrorRevision: null,
+      },
     )
   }
 
@@ -52,6 +57,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       start,
       lua.inputFiles,
       lua.inputFilesComplete,
+      [lua.resolver],
     )
     // After a successful compile that fetched new files, persist the worker's
     // cache to IndexedDB (non-blocking, best-effort) for instant return visits.

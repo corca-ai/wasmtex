@@ -77,7 +77,10 @@
     },
     {
       "name": "wasmtex-runtime-helper",
-      "patterns": ["wasmtex-kpse-resolve.js"],
+      "patterns": [
+        "wasmtex-kpse-resolve.js",
+        "wasmtex-*-resolver-evidence.js"
+      ],
       "distributionTerms": ["MIT"]
     }
   ],

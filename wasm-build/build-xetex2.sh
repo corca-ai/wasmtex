@@ -271,6 +271,7 @@ grep -F 'libxpdf.a' "$OUT/wasmtex-xetex.map" >/dev/null || {
   exit 1
 }
 cp "$GLUE/xetex-worker.js" "$OUT/wasmtex-xetex.worker.js"
+cp "$GLUE/resolver-evidence.js" "$OUT/wasmtex-xetex-resolver-evidence.js"
 
 echo ""
 echo "=== Output ==="

@@ -122,6 +122,7 @@ COPY pdf-backend /src/pdf-backend
 COPY build-xetex2.sh /src/build-xetex2.sh
 COPY xetex-entry.c /src/xetex-entry.c
 COPY xetex-worker.js /src/xetex-worker.js
+COPY resolver-evidence.js /src/resolver-evidence.js
 COPY xetex-library.js /src/xetex-library.js
 COPY kpse-hook.c /src/kpse-hook.c
 COPY fontconfig-shim.c /src/fontconfig-shim.c

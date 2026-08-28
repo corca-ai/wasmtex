@@ -73,3 +73,17 @@ test('all engine workflows bind builds and receipts to the selected annual sourc
     assert.match(workflow, /gen-engine-build-receipt\.mjs/, name)
   }
 })
+
+test('corresponding-source workflow assembles the selected annual line', () => {
+  const workflow = readFileSync(
+    resolve(root, '.github/workflows/build-corresponding-source.yml'),
+    'utf8',
+  )
+  assert.match(workflow, /options: \['2025', '2026'\]/)
+  assert.equal(
+    workflow.match(/path: public\/wasmtex\/\$\{\{ env\.TEXLIVE_YEAR \}\}/g)?.length,
+    6,
+  )
+  assert.match(workflow, /check-license-compliance\.mjs "\$TEXLIVE_YEAR"/)
+  assert.doesNotMatch(workflow, /path: public\/wasmtex\/2026/)
+})

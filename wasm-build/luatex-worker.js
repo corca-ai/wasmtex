@@ -21,6 +21,8 @@
  *   - saved under the requested name (the CDN has no per-file `fileid` header).
  * ========================================================================== */
 
+importScripts('wasmtex-luatex-resolver-evidence.js')
+
 const TEXCACHEROOT = '/tex'
 const WORKROOT = '/work'
 // biome-ignore lint: emscripten populates Module
@@ -344,7 +346,11 @@ self.onmessage = (ev) => {
       FS.writeFile(savepath, new Uint8Array(data.data))
       const cacheKey = `${data.format}/${data.filename}`
       texlive200[cacheKey] = savepath
+      texlive200Source[cacheKey] = data.source === 'persistent-cache'
+        ? 'persistent-cache'
+        : 'warmup-cache'
       delete texlive404[cacheKey]
+      delete texlive404Source[cacheKey]
     } catch {}
     self.postMessage({ result: 'ok', cmd: 'preloadtexlive', msgId: data.msgId })
   } else if (cmd === 'preload404') {
@@ -353,7 +359,12 @@ self.onmessage = (ev) => {
     const entries = data.entries || []
     for (let i = 0; i < entries.length; i++) {
       const cacheKey = `${entries[i].format}/${entries[i].filename}`
-      if (!(cacheKey in texlive200)) texlive404[cacheKey] = 1
+      if (!(cacheKey in texlive200)) {
+        texlive404[cacheKey] = 1
+        texlive404Source[cacheKey] = data.source === 'durable-negative'
+          ? 'durable-negative'
+          : 'warmup-negative'
+      }
     }
     self.postMessage({ result: 'ok', cmd: 'preload404', msgId: data.msgId })
   } else if (cmd === 'dumpcache') {
@@ -390,6 +401,8 @@ self.onmessage = (ev) => {
 // --- kpse over HTTP against the WasmTex CDN ---------------------------------
 const texlive404 = {}
 const texlive200 = {}
+const texlive404Source = {}
+const texlive200Source = {}
 
 // --- Bloom filter: skip sync XHR for files that definitely don't exist --------
 // Binary format (shared with the pdfTeX worker / gen-bloom-filter.mjs):
@@ -465,8 +478,18 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   const reqname = UTF8ToString(nameptr)
   if (reqname.includes('/')) return 0
   const cacheKey = `${format}/${reqname}`
-  if (cacheKey in texlive404) return 0
-  if (cacheKey in texlive200) return _allocate(intArrayFromString(texlive200[cacheKey]))
+  if (cacheKey in texlive404) {
+    self.wasmtexResolverEvidence(reqname, format, 'mirror-absent', [{
+      source: texlive404Source[cacheKey] || 'durable-negative', outcome: 'not-found',
+    }])
+    return 0
+  }
+  if (cacheKey in texlive200) {
+    self.wasmtexResolverEvidence(reqname, format, 'resolved', [{
+      source: texlive200Source[cacheKey] || 'session-cache', outcome: 'hit',
+    }])
+    return _allocate(intArrayFromString(texlive200[cacheKey]))
+  }
 
   const [dir, filename] = resolveCdn(reqname, format)
   // TFMs/VFs are stored extension-less, so `cmr12.tfm` 403s and a Computer Modern
@@ -482,18 +505,29 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
   let hit = null
   let hitName = null
+  const attempts = []
   for (const cdnName of names) {
     // Bloom filter: skip the sync XHR for names the CDN definitely lacks (avoids 403
     // console noise) without blocking a name stored under a different extension.
-    if (!bloomCheck(`${dir}/${cdnName}`)) continue
+    if (!bloomCheck(`${dir}/${cdnName}`)) {
+      attempts.push({ source: 'bloom-filter', outcome: 'not-found', candidate: cdnName })
+      continue
+    }
     const xhr = new XMLHttpRequest()
     xhr.open('GET', `${self.texlive_endpoint}pdftex/${dir}/${cdnName}`, false)
     xhr.responseType = 'arraybuffer'
     try {
       xhr.send()
     } catch {
+      attempts.push({ source: 'network', outcome: 'transport-error', candidate: cdnName })
       continue
     }
+    attempts.push({
+      source: 'network',
+      outcome: xhr.status === 200 ? 'hit' : 'not-found',
+      candidate: cdnName,
+      status: xhr.status,
+    })
     if (xhr.status === 200) {
       hit = xhr
       hitName = cdnName
@@ -518,9 +552,24 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
     const savepath = `${TEXCACHEROOT}/${reqname}`
     FS.writeFile(savepath, new Uint8Array(hit.response))
     texlive200[cacheKey] = savepath
+    texlive200Source[cacheKey] = 'session-cache'
+    delete texlive404Source[cacheKey]
+    self.wasmtexResolverEvidence(reqname, format, 'resolved', attempts)
     return _allocate(intArrayFromString(savepath))
   }
-  texlive404[cacheKey] = 1
+  const mirrorAbsent = attempts.length > 0 && attempts.every((attempt) => attempt.outcome === 'not-found')
+  if (mirrorAbsent) {
+    texlive404[cacheKey] = 1
+    texlive404Source[cacheKey] = attempts.some((attempt) => attempt.source === 'bloom-filter')
+      ? 'bloom-filter'
+      : 'network'
+  }
+  self.wasmtexResolverEvidence(
+    reqname,
+    format,
+    mirrorAbsent ? 'mirror-absent' : 'transport-error',
+    attempts,
+  )
   return 0
 }
 

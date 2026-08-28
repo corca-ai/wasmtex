@@ -6,11 +6,14 @@ on:
       - '.github/workflows/build-corresponding-source.yml'
       - 'LICENSES/**'
       - 'docs/license-evidence/**'
+      - 'public/wasmtex/2025/LICENSE-MANIFEST.json'
       - 'public/wasmtex/2026/LICENSE-MANIFEST.json'
       - 'scripts/build-corresponding-source.mjs'
       - 'scripts/check-corresponding-source.mjs'
       - 'scripts/check-license-compliance.mjs'
+      - 'scripts/corresponding-source-2025.json'
       - 'scripts/corresponding-source-2026.json'
+      - 'scripts/engine-components-2025.json'
       - 'scripts/engine-components-2026.json'
   workflow_dispatch:
     inputs:
@@ -18,7 +21,7 @@ on:
         description: Annual TeX Live engine line
         required: true
         type: choice
-        options: ['2026']
+        options: ['2025', '2026']
         default: '2026'
 
 permissions:
@@ -40,8 +43,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-build.yml
-          name: wasm-pdftex-2026
-          path: public/wasmtex/2026
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-pdftex-2026' || 'wasm-pdftex' }}
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -49,8 +52,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-build.yml
-          name: wasm-bibtex-2026
-          path: public/wasmtex/2026
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex-2026' || 'wasm-bibtex' }}
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -58,8 +61,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-bibtex8.yml
-          name: wasm-bibtex8-2026
-          path: public/wasmtex/2026
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex8-2026' || 'wasm-bibtex8' }}
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -67,8 +70,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-makeindex.yml
-          name: wasm-makeindex-2026
-          path: public/wasmtex/2026
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-makeindex-2026' || 'wasm-makeindex' }}
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -76,8 +79,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-xetex.yml
-          name: wasm-xetex-2026
-          path: public/wasmtex/2026
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-xetex-2026' || 'wasm-xetex' }}
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -85,14 +88,14 @@ jobs:
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-luatex.yml
-          name: wasm-luatex-2026
-          path: public/wasmtex/2026
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-luatex-2026' || 'wasm-luatex' }}
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Verify release inputs
         run: |
-          npm run check:licenses:2026
+          node scripts/check-license-compliance.mjs "$TEXLIVE_YEAR"
           node scripts/gen-asset-manifest.mjs "$TEXLIVE_YEAR"
           node scripts/check-release-notices.mjs --assets "public/wasmtex/$TEXLIVE_YEAR"
       - name: Build and verify complete corresponding source

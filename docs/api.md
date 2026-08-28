@@ -420,12 +420,20 @@ const { telemetry } = await compiler.compile()
 | Field | Type | Description |
 |-------|------|-------------|
 | `diagnostics` | `Diagnostic[]` | Every error/warning with a stable `code` (`tex-error`, `package-error`, `missing-package`, `font-not-found`, `missing-glyph`, `undefined-reference`, `undefined-citation`, `rerun-needed`, `overfull-box`, `package-warning`, `latex-warning`), `severity`, `message`, and optional `file`/`line`. A `missing-glyph` entry carries the affected font + characters in `glyph`. |
+| `resolver` | `ResolverEvidenceReport` | Bounded, profile-bound evidence for TeX Live lookups. Each entry identifies the engine stage, requested name, kpathsea format, final outcome (`resolved`, `mirror-absent`, or `transport-error`), and the cache/bloom/network attempts that led to it. `dropped` and `complete` describe the 256-entry retention bound. |
 | `geometry` | `DocumentGeometry` | Page/box geometry parsed from the XDV — per page: `width`/`height` (media box, bp), `textRuns` (positioned runs with `x`/`y`/`width`/`size`/`glyphs`, plus `text`/`font` when available), `rules`, and a `contentBox`. The substrate for text extraction, click-to-source, cropping, and overlays. **XeLaTeX only** (the engine that emits XDV); `reliable: false` flags an unparseable/desynced run. |
 | `dependencies` | `DependencyGraph` | What the compile depended on: `nodes` (each with `kind: 'tex' \| 'class' \| 'package' \| 'font' \| 'image' \| 'bib' \| 'other'`, `origin: 'project' \| 'system'`, and `discoveredBy`) + `edges` (`includes`/`loads`/`uses-font`/`reads`) + `root`. Rich tooling data derived from the log and enriched with source declarations, XDV fonts, and each TeX engine's `.fls` recorder. It remains useful when observations are incomplete, so do not treat the graph alone as a safe invalidation proof. |
 | `dependencyManifest` | `DependencyManifest` | Versioned, normalized project-input boundary produced by `WasmTexCompiler`. `projectInputs` includes arbitrary project files read by the engine plus the inputs forwarded to bibliography/index stages. `complete: true` is a correctness guarantee, not a confidence score. `coverage` identifies the contributing stages/signals; `incompleteReason` explains why a host must compile conservatively. |
 | `completionSnapshot` | `CompletionSnapshot` | Versioned, bounded runtime evidence produced only as a by-product of this full compile. Its identity binds the project revision, root, engine, TeX Live year, and mirror/profile. Fields independently report `observed`/`unsupported`, `complete`, and truncation. |
 
 Coordinates are PDF points (bp) measured from each page's top-left. Geometry text and dependency fonts are best-effort — XeTeX emits run text only for some runs, and font edges come from the XeLaTeX XDV.
+
+Resolver evidence is delivered only in the returned result; wasmtex does not send it
+to an analytics service. Cache hits distinguish warmup, persistent, and current-session
+state. Negative hits distinguish warmup/durable state from an immutable-mirror response,
+while a request that received no mirror response is `transport-error` and is not added to
+the negative cache. Candidate values are filenames, never URLs. Hosts should classify
+user-facing problems from these stable fields and the attached `profile`, not console text.
 
 #### Safe host-side invalidation
 

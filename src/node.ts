@@ -40,4 +40,10 @@ export type {
   DependencyManifestIncompleteReason,
   DependencyManifestSource,
   DependencyManifestStage,
+  ResolverAttempt,
+  ResolverAttemptOutcome,
+  ResolverAttemptSource,
+  ResolverEvidence,
+  ResolverEvidenceReport,
+  ResolverStage,
 } from './types'

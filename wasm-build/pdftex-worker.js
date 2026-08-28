@@ -24,6 +24,8 @@
 //
 // =============================================================================
 
+importScripts('wasmtex-pdftex-resolver-evidence.js');
+
 // --- Constants ---------------------------------------------------------------
 
 var TEXCACHEROOT = "/tex";  // Cache for downloaded TexLive packages
@@ -446,6 +448,8 @@ function allocateString(str) {
 
 var texlive404_cache = {};
 var texlive200_cache = {};
+var texlive404_source = {};
+var texlive200_source = {};
 
 // --- Bloom filter for CDN existence checks -----------------------------------
 //
@@ -524,10 +528,18 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
     // Check caches first
     if (cacheKey in texlive404_cache) {
+        self.wasmtexResolverEvidence(reqname, format, "mirror-absent", [{
+            "source": texlive404_source[cacheKey] || "durable-negative",
+            "outcome": "not-found"
+        }]);
         return 0;
     }
     if (cacheKey in texlive200_cache) {
         var savepath = texlive200_cache[cacheKey];
+        self.wasmtexResolverEvidence(reqname, format, "resolved", [{
+            "source": texlive200_source[cacheKey] || "session-cache",
+            "outcome": "hit"
+        }]);
         return allocateString(savepath);
     }
 
@@ -537,9 +549,14 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
     // different extension than kpathsea requested (see bloomMaybe).
     if (!bloomMaybe(format, reqname)) {
         texlive404_cache[cacheKey] = 1;
+        texlive404_source[cacheKey] = "bloom-filter";
+        self.wasmtexResolverEvidence(reqname, format, "mirror-absent", [{
+            "source": "bloom-filter", "outcome": "not-found"
+        }]);
         return 0;
     }
 
+    var resolverAttempts = [];
     // Helper for actual fetch
     function tryFetch(name) {
         // Notify host about the download
@@ -552,8 +569,19 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         xhr.responseType = "arraybuffer";
         try {
             xhr.send();
+            resolverAttempts.push({
+                "source": "network",
+                "outcome": xhr.status === 200 ? "hit" : "not-found",
+                "candidate": name,
+                "status": xhr.status
+            });
             return xhr;
-        } catch(err) { return null; }
+        } catch(err) {
+            resolverAttempts.push({
+                "source": "network", "outcome": "transport-error", "candidate": name
+            });
+            return null;
+        }
     }
 
     var xhr = tryFetch(reqname);
@@ -615,13 +643,30 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         }
 
         texlive200_cache[cacheKey] = savepath;
+        texlive200_source[cacheKey] = "session-cache";
+        delete texlive404_source[cacheKey];
+        self.wasmtexResolverEvidence(
+            UTF8ToString(nameptr).replace(/^[*&]/, ""), format, "resolved", resolverAttempts
+        );
         var ptr = allocateString(savepath);
         console.log("[kpse] Downloaded: " + reqname + " (" + format + ")");
         return ptr;
     } else {
         var status = xhr ? xhr.status : "network error";
         console.warn("[kpse] Failed: " + reqname + " (" + format + ") - status: " + status);
-        texlive404_cache[cacheKey] = 1;
+        var sawMirrorResponse = resolverAttempts.length > 0 && resolverAttempts.every(function(attempt) {
+            return attempt.outcome === "not-found";
+        });
+        if (sawMirrorResponse) {
+            texlive404_cache[cacheKey] = 1;
+            texlive404_source[cacheKey] = "network";
+        }
+        self.wasmtexResolverEvidence(
+            UTF8ToString(nameptr).replace(/^[*&]/, ""),
+            format,
+            sawMirrorResponse ? "mirror-absent" : "transport-error",
+            resolverAttempts
+        );
         return 0;
     }
 
@@ -1343,7 +1388,10 @@ self["onmessage"] = function(ev) {
         var savepath = TEXCACHEROOT + "/" + filename;
         FS.writeFile(savepath, fileData);
         texlive200_cache[cacheKey] = savepath;
+        texlive200_source[cacheKey] = data["source"] === "persistent-cache"
+            ? "persistent-cache" : "warmup-cache";
         delete texlive404_cache[cacheKey];
+        delete texlive404_source[cacheKey];
         if (format === 10) {
             FS.writeFile(WORKROOT + "/" + filename, fileData);
         }
@@ -1374,6 +1422,8 @@ self["onmessage"] = function(ev) {
             var cacheKey = entries[i].format + "/" + entries[i].filename;
             if (!(cacheKey in texlive200_cache)) {
                 texlive404_cache[cacheKey] = 1;
+                texlive404_source[cacheKey] = data["source"] === "durable-negative"
+                    ? "durable-negative" : "warmup-negative";
             }
         }
         self.postMessage({ "result": "ok", "cmd": "preload404", "msgId": msgId });

@@ -157,6 +157,15 @@ every fetched file (keyed by TeX Live year). On the next visit the engine rehydr
 that set and injects it instead of prefetching from the CDN, so a return visit does
 ~zero network and works offline. `clearCache()` / `clearTexliveCache()` drop it.
 
+**Resolver evidence.** Every authored TeX worker reports the final result of each
+TeX Live lookup through the same data-only worker protocol. The host validates,
+deduplicates, and retains at most 256 resources per compile, then exposes them as
+`telemetry.resolver` under the exact engine/year/mirror profile. Cache, bloom-filter,
+HTTP absence, and transport failure remain distinct. A transport failure is deliberately
+not written to the negative cache; only evidence from an immutable-mirror response or a
+known negative preload can suppress a later request. Browser and Node use the same worker
+controllers and collector, so the evidence contract is identical in both hosts.
+
 **Recompile (edit) latency.** Within a session, body edits recompile in
 ~0.4–0.5 s: the prebuilt format is injected into the work dir only once (it
 persists in MEMFS across recompiles), and the remaining cost is genuine preamble

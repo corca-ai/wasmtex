@@ -60,6 +60,7 @@ type WorkerReply = {
   preambleInputFiles?: string[]
   preambleRebuilt?: boolean
   preambleSnapshot?: boolean
+  evidence?: unknown
 }
 
 /** Drives the engine without a real Worker by exposing the protected seams. */
@@ -80,6 +81,16 @@ class TestableEngine extends WasmTexPdftexEngine {
   /** Simulate a worker → main message through the real dispatch path. */
   deliver(reply: WorkerReply): void {
     this.dispatchWorkerMessage(reply as never, noop, noop)
+  }
+
+  installResolverWorker(evidence: unknown): void {
+    this.worker = {
+      postMessage: () => {
+        this.dispatchWorkerMessage({ cmd: 'resolverready' } as never, noop, noop)
+        this.dispatchWorkerMessage({ cmd: 'resolver', evidence } as never, noop, noop)
+        this.dispatchWorkerMessage({ cmd: 'compile', result: 'ok', status: 0, log: '' }, noop, noop)
+      },
+    } as unknown as EngineWorker
   }
 }
 
@@ -348,6 +359,31 @@ describe('WasmTexPdftexEngine compile() result mapping', () => {
     postProcessMs: 1,
     texRunMs: 10,
   }
+
+  it('attaches profile-bound resolver evidence from the pdfTeX worker', async () => {
+    const profile = {
+      id: '2026-latest@rev',
+      texliveYear: '2026' as const,
+      mirrorRevision: 'rev',
+    }
+    const engine = new TestableEngine({
+      assetBaseUrl: '/',
+      texliveVersion: '2026',
+      resolverProfile: profile,
+    })
+    engine.markReady()
+    engine.installResolverWorker({
+      requestedName: 'article.cls',
+      format: 26,
+      outcome: 'resolved',
+      attempts: [{ source: 'warmup-cache', outcome: 'hit' }],
+    })
+
+    expect((await engine.compile()).telemetry?.resolver).toMatchObject({
+      profile,
+      entries: [{ stage: 'pdftex', requestedName: 'article.cls', outcome: 'resolved' }],
+    })
+  })
 
   it('maps valid worker phase timings and rejects malformed telemetry', async () => {
     const valid = new TestableEngine({ assetBaseUrl: '/' })

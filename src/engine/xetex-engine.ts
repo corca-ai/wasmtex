@@ -39,6 +39,11 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       unicodeFormatUrl('xetex', options),
       undefined,
       options.persistentCache ? { version } : undefined,
+      options.resolverProfile ?? {
+        id: `texlive-${version}`,
+        texliveYear: version,
+        mirrorRevision: null,
+      },
     )
     this.dvipdfm = createCompileWorker('dvipdfm', options)
   }
@@ -89,6 +94,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
         start,
         xelatex.inputFiles,
         false,
+        [xelatex.resolver],
       )
     }
     // 2. dvipdfmx: main.xdv -> main.pdf (fetches + embeds fonts from the CDN).
@@ -104,6 +110,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       start,
       xelatex.inputFiles,
       xelatex.inputFilesComplete,
+      [xelatex.resolver, dvi.resolver],
     )
     // Parse the XDV once (xelatex.out is the XeTeX output, before dvipdfmx) — headless,
     // no engine patch — and use it for both products: page/box geometry telemetry

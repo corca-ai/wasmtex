@@ -143,6 +143,7 @@ RUN set -eu; \
 # =============================================================================
 COPY build-luatex.sh /src/build-luatex.sh
 COPY luatex-worker.js /src/luatex-worker.js
+COPY resolver-evidence.js /src/resolver-evidence.js
 COPY luatex-library.js /src/luatex-library.js
 COPY luatex-entry.c /src/luatex-entry.c
 COPY kpse-hook.c /src/kpse-hook.c

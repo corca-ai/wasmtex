@@ -131,6 +131,7 @@ RUN echo "=== Phase 1b: Native build ===" && \
 COPY Makefile /src/Makefile
 COPY build.sh /src/build.sh
 COPY pdftex-worker.js /src/pdftex-worker.js
+COPY resolver-evidence.js /src/resolver-evidence.js
 COPY kpse-resolve.cjs /src/kpse-resolve.cjs
 COPY wasm-entry.c /src/wasm-entry.c
 COPY kpse-hook.c /src/kpse-hook.c

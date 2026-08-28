@@ -1,5 +1,6 @@
-import { CachedTexliveFile, TexliveFileEntry, TexliveVersion } from '../types';
+import { CachedTexliveFile, CompletionSnapshotProfile, ResolverEvidenceReport, ResolverStage, TexliveFileEntry, TexliveVersion } from '../types';
 import { BaseWorkerEngine } from './base-worker-engine';
+import { RawResolverEvidence } from './resolver-evidence';
 /** Messages exchanged with a WasmTex engine worker. */
 export interface WasmTexWorkerMsg {
     result?: string;
@@ -18,12 +19,14 @@ export interface WasmTexWorkerMsg {
     /** dumpcache response: fetched files + known-missing entries. */
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];
+    evidence?: RawResolverEvidence;
 }
 export declare abstract class WasmTexWorker<TMsg extends WasmTexWorkerMsg = WasmTexWorkerMsg> extends BaseWorkerEngine<TMsg> {
     onFileDownload?: (filename: string) => void;
     protected version: TexliveVersion;
     constructor(enginePath: string, texliveUrl: string | null, version: TexliveVersion);
     init(): Promise<void>;
+    protected handleProtocolMessage(_data: TMsg): boolean;
     /** Tear down a worker that failed to initialize and settle any in-flight request. The
      *  worker reference MUST be cleared (only terminate() did this before): otherwise the
      *  `if (this.worker) return` re-entry guard would let a later init() resolve silently
@@ -44,6 +47,7 @@ export interface CompileWorkerResult {
     out: Uint8Array | null;
     inputFiles?: string[];
     inputFilesComplete?: boolean;
+    resolver?: ResolverEvidenceReport;
 }
 /**
  * A WasmTex worker with a single-command compile entry point, shared by
@@ -51,6 +55,9 @@ export interface CompileWorkerResult {
  * `compile*` command under the `cmd:compile` key with `{result,status,log,pdf}`.
  */
 export declare class CompileWorkerDriver extends WasmTexWorker {
+    private readonly resolver;
+    constructor(enginePath: string, texliveUrl: string | null, version: TexliveVersion, stage?: ResolverStage, profile?: CompletionSnapshotProfile);
+    protected handleProtocolMessage(data: WasmTexWorkerMsg): boolean;
     /** Run `command` (`compilelatex` | `compileformat` | `compilepdf`) and collect
      *  the output. status 0 (ok) and 1 (warnings) both count as success. */
     run(command: string): Promise<CompileWorkerResult>;
@@ -64,13 +71,13 @@ export declare class CompileWorkerDriver extends WasmTexWorker {
      *  later `compilelatex`; not awaiting a reply keeps a stale worker (one without
      *  this command) from hanging the compile — it just degrades to on-demand XHR.
      *  Transfers buf. */
-    preloadTexlive(format: number, filename: string, buf: ArrayBuffer): void;
+    preloadTexlive(format: number, filename: string, buf: ArrayBuffer, source: 'warmup-cache' | 'persistent-cache'): void;
     /** Pre-seed known-missing lookups so the worker skips their sync XHR
      *  (fire-and-forget, same rationale as {@link preloadTexlive}). */
     preload404(entries: ReadonlyArray<{
         format: number;
         filename: string;
-    }>): void;
+    }>, source: 'warmup-negative' | 'durable-negative'): void;
     /** Export every TeX Live file fetched/preloaded this session, plus known-missing
      *  entries, for the durable cache. */
     dumpCache(): Promise<{

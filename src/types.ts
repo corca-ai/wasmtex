@@ -103,6 +103,10 @@ export interface Diagnostic {
 
 export interface EngineTelemetry {
   diagnostics: Diagnostic[]
+  /** Bounded, host-local evidence for TeX Live resource resolution. The report is
+   *  tied to the exact compile profile and contains resource names and lookup
+   *  outcomes only — never document bytes, account identity, or remote telemetry. */
+  resolver?: ResolverEvidenceReport
   /** Page/box geometry parsed from the engine's intermediate output (XeTeX's XDV),
    *  when available (#54 slice 3). The substrate a host needs for text extraction,
    *  click-to-source, content cropping, and figure/equation overlays — all headless,
@@ -122,6 +126,45 @@ export interface EngineTelemetry {
   /** Revision-bound runtime completion evidence collected only as a by-product of
    *  this normal compile. It never causes a compile and is replaced atomically. */
   completionSnapshot?: CompletionSnapshot
+}
+
+export type ResolverStage = 'pdftex' | 'xetex' | 'luatex' | 'dvipdfmx'
+
+export type ResolverAttemptSource =
+  | 'warmup-cache'
+  | 'persistent-cache'
+  | 'session-cache'
+  | 'warmup-negative'
+  | 'durable-negative'
+  | 'bloom-filter'
+  | 'network'
+
+export type ResolverAttemptOutcome = 'hit' | 'not-found' | 'transport-error'
+
+export interface ResolverAttempt {
+  source: ResolverAttemptSource
+  outcome: ResolverAttemptOutcome
+  /** CDN candidate name, when it differs from the kpathsea request. Never a URL. */
+  candidate?: string
+  /** HTTP status observed from the immutable mirror. */
+  status?: number
+}
+
+export interface ResolverEvidence {
+  stage: ResolverStage
+  requestedName: string
+  format: number
+  outcome: 'resolved' | 'mirror-absent' | 'transport-error'
+  attempts: ResolverAttempt[]
+}
+
+export interface ResolverEvidenceReport {
+  schemaVersion: 1
+  profile: CompletionSnapshotProfile
+  entries: ResolverEvidence[]
+  /** Valid entries omitted after the per-compile retention limit was reached. */
+  dropped: number
+  complete: boolean
 }
 
 export type CompletionSnapshotEngine = 'pdflatex' | 'xelatex' | 'lualatex'

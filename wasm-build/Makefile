@@ -472,6 +472,7 @@ wasm-compile:
 	fi
 	cp $(PDFTEX_WORKER) $(DIST)/wasmtex-pdftex.worker.js
 	cp $(KPSE_RESOLVE) $(DIST)/wasmtex-kpse-resolve.js
+	cp /src/resolver-evidence.js $(DIST)/wasmtex-pdftex-resolver-evidence.js
 	@echo ""
 	@echo "WASM compilation complete."
 
