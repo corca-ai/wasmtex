@@ -45,7 +45,7 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - name: Download pdfTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-pdftex-2026' || 'wasm-pdftex' }}
@@ -54,7 +54,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download BibTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex-2026' || 'wasm-bibtex' }}
@@ -63,7 +63,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download BibTeX8
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-bibtex8.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex8-2026' || 'wasm-bibtex8' }}
@@ -72,7 +72,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download MakeIndex
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-makeindex.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-makeindex-2026' || 'wasm-makeindex' }}
@@ -81,7 +81,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download XeTeX and dvipdfmx
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-xetex.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-xetex-2026' || 'wasm-xetex' }}
@@ -90,7 +90,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download LuaHBTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-luatex.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-luatex-2026' || 'wasm-luatex' }}

@@ -39,7 +39,7 @@ jobs:
         run: npm ci
 
       - name: Download pdfTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: ${{ matrix.texlive_year == '2025' && 'wasm-pdftex' || 'wasm-pdftex-2026' }}
@@ -49,7 +49,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download BibTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: ${{ matrix.texlive_year == '2025' && 'wasm-bibtex' || 'wasm-bibtex-2026' }}
@@ -59,7 +59,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download BibTeX8
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-bibtex8.yml
           name: ${{ matrix.texlive_year == '2025' && 'wasm-bibtex8' || 'wasm-bibtex8-2026' }}
@@ -69,7 +69,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download MakeIndex
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-makeindex.yml
           name: ${{ matrix.texlive_year == '2025' && 'wasm-makeindex' || 'wasm-makeindex-2026' }}
@@ -79,7 +79,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download XeTeX and dvipdfmx
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-xetex.yml
           name: ${{ matrix.texlive_year == '2025' && 'wasm-xetex' || 'wasm-xetex-2026' }}
@@ -89,7 +89,7 @@ jobs:
           if_no_artifact_found: fail
 
       - name: Download LuaHBTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-luatex.yml
           name: ${{ matrix.texlive_year == '2025' && 'wasm-luatex' || 'wasm-luatex-2026' }}

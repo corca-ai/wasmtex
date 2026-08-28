@@ -65,7 +65,7 @@ jobs:
       - run: npm run check:licenses:2026
       - run: npm ci
       - name: Download latest WASM engine
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: wasm-pdftex
@@ -74,7 +74,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest BibTeX WASM
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: wasm-bibtex
@@ -83,7 +83,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest BibTeX8 WASM
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-bibtex8.yml
           name: wasm-bibtex8
@@ -92,7 +92,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: warn
       - name: Download latest makeindex WASM
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-makeindex.yml
           name: wasm-makeindex
@@ -106,7 +106,7 @@ jobs:
         # having run yet (the API 404s listing runs, which `if_no_artifact_found`
         # does not cover).
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-xetex.yml
           name: wasm-xetex
@@ -120,7 +120,7 @@ jobs:
         # continue-on-error keeps the deploy green; LuaLaTeX then degrades to the
         # actionable "requires LuaLaTeX" result.
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-luatex.yml
           name: wasm-luatex
@@ -133,7 +133,7 @@ jobs:
       # artifact-producing change is qualified by its own build workflow before
       # its immutable release metadata is updated here.
       - name: Download TeX Live 2026 pdfTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: wasm-pdftex-2026
@@ -142,7 +142,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 BibTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-build.yml
           name: wasm-bibtex-2026
@@ -151,7 +151,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 BibTeX8
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-bibtex8.yml
           name: wasm-bibtex8-2026
@@ -160,7 +160,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 MakeIndex
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-makeindex.yml
           name: wasm-makeindex-2026
@@ -169,7 +169,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 XeLaTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-xetex.yml
           name: wasm-xetex-2026
@@ -178,7 +178,7 @@ jobs:
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 LuaLaTeX
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: wasm-luatex.yml
           name: wasm-luatex-2026
