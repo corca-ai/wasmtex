@@ -128,17 +128,17 @@ jobs:
           branch: main
           search_artifacts: true
           if_no_artifact_found: warn
-      # Annual artifacts are produced by workflow_dispatch. A pull request must
-      # qualify the artifacts built from its own head revision; after merge the
-      # same workflows are dispatched on main before the Pages deployment is
-      # retried.
+      # Annual artifacts are produced by workflow_dispatch rather than by every
+      # pull request. CI qualifies the latest successful main artifacts; an
+      # artifact-producing change is qualified by its own build workflow before
+      # its immutable release metadata is updated here.
       - name: Download TeX Live 2026 pdfTeX
         uses: dawidd6/action-download-artifact@v21
         with:
           workflow: wasm-build.yml
           name: wasm-pdftex-2026
           path: public/wasmtex/2026
-          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          branch: main
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 BibTeX
@@ -147,7 +147,7 @@ jobs:
           workflow: wasm-build.yml
           name: wasm-bibtex-2026
           path: public/wasmtex/2026
-          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          branch: main
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 BibTeX8
@@ -156,7 +156,7 @@ jobs:
           workflow: wasm-bibtex8.yml
           name: wasm-bibtex8-2026
           path: public/wasmtex/2026
-          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          branch: main
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 MakeIndex
@@ -165,7 +165,7 @@ jobs:
           workflow: wasm-makeindex.yml
           name: wasm-makeindex-2026
           path: public/wasmtex/2026
-          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          branch: main
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 XeLaTeX
@@ -174,7 +174,7 @@ jobs:
           workflow: wasm-xetex.yml
           name: wasm-xetex-2026
           path: public/wasmtex/2026
-          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          branch: main
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Download TeX Live 2026 LuaLaTeX
@@ -183,7 +183,7 @@ jobs:
           workflow: wasm-luatex.yml
           name: wasm-luatex-2026
           path: public/wasmtex/2026
-          branch: ${{ github.event.pull_request.head.ref || 'main' }}
+          branch: main
           search_artifacts: true
           if_no_artifact_found: fail
       - run: npm run lint

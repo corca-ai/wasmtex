@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TEXLIVE_YEAR: ${{ inputs.texlive_year || '2026' }}
-      ARTIFACT_BRANCH: ${{ inputs.artifact_branch || github.head_ref || github.ref_name }}
+      ARTIFACT_BRANCH: ${{ inputs.artifact_branch || 'main' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
