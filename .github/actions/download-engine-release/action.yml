@@ -1,0 +1,34 @@
+name: Download pinned engine release
+description: Download the exact receipt-bound artifact runs pinned for an annual engine release
+
+inputs:
+  texlive-year:
+    description: Annual TeX Live line
+    required: true
+  destination:
+    description: Directory that receives the composed engine assets
+    required: true
+  github-token:
+    description: Token with Actions read access
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download exact component artifacts
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TEXLIVE_YEAR: ${{ inputs.texlive-year }}
+        DESTINATION: ${{ inputs.destination }}
+      run: |
+        while IFS=$'\t' read -r run_id artifact; do
+          gh run download "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$artifact" \
+            --dir "$DESTINATION"
+        done < <(
+          jq -r --arg year "$TEXLIVE_YEAR" \
+            '.years[$year].downloads[] | .runId as $run | .artifacts[] | [$run, .] | @tsv' \
+            scripts/engine-release-components.json
+        )

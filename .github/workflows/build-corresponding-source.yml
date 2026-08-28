@@ -15,6 +15,9 @@ on:
       - 'scripts/corresponding-source-2026.json'
       - 'scripts/engine-components-2025.json'
       - 'scripts/engine-components-2026.json'
+      - 'scripts/engine-release-components.json'
+      - 'scripts/lib/engine-release-components.mjs'
+      - '.github/actions/download-engine-release/action.yml'
   workflow_dispatch:
     inputs:
       texlive_year:
@@ -23,11 +26,6 @@ on:
         type: choice
         options: ['2025', '2026']
         default: '2026'
-      artifact_branch:
-        description: Branch whose already-built annual engine artifacts should be verified
-        required: false
-        type: string
-        default: main
 
 permissions:
   contents: read
@@ -38,66 +36,17 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TEXLIVE_YEAR: ${{ inputs.texlive_year || '2026' }}
-      ARTIFACT_BRANCH: ${{ inputs.artifact_branch || 'main' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm ci
-      - name: Download pdfTeX
-        uses: dawidd6/action-download-artifact@v21
+      - name: Download pinned annual engine release
+        uses: ./.github/actions/download-engine-release
         with:
-          workflow: wasm-build.yml
-          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-pdftex-2026' || 'wasm-pdftex' }}
-          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
-          branch: ${{ env.ARTIFACT_BRANCH }}
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download BibTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-build.yml
-          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex-2026' || 'wasm-bibtex' }}
-          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
-          branch: ${{ env.ARTIFACT_BRANCH }}
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download BibTeX8
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-bibtex8.yml
-          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex8-2026' || 'wasm-bibtex8' }}
-          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
-          branch: ${{ env.ARTIFACT_BRANCH }}
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download MakeIndex
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-makeindex.yml
-          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-makeindex-2026' || 'wasm-makeindex' }}
-          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
-          branch: ${{ env.ARTIFACT_BRANCH }}
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download XeTeX and dvipdfmx
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-xetex.yml
-          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-xetex-2026' || 'wasm-xetex' }}
-          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
-          branch: ${{ env.ARTIFACT_BRANCH }}
-          search_artifacts: true
-          if_no_artifact_found: fail
-      - name: Download LuaHBTeX
-        uses: dawidd6/action-download-artifact@v21
-        with:
-          workflow: wasm-luatex.yml
-          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-luatex-2026' || 'wasm-luatex' }}
-          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
-          branch: ${{ env.ARTIFACT_BRANCH }}
-          search_artifacts: true
-          if_no_artifact_found: fail
+          texlive-year: ${{ env.TEXLIVE_YEAR }}
+          destination: public/wasmtex/${{ env.TEXLIVE_YEAR }}
+          github-token: ${{ github.token }}
       - name: Verify release inputs
         run: |
           node scripts/check-license-compliance.mjs "$TEXLIVE_YEAR"

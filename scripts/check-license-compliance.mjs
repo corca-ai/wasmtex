@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateSourceConfig } from './lib/engine-build-receipt.mjs'
 import { loadAndValidateEngineLicenseInventory } from './lib/engine-license-inventory.mjs'
+import { validateEngineReleaseComponents } from './lib/engine-release-components.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const positional = process.argv.slice(2).filter((arg) => !arg.startsWith('--'))
@@ -102,10 +103,12 @@ for (const path of [
   'scripts/check-engine-license-inventory.mjs',
   'scripts/check-release-notices.mjs',
   'scripts/engine-components-2025.json',
+  'scripts/engine-release-components.json',
   'scripts/gen-texlive-catalog.mjs',
   'scripts/gen-texlive-provenance.mjs',
   'scripts/lib/engine-build-receipt.mjs',
   'scripts/lib/engine-license-inventory.mjs',
+  'scripts/lib/engine-release-components.mjs',
   'scripts/lib/format-input-evidence.mjs',
   'scripts/lib/link-inventory.mjs',
   'scripts/lib/corresponding-source.mjs',
@@ -120,6 +123,7 @@ for (const path of [
   'scripts/texlive-mirror-2025.json',
   'scripts/texlive-mirror-overrides-2025.json',
   'wasm-build/texlive-source.ref',
+  '.github/actions/download-engine-release/action.yml',
 ]) {
   requirePath(path)
 }
@@ -132,6 +136,14 @@ const mirrorOverrides = readJsonIfExists(`scripts/texlive-mirror-overrides-${ver
 const semanticOverrides = readJsonIfExists(`scripts/tex-semantic-overrides-${version}.json`)
 const sourceConfig = readJson(`scripts/corresponding-source-${version}.json`)
 const componentInventory = readJson(`scripts/engine-components-${version}.json`)
+const releaseComponentsConfig = readJson('scripts/engine-release-components.json')
+if (releaseComponentsConfig) {
+  try {
+    validateEngineReleaseComponents(releaseComponentsConfig, version)
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
+}
 const linkInventory = componentInventory?.linkInventory
   ? readJson(componentInventory.linkInventory)
   : null
@@ -647,29 +659,11 @@ for (const required of [
 }
 
 const aggregateWorkflow = readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8')
-for (const requiredArtifact of [
-  'wasm-pdftex',
-  'wasm-bibtex',
-  'wasm-bibtex8',
-  'wasm-makeindex',
-  'wasm-xetex',
-  'wasm-luatex',
-]) {
-  const artifactMarker = `name: ${requiredArtifact}`
-  const artifactOffset = aggregateWorkflow.indexOf(artifactMarker)
-  if (artifactOffset === -1) {
-    fail(`aggregate workflow omits required build artifact: ${requiredArtifact}`)
-    continue
-  }
-
-  const nextStepOffset = aggregateWorkflow.indexOf('\n      - ', artifactOffset)
-  const artifactStep = aggregateWorkflow.slice(
-    artifactOffset,
-    nextStepOffset === -1 ? undefined : nextStepOffset,
-  )
-  if (!/^\s+branch:\s+main\s*$/m.test(artifactStep)) {
-    fail(`aggregate workflow must download ${requiredArtifact} artifacts from main`)
-  }
+if (!aggregateWorkflow.includes('uses: ./.github/actions/download-engine-release')) {
+  fail('aggregate workflow must assemble releases from explicitly pinned component runs')
+}
+if (aggregateWorkflow.includes('search_artifacts:')) {
+  fail('aggregate workflow must not discover release artifacts by latest-successful search')
 }
 
 for (const workflow of ['.github/workflows/wasm-xetex.yml', '.github/workflows/wasm-luatex.yml']) {

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "texliveYear": "2026",
   "distributionProfileId": "2026-20260826",
   "discovery": {
@@ -24,7 +24,13 @@
         "tag": "engine-2026-e4bc65275123982c",
         "sourceRevisions": ["2f9ed38431af364ee8c10c6a7dcb06e185423534"],
         "correspondingSourceSha256": "bfdd129742502944ae9b0a260eba403a1138e76cde3bfa73c4d8b21828091a97",
-        "buildRuns": [33067203361, 33067205526, 33067207758, 33067209911, 33067211879]
+        "buildRuns": {
+          "pdftex-bibtex": 33067203361,
+          "bibtex8": 33067205526,
+          "makeindex": 33067207758,
+          "xetex": 33067209911,
+          "luahbtex": 33067211879
+        }
       },
       "qualification": {
         "browserGoldens": 7,
@@ -44,11 +50,17 @@
         "objects": 168942
       },
       "engine": {
-        "releaseId": "2026-4b62cfc048a70903",
-        "tag": "engine-2026-4b62cfc048a70903",
-        "sourceRevisions": ["d017693840ba301a7723305646e5a53862677fa8"],
-        "correspondingSourceSha256": "6866178675597aa02b6570dfecad67d9e935466b4a53db688e6d822af0cc161d",
-        "buildRuns": [33171985192, 33171992268, 33171994212, 33171987482, 33171989987]
+        "releaseId": "2026-2cf7faa6c44284dc",
+        "tag": "engine-2026-2cf7faa6c44284dc",
+        "sourceRevisions": ["06f1937c502188fe04f0931fed702d06c2b78ab3"],
+        "correspondingSourceSha256": "5f1a99e6d7cc4019a42b59b62b750e165fb812a8cd83d2c86ab6cb7ab476cbab",
+        "buildRuns": {
+          "pdftex-bibtex": 33163170379,
+          "bibtex8": 33163172428,
+          "makeindex": 33163174571,
+          "xetex": 33163176440,
+          "luahbtex": 33163178493
+        }
       },
       "qualification": {
         "browserGoldens": 7,

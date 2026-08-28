@@ -60,18 +60,21 @@ on:
       - 'scripts/corresponding-source-2026.json'
       - 'scripts/check-annual-engine-source.mjs'
       - 'scripts/lib/annual-engine-source.mjs'
-      - '.github/workflows/wasm-xetex.yml'
 
 jobs:
   build-xetex:
     runs-on: ubuntu-latest
     env:
       TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
-      TEXLIVE_URL: ${{ inputs.texlive_url || (inputs.texlive_year == '2026' && 'https://texlive.corca.ai/snapshots/2026-b4f6befbe7732169/2026/' || 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/') }}
-      TEXLIVE_MIRROR_REVISION: ${{ inputs.mirror_revision || (inputs.texlive_year == '2026' && '2026-b4f6befbe7732169' || '2025-0d3fc73b65e39905') }}
-      TEXLIVE_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 || (inputs.texlive_year == '2026' && 'e3de2b970525f1a39e5d97da4ce1c3bbee4c16ecc78b9cc6fe1131c3020f5307' || 'f43c385400b1f5ecdc8708ee73519ddcd618a13d649dccfde86ceea6f3534697') }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Resolve immutable build mirror
+        env:
+          INPUT_TEXLIVE_URL: ${{ inputs.texlive_url }}
+          INPUT_MIRROR_REVISION: ${{ inputs.mirror_revision }}
+          INPUT_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 }}
+        run: node scripts/configure-engine-build-mirror.mjs
 
       - name: Verify source licensing policy
         run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"

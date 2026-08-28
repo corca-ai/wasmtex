@@ -2,18 +2,25 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
+import {
+  buildRunsFor,
+  validateEngineReleaseComponents,
+} from './lib/engine-release-components.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const value = JSON.parse(readFileSync(resolve(root, 'scripts/texlive-profiles-2026.json'), 'utf8'))
 const licenseManifest = JSON.parse(
   readFileSync(resolve(root, 'public/wasmtex/2026/LICENSE-MANIFEST.json'), 'utf8'),
 )
+const releaseComponentsConfig = JSON.parse(
+  readFileSync(resolve(root, 'scripts/engine-release-components.json'), 'utf8'),
+)
 const sha256 = /^[a-f0-9]{64}$/
 const releaseId = /^2026-[a-f0-9]{16}$/
 const revision = /^2026-[a-f0-9]{16}$/
 
 test('2026 profiles expose only exact immutable mirror and engine identities', () => {
-  assert.equal(value.schemaVersion, 2)
+  assert.equal(value.schemaVersion, 3)
   assert.equal(value.texliveYear, '2026')
   assert.deepEqual(
     value.profiles.map((profile) => profile.id),
@@ -39,7 +46,14 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
       assert.match(sourceRevision, /^[a-f0-9]{40}$/)
     }
     assert.match(profile.engine.correspondingSourceSha256, sha256)
-    assert.equal(new Set(profile.engine.buildRuns).size, 5)
+    assert.deepEqual(Object.keys(profile.engine.buildRuns).sort(), [
+      'bibtex8',
+      'luahbtex',
+      'makeindex',
+      'pdftex-bibtex',
+      'xetex',
+    ])
+    assert.equal(new Set(Object.values(profile.engine.buildRuns)).size, 5)
     assert.equal(profile.qualification.browserGoldens, 7)
     assert.equal(profile.qualification.nodeBrowserParity, 7)
     assert.deepEqual(profile.qualification.representativeEngines, [
@@ -53,6 +67,12 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
 test('checked-in 2026 distribution is legally bound to its exact engine profile', () => {
   const profile = value.profiles.find((candidate) => candidate.id === value.distributionProfileId)
   assert.ok(profile)
+  const releaseComponents = validateEngineReleaseComponents(releaseComponentsConfig, '2026')
+  assert.deepEqual(profile.mirror, {
+    ...releaseComponents.mirror,
+    objects: profile.mirror.objects,
+  })
+  assert.deepEqual(profile.engine.buildRuns, buildRunsFor(releaseComponents))
   assert.ok(licenseManifest.correspondingSource.url.includes(`/engine-${profile.engine.releaseId}/`))
   assert.equal(
     licenseManifest.correspondingSource.sha256,
