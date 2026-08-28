@@ -14,12 +14,10 @@ if (self.__wasmtexWasmBinary) Module["wasmBinary"] = self.__wasmtexWasmBinary;
 
 Module["print"] = function(a) {
   self.memlog += a + "\n";
-  console.log("[bibtex] " + a);
 };
 
 Module["printErr"] = function(a) {
   self.memlog += a + "\n";
-  console.warn("[bibtex-err] " + a);
 };
 
 Module["preRun"] = function() {
@@ -63,8 +61,6 @@ function allocateString(str) {
 
 function kpse_find_file_impl(nameptr, format, _mustexist) {
   var reqname = UTF8ToString(nameptr);
-  console.log("[bibtex-kpse] REQUESTED: " + reqname + " (format: " + format + ")");
-  
   if (reqname.startsWith("*") || reqname.startsWith("&")) {
     reqname = reqname.substring(1);
   }
@@ -75,14 +71,12 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   try {
     var localPath = WORKROOT + "/" + reqname;
     if (FS.analyzePath(localPath).exists) {
-      console.log("[bibtex-kpse] FOUND LOCAL: " + reqname);
       return allocateString(localPath);
     }
   } catch(e) {}
 
   var cacheKey = format + "/" + reqname;
   if (texlive200_cache[cacheKey]) {
-    console.log("[bibtex-kpse] FOUND CACHE: " + reqname);
     return allocateString(texlive200_cache[cacheKey]);
   }
   if (texlive404_cache[cacheKey]) {
@@ -104,8 +98,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
   var xhr = tryFetch(reqname);
 
-  // Smart extension retry. CloudFront answers a missing key with 403, not
-  // 404, so the retry must trigger on any >=400 status (matches the pdfTeX
+  // Smart extension retry. Some object stores answer a missing key with 403,
+  // so the retry must trigger on any >=400 status (matches the pdfTeX
   // worker). With ===404 the bst lookup (e.g. ACM-Reference-Format -> .bst)
   // never retried and bibtex aborted with "I couldn't open style file".
   if (xhr && xhr.status >= 400) {
@@ -129,7 +123,6 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         if (reqname.endsWith(exts[i])) continue;
         var retryXhr = tryFetch(reqname + exts[i]);
         if (retryXhr && retryXhr.status === 200) {
-          console.log("[bibtex-kpse] FOUND AFTER RETRY: " + reqname + exts[i]);
           xhr = retryXhr;
           reqname += exts[i];
           break;
@@ -145,7 +138,6 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
     var data = new Uint8Array(arraybuffer);
     FS.writeFile(savepath, data);
     texlive200_cache[cacheKey] = savepath;
-    console.log("[bibtex-kpse] DOWNLOADED: " + fileid);
     return allocateString(savepath);
   }
 
@@ -173,7 +165,6 @@ function writeTexmfCnf() {
 }
 
 function compileBibtexRoutine() {
-  console.log("[bibtex] Starting compilation for: " + self.mainfile);
   self.memlog = "";
   restoreHeapMemory();
 
@@ -201,7 +192,6 @@ function compileBibtexRoutine() {
     }
   }
 
-  console.log("[bibtex] Finished with status: " + status);
   self.postMessage({
     "cmd": "compile",
     "result": status <= 1 ? "ok" : "error",

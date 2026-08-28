@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -13,6 +14,19 @@ import { describe, expect, it } from 'vitest'
 const ROOT = join(import.meta.dirname, '..', '..')
 const CONTROLLER = join(ROOT, 'wasm-build', 'bibtex-worker.js')
 const PUBLISHED_2025 = join(ROOT, 'public', 'wasmtex', '2025', 'wasmtex-bibtex.worker.js')
+const PUBLISHED_RECEIPT = join(ROOT, 'public', 'wasmtex', '2025', 'BUILD-RECEIPT.bibtex.json')
+
+function publishedControllerIsFromCurrentCheckout(): boolean {
+  if (!existsSync(PUBLISHED_2025) || !existsSync(PUBLISHED_RECEIPT)) return false
+  const receipt = JSON.parse(readFileSync(PUBLISHED_RECEIPT, 'utf8')) as {
+    sourceRevision?: unknown
+  }
+  const checkout = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  }).trim()
+  return receipt.sourceRevision === checkout
+}
 
 // (name, must-appear regex) — invariants the worker MUST carry to compile real bibliographies.
 const INVARIANTS: Array<[string, RegExp]> = [
@@ -29,10 +43,10 @@ describe('published BibTeX worker controller (#152)', () => {
     for (const [name, re] of INVARIANTS) expect(controller, name).toMatch(re)
   })
 
-  // The published engine set is gitignored (binaries are quarantined from version
-  // control), so this drift check runs only where the assets are staged — dev
-  // machines and CI's deploy job after the engine artifacts are downloaded.
-  it.runIf(existsSync(PUBLISHED_2025))(
+  // PR CI deliberately stages the last main-branch release, which may predate the
+  // authored controller under review. Compare bytes only when the receipt binds the
+  // staged artifact to this exact checkout; engine build jobs verify new controllers.
+  it.runIf(publishedControllerIsFromCurrentCheckout())(
     'the published 2025 controller exactly matches its authored source',
     () => {
       expect(readFileSync(PUBLISHED_2025)).toEqual(readFileSync(CONTROLLER))

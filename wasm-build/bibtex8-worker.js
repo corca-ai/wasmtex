@@ -18,12 +18,10 @@ if (self.__wasmtexWasmBinary) Module["wasmBinary"] = self.__wasmtexWasmBinary;
 
 Module["print"] = function(a) {
   self.memlog += a + "\n";
-  console.log("[bibtex8] " + a);
 };
 
 Module["printErr"] = function(a) {
   self.memlog += a + "\n";
-  console.warn("[bibtex8-err] " + a);
 };
 
 Module["preRun"] = function() {
@@ -67,8 +65,6 @@ function allocateString(str) {
 
 function kpse_find_file_impl(nameptr, format, _mustexist) {
   var reqname = UTF8ToString(nameptr);
-  console.log("[bibtex8-kpse] REQUESTED: " + reqname + " (format: " + format + ")");
-
   if (reqname.startsWith("*") || reqname.startsWith("&")) {
     reqname = reqname.substring(1);
   }
@@ -95,7 +91,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
   var xhr = tryFetch(reqname);
 
-  // CloudFront answers a missing key with 403, not 404 — retry on any >=400.
+  // Some object stores answer a missing key with 403, not 404 — retry on any >=400.
   if (xhr && xhr.status >= 400) {
     if (reqname.includes(".")) {
       var bare = reqname.substring(0, reqname.lastIndexOf("."));
@@ -141,7 +137,6 @@ function writeTexmfCnf() {
 }
 
 function compileBibtex8Routine() {
-  console.log("[bibtex8] Starting compilation for: " + self.mainfile);
   self.memlog = "";
   restoreHeapMemory();
 
@@ -169,7 +164,6 @@ function compileBibtex8Routine() {
     }
   }
 
-  console.log("[bibtex8] Finished with status: " + status);
   self.postMessage({
     "cmd": "compile",
     "result": status <= 1 ? "ok" : "error",
