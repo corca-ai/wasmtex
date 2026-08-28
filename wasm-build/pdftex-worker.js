@@ -406,8 +406,6 @@ function buildPreambleFormat(preambleText) {
         // Check build log for errors that indicate a broken format
         if (self.memlog.includes("Fatal format file error") ||
             self.memlog.includes("I can\\'t go on")) {
-            console.error("[preamble] build log contains fatal errors:");
-            console.error(self.memlog);
             return null;
         }
         try {
@@ -417,9 +415,6 @@ function buildPreambleFormat(preambleText) {
             }
             return fmt;
         } catch(e) { return null; }
-    } else {
-        console.error("[preamble] format build failed. log below:");
-        console.error(self.memlog);
     }
     return null;
 }
@@ -792,8 +787,6 @@ function compileLaTeXRoutine() {
                 console.error("[compile] Format build succeeded but can't read output: " + e);
             }
         } else {
-            console.error("[compile] Initial format build failed. log below:");
-            console.error(self.memlog);
             self.postMessage({
                 "result": "failed",
                 "status": fmtStatus,
@@ -1038,7 +1031,6 @@ function compileLaTeXRoutine() {
         try {
             pdfArrayBuffer = FS.readFile(pdfPath, { encoding: "binary" });
         } catch(err) {
-            console.error("Failed to read PDF output: " + pdfPath);
             self.postMessage({
                 "result": "failed",
                 "status": status,
@@ -1117,7 +1109,6 @@ function compileLaTeXRoutine() {
         self.postMessage(response, transferables);
 
     } else {
-        console.error("Compilation failed, with status code " + status);
         phaseTimings.heapSizeBytes = wasmMemory.buffer.byteLength;
         phaseTimings.postProcessMs = performance.now() - postProcessStart;
         phaseTimings.workerTotalMs = performance.now() - routineStart;
@@ -1170,7 +1161,6 @@ function compileFormatRoutine() {
             var fmtPath = WORKROOT + "/pdflatex.fmt";
             fmtArrayBuffer = FS.readFile(fmtPath, { encoding: "binary" });
         } catch(err) {
-            console.error("Failed to read format file");
             status = -253;
             self.postMessage({
                 "result": "failed",
@@ -1188,7 +1178,6 @@ function compileFormatRoutine() {
             "cmd": "compile"
         }, [fmtArrayBuffer.buffer]);
     } else {
-        console.error("Compilation format failed, with status code " + status);
         self.postMessage({
             "result": "failed",
             "status": status,
