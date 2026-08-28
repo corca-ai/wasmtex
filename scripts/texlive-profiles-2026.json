@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "texliveYear": "2026",
-  "distributionProfileId": "2026-initial",
+  "distributionProfileId": "2026-20260826",
   "discovery": {
     "name": "2026-latest",
     "profileId": "2026-20260826",
@@ -34,7 +34,7 @@
     },
     {
       "id": "2026-20260826",
-      "label": "TeX Live 2026 dated (2026-08-26)",
+      "label": "TeX Live 2026 latest (2026-08-26)",
       "snapshot": "2026-08-26",
       "snapshotDate": "2026-08-26",
       "mirror": {
@@ -44,11 +44,11 @@
         "objects": 168942
       },
       "engine": {
-        "releaseId": "2026-df228a6f964a208a",
-        "tag": "engine-2026-df228a6f964a208a",
-        "sourceRevision": "87132ab3fc15533bf39c6812ed1ce7cd0da2d243",
-        "correspondingSourceSha256": "c6587a2fa11b2520254265d70b32c9b6bb114ba9d0473663b5dd57381def4620",
-        "buildRuns": [33063076566, 33063078826, 33063080975, 33063082862, 33063085213]
+        "releaseId": "2026-2cf7faa6c44284dc",
+        "tag": "engine-2026-2cf7faa6c44284dc",
+        "sourceRevision": "06f1937c502188fe04f0931fed702d06c2b78ab3",
+        "correspondingSourceSha256": "5f1a99e6d7cc4019a42b59b62b750e165fb812a8cd83d2c86ab6cb7ab476cbab",
+        "buildRuns": [33163170379, 33163172428, 33163174571, 33163176440, 33163178493]
       },
       "qualification": {
         "browserGoldens": 7,

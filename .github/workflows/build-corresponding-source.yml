@@ -23,6 +23,11 @@ on:
         type: choice
         options: ['2025', '2026']
         default: '2026'
+      artifact_branch:
+        description: Branch whose already-built annual engine artifacts should be verified
+        required: false
+        type: string
+        default: main
 
 permissions:
   contents: read
@@ -33,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TEXLIVE_YEAR: ${{ inputs.texlive_year || '2026' }}
-      ARTIFACT_BRANCH: ${{ github.head_ref || github.ref_name }}
+      ARTIFACT_BRANCH: ${{ inputs.artifact_branch || 'main' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
