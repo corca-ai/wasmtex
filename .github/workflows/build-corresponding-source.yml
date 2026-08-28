@@ -44,7 +44,7 @@ jobs:
         with:
           workflow: wasm-build.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-pdftex-2026' || 'wasm-pdftex' }}
-          path: public/wasmtex/2026
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -53,7 +53,7 @@ jobs:
         with:
           workflow: wasm-build.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex-2026' || 'wasm-bibtex' }}
-          path: public/wasmtex/2026
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -62,7 +62,7 @@ jobs:
         with:
           workflow: wasm-bibtex8.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-bibtex8-2026' || 'wasm-bibtex8' }}
-          path: public/wasmtex/2026
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -71,7 +71,7 @@ jobs:
         with:
           workflow: wasm-makeindex.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-makeindex-2026' || 'wasm-makeindex' }}
-          path: public/wasmtex/2026
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -80,7 +80,7 @@ jobs:
         with:
           workflow: wasm-xetex.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-xetex-2026' || 'wasm-xetex' }}
-          path: public/wasmtex/2026
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
@@ -89,13 +89,13 @@ jobs:
         with:
           workflow: wasm-luatex.yml
           name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-luatex-2026' || 'wasm-luatex' }}
-          path: public/wasmtex/2026
+          path: public/wasmtex/${{ env.TEXLIVE_YEAR }}
           branch: ${{ env.ARTIFACT_BRANCH }}
           search_artifacts: true
           if_no_artifact_found: fail
       - name: Verify release inputs
         run: |
-          npm run check:licenses:2026
+          node scripts/check-license-compliance.mjs "$TEXLIVE_YEAR"
           node scripts/gen-asset-manifest.mjs "$TEXLIVE_YEAR"
           node scripts/check-release-notices.mjs --assets "public/wasmtex/$TEXLIVE_YEAR"
       - name: Build and verify complete corresponding source
