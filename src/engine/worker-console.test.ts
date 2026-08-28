@@ -77,4 +77,21 @@ describe('engine worker console output', () => {
 
     expect(workerConsole.warn).toHaveBeenCalledOnce()
   })
+
+  it('returns expected pdfTeX failures through the worker protocol without console dumps', () => {
+    const source = readFileSync(resolve('wasm-build/pdftex-worker.js'), 'utf8')
+
+    expect(source).not.toContain('console.error(self.memlog)')
+    for (const internalMessage of [
+      '[preamble] build log contains fatal errors',
+      '[preamble] format build failed',
+      '[compile] Initial format build failed',
+      'Failed to read PDF output',
+      'Compilation failed, with status code',
+      'Failed to read format file',
+      'Compilation format failed, with status code',
+    ]) {
+      expect(source).not.toContain(internalMessage)
+    }
+  })
 })
