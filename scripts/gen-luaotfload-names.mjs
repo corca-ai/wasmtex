@@ -32,19 +32,17 @@
  * the engine's TeX Live source is bumped.
  *
  * Usage:
- *   # 0. (exact-mirror) Sync the mirror fonts where AWS creds exist, then move them
- *   #    to the Docker host as <dir>/opentype/*.otf + <dir>/truetype/*.ttf:
- *   #    AWS_PROFILE=cc aws s3 sync s3://<bucket>/<year>/pdftex/47/ <dir>/opentype/
- *   #    AWS_PROFILE=cc aws s3 sync s3://<bucket>/<year>/pdftex/36/ <dir>/truetype/
+ *   # 0. (exact-mirror) Download the R2 mirror fonts to the Docker host as
+ *   #    <dir>/opentype/*.otf + <dir>/truetype/*.ttf.
  *   # 1. Generate in a Docker environment. Produces ./luaotfload-names.lua
  *   node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>   # exact-mirror (#73)
  *   node scripts/gen-luaotfload-names.mjs --generate                     # quick, not exact
- *   # 2. Upload from a host with AWS creds (AWS_PROFILE=cc)
- *   AWS_PROFILE=cc node scripts/gen-luaotfload-names.mjs --db ./luaotfload-names.lua --upload
+ *   # 2. Upload from a host with scoped R2 credentials.
+ *   node scripts/gen-luaotfload-names.mjs --db ./luaotfload-names.lua --upload
  *   # (or do both at once where both Docker and creds exist)
- *   AWS_PROFILE=cc node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir> --upload
+ *   node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir> --upload
  *
- * Uploads to s3://<bucket>/<year>/pdftex/51/luaotfload-names.lua (kpse lua format).
+ * Uploads to the configured R2 prefix at <year>/pdftex/51/luaotfload-names.lua.
  * After uploading, the file is fetched DIRECTLY by the worker (not via kpse), so no
  * bloom-filter entry is required for the DB itself — but the fonts it references are
  * already mirrored under 47/36/4.
@@ -201,12 +199,12 @@ function verify(path) {
 function upload(path) {
   const dest = objectUri(STORE, YEAR, 'pdftex', '51', 'luaotfload-names.lua')
   console.log(`Uploading to ${dest} ...`)
-  // Plain Lua text; CloudFront gzip-compresses it on the wire (~240 KB).
+  // Plain Lua text; the public mirror may compress it on the wire.
   runObjectStore(STORE, ['s3', 'cp', path, dest, '--content-type', 'text/plain',
     '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
   console.log(
     'Upload complete. The DB is fetched directly by the worker (no bloom entry needed). ' +
-      'Invalidate the CDN path /' + YEAR + '/pdftex/51/luaotfload-names.lua for immediate effect.',
+      'Purge the public mirror path /' + YEAR + '/pdftex/51/luaotfload-names.lua if needed.',
   )
 }
 

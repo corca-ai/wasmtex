@@ -1,7 +1,7 @@
 # TeX Live mirror coverage
 
-- Bucket: `s3://corca-fastlatex-texlib/2025/pdftex/`
-- Served by: `d1jectpaw0dlvl.cloudfront.net/2025/`
+- R2 prefix: `corca-texlive-production/snapshots/2025-92e10d3241a312f0/2025/pdftex/`
+- Served by: `https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/`
 - Total: **155976 objects**, **3.0 GB**
 
 | fmt | kpathsea format | objects | size | status |

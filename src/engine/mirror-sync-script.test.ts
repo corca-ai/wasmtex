@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '../..')
-const script = join(root, 'scripts/sync-texlive-s3.sh')
+const script = join(root, 'scripts/sync-texlive-mirror.sh')
 
 describe('TeX Live mirror sync script', () => {
   it('pins archive integrity and publishes without size-only or stale objects', () => {
@@ -23,7 +23,8 @@ describe('TeX Live mirror sync script', () => {
     expect(source).toContain('verify_archive')
     expect(source).not.toContain('| tar xJ')
     expect(source).not.toContain('--size-only')
-    expect(source).toMatch(/object_store s3 sync .* --delete/)
+    expect(source).not.toContain('--delete')
+    expect(source).not.toContain('--replace-existing')
     expect(source).toContain('TEXLIVE_OBJECT_ENDPOINT')
     expect(source).toContain('TEXLIVE_OBJECT_PREFIX')
     // Staging is delegated to the provenance generator + checker, so an upload

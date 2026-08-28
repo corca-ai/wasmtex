@@ -14,9 +14,9 @@
 #
 # Usage:
 #   scripts/build-icu-data.sh                 # build icudt68l.dat into /tmp/icu-data/
-#   scripts/build-icu-data.sh --upload        # build + gzip + upload through S3 protocol
+#   scripts/build-icu-data.sh --upload        # build + gzip + upload to R2
 #
-# CDN target: s3://corca-fastlatex-texlib/<year>/icudt68l.dat (gzip Content-Encoding,
+# R2 target: <bucket>/<immutable-prefix>/<year>/icudt68l.dat (gzip Content-Encoding,
 # so the worker's XHR transparently decompresses). The worker fetches it at
 # ${texlive_endpoint}icudt68l.dat.
 set -euo pipefail
@@ -24,10 +24,10 @@ set -euo pipefail
 ICU_VER="68_2"          # must match emscripten's ICU port (tools/ports/icu.py TAG)
 ICU_MAJOR="68"
 YEAR="${TEXLIVE_YEAR:-${YEAR:-2025}}"
-OBJECT_BUCKET="${TEXLIVE_OBJECT_BUCKET:-${S3_BUCKET:-corca-fastlatex-texlib}}"
+OBJECT_BUCKET="${TEXLIVE_OBJECT_BUCKET:-corca-texlive-production}"
 OBJECT_ENDPOINT="${TEXLIVE_OBJECT_ENDPOINT:-}"
 OBJECT_PREFIX="${TEXLIVE_OBJECT_PREFIX:-}"
-OBJECT_PROFILE="${TEXLIVE_OBJECT_PROFILE:-}"
+OBJECT_PROFILE="${TEXLIVE_R2_PROFILE:-}"
 EMSDK_IMAGE="${EMSDK_IMAGE:-emscripten/emsdk:3.1.46}"
 WORK="${WORK_DIR:-/tmp/icu-data}"
 UPLOAD=0
@@ -69,6 +69,14 @@ DAT="$WORK/icudt${ICU_MAJOR}l.dat"
 echo "Built $DAT ($(wc -c < "$DAT") bytes)"
 
 if [ "$UPLOAD" = 1 ]; then
+  if [ -z "$OBJECT_ENDPOINT" ]; then
+    echo "TEXLIVE_OBJECT_ENDPOINT is required for R2 upload" >&2
+    exit 1
+  fi
+  case "$OBJECT_ENDPOINT" in
+    https://*.r2.cloudflarestorage.com|https://*.r2.cloudflarestorage.com/) ;;
+    *) echo "TEXLIVE_OBJECT_ENDPOINT must be a Cloudflare R2 endpoint" >&2; exit 1 ;;
+  esac
   gzip -9 -c "$DAT" > "$DAT.gz"
   OBJECT_PREFIX="${OBJECT_PREFIX#/}"; OBJECT_PREFIX="${OBJECT_PREFIX%/}"
   if [ -n "$OBJECT_PREFIX" ]; then
@@ -77,7 +85,7 @@ if [ "$UPLOAD" = 1 ]; then
     DEST="s3://$OBJECT_BUCKET/$YEAR/icudt${ICU_MAJOR}l.dat"
   fi
   set -- aws ${OBJECT_PROFILE:+--profile "$OBJECT_PROFILE"} \
-    ${OBJECT_ENDPOINT:+--endpoint-url "$OBJECT_ENDPOINT"} s3 cp "$DAT.gz" "$DEST"
+    --endpoint-url "$OBJECT_ENDPOINT" s3 cp "$DAT.gz" "$DEST"
   echo "Uploading to $DEST (gzip) ..."
   "$@" \
     --content-encoding gzip --content-type application/octet-stream \

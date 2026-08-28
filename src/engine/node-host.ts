@@ -12,7 +12,7 @@
  *   import { installNodeWorkerHost } from 'wasmtex/node'
  *   installNodeWorkerHost({ publicDir: '…/public', assetBaseUrl: 'http://assets.local/' })
  *   const c = new WasmTexCompiler({ engine: 'pdflatex', assetBaseUrl: 'http://assets.local/',
- *                                     texliveUrl: 'https://…cloudfront.net/2025/', files })
+ *                                     texliveUrl: 'https://texlive.example/2025/', files })
  */
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'

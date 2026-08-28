@@ -2,9 +2,9 @@
 
 This document details the LaTeX/BibTeX engine internals and the on-demand package system.
 
-Production package bytes will be served from immutable Cloudflare R2 prefixes at
-`texlive.corca.ai` after the qualified origin cutover. Publication and migration are documented in
-[TeX Live mirror operations](texlive-mirror-operations.md).
+Production package bytes are served from immutable Cloudflare R2 prefixes at
+`texlive.corca.ai`; [TeX Live mirror operations](texlive-mirror-operations.md)
+documents publication and recovery.
 
 ## Engine Setup
 
@@ -230,7 +230,7 @@ dvipdfmx (XDV→PDF) is built from the same pinned `texlive-source` tree with
 `wasm-build/dvipdfm-worker.js`, `xetex-dvipdfm-library.js`, and real `libkpathsea`.
 The release path therefore has no externally downloaded engine or worker artifact.
 
-`scripts/sync-texlive-s3.sh` is a conservative helper for constructing and auditing a
+`scripts/sync-texlive-mirror.sh` is a conservative helper for constructing and auditing a
 transformed, flattened TeX Live mirror from pinned archives. It verifies archive
 hashes, records flattened-name collision decisions, derives an immutable
 `mirrorRevision`, and generates exact resource-completion shards under
@@ -243,7 +243,7 @@ coverage report under `semantic/<mirrorRevision>/`. Both immutable trees upload
 before publication of the manifest. A
 custom host must expose the matching catalog identity in its compile profile.
 
-When the TeX Live files are already deployed, `scripts/sync-texlive-s3.sh
+When the TeX Live files are already deployed, `scripts/sync-texlive-mirror.sh
 --catalog-only` emits only the completion-relevant inventory (`.cls`, `.sty`,
 bibliography styles, fonts, and the configured xcolor `.def` inputs), catalogs, and semantic
 shards. This lane does not copy or upload TeX Live package bytes and therefore does
@@ -367,22 +367,23 @@ metadata are accepted only as unproven coverage. XeTeX/LuaTeX currently expose t
 snapshot schema but mark command and registry observations unsupported. Rebuild and deploy
 the pdfTeX controller/module/WASM set together before relying on this capability.
 
-## TexLive & CDN
+## TeX Live & R2
 
 Packages are fetched via synchronous XHR inside the WASM worker.
 
-- **CDN**: Served via CloudFront (`d1jectpaw0dlvl.cloudfront.net`). This is a public CDN — no configuration is needed for basic usage.
-- **Structure**: Files are organized by TeX Live version and format IDs (e.g., `2025/pdftex/26/` for `.sty` files).
-- **Bloom Filter**: A ~180 KB bloom filter (`bloom-filter.bin`) is fetched at startup and loaded into the worker. It allows the worker to skip sync XHR for files that definitely don't exist on the CDN, eliminating 403 errors in the browser console. Regenerate with `node scripts/gen-bloom-filter.mjs`.
+- **Mirror**: Immutable snapshots are served from Cloudflare R2 through `texlive.corca.ai`; no configuration is needed for basic usage.
+- **Structure**: Files are organized by mirror revision, TeX Live version, and format IDs (for example, `snapshots/<revision>/2025/pdftex/26/` for `.sty` files).
+- **Bloom Filter**: A ~180 KB bloom filter (`bloom-filter.bin`) is fetched at startup and loaded into the worker. It allows the worker to skip sync XHR for files that definitely do not exist on the mirror. Regenerate with `node scripts/gen-bloom-filter.mjs`.
 - **Caching**: A Service Worker (`public/sw.js`) caches these files locally to enable offline compilation and speed up subsequent runs.
 
 ### URL Resolution Order
 The `texliveUrl` is determined as follows:
 1. `options.texliveUrl` passed to the constructor.
 2. `VITE_TEXLIVE_URL` environment variable.
-3. Public CDN: `https://d1jectpaw0dlvl.cloudfront.net/{version}/` (default).
+3. The immutable R2 snapshot pinned for that TeX Live year.
 
-For most users, the default CDN works out of the box — no setup required.
+The default R2 mirror works out of the box. An explicit URL should likewise name
+an immutable snapshot rather than mutable discovery metadata.
 
 ## Asset Resolution (WASM & Workers)
 
@@ -435,7 +436,7 @@ const nodeHost = installNodeWorkerHost({
 const c = new WasmTexCompiler({
   engine: 'xelatex',                 // pdflatex | xelatex | lualatex | auto
   assetBaseUrl: 'http://assets.local/',
-  texliveUrl: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+  texliveUrl: 'https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/',
   files,
 })
 await c.init()

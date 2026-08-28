@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url'
  * Not a vitest target (no `.test` suffix, no `describe`/`it`); only imported by the smokes.
  */
 export const SMOKE_TEXLIVE =
-  process.env.WASMTEX_SMOKE_TEXLIVE_URL ?? 'https://d1jectpaw0dlvl.cloudfront.net/2025/'
+  process.env.WASMTEX_SMOKE_TEXLIVE_URL ??
+  'https://texlive.corca.ai/snapshots/2025-92e10d3241a312f0/2025/'
 
 /** A pdfLaTeX document of `n` `\clearpage`-separated sections, each with a replaceable plain-text
  *  marker; the last section's marker is `lastMarker`. Editing only the last marker is a servable

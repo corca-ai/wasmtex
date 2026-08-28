@@ -109,9 +109,8 @@ export const PRELOAD_FILES: TexliveFileEntry[] = [
 export const KNOWN_404S: TexliveFileEntry[] = [
   // --- Virtual font lookups (format 33) ---
   // pdfTeX checks for .vf when outputting glyphs. The lookup name
-  // includes the .vf extension (e.g. "cmr17.vf"). CloudFront returns
-  // 403 (not 404) so the worker's extension-retry logic is never
-  // reached — the cache key must match the full name with extension.
+  // includes the .vf extension (e.g. "cmr17.vf"). Keep the cache key
+  // equal to the full requested name so no missing-object request is made.
   { format: 33, filename: 'cmbx8.vf' },
   { format: 33, filename: 'cmbx10.vf' },
   { format: 33, filename: 'cmbx12.vf' },

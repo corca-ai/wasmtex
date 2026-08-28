@@ -6,7 +6,7 @@
  *
  * fontconfig already analyses coverage: `fc-scan %{lang}` lists the languages a font
  * supports, which map cleanly to scripts (ko→Hangul, ja→Hiragana/Katakana/Han, …).
- * We run it over a full TeX Live font tree (the texlive/texlive image — no S3 auth),
+ * We run it over a full TeX Live font tree (the texlive/texlive image — no R2 access),
  * so a suggested font is one the worker can fetch on demand from the mirror.
  *
  * Usage:

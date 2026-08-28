@@ -1,5 +1,5 @@
-const CACHE_NAME = 'texlive-cache-v1'
-const TEXLIVE_CDN_ORIGIN = 'https://d1jectpaw0dlvl.cloudfront.net'
+const CACHE_NAME = 'texlive-cache-v2'
+const TEXLIVE_MIRROR_ORIGIN = 'https://texlive.corca.ai'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
@@ -22,9 +22,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   const base = new URL(self.registration.scope).pathname
   const isLocalTexlive = url.pathname.startsWith(`${base}texlive/`)
-  const isPublicTexlive = url.origin === TEXLIVE_CDN_ORIGIN
+  const isPublicTexlive = url.origin === TEXLIVE_MIRROR_ORIGIN
 
-  // Only intercept TeX Live requests (base-path aware local proxy or public CDN)
+  // Only intercept TeX Live requests (base-path aware local proxy or public R2 mirror)
   if (!isLocalTexlive && !isPublicTexlive) return
 
   event.respondWith(

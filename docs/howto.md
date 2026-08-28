@@ -229,7 +229,7 @@ const nodeHost = installNodeWorkerHost({
 
 const compiler = new WasmTexCompiler({
   assetBaseUrl: 'http://assets.local/',
-  texliveUrl: 'https://your-texlive-cdn/2025/',  // TeX Live packages (pass-through fetch)
+  texliveUrl: 'https://texlive.example/immutable/2025/', // packages (pass-through fetch)
   files: { 'main.tex': '\\documentclass{article}\\begin{document}Hello\\end{document}' },
 })
 await compiler.init()

@@ -1,4 +1,5 @@
 import type { EngineStatus, TexliveVersion } from '../types'
+import { defaultTexliveUrl } from './default-texlive-mirrors'
 import type { EngineWorker } from './worker-host'
 
 /** An `AbortError`-named Error, the conventional signal for a cancelled async op
@@ -159,8 +160,6 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
   }
 }
 
-const CLOUDFRONT_BASE = 'https://d1jectpaw0dlvl.cloudfront.net/'
-
 function assertMirrorYear(url: string, version: TexliveVersion): void {
   const years = new URL(url, 'https://wasmtex.invalid').pathname
     .split('/')
@@ -187,6 +186,5 @@ export function resolveTexliveUrl(
     return envUrl.endsWith('/') ? envUrl : `${envUrl}/`
   }
 
-  // Consistent versioned path: https://.../{version}/
-  return `${CLOUDFRONT_BASE}${version}/`
+  return defaultTexliveUrl(version)
 }

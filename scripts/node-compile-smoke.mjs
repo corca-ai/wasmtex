@@ -2,6 +2,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WasmTexCompiler, installNodeWorkerHost } from '../lib/node.js'
+import { defaultTexliveUrl } from './lib/default-texlive-mirrors.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ASSET = 'http://assets.local/'
@@ -16,8 +17,7 @@ const c = new WasmTexCompiler({
   texliveVersion: process.env.WASMTEX_SMOKE_TEXLIVE_VERSION ?? '2025',
   assetBaseUrl: ASSET,
   texliveUrl:
-    process.env.WASMTEX_SMOKE_TEXLIVE_URL ??
-    'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+    process.env.WASMTEX_SMOKE_TEXLIVE_URL ?? defaultTexliveUrl('2025'),
   files: { 'main.tex': doc },
 })
 const t0 = Date.now()

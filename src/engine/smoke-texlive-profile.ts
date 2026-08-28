@@ -1,3 +1,5 @@
+import { defaultTexliveUrl } from './default-texlive-mirrors'
+
 export type SmokeTexliveProfile = {
   version: '2025' | '2026'
   url: string
@@ -5,7 +7,7 @@ export type SmokeTexliveProfile = {
 
 const DEFAULT_PROFILE: SmokeTexliveProfile = {
   version: '2025',
-  url: 'https://d1jectpaw0dlvl.cloudfront.net/2025/',
+  url: defaultTexliveUrl('2025'),
 }
 
 export function smokeTexliveProfile(
