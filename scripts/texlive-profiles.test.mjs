@@ -13,7 +13,7 @@ const releaseId = /^2026-[a-f0-9]{16}$/
 const revision = /^2026-[a-f0-9]{16}$/
 
 test('2026 profiles expose only exact immutable mirror and engine identities', () => {
-  assert.equal(value.schemaVersion, 1)
+  assert.equal(value.schemaVersion, 2)
   assert.equal(value.texliveYear, '2026')
   assert.deepEqual(
     value.profiles.map((profile) => profile.id),
@@ -30,7 +30,14 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
     assert.ok(Number.isSafeInteger(profile.mirror.objects) && profile.mirror.objects > 0)
     assert.match(profile.engine.releaseId, releaseId)
     assert.equal(profile.engine.tag, `engine-${profile.engine.releaseId}`)
-    assert.match(profile.engine.sourceRevision, /^[a-f0-9]{40}$/)
+    assert.ok(profile.engine.sourceRevisions.length > 0)
+    assert.deepEqual(
+      profile.engine.sourceRevisions,
+      [...new Set(profile.engine.sourceRevisions)].sort(),
+    )
+    for (const sourceRevision of profile.engine.sourceRevisions) {
+      assert.match(sourceRevision, /^[a-f0-9]{40}$/)
+    }
     assert.match(profile.engine.correspondingSourceSha256, sha256)
     assert.equal(new Set(profile.engine.buildRuns).size, 5)
     assert.equal(profile.qualification.browserGoldens, 7)

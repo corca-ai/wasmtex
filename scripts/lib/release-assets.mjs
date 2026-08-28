@@ -104,10 +104,6 @@ export function inspectReleaseAssets({ directory, legal, sourceConfig }) {
   for (const family of legal.requiredBuildFamilies ?? []) {
     if (!receiptFamilies.has(family)) errors.push(`missing required build receipt: ${family}`)
   }
-  const sourceRevisions = new Set(receipts.map((receipt) => receipt.value.sourceRevision))
-  if (sourceRevisions.size > 1) {
-    errors.push('build receipts do not share one WasmTex source revision')
-  }
   const mirrorIdentities = new Set(
     receipts.map((receipt) => JSON.stringify(receipt.value.mirror ?? null)),
   )

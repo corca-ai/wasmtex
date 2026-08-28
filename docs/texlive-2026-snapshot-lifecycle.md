@@ -21,6 +21,10 @@ only an application-level pointer to one qualified immutable profile. Moving it
 does not change either package prefix. Existing projects retain their exact
 profile until a user changes it.
 
+The machine profile records `engine.sourceRevisions` as a sorted set. Most
+annual releases have one entry, while a release that replaces only an affected
+engine family records every revision named by its composed build receipts.
+
 ## Finalize after TeX Live 2027 releases
 
 The 2026 `tlnet-final` repository does not exist until the TeX Live project

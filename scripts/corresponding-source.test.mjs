@@ -7,6 +7,13 @@ import { afterEach, test } from 'node:test'
 import { checkCorrespondingSourceDirectory } from './lib/corresponding-source.mjs'
 
 const COMMIT = '1234567890abcdef1234567890abcdef12345678'
+const WASMTEX_SOURCE_PATHS = [
+  'wasm-build/texlive-source-2025.ref',
+  'wasm-build/patches/texlive-wtpdf.patch',
+  'wasm-build/pdf-backend/wtpdf.h',
+  'wasm-build/pdf-backend/wtpdf-xpdf.cc',
+  'wasm-build/sha2/wasmtex-sha2.c',
+]
 const temporary = []
 afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true })
@@ -20,6 +27,10 @@ function put(root, path, value = 'source\n') {
   const target = join(root, path)
   mkdirSync(join(target, '..'), { recursive: true })
   writeFileSync(target, value)
+}
+
+function putWasmtexSource(root, revision) {
+  for (const path of WASMTEX_SOURCE_PATHS) put(root, `source/wasmtex/${revision}/${path}`)
 }
 
 function fixture() {
@@ -45,15 +56,7 @@ function fixture() {
   put(root, 'REBUILD.md')
   put(root, 'RELINK.md')
   put(root, 'release/ENGINE-COMPONENTS.json', '{}\n')
-  for (const path of [
-    'wasm-build/texlive-source-2025.ref',
-    'wasm-build/patches/texlive-wtpdf.patch',
-    'wasm-build/pdf-backend/wtpdf.h',
-    'wasm-build/pdf-backend/wtpdf-xpdf.cc',
-    'wasm-build/sha2/wasmtex-sha2.c',
-  ]) {
-    put(root, `source/wasmtex/${COMMIT}/${path}`)
-  }
+  putWasmtexSource(root, COMMIT)
   put(root, 'source/texlive/Build')
   for (const path of ['libs/xpdf/.keep', 'texk/web2c/.keep', 'texk/dvipdfm-x/.keep']) {
     put(root, `source/texlive/${path}`)
@@ -79,7 +82,7 @@ function fixture() {
     },
   }
   put(root, 'SOURCE-MANIFEST.json', `${JSON.stringify(sourceManifest)}\n`)
-  return { root, config, assetManifest }
+  return { root, config, assetManifest, sourceManifest }
 }
 
 test('accepts a source tree bound to the release receipts', () => {
@@ -105,6 +108,37 @@ test('accepts a differing release ID when the source revisions still match', () 
       directory: value.root,
       config: value.config,
       assetManifest: { ...value.assetManifest, releaseId: '2025-ffffffffffffffff' },
+    }),
+    [],
+  )
+})
+
+test('accepts every source snapshot named by a composed family release', () => {
+  const value = fixture()
+  const otherRevision = 'a'.repeat(40)
+  const receipt = JSON.stringify({
+    sourceRevision: otherRevision,
+    texliveSourceCommit: COMMIT,
+    toolchain: { emscriptenCommit: COMMIT },
+  })
+  value.assetManifest.buildReceipts.push({
+    name: 'BUILD-RECEIPT.bibtex.json',
+    sha256: sha('sha256', receipt),
+    sourceRevision: otherRevision,
+  })
+  put(value.root, 'release/BUILD-RECEIPT.bibtex.json', receipt)
+  const engineManifest = JSON.stringify(value.assetManifest)
+  put(value.root, 'release/manifest.json', engineManifest)
+  value.sourceManifest.engineAssetManifest.sha256 = sha('sha256', engineManifest)
+  value.sourceManifest.sources.wasmtex.push({ commit: otherRevision, tree: otherRevision })
+  put(value.root, 'SOURCE-MANIFEST.json', `${JSON.stringify(value.sourceManifest)}\n`)
+  putWasmtexSource(value.root, otherRevision)
+
+  assert.deepEqual(
+    checkCorrespondingSourceDirectory({
+      directory: value.root,
+      config: value.config,
+      assetManifest: value.assetManifest,
     }),
     [],
   )

@@ -224,7 +224,11 @@ Self-hosting your own assets? Publish a manifest next to the versioned assets, t
 `npm run sync-engine-assets` to fetch and verify the complete set.
 Release manifests contain a content-derived release ID and per-engine build receipts;
 release mode rejects an engine byte that is not covered by exactly one receipt and
-one license artifact family.
+one license artifact family. The deployed set is composable by family: a workflow
+rebuild replaces only the artifact and receipt it owns, while CI reuses the latest
+cleared pair for every unaffected family. Receipt source revisions may therefore
+differ; the corresponding-source archive includes every distinct revision. Mirror,
+TeX Live source, and toolchain identities remain release-wide coherence constraints.
 
 XeTeX is built **from `texlive-source` against the real `libkpathsea`**, with no
 separate engine source tree or kpathsea emulation shim. `wasm-build/Dockerfile.xetex`

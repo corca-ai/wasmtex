@@ -21,8 +21,10 @@ stale manifests, missing or overlapping receipts, unclassified files, changed
 artifact bytes, and legacy `pplib` markers.
 
 Locally ignored files under `public/wasmtex/<version>/` are development inputs. Do
-not use an old directory merely because it contains runnable engines: regenerate all
-release artifacts and receipts with the release workflows first.
+not use an old directory merely because it contains runnable engines. Assemble the
+directory from the latest cleared receipt-bound artifact for each family. Rebuild
+only families whose owned source or build inputs changed; reuse the exact artifact
+and receipt together for every unaffected family.
 
 ## Create and verify an archive
 
@@ -86,7 +88,7 @@ the distributed build receipts name, and does not require the release IDs to be
 equal.
 
 The practical obligation this leaves: **re-cut and republish the archive
-whenever the engines are rebuilt from a new source revision.** Engine assets
-change only when the `wasm-*` build workflows re-run (an engine glue or pinned
-source change), not on every commit, so this is a per-engine-release step, not a
-per-push one.
+whenever any family is rebuilt from a new source revision.** The archive contains
+one WasmTex snapshot for every distinct revision named by the composed receipts.
+Engine assets change only when their owning `wasm-*` build workflow re-runs, so
+this is a per-family release step, not a per-push or whole-engine-set rebuild.
