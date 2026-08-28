@@ -99,7 +99,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   }
 
   var xhr = tryFetch(reqname);
-  // Missing-object status varies by mirror; retry the bare name on any >=400.
+  // CloudFront answers a missing key with 403 (not 404); retry the bare name.
   if (xhr && xhr.status >= 400 && reqname.includes(".")) {
     var bare = reqname.substring(0, reqname.lastIndexOf("."));
     var retryXhr = tryFetch(bare);

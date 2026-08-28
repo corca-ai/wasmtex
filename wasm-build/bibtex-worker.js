@@ -104,9 +104,9 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
   var xhr = tryFetch(reqname);
 
-  // Smart extension retry. Missing-object status varies by mirror, so the retry
-  // must trigger on any >=400 status (matches the pdfTeX worker). A narrow status
-  // check can prevent a bst lookup (e.g. ACM-Reference-Format -> .bst)
+  // Smart extension retry. CloudFront answers a missing key with 403, not
+  // 404, so the retry must trigger on any >=400 status (matches the pdfTeX
+  // worker). With ===404 the bst lookup (e.g. ACM-Reference-Format -> .bst)
   // never retried and bibtex aborted with "I couldn't open style file".
   if (xhr && xhr.status >= 400) {
     if (reqname.includes(".")) {
