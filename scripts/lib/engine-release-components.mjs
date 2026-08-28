@@ -2,7 +2,11 @@ const SHA256 = /^[a-f0-9]{64}$/i
 const EXPECTED_FAMILIES = ['bibtex', 'bibtex8', 'luahbtex', 'makeindex', 'pdftex', 'xetex']
 
 function validateMirror(mirror, year, label) {
-  if (!new RegExp(`^${year}-[a-f0-9]{16}$`).test(mirror?.revision ?? '')) {
+  const revision = mirror?.revision ?? ''
+  const separator = revision.indexOf('-')
+  const revisionYear = revision.slice(0, separator)
+  const identity = revision.slice(separator + 1)
+  if (separator < 0 || revisionYear !== year || !/^[a-f0-9]{16}$/.test(identity)) {
     throw new Error(`${year}: invalid ${label} mirror revision`)
   }
   if (!SHA256.test(mirror?.provenanceSha256 ?? '')) {
