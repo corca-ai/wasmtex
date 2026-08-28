@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "texliveYear": "2026",
   "distributionProfileId": "2026-20260826",
   "discovery": {
@@ -22,7 +22,7 @@
       "engine": {
         "releaseId": "2026-e4bc65275123982c",
         "tag": "engine-2026-e4bc65275123982c",
-        "sourceRevision": "2f9ed38431af364ee8c10c6a7dcb06e185423534",
+        "sourceRevisions": ["2f9ed38431af364ee8c10c6a7dcb06e185423534"],
         "correspondingSourceSha256": "bfdd129742502944ae9b0a260eba403a1138e76cde3bfa73c4d8b21828091a97",
         "buildRuns": [33067203361, 33067205526, 33067207758, 33067209911, 33067211879]
       },
@@ -46,7 +46,7 @@
       "engine": {
         "releaseId": "2026-2cf7faa6c44284dc",
         "tag": "engine-2026-2cf7faa6c44284dc",
-        "sourceRevision": "06f1937c502188fe04f0931fed702d06c2b78ab3",
+        "sourceRevisions": ["06f1937c502188fe04f0931fed702d06c2b78ab3"],
         "correspondingSourceSha256": "5f1a99e6d7cc4019a42b59b62b750e165fb812a8cd83d2c86ab6cb7ab476cbab",
         "buildRuns": [33163170379, 33163172428, 33163174571, 33163176440, 33163178493]
       },

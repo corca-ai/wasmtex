@@ -163,9 +163,11 @@ The implementation's independence is both enforced and evidenced:
 
 Every release artifact is bound to a `BUILD-RECEIPT.<family>.json` recording
 the WasmTex commit, TeX Live commit, Emscripten commit, digest-pinned build
-image, and per-file SHA-256, and all family receipts must share one source
-revision. A per-archive link inventory and an SPDX SBOM classify everything
-the linker actually selected, as recorded in the
+image, and per-file SHA-256. A release may compose independently built families
+from different WasmTex commits; unchanged families retain their existing bytes
+and receipts. All receipts must still bind the same immutable TeX Live mirror,
+TeX Live source, and toolchain inputs. A per-archive link inventory and an SPDX
+SBOM classify everything the linker actually selected, as recorded in the
 [engine release evidence](license-evidence/engine-release-2025-57ad3e9.md) for that build.
 Independent rebuilds reproduce the engine bytes, format dumps record their
 observed inputs and known non-determinism, and version control carries no
@@ -188,8 +190,8 @@ and [corresponding-source guide](corresponding-source.md). Because that link is
 reproducible but not bit-identical, the corresponding source is bound to the
 distributed binaries by **source revision**, not by an exact content-hash
 release ID: the checker requires the archive to bundle exactly the source
-revision the deployed receipts name, and the archive is re-cut when the engines
-are rebuilt from a new revision. The archive SHA-256 and its public HTTPS URL
+revisions the deployed receipts name, and the archive is re-cut when any family
+is rebuilt from a new revision. The archive SHA-256 and its public HTTPS URL
 are recorded in `LICENSE-MANIFEST.json#correspondingSource`.
 
 ### Notices and relink material

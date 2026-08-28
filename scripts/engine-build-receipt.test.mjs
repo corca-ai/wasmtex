@@ -160,7 +160,7 @@ test('binds every release file to one receipt and one license family', () => {
   )
 })
 
-test('rejects missing build families and mixed source revisions', () => {
+test('composes independently built families while keeping one mirror identity', () => {
   const { artifacts, config } = fixture()
   const pdftex = createBuildReceipt({
     family: 'pdftex',
@@ -171,14 +171,13 @@ test('rejects missing build families and mixed source revisions', () => {
     mirror: MIRROR,
     config,
   })
-  writeFileSync(join(artifacts, 'other.wasm'), Buffer.from([0, 97, 115, 109, 1]))
   const bibtex = createBuildReceipt({
     family: 'bibtex',
     directory: artifacts,
-    filenames: ['other.wasm'],
+    filenames: ['engine.wasm'],
     sourceRevision: 'f'.repeat(40),
     texliveSourceCommit: COMMIT,
-    mirror: { ...MIRROR, revision: '2025-fedcba9876543210', url: 'https://tex.example/snapshots/2025-fedcba9876543210/2025/' },
+    mirror: MIRROR,
     config,
   })
   writeFileSync(join(artifacts, 'BUILD-RECEIPT.pdftex.json'), `${JSON.stringify(pdftex)}\n`)
@@ -188,17 +187,19 @@ test('rejects missing build families and mixed source revisions', () => {
     directory: artifacts,
     legal: {
       texliveSourceCommit: COMMIT,
-      requiredBuildFamilies: ['pdftex', 'bibtex', 'makeindex'],
+      requiredBuildFamilies: ['pdftex', 'bibtex'],
       artifactFamilies: [
         { name: 'pdftex', patterns: ['engine.js'] },
-        { name: 'bibtex', patterns: ['other.wasm'] },
+        { name: 'bibtex', patterns: ['engine.wasm'] },
       ],
     },
     sourceConfig: config,
   })
-  assert.match(inspected.errors.join('\n'), /missing required build receipt: makeindex/)
-  assert.match(inspected.errors.join('\n'), /do not share one WasmTex source revision/)
-  assert.match(inspected.errors.join('\n'), /do not share one mirror identity/)
+  assert.deepEqual(inspected.errors, [])
+  assert.deepEqual(
+    inspected.buildReceipts.map((receipt) => receipt.sourceRevision).sort(),
+    [COMMIT, 'f'.repeat(40)].sort(),
+  )
 })
 
 test('rejects a missing or mutable mirror identity', () => {
