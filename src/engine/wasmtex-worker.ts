@@ -1,5 +1,13 @@
-import type { CachedTexliveFile, TexliveFileEntry, TexliveVersion } from '../types'
+import type {
+  CachedTexliveFile,
+  CompletionSnapshotProfile,
+  ResolverEvidenceReport,
+  ResolverStage,
+  TexliveFileEntry,
+  TexliveVersion,
+} from '../types'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
+import { type RawResolverEvidence, ResolverEvidenceCollector } from './resolver-evidence'
 import { createEngineWorker } from './worker-host'
 
 /** Messages exchanged with a WasmTex engine worker. */
@@ -20,6 +28,7 @@ export interface WasmTexWorkerMsg {
   /** dumpcache response: fetched files + known-missing entries. */
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
+  evidence?: RawResolverEvidence
 }
 
 /**
@@ -69,6 +78,7 @@ export abstract class WasmTexWorker<
           }
           return
         }
+        if (this.handleProtocolMessage(data)) return
         if (data.cmd === 'downloading' && data.file) {
           this.onFileDownload?.(data.file)
           return
@@ -87,6 +97,10 @@ export abstract class WasmTexWorker<
       cmd: 'settexliveurl',
       url: resolveTexliveUrl(this.texliveUrl, this.version),
     })
+  }
+
+  protected handleProtocolMessage(_data: TMsg): boolean {
+    return false
   }
 
   /** Tear down a worker that failed to initialize and settle any in-flight request. The
@@ -138,6 +152,7 @@ export interface CompileWorkerResult {
   out: Uint8Array | null
   inputFiles?: string[]
   inputFilesComplete?: boolean
+  resolver?: ResolverEvidenceReport
 }
 
 /**
@@ -146,6 +161,35 @@ export interface CompileWorkerResult {
  * `compile*` command under the `cmd:compile` key with `{result,status,log,pdf}`.
  */
 export class CompileWorkerDriver extends WasmTexWorker {
+  private readonly resolver: ResolverEvidenceCollector
+
+  constructor(
+    enginePath: string,
+    texliveUrl: string | null,
+    version: TexliveVersion,
+    stage: ResolverStage = 'pdftex',
+    profile: CompletionSnapshotProfile = {
+      id: `texlive-${version}`,
+      texliveYear: version,
+      mirrorRevision: null,
+    },
+  ) {
+    super(enginePath, texliveUrl, version)
+    this.resolver = new ResolverEvidenceCollector(stage, profile)
+  }
+
+  protected override handleProtocolMessage(data: WasmTexWorkerMsg): boolean {
+    if (data.cmd === 'resolverready') {
+      this.resolver.markSupported()
+      return true
+    }
+    if (data.cmd === 'resolver' && data.evidence) {
+      this.resolver.record(data.evidence)
+      return true
+    }
+    return false
+  }
+
   /** Run `command` (`compilelatex` | `compileformat` | `compilepdf`) and collect
    *  the output. status 0 (ok) and 1 (warnings) both count as success. */
   async run(command: string): Promise<CompileWorkerResult> {
@@ -153,7 +197,9 @@ export class CompileWorkerDriver extends WasmTexWorker {
       return { success: false, log: 'engine not ready', out: null }
     }
     this.status = 'compiling'
+    this.resolver.begin()
     const data = await this.postMessageWithResponse({ cmd: command }, 'cmd:compile')
+    const resolver = this.resolver.finish()
     this.status = 'ready'
     const success = data.result === 'ok' && (data.status === 0 || data.status === 1)
     const out = data.pdf ? new Uint8Array(data.pdf) : null
@@ -165,6 +211,7 @@ export class CompileWorkerDriver extends WasmTexWorker {
       ...(typeof data.inputFilesComplete === 'boolean'
         ? { inputFilesComplete: data.inputFilesComplete }
         : {}),
+      ...(resolver ? { resolver } : {}),
     }
   }
 
@@ -181,15 +228,23 @@ export class CompileWorkerDriver extends WasmTexWorker {
    *  later `compilelatex`; not awaiting a reply keeps a stale worker (one without
    *  this command) from hanging the compile — it just degrades to on-demand XHR.
    *  Transfers buf. */
-  preloadTexlive(format: number, filename: string, buf: ArrayBuffer): void {
-    this.worker?.postMessage({ cmd: 'preloadtexlive', format, filename, data: buf }, [buf])
+  preloadTexlive(
+    format: number,
+    filename: string,
+    buf: ArrayBuffer,
+    source: 'warmup-cache' | 'persistent-cache',
+  ): void {
+    this.worker?.postMessage({ cmd: 'preloadtexlive', format, filename, data: buf, source }, [buf])
   }
 
   /** Pre-seed known-missing lookups so the worker skips their sync XHR
    *  (fire-and-forget, same rationale as {@link preloadTexlive}). */
-  preload404(entries: ReadonlyArray<{ format: number; filename: string }>): void {
+  preload404(
+    entries: ReadonlyArray<{ format: number; filename: string }>,
+    source: 'warmup-negative' | 'durable-negative',
+  ): void {
     if (entries.length === 0) return
-    this.worker?.postMessage({ cmd: 'preload404', entries })
+    this.worker?.postMessage({ cmd: 'preload404', entries, source })
   }
 
   /** Export every TeX Live file fetched/preloaded this session, plus known-missing

@@ -282,6 +282,7 @@ export class WasmTex {
       preambleCacheIdentity: {
         mirrorRevision: this.opts.completionProfile?.mirrorRevision ?? null,
       },
+      resolverProfile: this.completionProfile(),
       texliveVersion: this.opts.texliveVersion || '2025',
       ...(this.opts.warmupCache ? { warmupCache: this.opts.warmupCache } : {}),
     }

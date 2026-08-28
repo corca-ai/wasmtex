@@ -1,6 +1,8 @@
 import type {
   CachedTexliveFile,
   CompileResult,
+  CompletionSnapshotProfile,
+  ResolverEvidenceReport,
   TexliveFileEntry,
   TexliveVersion,
   WarmupCache,
@@ -22,6 +24,7 @@ import type { BinaryStore } from './persistent-cache'
 import { isIndexedDbSupported, PersistentCache } from './persistent-cache'
 import { durablePreambleKey, PreambleSnapshotCache, preambleSha256 } from './preamble-cache'
 import { extractPreamble } from './preamble-utils'
+import { type RawResolverEvidence, ResolverEvidenceCollector } from './resolver-evidence'
 import { createEngineWorker } from './worker-host'
 
 export interface WasmTexEngineOptions {
@@ -54,6 +57,8 @@ export interface WasmTexEngineOptions {
   preambleCacheIdentity?: { mirrorRevision: string | null }
   /** Test/integration injection point; browser hosts normally omit it. @internal */
   preambleCacheStore?: BinaryStore
+  /** Exact compile profile attached to host-local resolver evidence. */
+  resolverProfile?: CompletionSnapshotProfile
 }
 
 /** Counter for unique message IDs. */
@@ -89,6 +94,13 @@ interface WorkerMessage {
   completionObservations?: string[]
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
+  evidence?: RawResolverEvidence
+}
+
+function resolverTelemetry(
+  resolver: ResolverEvidenceReport | undefined,
+): Record<string, never> | { resolver: ResolverEvidenceReport } {
+  return resolver ? { resolver } : {}
 }
 
 function applyEngineCommandObservation(result: CompileResult, data: WorkerMessage): void {
@@ -161,6 +173,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private skipFormatPreload: boolean
   private version: TexliveVersion
   private warmupCache: WarmupCache | undefined
+  private readonly warmupPositiveSources = new Map<string, 'warmup-cache' | 'persistent-cache'>()
+  private readonly warmupNegativeSources = new Map<string, 'warmup-negative' | 'durable-negative'>()
   private preambleSnapshotEnabled: boolean
   private persistentCacheEnabled: boolean
   private readonly assetBaseUrl: string
@@ -183,6 +197,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private completionObservation: EngineCompletionObservation | null = null
   /** Download/persist watermark (drives auto-persist; single-flight guarded). */
   private readonly persist: PersistState = { downloadCount: 0, lastPersisted: -1, inFlight: false }
+  private readonly resolver: ResolverEvidenceCollector
 
   public onFileDownload?: (filename: string) => void
 
@@ -200,6 +215,14 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     this.assetBaseUrl = base
     this.effectiveTexliveUrl = resolveTexliveUrl(options?.texliveUrl ?? null, version)
     this.preambleMirrorRevision = options?.preambleCacheIdentity?.mirrorRevision ?? null
+    this.resolver = new ResolverEvidenceCollector(
+      'pdftex',
+      options?.resolverProfile ?? {
+        id: `texlive-${version}`,
+        texliveYear: version,
+        mirrorRevision: this.preambleMirrorRevision,
+      },
+    )
     if (
       options?.persistentPreambleCache &&
       this.preambleMirrorRevision &&
@@ -324,6 +347,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
     // Dispatch by cmd (legacy protocol for compile/readfile)
     if (data.cmd) {
+      if (this.handleResolverMessage(data)) return
       if (data.cmd === 'downloading' && data.file) {
         this.persist.downloadCount++
         this.onFileDownload?.(data.file)
@@ -332,6 +356,18 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
       this.deliverResponse(`cmd:${data.cmd}`, data)
     }
+  }
+
+  private handleResolverMessage(data: WorkerMessage): boolean {
+    if (data.cmd === 'resolverready') {
+      this.resolver.markSupported()
+      return true
+    }
+    if (data.cmd === 'resolver' && data.evidence) {
+      this.resolver.record(data.evidence)
+      return true
+    }
+    return false
   }
 
   private async preloadFormat(): Promise<void> {
@@ -352,7 +388,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       const buf = await resp.arrayBuffer()
       const msgId = `msg-${nextMsgId++}`
       await this.postMessageWithResponse(
-        { cmd: 'preloadtexlive', format, filename, data: buf, msgId },
+        { cmd: 'preloadtexlive', format, filename, data: buf, source: 'warmup-cache', msgId },
         msgId,
         [buf],
       )
@@ -372,7 +408,15 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       const buf = file.data.slice(0)
       promises.push(
         this.postMessageWithResponse(
-          { cmd: 'preloadtexlive', format: file.format, filename: file.filename, data: buf, msgId },
+          {
+            cmd: 'preloadtexlive',
+            format: file.format,
+            filename: file.filename,
+            data: buf,
+            source:
+              this.warmupPositiveSources.get(`${file.format}/${file.filename}`) ?? 'warmup-cache',
+            msgId,
+          },
           msgId,
           [buf],
         ),
@@ -382,10 +426,29 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     // Send 404 entries in a single batch.
     // Uses a timeout because old pre-built WASM workers won't have the
     // preload404 command and will silently ignore it (no response).
-    if (cache.notFound.length > 0) {
+    const negativeGroups = [
+      {
+        source: 'warmup-negative' as const,
+        entries: cache.notFound.filter(
+          (entry) =>
+            this.warmupNegativeSources.get(`${entry.format}/${entry.filename}`) !==
+            'durable-negative',
+        ),
+      },
+      {
+        source: 'durable-negative' as const,
+        entries: cache.notFound.filter(
+          (entry) =>
+            this.warmupNegativeSources.get(`${entry.format}/${entry.filename}`) ===
+            'durable-negative',
+        ),
+      },
+    ]
+    for (const group of negativeGroups) {
+      if (group.entries.length === 0) continue
       const msgId = `msg-${nextMsgId++}`
       const preload404 = this.postMessageWithResponse(
-        { cmd: 'preload404', entries: cache.notFound, msgId },
+        { cmd: 'preload404', entries: group.entries, source: group.source, msgId },
         msgId,
       )
       // An old worker lacking the preload404 command never replies, so the
@@ -520,8 +583,34 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         // Corrupt/unavailable durable cache — fall back to the provided warmup only.
       }
     }
+    this.recordWarmupSources(resolved)
     if (resolved?.bloomFilter) this.bloomFilter = resolved.bloomFilter
     return resolved
+  }
+
+  private recordWarmupSources(resolved: WarmupCache | undefined): void {
+    this.warmupPositiveSources.clear()
+    this.warmupNegativeSources.clear()
+    const callerFileKeys = new Set(
+      this.warmupCache?.files.map((file) => `${file.format}/${file.filename}`) ?? [],
+    )
+    const callerNegativeKeys = new Set(
+      this.warmupCache?.notFound.map((entry) => `${entry.format}/${entry.filename}`) ?? [],
+    )
+    for (const file of resolved?.files ?? []) {
+      const key = `${file.format}/${file.filename}`
+      this.warmupPositiveSources.set(
+        key,
+        callerFileKeys.has(key) ? 'warmup-cache' : 'persistent-cache',
+      )
+    }
+    for (const entry of resolved?.notFound ?? []) {
+      const key = `${entry.format}/${entry.filename}`
+      this.warmupNegativeSources.set(
+        key,
+        callerNegativeKeys.has(key) ? 'warmup-negative' : 'durable-negative',
+      )
+    }
   }
 
   /**
@@ -588,7 +677,9 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
     const start = performance.now()
 
+    this.resolver.begin()
     const data = await this.postMessageWithResponse({ cmd: 'compilelatex' }, 'cmd:compile')
+    const resolver = this.resolver.finish()
     this.completionObservation = Array.isArray(data.completionObservations)
       ? parseEngineCompletionObservation(data.completionObservations)
       : null
@@ -639,6 +730,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     // compile's log — the source's `\usepackage` declarations recover them.
     result.telemetry = {
       diagnostics: buildDiagnostics(log, glyphGaps),
+      ...resolverTelemetry(resolver),
       dependencies: buildDependencyGraph(log, {
         inputFiles: result.inputFiles,
         source: this.sources.get(this.mainFileName),

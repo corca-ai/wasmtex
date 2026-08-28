@@ -16,6 +16,8 @@
  * canonical extension for extension-less lookups — exactly like the XeTeX glue.
  * ========================================================================== */
 
+importScripts('wasmtex-resolver-evidence.js')
+
 const TEXCACHEROOT = '/tex'
 const WORKROOT = '/work'
 // biome-ignore lint: emscripten populates Module
@@ -195,6 +197,47 @@ self.onmessage = (ev) => {
     }
   } else if (cmd === 'setmainfile') {
     self.mainfile = data.url
+  } else if (cmd === 'preloadtexlive') {
+    try {
+      const savepath = `${TEXCACHEROOT}/${data.filename}`
+      FS.writeFile(savepath, new Uint8Array(data.data))
+      const cacheKey = `${data.format}/${data.filename}`
+      texlive200[cacheKey] = savepath
+      texlive200Source[cacheKey] = data.source === 'persistent-cache'
+        ? 'persistent-cache'
+        : 'warmup-cache'
+      delete texlive404[cacheKey]
+      delete texlive404Source[cacheKey]
+    } catch {}
+  } else if (cmd === 'preload404') {
+    for (const entry of data.entries || []) {
+      const cacheKey = `${entry.format}/${entry.filename}`
+      if (!(cacheKey in texlive200)) {
+        texlive404[cacheKey] = 1
+        texlive404Source[cacheKey] = data.source === 'durable-negative'
+          ? 'durable-negative'
+          : 'warmup-negative'
+      }
+    }
+  } else if (cmd === 'dumpcache') {
+    const files = []
+    const transfer = []
+    for (const key in texlive200) {
+      const slash = key.indexOf('/')
+      if (slash < 0) continue
+      try {
+        const bytes = FS.readFile(texlive200[key], { encoding: 'binary' })
+        const copy = new Uint8Array(bytes.length)
+        copy.set(bytes)
+        files.push({ format: Number(key.slice(0, slash)), filename: key.slice(slash + 1), data: copy.buffer })
+        transfer.push(copy.buffer)
+      } catch {}
+    }
+    const notFound = Object.keys(texlive404).map((key) => {
+      const slash = key.indexOf('/')
+      return { format: Number(key.slice(0, slash)), filename: key.slice(slash + 1) }
+    })
+    self.postMessage({ result: 'ok', cmd: 'dumpcache', files, notFound }, transfer)
   } else if (cmd === 'flushcache') {
     cleanDir(WORKROOT)
   } else if (cmd === 'grace') {
@@ -205,6 +248,8 @@ self.onmessage = (ev) => {
 // --- kpse over HTTP against the WasmTex CDN ---------------------------------
 const texlive404 = {}
 const texlive200 = {}
+const texlive404Source = {}
+const texlive200Source = {}
 
 /** Canonical extension for a kpse format (for extension-less requests). */
 const FORMAT_EXT = { 4: '.afm', 26: '.tex', 32: '.pfb', 36: '.ttf', 47: '.otf' }
@@ -247,9 +292,20 @@ function kpse_find_file_impl(nameptr, format) {
   if (reqname.startsWith(`${TEXCACHEROOT}/`)) reqname = reqname.slice(TEXCACHEROOT.length + 1)
   if (reqname.includes('/')) return 0
   const cacheKey = `${format}/${reqname}`
-  if (cacheKey in texlive404) return 0
-  if (cacheKey in texlive200) return _allocate(intArrayFromString(texlive200[cacheKey]))
+  if (cacheKey in texlive404) {
+    self.wasmtexResolverEvidence(reqname, format, 'mirror-absent', [{
+      source: texlive404Source[cacheKey] || 'durable-negative', outcome: 'not-found',
+    }])
+    return 0
+  }
+  if (cacheKey in texlive200) {
+    self.wasmtexResolverEvidence(reqname, format, 'resolved', [{
+      source: texlive200Source[cacheKey] || 'session-cache', outcome: 'hit',
+    }])
+    return _allocate(intArrayFromString(texlive200[cacheKey]))
+  }
 
+  const attempts = []
   for (const [dir, filename] of cdnCandidates(reqname, format)) {
     const url = `${self.texlive_endpoint}pdftex/${dir}/${filename}`
     const xhr = new XMLHttpRequest()
@@ -258,8 +314,15 @@ function kpse_find_file_impl(nameptr, format) {
     try {
       xhr.send()
     } catch {
+      attempts.push({ source: 'network', outcome: 'transport-error', candidate: filename })
       continue
     }
+    attempts.push({
+      source: 'network',
+      outcome: xhr.status === 200 ? 'hit' : 'not-found',
+      candidate: filename,
+      status: xhr.status,
+    })
     if (xhr.status === 200) {
       const bytes = new Uint8Array(xhr.response)
       // Save at the MATCHED-extension path (e.g. /tex/lmroman10-regular.otf): for an
@@ -276,15 +339,30 @@ function kpse_find_file_impl(nameptr, format) {
         } catch {}
       }
       texlive200[cacheKey] = withExt
+      texlive200Source[cacheKey] = 'session-cache'
       // Also key by the matched filename so a re-lookup by the returned path
       // (/tex/name.otf -> name.otf) or by the container's own format dir hits the
       // cache instead of re-fetching the same file from the CDN.
       texlive200[`${format}/${filename}`] = withExt
       texlive200[`${dir}/${filename}`] = withExt
+      texlive200Source[`${format}/${filename}`] = 'session-cache'
+      texlive200Source[`${dir}/${filename}`] = 'session-cache'
+      self.postMessage({ cmd: 'downloading', file: reqname })
+      self.wasmtexResolverEvidence(reqname, format, 'resolved', attempts)
       return _allocate(intArrayFromString(withExt))
     }
   }
-  texlive404[cacheKey] = 1
+  const mirrorAbsent = attempts.length > 0 && attempts.every((attempt) => attempt.outcome === 'not-found')
+  if (mirrorAbsent) {
+    texlive404[cacheKey] = 1
+    texlive404Source[cacheKey] = 'network'
+  }
+  self.wasmtexResolverEvidence(
+    reqname,
+    format,
+    mirrorAbsent ? 'mirror-absent' : 'transport-error',
+    attempts,
+  )
   return 0
 }
 

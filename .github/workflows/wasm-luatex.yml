@@ -34,6 +34,7 @@ on:
     branches: [main]
     paths:
       - 'wasm-build/luatex-worker.js'
+      - 'wasm-build/resolver-evidence.js'
       - 'wasm-build/luatex-library.js'
       - 'wasm-build/luatex-entry.c'
       - 'wasm-build/build-luatex.sh'
@@ -113,7 +114,8 @@ jobs:
           node -e "const fs=require('fs'); const bytes=fs.readFileSync('wasm-build/dist-luatex/wasmtex-luatex.wasm'); if (!WebAssembly.validate(bytes)) process.exit(1)"
           node scripts/gen-engine-build-receipt.mjs \
             luahbtex wasm-build/dist-luatex wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex-raw.json \
-            wasmtex-luatex.js wasmtex-luatex.worker.js wasmtex-luatex.wasm
+            wasmtex-luatex.js wasmtex-luatex.worker.js wasmtex-luatex.wasm \
+            wasmtex-resolver-evidence.js
 
       - name: Upload raw 2026 LuaHBTeX build evidence
         if: env.TEXLIVE_YEAR == '2026'
@@ -122,6 +124,7 @@ jobs:
           name: wasm-luatex-2026-raw
           path: |
             wasm-build/dist-luatex/wasmtex-luatex.*
+            wasm-build/dist-luatex/wasmtex-resolver-evidence.js
             wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex-raw.json
           retention-days: 90
 
@@ -145,7 +148,8 @@ jobs:
           mkdir -p "public/wasmtex/$TEXLIVE_YEAR"
           cp wasm-build/dist-luatex/wasmtex-luatex.js \
              wasm-build/dist-luatex/wasmtex-luatex.worker.js \
-             wasm-build/dist-luatex/wasmtex-luatex.wasm "public/wasmtex/$TEXLIVE_YEAR/"
+             wasm-build/dist-luatex/wasmtex-luatex.wasm \
+             wasm-build/dist-luatex/wasmtex-resolver-evidence.js "public/wasmtex/$TEXLIVE_YEAR/"
           node scripts/extract-luatex-format.mjs "$TEXLIVE_YEAR"
           # Ship the format gzipped (consistent with XeLaTeX; the engine prefers
           # `.fmt.gz` and decompresses in-browser). ~5.5 MB → ~2 MB.
@@ -182,7 +186,7 @@ jobs:
           node scripts/gen-engine-build-receipt.mjs \
             luahbtex wasm-build/dist-luatex wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json \
             wasmtex-luatex.js wasmtex-luatex.worker.js wasmtex-luatex.wasm \
-            wasmtex-luatex.fmt.gz
+            wasmtex-luatex.fmt.gz wasmtex-resolver-evidence.js
 
       - name: Upload LuaTeX WASM artifacts
         uses: actions/upload-artifact@v7
@@ -193,6 +197,7 @@ jobs:
             wasm-build/dist-luatex/wasmtex-luatex.worker.js
             wasm-build/dist-luatex/wasmtex-luatex.wasm
             wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
+            wasm-build/dist-luatex/wasmtex-resolver-evidence.js
             wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json
           retention-days: 90
 

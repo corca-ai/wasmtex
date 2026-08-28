@@ -13,7 +13,14 @@
  * dvipdfmx worker. They therefore implement {@link init}, {@link compile},
  * {@link flushCache} and {@link terminate} themselves.
  */
-import type { CompileResult, EngineStatus, TexliveVersion, WarmupCache } from '../types'
+import type {
+  CompileResult,
+  CompletionSnapshotProfile,
+  EngineStatus,
+  ResolverEvidenceReport,
+  TexliveVersion,
+  WarmupCache,
+} from '../types'
 import type { CompileEngine } from './compile-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import { engineFormatUrl, engineWorkerUrl } from './engine-assets'
@@ -22,6 +29,7 @@ import { enrichGlyphSuggestions } from './glyph-suggestions'
 import { buildDiagnostics, parseGlyphGaps, parseTexErrors } from './parse-errors'
 import { persistIfNeeded } from './persist-watermark'
 import { isIndexedDbSupported, PersistentCache } from './persistent-cache'
+import { mergeResolverReports } from './resolver-evidence'
 import { mergeWarmupCaches, type WasmTexEngineOptions } from './wasmtex-engine'
 import { CompileWorkerDriver } from './wasmtex-worker'
 
@@ -37,7 +45,19 @@ export function createCompileWorker(
   const base = options.assetBaseUrl ?? import.meta.env.BASE_URL
   const version = options.texliveVersion ?? '2025'
   const url = options.texliveUrl ?? null
-  return new CompileWorkerDriver(engineWorkerUrl(base, version, binary), url, version)
+  const profile = options.resolverProfile ?? {
+    id: `texlive-${version}`,
+    texliveYear: version,
+    mirrorRevision: null,
+  }
+  const stage = binary === 'dvipdfm' ? 'dvipdfmx' : binary
+  return new CompileWorkerDriver(
+    engineWorkerUrl(base, version, binary),
+    url,
+    version,
+    stage,
+    profile,
+  )
 }
 
 /**
@@ -76,6 +96,7 @@ interface TexFmtWarmSet {
   bloom: ArrayBuffer | null
   files: Array<{ format: number; filename: string; data: ArrayBuffer }>
   notFound: ReadonlyArray<{ format: number; filename: string }>
+  source: 'warmup-cache' | 'persistent-cache'
 }
 
 export abstract class BaseTexFmtEngine implements CompileEngine {
@@ -107,6 +128,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   /** Files the worker has reported fetching this session; drives auto-persist (shape matches
    *  PersistState; inferred so this engine and WasmTexPdftexEngine don't share an import block). */
   private readonly persist = { downloadCount: 0, lastPersisted: -1, inFlight: false }
+  protected readonly resolverProfile: CompletionSnapshotProfile
   public onProgress?: (progress: number) => void
   public onFileDownload?: (filename: string) => void
 
@@ -116,11 +138,15 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     formatUrl?: string,
     warmup?: TexFmtWarmupPlan,
     persistentCache?: { version: TexliveVersion },
+    resolverProfile?: CompletionSnapshotProfile,
   ) {
     this.tex = tex
     this.fmtFile = fmtFile
     this.formatUrl = formatUrl
     this.warmup = warmup
+    this.resolverProfile =
+      resolverProfile ??
+      ({ id: 'texlive-2025', texliveYear: '2025', mirrorRevision: null } as const)
     if (persistentCache && isIndexedDbSupported()) {
       this.durableCache = new PersistentCache({ version: persistentCache.version })
     }
@@ -197,6 +223,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       bloom: cache.bloomFilter ?? null,
       files: cache.files.map((f) => ({ format: f.format, filename: f.filename, data: f.data })),
       notFound: cache.notFound,
+      source: 'persistent-cache',
     }
   }
 
@@ -258,7 +285,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   /** Prefetch the bloom filter and every warmup file in parallel (worker not
    *  needed yet). Best-effort: failures just fall back to on-demand sync XHR. */
   private async fetchWarmupAssets(): Promise<TexFmtWarmSet> {
-    if (!this.warmup) return { bloom: null, files: [], notFound: [] }
+    if (!this.warmup) return { bloom: null, files: [], notFound: [], source: 'warmup-cache' }
     const { texliveUrl, preload, notFound, concurrency = 8 } = this.warmup
     const fetchBuf = async (url: string): Promise<ArrayBuffer | null> => {
       try {
@@ -283,7 +310,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     const bloom = await bloomP
     // Retain the bloom bytes so a later persist() stores them in the durable cache.
     if (bloom && this.durableCache) this.bloomBytes = bloom
-    return { bloom, files, notFound }
+    return { bloom, files, notFound, source: 'warmup-cache' }
   }
 
   /** Send the resolved warmup set to the worker (worker must be ready). The
@@ -292,11 +319,16 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
    *  and fetches on demand. */
   private injectWarmupAssets(driver: CompileWorkerDriver, assets: TexFmtWarmSet): void {
     if (assets.bloom) driver.loadBloom(assets.bloom)
-    driver.preload404(assets.notFound)
+    driver.preload404(
+      assets.notFound,
+      assets.source === 'persistent-cache' ? 'durable-negative' : 'warmup-negative',
+    )
     // Copy each buffer: preloadTexlive TRANSFERS (detaches) it, but the same warm set is
     // re-injected into a second worker (XeLaTeX's dvipdfmx via rehydrateExtraDriver), which
     // would otherwise receive a 0-byte detached buffer. Mirrors WasmTexPdftexEngine.injectWarmupCache.
-    for (const f of assets.files) driver.preloadTexlive(f.format, f.filename, f.data.slice(0))
+    for (const f of assets.files) {
+      driver.preloadTexlive(f.format, f.filename, f.data.slice(0), assets.source)
+    }
   }
 
   /** Persist the worker caches to the durable store, but only when new files were fetched
@@ -353,6 +385,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     start: number,
     inputFiles?: string[],
     inputFilesComplete?: boolean,
+    resolverReports: ReadonlyArray<ResolverEvidenceReport | undefined> = [],
   ): CompileResult {
     const glyphGaps = parseGlyphGaps(log)
     if (glyphGaps.length > 0) enrichGlyphSuggestions(glyphGaps)
@@ -368,6 +401,9 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       ...(glyphGaps.length > 0 ? { glyphCoverage: { gaps: glyphGaps } } : {}),
       telemetry: {
         diagnostics: buildDiagnostics(log, glyphGaps),
+        ...(resolverReports.some(Boolean)
+          ? { resolver: mergeResolverReports(this.resolverProfile, resolverReports) }
+          : {}),
         // Source enrichment here covers LuaLaTeX (uses this result() directly) and the
         // XeLaTeX failure path (early return). XeLaTeX's success path re-derives this
         // with XDV fonts too. Recovers packages the preamble snapshot hides from the log.

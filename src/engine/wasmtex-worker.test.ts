@@ -116,3 +116,66 @@ describe('WasmTexWorker init failure recovery', () => {
     })
   })
 })
+
+describe('CompileWorkerDriver resolver evidence', () => {
+  afterEach(() => {
+    setWorkerFactory(() => {
+      throw new Error('worker factory not installed')
+    })
+  })
+
+  it('collects worker resolver messages into the command result', async () => {
+    let onmessage: ((ev: { data: unknown }) => void) | null = null
+    setWorkerFactory(
+      () =>
+        ({
+          postMessage(message: { cmd?: string }) {
+            if (message.cmd === 'settexliveurl') return
+            if (message.cmd === 'compilelatex') {
+              queueMicrotask(() => {
+                onmessage?.({
+                  data: {
+                    cmd: 'resolver',
+                    evidence: {
+                      requestedName: 'article.cls',
+                      format: 26,
+                      outcome: 'resolved',
+                      attempts: [{ source: 'network', outcome: 'hit', status: 200 }],
+                    },
+                  },
+                })
+                onmessage?.({ data: { cmd: 'compile', result: 'ok', status: 0, log: '' } })
+              })
+            }
+          },
+          terminate() {},
+          get onmessage() {
+            return onmessage
+          },
+          set onmessage(fn: ((ev: { data: unknown }) => void) | null) {
+            onmessage = fn
+            if (fn) {
+              queueMicrotask(() => {
+                fn({ data: { cmd: 'resolverready', schemaVersion: 1 } })
+                fn({ data: { result: 'ok' } })
+              })
+            }
+          },
+          onerror: null,
+        }) as unknown as EngineWorker,
+    )
+    const profile = {
+      id: '2026-latest@rev',
+      texliveYear: '2026' as const,
+      mirrorRevision: 'rev',
+    }
+    const driver = new CompileWorkerDriver('/engine.js', '/tl/', '2026', 'luatex', profile)
+    await driver.init()
+
+    const result = await driver.run('compilelatex')
+    expect(result.resolver).toMatchObject({
+      profile,
+      entries: [{ stage: 'luatex', requestedName: 'article.cls', outcome: 'resolved' }],
+    })
+  })
+})

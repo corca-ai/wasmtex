@@ -1,8 +1,9 @@
-import { CachedTexliveFile, CompileResult, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types';
+import { CachedTexliveFile, CompileResult, CompletionSnapshotProfile, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types';
 import { BaseWorkerEngine } from './base-worker-engine';
 import { CompileEngine } from './compile-engine';
 import { EngineCompletionObservation } from './completion-snapshot';
 import { BinaryStore } from './persistent-cache';
+import { RawResolverEvidence } from './resolver-evidence';
 export interface WasmTexEngineOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -35,6 +36,8 @@ export interface WasmTexEngineOptions {
     };
     /** Test/integration injection point; browser hosts normally omit it. @internal */
     preambleCacheStore?: BinaryStore;
+    /** Exact compile profile attached to host-local resolver evidence. */
+    resolverProfile?: CompletionSnapshotProfile;
 }
 /** Incoming response message from the WASM worker. */
 interface WorkerMessage {
@@ -66,6 +69,7 @@ interface WorkerMessage {
     completionObservations?: string[];
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];
+    evidence?: RawResolverEvidence;
 }
 /** Merge two warmup caches; `override` entries win on key collisions.
  *  Exported for unit testing — the merge must keep `files` and `notFound`
@@ -76,6 +80,8 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private skipFormatPreload;
     private version;
     private warmupCache;
+    private readonly warmupPositiveSources;
+    private readonly warmupNegativeSources;
     private preambleSnapshotEnabled;
     private persistentCacheEnabled;
     private readonly assetBaseUrl;
@@ -98,6 +104,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private completionObservation;
     /** Download/persist watermark (drives auto-persist; single-flight guarded). */
     private readonly persist;
+    private readonly resolver;
     onFileDownload?: (filename: string) => void;
     constructor(options?: WasmTexEngineOptions);
     init(): Promise<void>;
@@ -107,6 +114,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
      * Separated from init() to reduce cognitive complexity.
      */
     protected dispatchWorkerMessage(data: WorkerMessage, initResolve: () => void, initReject: (err: Error) => void): void;
+    private handleResolverMessage;
     private preloadFormat;
     /** Pre-load a texlive file into the worker's MEMFS cache. */
     private preloadTexliveFile;
@@ -135,6 +143,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
      * `warmupCache`.
      */
     private resolveWarmupCache;
+    private recordWarmupSources;
     /**
      * Export the worker's in-memory TeX Live cache: every file fetched or
      * preloaded this session (by `format/name`) plus the accumulated 404 set.

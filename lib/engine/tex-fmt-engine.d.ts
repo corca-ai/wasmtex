@@ -1,4 +1,4 @@
-import { CompileResult, EngineStatus, TexliveVersion } from '../types';
+import { CompileResult, CompletionSnapshotProfile, EngineStatus, ResolverEvidenceReport, TexliveVersion } from '../types';
 import { CompileEngine } from './compile-engine';
 import { WasmTexEngineOptions } from './wasmtex-engine';
 import { CompileWorkerDriver } from './wasmtex-worker';
@@ -65,11 +65,12 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** Files the worker has reported fetching this session; drives auto-persist (shape matches
      *  PersistState; inferred so this engine and WasmTexPdftexEngine don't share an import block). */
     private readonly persist;
+    protected readonly resolverProfile: CompletionSnapshotProfile;
     onProgress?: (progress: number) => void;
     onFileDownload?: (filename: string) => void;
     protected constructor(tex: CompileWorkerDriver, fmtFile: string, formatUrl?: string, warmup?: TexFmtWarmupPlan, persistentCache?: {
         version: TexliveVersion;
-    });
+    }, resolverProfile?: CompletionSnapshotProfile);
     abstract init(): Promise<void>;
     abstract compile(): Promise<CompileResult>;
     abstract flushCache(): Promise<void>;
@@ -134,7 +135,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** Mark the injected format as gone (call after a flushCache wipes the work
      *  dir) so the next {@link ensureFormat} re-injects it. */
     protected clearInjectedFormat(): void;
-    protected result(success: boolean, pdf: Uint8Array | null, log: string, start: number, inputFiles?: string[], inputFilesComplete?: boolean): CompileResult;
+    protected result(success: boolean, pdf: Uint8Array | null, log: string, start: number, inputFiles?: string[], inputFilesComplete?: boolean, resolverReports?: ReadonlyArray<ResolverEvidenceReport | undefined>): CompileResult;
     writeFile(path: string, content: string | Uint8Array): Promise<void>;
     /** The main `.tex` source as last written, for dependency extraction. */
     protected mainSource(): string | undefined;
