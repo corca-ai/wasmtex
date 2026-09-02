@@ -8,7 +8,7 @@ import type {
   ResolverStage,
 } from '../types'
 
-const MAX_ENTRIES = 256
+const MAX_ENTRIES = 1024
 const MAX_ATTEMPTS = 8
 const SOURCES = new Set<ResolverAttemptSource>([
   'warmup-cache',

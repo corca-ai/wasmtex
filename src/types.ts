@@ -107,6 +107,11 @@ export interface EngineTelemetry {
    *  tied to the exact compile profile and contains resource names and lookup
    *  outcomes only — never document bytes, account identity, or remote telemetry. */
   resolver?: ResolverEvidenceReport
+  /** Every TeX Live resource the TeX passes of this compile resolved (or found
+   *  absent), unioned across reruns, in the form a host can hand back to
+   *  `warmup({ dependencies })` next session so the first compile never blocks on
+   *  a synchronous mirror fetch. Names only — never bytes. */
+  texliveDependencies?: TexliveDependencySet
   /** Page/box geometry parsed from the engine's intermediate output (XeTeX's XDV),
    *  when available (#54 slice 3). The substrate a host needs for text extraction,
    *  click-to-source, content cropping, and figure/equation overlays — all headless,
@@ -438,6 +443,33 @@ export type TexliveVersion = '2025' | '2026'
 export interface TexliveFileEntry {
   format: number
   filename: string
+}
+
+/** One TeX Live resource observed by a compile, addressable for prefetch. */
+export interface TexliveDependency {
+  format: number
+  /** The kpathsea request name — the worker's cache key and the `filename` a
+   *  preload must be injected under. */
+  filename: string
+  /** Mirror object name when it differs from the request (extension fallback,
+   *  e.g. request `ptmr7t.vf` served as `ptmr7t`). Fetch this; inject as `filename`. */
+  candidate?: string
+}
+
+/** The exact TeX Live dependency set of a compile — a prefetch manifest for the
+ *  next session. Bound to the TeX Live year and compile profile it was observed
+ *  under; a host must not replay it against a different mirror. */
+export interface TexliveDependencySet {
+  schemaVersion: 1
+  texliveVersion: TexliveVersion
+  profile: CompletionSnapshotProfile
+  /** Resources that resolved on the mirror (or from a cache seeded from it). */
+  files: TexliveDependency[]
+  /** Requests the mirror answered as absent; preloading them skips the retry probes. */
+  notFound: TexliveFileEntry[]
+  /** False when a per-pass retention bound dropped resolver entries — the set is
+   *  then a usable subset, not the full closure. */
+  complete: boolean
 }
 
 export interface CachedTexliveFile {

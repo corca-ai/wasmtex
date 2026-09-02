@@ -48,10 +48,53 @@ interface WarmupOptions {
   texliveVersion?: '2025' | '2026'  // default: '2025'; must match the mirror profile
   texliveUrl?: string               // override the default immutable R2 snapshot
   concurrency?: number              // max parallel fetches (default: 6)
+  dependencies?: TexliveDependencySet // replay a compile's exact set (see below)
+  files?: TexliveDependency[]       // explicit list; overrides the manifest and `dependencies`
+  notFound?: TexliveFileEntry[]     // explicit known-absent list
   signal?: AbortSignal              // cancellation
   onProgress?: (completed: number, total: number) => void
 }
 ```
+
+## Exact dependency prefetch (`dependencies`)
+
+The built-in manifest covers the LaTeX kernel plus the most common packages. A real
+document — a conference class, Times fonts, hyperref — needs many more files, and each
+one the worker fetches on demand is a **serial** synchronous request that pays the full
+mirror latency. Measured against the live mirror in a fresh browser context, that is
+where a cold first compile goes (warm recompiles of the same documents take 0.1–0.2 s):
+
+| Document | Mirror requests | No warmup | Built-in warmup | Exact set prefetched |
+|---|---:|---:|---:|---:|
+| article + amsmath (40 sections) | 19 | 8.3 s | 0.3 s (after a 5.3 s warmup) | 0.3 s (after a 1.5 s prefetch) |
+| IEEEtran conference | 40 | 12–23 s | 11.5 s | 0.3 s (after 2.0 s) |
+| NeurIPS 2026 | 89 | 31 s | 26 s | 0.4 s (after 2.4 s) |
+| acmart sigconf | 185 | 57–175 s | 69 s | 0.8 s (after 5.0 s) |
+
+Every compile therefore reports its **exact TeX Live dependency set** as
+`telemetry.texliveDependencies` — the union, across rerun passes, of every resource the
+TeX passes resolved (with the mirror object name when it differs from the kpathsea
+request) or found absent. It contains names only, never bytes, and is bound to the TeX
+Live year and compile profile it was observed under.
+
+A host persists that set per project (it is small — a few KB of JSON) and replays it
+next session:
+
+```ts
+// After a successful compile — store next to the project.
+const deps = result.telemetry?.texliveDependencies
+
+// Next session, before the engine boots — fetch the whole set in parallel.
+const cache = await warmup({ dependencies: deps, concurrency: 16, texliveVersion, texliveUrl })
+const compiler = new WasmTexCompiler({ warmupCache: cache, texliveVersion, texliveUrl, files })
+```
+
+`warmup` ignores a set whose `texliveVersion` differs from the requested one (it falls
+back to the built-in manifest), so a set recorded against one year can never seed the
+other year's mirror. `files` / `notFound` accept an explicit list when a host assembles
+its own manifest (a template pack, a union over several projects). Because the same
+engine runs byte-identically on a server (`wasmtex/node`), the set for a template or a
+shared project can be recorded once there and served to every client.
 
 ## Persistent Cache
 

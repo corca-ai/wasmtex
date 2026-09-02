@@ -21,6 +21,12 @@ Keep them user-facing and concise. Example:
 
 ### Added
 
+- `telemetry.texliveDependencies`: the exact TeX Live dependency set of a compile,
+  unioned across rerun passes, and `warmup({ dependencies })` to prefetch that set in
+  parallel next session. Measured against the live mirror, replaying the set takes a cold
+  IEEEtran first compile from 12–23 s to ~2.3 s and acmart from 57 s+ to ~6 s (#80).
+- Resolver evidence retains up to 1024 entries per pass (was 256), so the dependency
+  set of a large document stays complete.
 - Document Syntax Snapshot v8 exposes bounded, non-overlapping source-order blocks so
   downstream semantic engines can reason about adjacency without rescanning TeX.
 

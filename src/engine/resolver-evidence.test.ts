@@ -72,7 +72,7 @@ describe('ResolverEvidenceCollector', () => {
       outcome: 'resolved',
       attempts: [{ source: 'network', outcome: 'hit' }],
     })
-    for (let index = 0; index < 260; index++) {
+    for (let index = 0; index < 1028; index++) {
       collector.record({
         requestedName: `resource-${index}.sty`,
         format: 26,
@@ -81,7 +81,7 @@ describe('ResolverEvidenceCollector', () => {
       })
     }
     const report = collector.finish()!
-    expect(report.entries).toHaveLength(256)
+    expect(report.entries).toHaveLength(1024)
     expect(report.dropped).toBe(4)
     expect(report.complete).toBe(false)
   })

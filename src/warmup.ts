@@ -6,4 +6,10 @@
 // re-exported from the root `wasmtex` barrel for the all-in-one editor case.
 
 export { type WarmupOptions, warmup } from './engine/warmup'
-export type { CachedTexliveFile, WarmupCache } from './types'
+export type {
+  CachedTexliveFile,
+  TexliveDependency,
+  TexliveDependencySet,
+  TexliveFileEntry,
+  WarmupCache,
+} from './types'
