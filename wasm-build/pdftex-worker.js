@@ -1895,10 +1895,21 @@ async function compileFromHeapCheckpointRoutine(data) {
 // The engine binary: the plain build, or the Asyncify build that supports heap
 // checkpoints (#81) when the host loaded this worker with `?engine=checkpoint`.
 (function() {
-    var engine = "wasmtex-pdftex.js";
+    var wantCheckpoint = false;
     try {
-        var params = new URLSearchParams(self.location.search);
-        if (params.get("engine") === "checkpoint") engine = "wasmtex-pdftex-checkpoint.js";
+        wantCheckpoint = new URLSearchParams(self.location.search).get("engine") === "checkpoint";
     } catch(e) {}
-    importScripts("wasmtex-kpse-resolve.js", engine);
+    importScripts("wasmtex-kpse-resolve.js");
+    if (wantCheckpoint) {
+        // A self-hosted asset set may predate the checkpoint build; fall back to the
+        // plain engine rather than failing to boot (the host then sees no checkpoint
+        // support and keeps the page-break path).
+        try {
+            importScripts("wasmtex-pdftex-checkpoint.js");
+            return;
+        } catch(e) {
+            console.warn("[wasmtex] checkpoint engine unavailable, loading the plain build: " + e);
+        }
+    }
+    importScripts("wasmtex-pdftex.js");
 })();
