@@ -205,6 +205,8 @@ jobs:
             wasm-build/dist/wasmtex-pdftex.js
             wasm-build/dist/wasmtex-pdftex.worker.js
             wasm-build/dist/wasmtex-pdftex.wasm
+            wasm-build/dist/wasmtex-pdftex-checkpoint.js
+            wasm-build/dist/wasmtex-pdftex-checkpoint.wasm
             wasm-build/dist/wasmtex-pdftex.fmt
             wasm-build/dist/wasmtex-kpse-resolve.js
             wasm-build/dist/wasmtex-pdftex-resolver-evidence.js
@@ -228,6 +230,7 @@ jobs:
           name: wasm-pdftex-bibtex-link-maps
           path: |
             wasm-build/dist/wasmtex-pdftex.map
+            wasm-build/dist/wasmtex-pdftex-checkpoint.map
             wasm-build/dist/wasmtex-bibtex.map
           retention-days: 90
 
