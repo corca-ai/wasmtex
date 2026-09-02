@@ -50,15 +50,15 @@
         "objects": 168942
       },
       "engine": {
-        "releaseId": "2026-d35e3c2fc8336349",
-        "tag": "engine-2026-d35e3c2fc8336349",
+        "releaseId": "2026-8c7d991e953babac",
+        "tag": "engine-2026-8c7d991e953babac",
         "sourceRevisions": [
           "06f1937c502188fe04f0931fed702d06c2b78ab3",
-          "2189412bbd28869c2ae85e029db16bacdd35cb6a"
+          "f095e483b758a8fac85d1f181b4a8e22e4de13ce"
         ],
-        "correspondingSourceSha256": "e60bdc91b2aec34b0da7446bd87caa21ce93097b0607aaa52ddcab86e958d78e",
+        "correspondingSourceSha256": "64ebce847165c9d6add3aa2f035cf3225a7ebea3a51c6a81add1fb2531e5a0df",
         "buildRuns": {
-          "pdftex-bibtex": 33178974178,
+          "pdftex-bibtex": 33587861494,
           "bibtex8": 33163172428,
           "makeindex": 33163174571,
           "xetex": 33163176440,
