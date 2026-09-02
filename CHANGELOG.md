@@ -16,6 +16,13 @@ Add entries here as you land changes. Group them under these headings:
   Added / Changed / Deprecated / Removed / Fixed / Security
 Keep them user-facing and concise. Example:
   ### Added
+
+- TikZ figure externalization (`tikzExternalization` on `WasmTexCompiler`): a document that
+  calls `\tikzexternalize` now has its pictures rendered by a pool of sibling compilers
+  (no shell escape) and reused across edits via the `external` library's own MD5 check;
+  `mode: 'auto'` extends this to documents that load TikZ without calling it. A text-only
+  recompile of a 15-picture document drops from ~1.1 s to ~140 ms. Telemetry:
+  `telemetry.tikzExternalization`.
   - Server-side xindy backend for index generation.
 -->
 
