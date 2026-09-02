@@ -22,7 +22,9 @@
       "engine": {
         "releaseId": "2026-e4bc65275123982c",
         "tag": "engine-2026-e4bc65275123982c",
-        "sourceRevisions": ["2f9ed38431af364ee8c10c6a7dcb06e185423534"],
+        "sourceRevisions": [
+          "2f9ed38431af364ee8c10c6a7dcb06e185423534"
+        ],
         "correspondingSourceSha256": "bfdd129742502944ae9b0a260eba403a1138e76cde3bfa73c4d8b21828091a97",
         "buildRuns": {
           "pdftex-bibtex": 33067203361,
@@ -35,7 +37,11 @@
       "qualification": {
         "browserGoldens": 7,
         "nodeBrowserParity": 7,
-        "representativeEngines": ["pdflatex", "xelatex", "lualatex"]
+        "representativeEngines": [
+          "pdflatex",
+          "xelatex",
+          "lualatex"
+        ]
       }
     },
     {
@@ -50,15 +56,15 @@
         "objects": 168942
       },
       "engine": {
-        "releaseId": "2026-8c7d991e953babac",
-        "tag": "engine-2026-8c7d991e953babac",
+        "releaseId": "2026-4f5a81441b5f5fff",
+        "tag": "engine-2026-4f5a81441b5f5fff",
         "sourceRevisions": [
           "06f1937c502188fe04f0931fed702d06c2b78ab3",
-          "f095e483b758a8fac85d1f181b4a8e22e4de13ce"
+          "ffc2f06b6469a8ad59c3e848c8cf071506335394"
         ],
-        "correspondingSourceSha256": "64ebce847165c9d6add3aa2f035cf3225a7ebea3a51c6a81add1fb2531e5a0df",
+        "correspondingSourceSha256": "7d19446910b3f67eab177545c0fefc8e03a5623345449119c6bd649864730300",
         "buildRuns": {
-          "pdftex-bibtex": 33587861494,
+          "pdftex-bibtex": 33662768337,
           "bibtex8": 33163172428,
           "makeindex": 33163174571,
           "xetex": 33163176440,
@@ -68,7 +74,11 @@
       "qualification": {
         "browserGoldens": 7,
         "nodeBrowserParity": 7,
-        "representativeEngines": ["pdflatex", "xelatex", "lualatex"]
+        "representativeEngines": [
+          "pdflatex",
+          "xelatex",
+          "lualatex"
+        ]
       }
     }
   ],

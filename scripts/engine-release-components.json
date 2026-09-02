@@ -10,13 +10,40 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33587005028,
-          "artifacts": ["wasm-pdftex", "wasm-bibtex"]
+          "runId": 33662763719,
+          "artifacts": [
+            "wasm-pdftex",
+            "wasm-bibtex"
+          ]
         },
-        { "id": "bibtex8", "runId": 33171940061, "artifacts": ["wasm-bibtex8"] },
-        { "id": "makeindex", "runId": 33171940043, "artifacts": ["wasm-makeindex"] },
-        { "id": "xetex", "runId": 33163135773, "artifacts": ["wasm-xetex"] },
-        { "id": "luahbtex", "runId": 33171982660, "artifacts": ["wasm-luatex"] }
+        {
+          "id": "bibtex8",
+          "runId": 33171940061,
+          "artifacts": [
+            "wasm-bibtex8"
+          ]
+        },
+        {
+          "id": "makeindex",
+          "runId": 33171940043,
+          "artifacts": [
+            "wasm-makeindex"
+          ]
+        },
+        {
+          "id": "xetex",
+          "runId": 33163135773,
+          "artifacts": [
+            "wasm-xetex"
+          ]
+        },
+        {
+          "id": "luahbtex",
+          "runId": 33171982660,
+          "artifacts": [
+            "wasm-luatex"
+          ]
+        }
       ]
     },
     "2026": {
@@ -28,13 +55,40 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33587861494,
-          "artifacts": ["wasm-pdftex-2026", "wasm-bibtex-2026"]
+          "runId": 33662768337,
+          "artifacts": [
+            "wasm-pdftex-2026",
+            "wasm-bibtex-2026"
+          ]
         },
-        { "id": "bibtex8", "runId": 33163172428, "artifacts": ["wasm-bibtex8-2026"] },
-        { "id": "makeindex", "runId": 33163174571, "artifacts": ["wasm-makeindex-2026"] },
-        { "id": "xetex", "runId": 33163176440, "artifacts": ["wasm-xetex-2026"] },
-        { "id": "luahbtex", "runId": 33163178493, "artifacts": ["wasm-luatex-2026"] }
+        {
+          "id": "bibtex8",
+          "runId": 33163172428,
+          "artifacts": [
+            "wasm-bibtex8-2026"
+          ]
+        },
+        {
+          "id": "makeindex",
+          "runId": 33163174571,
+          "artifacts": [
+            "wasm-makeindex-2026"
+          ]
+        },
+        {
+          "id": "xetex",
+          "runId": 33163176440,
+          "artifacts": [
+            "wasm-xetex-2026"
+          ]
+        },
+        {
+          "id": "luahbtex",
+          "runId": 33163178493,
+          "artifacts": [
+            "wasm-luatex-2026"
+          ]
+        }
       ]
     }
   }

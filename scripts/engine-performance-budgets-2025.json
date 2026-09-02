@@ -4,6 +4,8 @@
   "artifactBytes": {
     "wasmtex-pdftex.js": 150000,
     "wasmtex-pdftex.wasm": 2100000,
+    "wasmtex-pdftex-checkpoint.js": 160000,
+    "wasmtex-pdftex-checkpoint.wasm": 2900000,
     "wasmtex-pdftex.worker.js": 80000,
     "wasmtex-pdftex.fmt": 4200000,
     "wasmtex-xetex.js": 160000,
