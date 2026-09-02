@@ -89,11 +89,13 @@ export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './
 // also pulling in the browser-component entry.
 export * from './backend-api'
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api'
+export type { AccessibleExportOptions } from './engine/accessible-export'
 export {
   COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
   COMPLETION_SNAPSHOT_SCHEMA_VERSION,
 } from './engine/completion-snapshot'
 export type {
+  AccessibleExportResult,
   CompilePhaseTimings,
   CompletionSnapshot,
   CompletionSnapshotCollection,

@@ -87,10 +87,24 @@ function stripComments(source: string): string {
   return source.replace(/(^|[^\\])(\\\\)*%.*$/gm, (_m, pre, esc) => `${pre}${esc ?? ''}`)
 }
 
+/** Skip `[…]` (one level, no regex — keeps CodeQL's polynomial-scan check quiet). */
+function skipOptionalArgument(text: string, at: number): number {
+  if (text[at] !== '[') return at
+  const close = text.indexOf(']', at + 1)
+  return close < 0 ? at : close + 1
+}
+
 /** The `\documentclass` name, or null. */
 export function documentClassOf(source: string): string | null {
-  const m = /\\documentclass(?:\[[^\]]*\])?\{([^}]*)\}/.exec(stripComments(source))
-  return m ? m[1]!.trim() : null
+  const code = stripComments(source)
+  const command = '\\documentclass'
+  const at = code.indexOf(command)
+  if (at < 0) return null
+  let cursor = skipOptionalArgument(code, at + command.length)
+  if (code[cursor] !== '{') return null
+  cursor++
+  const close = code.indexOf('}', cursor)
+  return close < 0 ? null : code.slice(cursor, close).trim() || null
 }
 
 /** Language the document declares (hyperref `pdflang`, `\DocumentMetadata{lang=…}`,
@@ -188,25 +202,60 @@ async function inflate(data: Uint8Array): Promise<Uint8Array | null> {
   }
 }
 
+function latin1(bytes: Uint8Array): string {
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 8192) {
+    s += String.fromCharCode(...bytes.subarray(i, i + 8192))
+  }
+  return s
+}
+
+/** Offset of the stream body after the `>>` at `dictEnd`, or -1 when no `stream` keyword
+ *  follows the dictionary. */
+function streamBodyStart(raw: string, dictEnd: number): number {
+  let at = dictEnd + 2
+  while (at < raw.length && ' \r\n'.includes(raw[at]!)) at++
+  if (!raw.startsWith('stream', at)) return -1
+  at += 'stream'.length
+  if (raw[at] === '\r') at++
+  if (raw[at] === '\n') at++
+  return at
+}
+
+/** End of the stream body starting at `start` (the EOL before `endstream` is not data), or -1. */
+function streamBodyEnd(raw: string, start: number): number {
+  let end = raw.indexOf('endstream', start)
+  if (end < 0) return -1
+  while (end > start && (raw[end - 1] === '\n' || raw[end - 1] === '\r')) end--
+  return end
+}
+
+/** Byte ranges of the Flate-encoded stream bodies. Located with indexOf, not a regex: a
+ *  `[^>]*` scan from every `/FlateDecode` is quadratic on adversarial input (CodeQL
+ *  js/polynomial-redos). */
+function flateStreamRanges(raw: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = []
+  let from = 0
+  for (;;) {
+    const filter = raw.indexOf('/FlateDecode', from)
+    if (filter < 0) break
+    from = filter + '/FlateDecode'.length
+    const dictEnd = raw.indexOf('>>', from)
+    if (dictEnd < 0) break
+    const start = streamBodyStart(raw, dictEnd)
+    if (start < 0) continue
+    const end = streamBodyEnd(raw, start)
+    if (end >= 0) ranges.push([start, end])
+  }
+  return ranges
+}
+
 /** Every byte of the PDF plus its inflated streams (object streams hide the catalog and
  *  structure elements of a PDF 2.0 file from a plain scan). */
 async function expandedPdfText(pdf: Uint8Array): Promise<string> {
-  const latin1 = (bytes: Uint8Array): string => {
-    let s = ''
-    for (let i = 0; i < bytes.length; i += 8192) {
-      s += String.fromCharCode(...bytes.subarray(i, i + 8192))
-    }
-    return s
-  }
   const raw = latin1(pdf)
   const parts = [raw]
-  const re = /\/FlateDecode[^>]*>>[ \r\n]{0,3}stream\r?\n/g
-  for (const m of raw.matchAll(re)) {
-    const start = (m.index ?? 0) + m[0].length
-    let end = raw.indexOf('endstream', start)
-    if (end < 0) continue
-    // The EOL before `endstream` is not part of the stream data.
-    while (end > start && (pdf[end - 1] === 0x0a || pdf[end - 1] === 0x0d)) end--
+  for (const [start, end] of flateStreamRanges(raw)) {
     const inflated = await inflate(pdf.subarray(start, end))
     if (inflated) parts.push(latin1(inflated))
   }

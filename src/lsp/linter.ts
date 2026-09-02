@@ -296,14 +296,25 @@ function displayMathDollars(ctx: LintContext): RawDiagnostic[] {
  *  text alternative (graphicx ≥ 2021 supports `alt={…}` regardless of tagging). */
 function graphicsAlt(ctx: LintContext): RawDiagnostic[] {
   const out: RawDiagnostic[] = []
-  const re = /\\includegraphics\*?(?:\[([^\]]*)\])?/g
-  for (const m of ctx.content.matchAll(re)) {
-    const offset = m.index ?? 0
+  const content = ctx.content
+  const command = '\\includegraphics'
+  let from = 0
+  for (;;) {
+    const offset = content.indexOf(command, from)
+    if (offset < 0) break
+    from = offset + command.length
     if (ctx.isMasked(offset)) continue
-    if (m[1] !== undefined && /(?:^|,)\s*alt\s*=/.test(m[1])) continue
+    let cursor = from
+    if (content[cursor] === '*') cursor++
+    // The optional argument is read without a regex: a `[^\]]*` scan per occurrence is
+    // quadratic on adversarial input (CodeQL js/polynomial-redos).
+    if (content[cursor] === '[') {
+      const close = content.indexOf(']', cursor + 1)
+      if (close >= 0 && /(?:^|,)\s*alt\s*=/.test(content.slice(cursor + 1, close))) continue
+    }
     out.push({
       offset,
-      length: '\\includegraphics'.length,
+      length: command.length,
       message:
         'Image has no text alternative; add alt={…} to \\includegraphics so screen readers can describe it.',
     })
