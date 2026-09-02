@@ -11,6 +11,10 @@ export {
   PersistentCache,
   type PersistentCacheOptions,
 } from './engine/persistent-cache'
+export type {
+  TikzExternalizationMode,
+  TikzExternalizationOptions,
+} from './engine/tikz-externalization'
 export { warmup } from './engine/warmup'
 export { wasmSimdSupported } from './engine/wasm-features'
 export {
@@ -78,6 +82,7 @@ export type {
   ResolverStage,
   TexError,
   TextRun,
+  TikzExternalizationTelemetry,
   WarmupCache,
 } from './types'
 export { WasmTex } from './wasmtex'

@@ -304,6 +304,7 @@ const result = await compiler.compile()
 | `persistentPreambleCache` | `boolean` | `false` | Persist [pdfLaTeX preamble snapshots](engine.md#durable-preamble-snapshots) across compiler sessions. Requires an immutable `completionProfile.mirrorRevision` and IndexedDB. |
 | `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only). |
+| `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. Today the headless compiler routes the `bibliography` stage through the registry — a registered server backend turns `{aux, bibFiles} → .bbl` and the client BibTeX (WASM) engine is skipped. See [Server backends](#server-backends). |
 
@@ -366,6 +367,44 @@ straight to a full compile (no stale-reference flash). The SyncTeX splice covers
 multi-file documents — `\include`/`\input` chapters splice at their own file-relative lines; only a head
 that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
 
+#### TikZ figure externalization
+
+`tikzExternalization` (default `{ mode: 'document' }`) makes the TikZ/pgfplots
+[`external` library](https://tikz.dev/library-external) work without shell escape. A document
+that calls `\tikzexternalize` normally needs `pdflatex -shell-escape` to spawn one pdflatex per
+picture; in the browser that `system()` call fails, every picture logs a shell-escape error and
+is typeset inline again on each compile. With externalization on, the headless compiler drives
+the library itself, so the document's own `\tikzexternalize` (and its `prefix=`,
+`\tikzsetnextfilename`, `\tikzexternaldisable`, …) behave as documented upstream:
+
+1. The main job runs in the library's `mode=list and make`: it writes the figure list, includes
+   every figure whose PDF exists, and keeps the library's own MD5 of each picture in
+   `<figure>.md5`.
+2. Each figure that is missing or whose MD5 changed is rendered by a **figure job** — a compile
+   of the same document on a sibling `WasmTexCompiler` with the library's grab mode selecting
+   that picture (the other pictures are skipped by the library's `optimize` path). The sibling
+   keeps its own preamble snapshot, so a figure job costs about the picture alone. Up to
+   `workers` figure jobs run concurrently (default `min(3, hardwareConcurrency - 1)`); each
+   worker is a full engine (one more worker heap per figure worker).
+3. The figure PDFs (and `.dpth` baseline files) are written into the main engine and the main
+   job runs once more. The pool is created on first use and disposed with the compiler.
+
+`mode: 'auto'` additionally externalizes documents that load `tikz`/`pgfplots` but never call
+`\tikzexternalize`, by activating the library at the end of the preamble (same line as
+`\begin{document}`, so no line number moves). The upstream caveats then apply to pictures the
+author never meant to externalize (`remember picture`/`overlay` across pictures, beamer
+overlays, `\ref` inside pictures needing a rerun) — enable it per project, not globally.
+`mode: 'off'` leaves such documents exactly as today.
+
+`result.telemetry.tikzExternalization` reports `{ figures, compiled, reused, failed, workers,
+figureTimeMs }` for the compile; a failed figure job appends its log tail to `result.log` and
+the main job shows the library's placeholder for that picture.
+
+Measured on a 15-picture document (10 node graphs + 5 pgfplots axes, preamble snapshot on): a
+warm text-only recompile drops from 1108 ms inline to ~140 ms; a single-picture edit costs
+that picture's job (140–680 ms) plus the main job. Rendering all 15 from scratch takes about
+the same as the inline compile with three workers.
+
 ### `WasmTexCompiler` Methods
 
 - `init(): Promise<void>`
@@ -422,6 +461,7 @@ const { telemetry } = await compiler.compile()
 | `diagnostics` | `Diagnostic[]` | Every error/warning with a stable `code` (`tex-error`, `package-error`, `missing-package`, `font-not-found`, `missing-glyph`, `undefined-reference`, `undefined-citation`, `rerun-needed`, `overfull-box`, `package-warning`, `latex-warning`), `severity`, `message`, and optional `file`/`line`. A `missing-glyph` entry carries the affected font + characters in `glyph`. |
 | `resolver` | `ResolverEvidenceReport` | Bounded, profile-bound evidence for TeX Live lookups. Each entry identifies the engine stage, requested name, kpathsea format, final outcome (`resolved`, `mirror-absent`, or `transport-error`), and the cache/bloom/network attempts that led to it. `dropped` and `complete` describe the 1024-entry retention bound. |
 | `texliveDependencies` | `TexliveDependencySet` | The exact TeX Live dependency set of the session so far — the union, across rerun passes and across every compile since `init()`, of every resource the TeX passes resolved (`files`, each with the kpathsea request `filename` and, when it differs, the mirror `candidate`) or found absent (`notFound`). Names only, bound to `texliveVersion` and `profile`; `complete` is false when a retention bound dropped entries. Replay it through [`warmup({ dependencies })`](warmup.md#exact-dependency-prefetch-dependencies) next session. |
+| `tikzExternalization` | `TikzExternalizationTelemetry` | Figure externalization outcome: `{ figures, compiled, reused, failed, workers, figureTimeMs }`. See [TikZ figure externalization](#tikz-figure-externalization). |
 | `geometry` | `DocumentGeometry` | Page/box geometry parsed from the XDV — per page: `width`/`height` (media box, bp), `textRuns` (positioned runs with `x`/`y`/`width`/`size`/`glyphs`, plus `text`/`font` when available), `rules`, and a `contentBox`. The substrate for text extraction, click-to-source, cropping, and overlays. **XeLaTeX only** (the engine that emits XDV); `reliable: false` flags an unparseable/desynced run. |
 | `dependencies` | `DependencyGraph` | What the compile depended on: `nodes` (each with `kind: 'tex' \| 'class' \| 'package' \| 'font' \| 'image' \| 'bib' \| 'other'`, `origin: 'project' \| 'system'`, and `discoveredBy`) + `edges` (`includes`/`loads`/`uses-font`/`reads`) + `root`. Rich tooling data derived from the log and enriched with source declarations, XDV fonts, and each TeX engine's `.fls` recorder. It remains useful when observations are incomplete, so do not treat the graph alone as a safe invalidation proof. |
 | `dependencyManifest` | `DependencyManifest` | Versioned, normalized project-input boundary produced by `WasmTexCompiler`. `projectInputs` includes arbitrary project files read by the engine plus the inputs forwarded to bibliography/index stages. `complete: true` is a correctness guarantee, not a confidence score. `coverage` identifies the contributing stages/signals; `incompleteReason` explains why a host must compile conservatively. |

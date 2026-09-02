@@ -38,6 +38,18 @@ import {
   buildTexliveDependencySet,
   mergeTexliveDependencySets,
 } from './engine/texlive-dependencies'
+import {
+  defaultFigureWorkers,
+  detectTikzExternalization,
+  figureJobSource,
+  mainJobSource,
+  PREAMBLE_SNAPSHOT_JOBNAME,
+  parseFigureList,
+  parseFigureMd5,
+  type TikzExternalizationKind,
+  type TikzExternalizationOptions,
+  TikzFigurePool,
+} from './engine/tikz-externalization'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { VirtualFS } from './fs/virtual-fs'
@@ -53,6 +65,7 @@ import type {
   ResolverEvidenceReport,
   TexliveDependencySet,
   TexliveVersion,
+  TikzExternalizationTelemetry,
   WarmupCache,
 } from './types'
 
@@ -125,6 +138,12 @@ export interface WasmTexCompilerOptions {
    *  splicing; falls back to a full compile when unavailable or unsafe (preamble or
    *  cross-reference changes). Defaults to false. */
   incremental?: boolean
+  /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
+   *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
+   *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of
+   *  today's per-figure shell-escape error and inline fallback. `mode: 'auto'` extends this to
+   *  documents that load TikZ but never call `\tikzexternalize`; `mode: 'off'` disables it. */
+  tikzExternalization?: TikzExternalizationOptions
   /** Per-stage backend registry (execution-model principle 3). The default for every
    *  stage is client/local, so nothing leaves the device. Register a **server** backend
    *  for a stage — e.g. a remote BibTeX/Biber for the `bibliography` stage — to offload
@@ -211,6 +230,8 @@ export class WasmTexCompiler {
    *  resolves only body files, so the per-compile set alone would shrink after the first
    *  compile and a host persisting it would lose the preamble's files. */
   private sessionDependencies: TexliveDependencySet | undefined
+  /** Sibling compilers rendering externalized TikZ figures (#82); created on first use. */
+  private tikzPool: TikzFigurePool | null = null
 
   constructor(options: WasmTexCompilerOptions = {}) {
     this.opts = options
@@ -331,19 +352,16 @@ export class WasmTexCompiler {
       engine.setPreambleSnapshot(wantSnapshot)
     }
 
-    // Incremental fast path (pdfLaTeX): serve a safe body edit from a checkpoint —
-    // re-typeset only the tail and splice onto the cached head PDF. Only when the
-    // result is `final` (no cross-reference changes); otherwise fall through to a
-    // full compile, which also reconciles labels and refreshes metadata.
-    if (this.incremental) {
-      const t0 = performance.now()
-      const fast = await this.incremental.tryIncremental(this.mainSource(), this.projectTexFiles())
-      if (fast?.final && fast.pdf) return this.toCompileResult(fast, performance.now() - t0)
-    }
+    const externalization = this.tikzExternalizationKind()
+    const fast = await this.tryIncrementalFastPath(externalization)
+    if (fast) return fast
 
     let result = await engine.compile()
     // Resolver evidence is per pass; the prefetch manifest is their union (#80).
     const resolverReports = [result.telemetry?.resolver]
+    if (externalization && (result.success || result.pdf)) {
+      result = await this.externalizeTikzFigures(result, externalization, resolverReports)
+    }
     let auxInjected = await this.runAuxStages(result)
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
@@ -551,6 +569,8 @@ export class WasmTexCompiler {
   dispose(): void {
     this.engine?.terminate()
     this.engine = null
+    this.tikzPool?.dispose()
+    this.tikzPool = null
     this.bibtexEngine?.terminate()
     this.bibtexEngine = null
     this.makeindexEngine?.terminate()
@@ -678,10 +698,156 @@ export class WasmTexCompiler {
     // replaces a map entry mid-sync. (Same protection as syncModifiedFilesToEngine.)
     await syncAllFilesToEngine(
       this.fs,
-      engine,
+      {
+        writeFile: (path, content) => engine.writeFile(path, this.engineContent(path, content)),
+        setMainFile: (mainFile) => engine.setMainFile(mainFile),
+      },
       (paths) => this.ensureEngineDirectories(paths),
       this.mainFile,
     )
+  }
+
+  /** Content the engine sees for `path`: the main file may carry the TikZ externalization
+   *  switches (same line count as the project source, so SyncTeX and diagnostics line up). */
+  private engineContent(path: string, content: string | Uint8Array): string | Uint8Array {
+    if (path !== this.mainFile || typeof content !== 'string') return content
+    const kind = this.tikzExternalizationKind(content)
+    return kind ? mainJobSource(content, kind) : content
+  }
+
+  private tikzExternalizationKind(source = this.mainSource()): TikzExternalizationKind | null {
+    return detectTikzExternalization(source, this.opts.tikzExternalization?.mode ?? 'document')
+  }
+
+  /**
+   * Incremental fast path (pdfLaTeX): serve a safe body edit from a checkpoint — re-typeset
+   * only the tail and splice onto the cached head PDF. Only when the result is `final` (no
+   * cross-reference changes); otherwise the caller falls through to a full compile, which also
+   * reconciles labels and refreshes metadata. Externalized figures live in the engine FS and
+   * are included by the main job; the checkpoint path compiles tails in isolation, so it is
+   * skipped for them.
+   */
+  private async tryIncrementalFastPath(
+    externalization: TikzExternalizationKind | null,
+  ): Promise<CompileResult | null> {
+    if (!this.incremental || externalization) return null
+    const t0 = performance.now()
+    const fast = await this.incremental.tryIncremental(this.mainSource(), this.projectTexFiles())
+    if (fast?.final && fast.pdf) return this.toCompileResult(fast, performance.now() - t0)
+    return null
+  }
+
+  /** Run figure jobs for `result` and, when any rendered, run the main job again so it
+   *  includes them (the figure telemetry carries over to the final result). */
+  private async externalizeTikzFigures(
+    result: CompileResult,
+    kind: TikzExternalizationKind,
+    resolverReports: Array<ResolverEvidenceReport | undefined>,
+  ): Promise<CompileResult> {
+    const engine = this.engine
+    if (!engine) return result
+    const snapshot = !!engine.setPreambleSnapshot && !this.opts.disablePreambleSnapshot
+    if (!(await this.runTikzFigureJobs(result, kind, snapshot))) return result
+    const figures = result.telemetry?.tikzExternalization
+    const next = await engine.compile()
+    resolverReports.push(next.telemetry?.resolver)
+    if (figures) {
+      next.telemetry ??= { diagnostics: buildDiagnostics(next.log) }
+      next.telemetry.tikzExternalization = figures
+    }
+    return next
+  }
+
+  /**
+   * Render the figures the main job listed as missing or stale (#82) and return whether the
+   * main job must run again to include them. Figure jobs are ordinary compiles of the same
+   * document on sibling compilers, selected through the `external` library's own grab mode;
+   * see `engine/tikz-externalization.ts`.
+   */
+  private async runTikzFigureJobs(
+    result: CompileResult,
+    kind: TikzExternalizationKind,
+    snapshot: boolean,
+  ): Promise<boolean> {
+    const engine = this.engine
+    if (!engine) return false
+    const mainBase = this.mainFile.replace(/\.tex$/i, '')
+    const candidates = snapshot
+      ? [PREAMBLE_SNAPSHOT_JOBNAME, mainBase]
+      : [mainBase, PREAMBLE_SNAPSHOT_JOBNAME]
+    let realJob: string | null = null
+    let names: string[] = []
+    for (const job of candidates) {
+      names = parseFigureList(await engine.readFile(`${job}.figlist`))
+      if (names.length > 0) {
+        realJob = job
+        break
+      }
+    }
+    if (!realJob) return false
+    const workers =
+      this.opts.tikzExternalization?.workers ??
+      defaultFigureWorkers(globalThis.navigator?.hardwareConcurrency)
+    this.tikzPool ??= new TikzFigurePool(() => this.spawnFigureCompiler(), workers, this.mainFile)
+    const pool = this.tikzPool
+    pool.retain(names)
+    const md5s = await Promise.all(names.map((name) => engine.readFile(`${name}.md5`)))
+    const jobs = names
+      .map((name, i) => ({ name, md5: parseFigureMd5(md5s[i]) }))
+      .filter((job) => !pool.isCurrent(job.name, job.md5))
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+    const telemetry: TikzExternalizationTelemetry = {
+      figures: names.length,
+      compiled: 0,
+      reused: names.length - jobs.length,
+      failed: [],
+      workers: Math.min(workers, Math.max(1, jobs.length)),
+      figureTimeMs: 0,
+    }
+    result.telemetry.tikzExternalization = telemetry
+    if (jobs.length === 0) return false
+    const source = this.mainSource()
+    const run = await pool.render(
+      jobs,
+      (figure) => figureJobSource(source, kind, realJob, figure),
+      () => this.projectFileEntries(),
+    )
+    telemetry.compiled = run.rendered.size
+    telemetry.failed = run.failures.map((f) => f.name)
+    telemetry.figureTimeMs = Math.round(run.elapsedMs)
+    for (const failure of run.failures) {
+      result.log += `\n[wasmtex] TikZ figure job '${failure.name}' failed:\n${failure.log.slice(-2000)}\n`
+    }
+    const paths: string[] = []
+    for (const name of run.rendered.keys()) paths.push(`${name}.pdf`)
+    await this.ensureEngineDirectories(paths)
+    await Promise.all(
+      [...run.rendered].flatMap(([name, figure]) => [
+        engine.writeFile(`${name}.pdf`, figure.pdf),
+        ...(figure.dpth !== null ? [engine.writeFile(`${name}.dpth`, figure.dpth)] : []),
+      ]),
+    )
+    return run.rendered.size > 0
+  }
+
+  private *projectFileEntries(): Iterable<[string, string | Uint8Array]> {
+    for (const path of this.fs.listFiles()) {
+      if (this.generatedFiles.has(path)) continue
+      const file = this.fs.getFile(path)
+      if (file) yield [path, file.content]
+    }
+  }
+
+  /** A sibling compiler for figure jobs: same profile, no externalization of its own. */
+  private spawnFigureCompiler(): WasmTexCompiler {
+    const { files: _files, backends: _backends, ...base } = this.opts
+    return new WasmTexCompiler({
+      ...base,
+      mainFile: this.mainFile,
+      engine: this.engineKind,
+      incremental: false,
+      tikzExternalization: { mode: 'off' },
+    })
   }
 
   private async syncModifiedFilesToEngine(): Promise<void> {
@@ -689,7 +855,11 @@ export class WasmTexCompiler {
     if (!engine || this.unavailable) return
     const modified = this.fs.getModifiedFiles()
     await this.ensureEngineDirectories(modified.map((file) => file.path))
-    await Promise.all(modified.map((file) => engine.writeFile(file.path, file.content)))
+    await Promise.all(
+      modified.map((file) =>
+        engine.writeFile(file.path, this.engineContent(file.path, file.content)),
+      ),
+    )
     // Only clear the files we synced; edits that landed during the awaits above
     // replaced their map entries and must remain modified for the next cycle.
     this.fs.markSynced(modified)

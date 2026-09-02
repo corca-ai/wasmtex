@@ -101,6 +101,15 @@ export interface Diagnostic {
   glyph?: FontGlyphGap
 }
 
+export interface TikzExternalizationTelemetry {
+  figures: number
+  compiled: number
+  reused: number
+  failed: string[]
+  workers: number
+  figureTimeMs: number
+}
+
 export interface EngineTelemetry {
   diagnostics: Diagnostic[]
   /** Bounded, host-local evidence for TeX Live resource resolution. The report is
@@ -112,6 +121,10 @@ export interface EngineTelemetry {
    *  `warmup({ dependencies })` next session so the first compile never blocks on
    *  a synchronous mirror fetch. Names only — never bytes. */
   texliveDependencies?: TexliveDependencySet
+  /** TikZ figure externalization outcome for this compile (#82): how many figures the
+   *  document lists, how many were rendered by figure jobs versus reused from the cache,
+   *  which failed, and the wall-clock spent rendering. */
+  tikzExternalization?: TikzExternalizationTelemetry
   /** Page/box geometry parsed from the engine's intermediate output (XeTeX's XDV),
    *  when available (#54 slice 3). The substrate a host needs for text extraction,
    *  click-to-source, content cropping, and figure/equation overlays — all headless,

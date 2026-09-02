@@ -1,5 +1,6 @@
 import { BackendRegistry } from './engine/backend-registry';
 import { EngineOption } from './engine/engine-select';
+import { TikzExternalizationOptions } from './engine/tikz-externalization';
 import { ProjectIndex } from './lsp/project-index';
 import { CompileResult, CompletionSnapshotState, TexliveVersion, WarmupCache } from './types';
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api';
@@ -43,6 +44,12 @@ export interface WasmTexCompilerOptions {
      *  splicing; falls back to a full compile when unavailable or unsafe (preamble or
      *  cross-reference changes). Defaults to false. */
     incremental?: boolean;
+    /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
+     *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
+     *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of
+     *  today's per-figure shell-escape error and inline fallback. `mode: 'auto'` extends this to
+     *  documents that load TikZ but never call `\tikzexternalize`; `mode: 'off'` disables it. */
+    tikzExternalization?: TikzExternalizationOptions;
     /** Per-stage backend registry (execution-model principle 3). The default for every
      *  stage is client/local, so nothing leaves the device. Register a **server** backend
      *  for a stage — e.g. a remote BibTeX/Biber for the `bibliography` stage — to offload
@@ -93,6 +100,8 @@ export declare class WasmTexCompiler {
      *  resolves only body files, so the per-compile set alone would shrink after the first
      *  compile and a host persisting it would lose the preamble's files. */
     private sessionDependencies;
+    /** Sibling compilers rendering externalized TikZ figures (#82); created on first use. */
+    private tikzPool;
     constructor(options?: WasmTexCompilerOptions);
     /** Engine options shared by every engine kind (binary-specific bits are set
      *  by the factory). */
@@ -156,6 +165,32 @@ export declare class WasmTexCompiler {
     private completionProfile;
     private attachCompletionSnapshot;
     private syncAllFilesToEngine;
+    /** Content the engine sees for `path`: the main file may carry the TikZ externalization
+     *  switches (same line count as the project source, so SyncTeX and diagnostics line up). */
+    private engineContent;
+    private tikzExternalizationKind;
+    /**
+     * Incremental fast path (pdfLaTeX): serve a safe body edit from a checkpoint — re-typeset
+     * only the tail and splice onto the cached head PDF. Only when the result is `final` (no
+     * cross-reference changes); otherwise the caller falls through to a full compile, which also
+     * reconciles labels and refreshes metadata. Externalized figures live in the engine FS and
+     * are included by the main job; the checkpoint path compiles tails in isolation, so it is
+     * skipped for them.
+     */
+    private tryIncrementalFastPath;
+    /** Run figure jobs for `result` and, when any rendered, run the main job again so it
+     *  includes them (the figure telemetry carries over to the final result). */
+    private externalizeTikzFigures;
+    /**
+     * Render the figures the main job listed as missing or stale (#82) and return whether the
+     * main job must run again to include them. Figure jobs are ordinary compiles of the same
+     * document on sibling compilers, selected through the `external` library's own grab mode;
+     * see `engine/tikz-externalization.ts`.
+     */
+    private runTikzFigureJobs;
+    private projectFileEntries;
+    /** A sibling compiler for figure jobs: same profile, no externalization of its own. */
+    private spawnFigureCompiler;
     private syncModifiedFilesToEngine;
     private ensureEngineDirectories;
     private updateIndexForFile;
