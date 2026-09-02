@@ -280,14 +280,18 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       await this.fetchAndSendBloomFilter()
     }
 
-    // Pre-load format and pdftex.map in parallel
-    const preloads: Promise<void>[] = [
-      this.preloadTexliveFile(
-        11,
-        'pdftex.map',
-        `${resolveTexliveUrl(this.texliveUrl, this.version)}pdftex/11/pdftex.map`,
-      ),
-    ]
+    // Pre-load format and pdftex.map in parallel — unless the warmup set already
+    // carried the map (a replayed dependency set does), which saves a ~5 MB fetch.
+    const preloads: Promise<void>[] = []
+    if (!this.warmupPositiveSources.has('11/pdftex.map')) {
+      preloads.push(
+        this.preloadTexliveFile(
+          11,
+          'pdftex.map',
+          `${resolveTexliveUrl(this.texliveUrl, this.version)}pdftex/11/pdftex.map`,
+        ),
+      )
+    }
     if (!this.skipFormatPreload) {
       preloads.push(this.preloadFormat())
     }

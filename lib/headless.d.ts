@@ -145,6 +145,9 @@ export declare class WasmTexCompiler {
     /** Attach the manifest only here, above every engine and auxiliary backend. The
      * engine layer alone cannot distinguish host project files from generated VFS
      * artifacts or account for server/client stage requests. */
+    /** Union the TeX passes' resolver evidence into the exact prefetch manifest a host
+     *  can replay through `warmup({ dependencies })` next session (#80). */
+    private attachTexliveDependencies;
     private attachDependencyManifest;
     private completionProfile;
     private attachCompletionSnapshot;

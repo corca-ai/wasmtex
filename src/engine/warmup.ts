@@ -2,7 +2,14 @@
  * Standalone warmup function that pre-fetches TeX Live files before
  * the WASM engine starts. Eliminates blocking sync XHR during first compile.
  */
-import type { CachedTexliveFile, TexliveVersion, WarmupCache } from '../types'
+import type {
+  CachedTexliveFile,
+  TexliveDependency,
+  TexliveDependencySet,
+  TexliveFileEntry,
+  TexliveVersion,
+  WarmupCache,
+} from '../types'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { KNOWN_404S, PRELOAD_FILES } from './texlive-manifest'
 
@@ -13,6 +20,16 @@ export interface WarmupOptions {
   texliveUrl?: string
   /** Max concurrent fetches. Defaults to 6. */
   concurrency?: number
+  /** Replay a compile's exact dependency set (`telemetry.texliveDependencies`) instead of
+   *  the built-in first-compile manifest. Ignored — with the built-in manifest used
+   *  instead — when its `texliveVersion` does not match the requested one, so a set
+   *  recorded against another year can never seed the wrong mirror. */
+  dependencies?: TexliveDependencySet
+  /** Explicit file list, overriding both the built-in manifest and `dependencies`.
+   *  Each entry is fetched as `candidate ?? filename` and injected as `filename`. */
+  files?: TexliveDependency[]
+  /** Explicit known-absent list, overriding the built-in one and `dependencies`. */
+  notFound?: TexliveFileEntry[]
   /** AbortSignal for cancellation. */
   signal?: AbortSignal
   /** Progress callback: called with (completed, total). */
@@ -37,16 +54,17 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
   const onProgress = options?.onProgress
 
   const baseUrl = resolveTexliveUrl(options?.texliveUrl ?? null, version)
+  const { entries, notFound } = selectPreloadSet(version, options)
 
   // Inject DNS preconnect hint
   injectPreconnect(baseUrl)
 
   const files: CachedTexliveFile[] = []
-  const total = PRELOAD_FILES.length
+  const total = entries.length
   let completed = 0
 
   // Concurrency pool
-  const queue = [...PRELOAD_FILES]
+  const queue = [...entries]
 
   async function worker(): Promise<void> {
     while (queue.length > 0) {
@@ -54,7 +72,7 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
 
       const entry = queue.shift()!
       try {
-        const url = `${baseUrl}pdftex/${entry.format}/${entry.filename}`
+        const url = `${baseUrl}pdftex/${entry.format}/${entry.candidate ?? entry.filename}`
         const resp = await fetch(url, signal ? { signal } : {})
         if (resp.ok) {
           const data = await resp.arrayBuffer()
@@ -84,9 +102,27 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
   // The documented `signal` option implies the AbortSignal convention: reject on abort.
   if (signal?.aborted) throw new DOMException('Warmup aborted', 'AbortError')
 
-  const result: WarmupCache = { files, notFound: [...KNOWN_404S] }
+  const result: WarmupCache = { files, notFound }
   if (bloomFilter) result.bloomFilter = bloomFilter
   return result
+}
+
+/** Which files to prefetch: explicit lists win, then a version-matched dependency
+ *  set, then the built-in first-compile manifest. */
+function selectPreloadSet(
+  version: TexliveVersion,
+  options: WarmupOptions | undefined,
+): { entries: TexliveDependency[]; notFound: TexliveFileEntry[] } {
+  const dependencies =
+    options?.dependencies && options.dependencies.texliveVersion === version
+      ? options.dependencies
+      : undefined
+  const entries = options?.files ?? dependencies?.files ?? PRELOAD_FILES
+  const notFound = options?.notFound ?? dependencies?.notFound ?? KNOWN_404S
+  return {
+    entries: entries.map((entry) => ({ ...entry })),
+    notFound: notFound.map((entry) => ({ format: entry.format, filename: entry.filename })),
+  }
 }
 
 function injectPreconnect(baseUrl: string): void {

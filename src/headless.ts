@@ -34,6 +34,7 @@ import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
 import { RerunController, signatureOf } from './engine/rerun-controller'
+import { buildTexliveDependencySet } from './engine/texlive-dependencies'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { VirtualFS } from './fs/virtual-fs'
@@ -46,6 +47,7 @@ import type {
   CompletionSnapshotProfile,
   CompletionSnapshotState,
   DependencyManifest,
+  ResolverEvidenceReport,
   TexliveVersion,
   WarmupCache,
 } from './types'
@@ -139,6 +141,28 @@ function resolveAssetBase(provided?: string): string {
   if (!provided) return '/'
   return provided.endsWith('/') ? provided : `${provided}/`
 }
+
+/** Auxiliary files LaTeX probes through kpathsea before opening them in the work
+ *  directory; never a mirror object, so never a prefetch entry. */
+const GENERATED_AUX_EXTENSIONS = [
+  'aux',
+  'toc',
+  'lof',
+  'lot',
+  'out',
+  'bbl',
+  'ind',
+  'nav',
+  'snm',
+  'vrb',
+  'glo',
+  'gls',
+  'acn',
+  'acr',
+  'loa',
+  'thm',
+  'xdy',
+] as const
 
 export class WasmTexCompiler {
   private engine: CompileEngine | null = null
@@ -309,6 +333,8 @@ export class WasmTexCompiler {
     }
 
     let result = await engine.compile()
+    // Resolver evidence is per pass; the prefetch manifest is their union (#80).
+    const resolverReports = [result.telemetry?.resolver]
     let auxInjected = await this.runAuxStages(result)
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
@@ -325,8 +351,10 @@ export class WasmTexCompiler {
       if (!decision.rerun && !auxInjected) break
       await this.syncModifiedFilesToEngine()
       result = await engine.compile()
+      resolverReports.push(result.telemetry?.resolver)
       auxInjected = await this.runAuxStages(result)
     }
+    this.attachTexliveDependencies(result, resolverReports)
 
     // Parse metadata (aux/trace) once on the final, stabilized result — intermediate
     // rerun passes only feed the rerun decision (log signature), not the project index,
@@ -543,6 +571,27 @@ export class WasmTexCompiler {
   /** Attach the manifest only here, above every engine and auxiliary backend. The
    * engine layer alone cannot distinguish host project files from generated VFS
    * artifacts or account for server/client stage requests. */
+  /** Union the TeX passes' resolver evidence into the exact prefetch manifest a host
+   *  can replay through `warmup({ dependencies })` next session (#80). */
+  private attachTexliveDependencies(
+    result: CompileResult,
+    reports: ReadonlyArray<ResolverEvidenceReport | undefined>,
+  ): void {
+    const excludeNames = new Set<string>()
+    for (const path of this.fs.listFiles()) excludeNames.add(path.slice(path.lastIndexOf('/') + 1))
+    const mainBase = this.mainFile.replace(/\.tex$/i, '').slice(this.mainFile.lastIndexOf('/') + 1)
+    for (const ext of GENERATED_AUX_EXTENSIONS) excludeNames.add(`${mainBase}.${ext}`)
+    const set = buildTexliveDependencySet(
+      this.opts.texliveVersion ?? '2025',
+      this.completionProfile(),
+      reports,
+      { excludeNames },
+    )
+    if (!set) return
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+    result.telemetry.texliveDependencies = set
+  }
+
   private attachDependencyManifest(result: CompileResult): void {
     result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
     const manifest = buildDependencyManifest({

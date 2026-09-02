@@ -62,6 +62,48 @@ describe('ResolverEvidenceCollector', () => {
     ])
   })
 
+  it('keeps the network attempts when the same request repeats as a cache hit', () => {
+    const collector = new ResolverEvidenceCollector('pdftex', profile)
+    collector.markSupported()
+    collector.begin()
+    collector.record({
+      requestedName: 'ptmr7t.vf',
+      format: 33,
+      outcome: 'resolved',
+      attempts: [
+        { source: 'network', outcome: 'not-found', candidate: 'ptmr7t.vf', status: 404 },
+        { source: 'network', outcome: 'hit', candidate: 'ptmr7t', status: 200 },
+      ],
+    })
+    collector.record({
+      requestedName: 'ptmr7t.vf',
+      format: 33,
+      outcome: 'resolved',
+      attempts: [{ source: 'session-cache', outcome: 'hit' }],
+    })
+    // A later failure still replaces the earlier success (retries update the outcome).
+    collector.record({
+      requestedName: 'gone.sty',
+      format: 26,
+      outcome: 'resolved',
+      attempts: [{ source: 'network', outcome: 'hit', candidate: 'gone.sty', status: 200 }],
+    })
+    collector.record({
+      requestedName: 'gone.sty',
+      format: 26,
+      outcome: 'transport-error',
+      attempts: [{ source: 'network', outcome: 'transport-error' }],
+    })
+    const report = collector.finish()!
+    expect(report.entries).toMatchObject([
+      {
+        requestedName: 'ptmr7t.vf',
+        attempts: [{ outcome: 'not-found' }, { outcome: 'hit', candidate: 'ptmr7t' }],
+      },
+      { requestedName: 'gone.sty', outcome: 'transport-error' },
+    ])
+  })
+
   it('ignores malformed worker data and bounds retained entries', () => {
     const collector = new ResolverEvidenceCollector('xetex', profile)
     collector.markSupported()
@@ -72,7 +114,7 @@ describe('ResolverEvidenceCollector', () => {
       outcome: 'resolved',
       attempts: [{ source: 'network', outcome: 'hit' }],
     })
-    for (let index = 0; index < 260; index++) {
+    for (let index = 0; index < 1028; index++) {
       collector.record({
         requestedName: `resource-${index}.sty`,
         format: 26,
@@ -81,7 +123,7 @@ describe('ResolverEvidenceCollector', () => {
       })
     }
     const report = collector.finish()!
-    expect(report.entries).toHaveLength(256)
+    expect(report.entries).toHaveLength(1024)
     expect(report.dropped).toBe(4)
     expect(report.complete).toBe(false)
   })
