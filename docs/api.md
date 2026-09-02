@@ -409,6 +409,9 @@ out.notes             // human-readable caveats for the host to show
 - **Cost**: a tagged compile is roughly 3× a plain warm compile on the sibling (its own
   preamble snapshot applies). Nothing is cached across sessions.
 
+The export module and the TikZ figure-worker pool are loaded on first use (dynamic
+imports), so a host's startup bundle carries only the headless compiler itself.
+
 `inspectPdfTagging(pdf)` (exported) produces the `tagging` report for any PDF bytes — it
 inflates object streams itself, so hosts need no PDF library for an accessibility summary.
 

@@ -208,6 +208,8 @@ export declare class WasmTexCompiler {
      * document lists no figures.
      */
     private runTikzFigureJobs;
+    /** The figure pool, loaded on first use (most documents never externalize). */
+    private ensureTikzPool;
     /** The figure list the main job wrote, under whichever real job name it ran as: the
      *  preamble snapshot's, or the main file's when snapshots are off. */
     private readTikzFigureList;

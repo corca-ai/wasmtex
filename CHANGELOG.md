@@ -15,7 +15,12 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 Add entries here as you land changes. Group them under these headings:
   Added / Changed / Deprecated / Removed / Fixed / Security
 Keep them user-facing and concise. Example:
-  ### Added
+  ### Changed
+
+- The accessible-export module and the TikZ figure-worker pool load on first use
+  (dynamic imports) instead of with the headless compiler.
+
+### Added
 
 - Accessible export (`WasmTexCompiler.exportAccessiblePdf()`): a tagged, PDF/UA-2 declared
   PDF produced by the LaTeX tagging kernel (`\DocumentMetadata{tagging=on}`, TeX Live 2026

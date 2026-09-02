@@ -6,15 +6,14 @@ import {
   detectTikzExternalization,
   documentExternalizationMode,
   documentExternalizes,
-  type FigureCompiler,
   figureJobSource,
   findBeginDocument,
   loadsTikz,
   mainJobSource,
   parseFigureList,
   parseFigureMd5,
-  TikzFigurePool,
 } from './tikz-externalization'
+import { type FigureCompiler, TikzFigurePool } from './tikz-figure-pool'
 
 const DOC = [
   '\\documentclass{article}',

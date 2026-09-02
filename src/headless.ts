@@ -1,12 +1,4 @@
-import {
-  type AccessibleExportOptions,
-  CLASS_SUPPORT,
-  type DocumentMetadataInjection,
-  documentClassOf,
-  injectDocumentMetadata,
-  inspectPdfTagging,
-  kernelLacksTagging,
-} from './engine/accessible-export'
+import type { AccessibleExportOptions, DocumentMetadataInjection } from './engine/accessible-export'
 import type { BackendRegistry } from './engine/backend-registry'
 import { runRemoteBiber } from './engine/biber-backend'
 import {
@@ -60,8 +52,8 @@ import {
   parseFigureMd5,
   type TikzExternalizationKind,
   type TikzExternalizationOptions,
-  TikzFigurePool,
 } from './engine/tikz-externalization'
+import type { TikzFigurePool } from './engine/tikz-figure-pool'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { VirtualFS } from './fs/virtual-fs'
@@ -154,6 +146,7 @@ export async function compileAccessiblePdf(
   const mainFile = options.mainFile ?? 'main.tex'
   const original = options.files?.[mainFile]
   const source = typeof original === 'string' ? original : ''
+  const { injectDocumentMetadata, documentClassOf, CLASS_SUPPORT } = await loadAccessibleExport()
   const declaration = injectDocumentMetadata(source, exportOptions)
   const documentClass = documentClassOf(source)
   const classSupport = (documentClass && CLASS_SUPPORT[documentClass]) || 'unknown'
@@ -180,6 +173,7 @@ async function describeAccessibleExport(
   classSupport: AccessibleExportResult['classSupport'],
   notes: string[],
 ): Promise<AccessibleExportResult> {
+  const { kernelLacksTagging, inspectPdfTagging } = await loadAccessibleExport()
   const kernelSupported = !kernelLacksTagging(result.log)
   if (!kernelSupported) {
     notes.push(
@@ -201,6 +195,12 @@ async function describeAccessibleExport(
     tagging,
     notes,
   }
+}
+
+/** The export module is loaded on first export: most sessions never export, and hosts
+ *  keep the headless compiler in their startup bundle. */
+function loadAccessibleExport() {
+  return import('./engine/accessible-export')
 }
 
 function exportNotes(
@@ -1023,8 +1023,7 @@ export class WasmTexCompiler {
     const workers =
       this.opts.tikzExternalization?.workers ??
       defaultFigureWorkers(nav?.hardwareConcurrency, nav?.deviceMemory)
-    this.tikzPool ??= new TikzFigurePool(() => this.spawnFigureCompiler(), workers, this.mainFile)
-    const pool = this.tikzPool
+    const pool = await this.ensureTikzPool(workers)
     pool.retain(names)
     const md5s = await Promise.all(names.map((name) => engine.readFile(`${name}.md5`)))
     const jobs = names
@@ -1084,6 +1083,15 @@ export class WasmTexCompiler {
     return { telemetry, errors, failureLog }
   }
 
+  /** The figure pool, loaded on first use (most documents never externalize). */
+  private async ensureTikzPool(workers: number): Promise<TikzFigurePool> {
+    if (!this.tikzPool) {
+      const { TikzFigurePool } = await import('./engine/tikz-figure-pool')
+      this.tikzPool = new TikzFigurePool(() => this.spawnFigureCompiler(), workers, this.mainFile)
+    }
+    return this.tikzPool
+  }
+
   /** The figure list the main job wrote, under whichever real job name it ran as: the
    *  preamble snapshot's, or the main file's when snapshots are off. */
   private async readTikzFigureList(
@@ -1122,6 +1130,7 @@ export class WasmTexCompiler {
   ): Promise<AccessibleExportResult> {
     this.ensureInitialized()
     const source = this.mainSource()
+    const { injectDocumentMetadata, documentClassOf, CLASS_SUPPORT } = await loadAccessibleExport()
     const declaration = injectDocumentMetadata(source, options)
     const documentClass = documentClassOf(source)
     const classSupport = (documentClass && CLASS_SUPPORT[documentClass]) || 'unknown'
