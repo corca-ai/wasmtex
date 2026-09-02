@@ -89,7 +89,7 @@ function stripComments(source: string): string {
 
 /** The `\documentclass` name, or null. */
 export function documentClassOf(source: string): string | null {
-  const m = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(stripComments(source))
+  const m = /\\documentclass(?:\[[^\]]*\])?\{([^}]*)\}/.exec(stripComments(source))
   return m ? m[1]!.trim() : null
 }
 
@@ -97,13 +97,13 @@ export function documentClassOf(source: string): string | null {
  *  babel/polyglossia main language, kotex/CJK packages), as BCP 47; null when none. */
 export function detectDocumentLanguage(source: string): string | null {
   const code = stripComments(source)
-  let m = /pdflang\s*=\s*\{?\s*([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/.exec(code)
+  let m = /pdflang ?= ?\{? ?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/.exec(code)
   if (m) return m[1]!
-  m = /\\DocumentMetadata\s*\{[^}]*\blang\s*=\s*([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/.exec(code)
+  m = /\\DocumentMetadata\{[^}]*\blang ?= ?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/.exec(code)
   if (m) return m[1]!
   // babel: the last option is the main language (\usepackage[french,english]{babel} → english),
   // unless `main=` says otherwise.
-  m = /\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/.exec(code)
+  m = /\\usepackage\[([^\]]*)\]\{babel\}/.exec(code)
   if (m) {
     const opts = m[1]!.split(',').map((o) => o.trim())
     const main = opts.find((o) => o.startsWith('main='))?.slice(5)
@@ -113,9 +113,9 @@ export function detectDocumentLanguage(source: string): string | null {
       if (lang) return lang
     }
   }
-  m = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(code)
+  m = /\\setmainlanguage(?:\[[^\]]*\])?\{([^}]*)\}/.exec(code)
   if (m) return BABEL_LANGS[m[1]!.trim()] ?? null
-  if (/\\usepackage\s*(?:\[[^\]]*\])?\s*\{(?:kotex|xetexko|luatexko)\}/.test(code)) return 'ko-KR'
+  if (/\\usepackage(?:\[[^\]]*\])?\{(?:kotex|xetexko|luatexko)\}/.test(code)) return 'ko-KR'
   if (/\\usepackage\s*(?:\[[^\]]*\])?\s*\{(?:xeCJK|luatexja|luatexja-fontspec)\}/.test(code)) {
     return null
   }
@@ -124,7 +124,7 @@ export function detectDocumentLanguage(source: string): string | null {
 
 /** True when the main file already declares `\DocumentMetadata`. */
 export function hasDocumentMetadata(source: string): boolean {
-  return /\\DocumentMetadata\s*\{/.test(stripComments(source))
+  return /\\DocumentMetadata\{/.test(stripComments(source))
 }
 
 export interface DocumentMetadataInjection {
@@ -200,7 +200,7 @@ async function expandedPdfText(pdf: Uint8Array): Promise<string> {
   }
   const raw = latin1(pdf)
   const parts = [raw]
-  const re = /\/FlateDecode[^>]*>>\s*stream\r?\n/g
+  const re = /\/FlateDecode[^>]*>>[ \r\n]{0,3}stream\r?\n/g
   for (const m of raw.matchAll(re)) {
     const start = (m.index ?? 0) + m[0].length
     let end = raw.indexOf('endstream', start)
@@ -231,7 +231,7 @@ function structElements(text: string): string[] {
 
 /** The `/Alt` text of a structure element (literal or UTF-16BE hex string), or null. */
 function altTextOf(element: string): string | null {
-  const hex = /\/Alt\s*<([0-9A-Fa-f\s]*)>/.exec(element)
+  const hex = /\/Alt ?<([0-9A-Fa-f\s]*)>/.exec(element)
   if (hex) {
     const digits = hex[1]!.replace(/\s+/g, '')
     const bytes: number[] = []
@@ -246,7 +246,7 @@ function altTextOf(element: string): string | null {
     }
     return String.fromCharCode(...bytes)
   }
-  const literal = /\/Alt\s*\(((?:[^()\\]|\\.)*)\)/.exec(element)
+  const literal = /\/Alt ?\(((?:[^()\\]|\\.)*)\)/.exec(element)
   return literal ? literal[1]!.replace(/\\(.)/g, '$1') : null
 }
 
@@ -282,11 +282,11 @@ export async function inspectPdfTagging(pdf: Uint8Array): Promise<PdfTaggingRepo
   const text = await expandedPdfText(pdf)
   const structRoot = /\/StructTreeRoot\b/.test(text)
   const marked = /\/Marked\s+true\b/.test(text)
-  const lang = /\/Lang\s*\(([^)]*)\)/.exec(text)?.[1] ?? null
+  const lang = /\/Lang ?\(([^)]*)\)/.exec(text)?.[1] ?? null
   const ua = /pdfuaid:part\s*=\s*"(\d)"|<pdfuaid:part>\s*(\d)/.exec(text)
   const uaPart = ua ? Number(ua[1] ?? ua[2]) : null
-  const titleMatch = /<dc:title>.*?<rdf:li[^>]*>([^<]*)<\/rdf:li>/s.exec(text)
-  const title = titleMatch?.[1]?.trim() || (/\/Title\s*\(([^)]*)\)/.exec(text)?.[1] ?? null)
+  const titleMatch = /<dc:title>[\s\S]{0,400}?<rdf:li[^>]*>([^<]*)<\/rdf:li>/.exec(text)
+  const title = titleMatch?.[1]?.trim() || (/\/Title ?\(([^)]*)\)/.exec(text)?.[1] ?? null)
   return {
     tagged: structRoot && marked,
     lang,

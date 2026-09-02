@@ -296,7 +296,7 @@ function displayMathDollars(ctx: LintContext): RawDiagnostic[] {
  *  text alternative (graphicx ≥ 2021 supports `alt={…}` regardless of tagging). */
 function graphicsAlt(ctx: LintContext): RawDiagnostic[] {
   const out: RawDiagnostic[] = []
-  const re = /\\includegraphics\*?(?:\s*\[([^\]]*)\])?/g
+  const re = /\\includegraphics\*?(?:\[([^\]]*)\])?/g
   for (const m of ctx.content.matchAll(re)) {
     const offset = m.index ?? 0
     if (ctx.isMasked(offset)) continue
@@ -374,8 +374,8 @@ function pdfMetadata(ctx: LintContext): RawDiagnostic[] {
   const cls = /\\documentclass\b/.exec(content)
   if (!cls || ctx.isMasked(cls.index)) return []
   const out: RawDiagnostic[] = []
-  const hasTitle = /\\title\s*(?:\[[^\]]*\])?\s*\{|pdftitle\s*=/.test(content)
-  const hasLang = /\\DocumentMetadata\s*\{[^}]*\blang\s*=|pdflang\s*=/.test(content)
+  const hasTitle = /\\title(?:\[[^\]]*\])?\{|pdftitle ?=/.test(content)
+  const hasLang = /\\DocumentMetadata\{[^}]*\blang ?=|pdflang ?=/.test(content)
   if (!hasTitle) {
     out.push({
       offset: cls.index,
