@@ -44,22 +44,35 @@ describe('warmup dependency-set replay', () => {
     complete: true,
   }
 
-  it('fetches the mirror candidate and injects it under the request name', async () => {
+  it('fetches the set on top of the built-in manifest, candidates under request names', async () => {
     const urls: string[] = []
     vi.stubGlobal('fetch', (url: string) => {
       urls.push(url)
       return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 }))
     })
     const cache = await warmup({ dependencies, concurrency: 2, texliveUrl: 'https://m.test/' })
-    expect(urls.filter((u) => u.includes('/pdftex/')).sort()).toEqual([
-      'https://m.test/pdftex/26/IEEEtran.cls',
-      'https://m.test/pdftex/33/ptmr7t',
-    ])
-    expect(cache.files.map((f) => `${f.format}/${f.filename}`).sort()).toEqual([
-      '26/IEEEtran.cls',
-      '33/ptmr7t.vf',
-    ])
-    expect(cache.notFound).toEqual([{ format: 33, filename: 'ptmb7t.vf' }])
+    const mirror = urls.filter((u) => u.includes('/pdftex/'))
+    expect(mirror).toContain('https://m.test/pdftex/26/IEEEtran.cls')
+    expect(mirror).toContain('https://m.test/pdftex/33/ptmr7t')
+    expect(mirror).toContain('https://m.test/pdftex/26/article.cls')
+    expect(mirror).not.toContain('https://m.test/pdftex/33/ptmr7t.vf')
+    expect(new Set(mirror).size).toBe(mirror.length)
+    const names = cache.files.map((f) => `${f.format}/${f.filename}`)
+    expect(names).toContain('26/IEEEtran.cls')
+    expect(names).toContain('33/ptmr7t.vf')
+    expect(names).toContain('26/article.cls')
+    expect(cache.notFound).toContainEqual({ format: 33, filename: 'ptmb7t.vf' })
+  })
+
+  it('drops a built-in negative entry that the set resolved', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(null, { status: 404 })))
+    const resolvedNegative = { format: 26, filename: 'graphicx.cfg' }
+    const cache = await warmup({
+      dependencies: { ...dependencies, files: [resolvedNegative], notFound: [] },
+      concurrency: 4,
+      texliveUrl: 'https://m.test/',
+    })
+    expect(cache.notFound).not.toContainEqual(resolvedNegative)
   })
 
   it('ignores a dependency set recorded against another TeX Live year', async () => {

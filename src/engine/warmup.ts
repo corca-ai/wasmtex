@@ -20,10 +20,12 @@ export interface WarmupOptions {
   texliveUrl?: string
   /** Max concurrent fetches. Defaults to 6. */
   concurrency?: number
-  /** Replay a compile's exact dependency set (`telemetry.texliveDependencies`) instead of
-   *  the built-in first-compile manifest. Ignored — with the built-in manifest used
-   *  instead — when its `texliveVersion` does not match the requested one, so a set
-   *  recorded against another year can never seed the wrong mirror. */
+  /** Replay a compile's exact dependency set (`telemetry.texliveDependencies`) on top of
+   *  the built-in first-compile manifest (the union, deduplicated by request name). An
+   *  engine that only reports network lookups records a set without the kernel files it
+   *  got from warmup, so replacing the manifest would reintroduce those fetches. Ignored
+   *  when its `texliveVersion` does not match the requested one, so a set recorded
+   *  against another year can never seed the wrong mirror. */
   dependencies?: TexliveDependencySet
   /** Explicit file list, overriding both the built-in manifest and `dependencies`.
    *  Each entry is fetched as `candidate ?? filename` and injected as `filename`. */
@@ -117,12 +119,29 @@ function selectPreloadSet(
     options?.dependencies && options.dependencies.texliveVersion === version
       ? options.dependencies
       : undefined
-  const entries = options?.files ?? dependencies?.files ?? PRELOAD_FILES
-  const notFound = options?.notFound ?? dependencies?.notFound ?? KNOWN_404S
+  const entries =
+    options?.files ??
+    (dependencies ? unionByName(PRELOAD_FILES, dependencies.files) : PRELOAD_FILES)
+  const notFound =
+    options?.notFound ??
+    (dependencies ? unionByName(KNOWN_404S, dependencies.notFound) : KNOWN_404S)
+  // A request the set resolved must not stay on the negative list from the manifest.
+  const resolved = new Set(entries.map((entry) => `${entry.format}/${entry.filename}`))
   return {
     entries: entries.map((entry) => ({ ...entry })),
-    notFound: notFound.map((entry) => ({ format: entry.format, filename: entry.filename })),
+    notFound: notFound
+      .filter((entry) => !resolved.has(`${entry.format}/${entry.filename}`))
+      .map((entry) => ({ format: entry.format, filename: entry.filename })),
   }
+}
+
+/** Built-in entries first, then the set's entries not already present; the set's
+ *  entry wins when both exist so its mirror `candidate` is kept. */
+function unionByName<T extends TexliveFileEntry>(base: readonly T[], extra: readonly T[]): T[] {
+  const byName = new Map<string, T>()
+  for (const entry of base) byName.set(`${entry.format}/${entry.filename}`, entry)
+  for (const entry of extra) byName.set(`${entry.format}/${entry.filename}`, entry)
+  return [...byName.values()]
 }
 
 function injectPreconnect(baseUrl: string): void {
