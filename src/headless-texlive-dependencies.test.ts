@@ -50,6 +50,22 @@ class TwoPassEngine {
                   outcome: 'mirror-absent',
                   attempts: [{ source: 'network', outcome: 'not-found', status: 404 }],
                 },
+                // LaTeX probes its own aux file and the project's inputs through
+                // kpathsea first; those are never mirror objects.
+                {
+                  stage: 'pdftex',
+                  requestedName: 'main.aux',
+                  format: 26,
+                  outcome: 'mirror-absent',
+                  attempts: [{ source: 'network', outcome: 'not-found', status: 404 }],
+                },
+                {
+                  stage: 'pdftex',
+                  requestedName: 'refs.bib',
+                  format: 6,
+                  outcome: 'mirror-absent',
+                  attempts: [{ source: 'bloom-filter', outcome: 'not-found' }],
+                },
               ]
             : [
                 {
@@ -86,7 +102,10 @@ describe('headless texliveDependencies telemetry', () => {
   it('unions resolver evidence across rerun passes into one prefetch manifest', async () => {
     const compiler = new WasmTexCompiler({
       engine: 'pdflatex',
-      files: { 'main.tex': '\\documentclass{article}\\begin{document}x\\end{document}' },
+      files: {
+        'main.tex': '\\documentclass{article}\\begin{document}x\\end{document}',
+        'refs.bib': '',
+      },
       completionProfile: profile,
     })
     const engine = new TwoPassEngine()
@@ -102,6 +121,7 @@ describe('headless texliveDependencies telemetry', () => {
       files: [
         { format: 33, filename: 'ptmr7t.vf', candidate: 'ptmr7t' },
         { format: 26, filename: 'nameref.sty' },
+        { format: 11, filename: 'pdftex.map' },
       ],
       notFound: [{ format: 33, filename: 'ptmb7t.vf' }],
       complete: true,

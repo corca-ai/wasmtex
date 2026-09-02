@@ -142,6 +142,28 @@ function resolveAssetBase(provided?: string): string {
   return provided.endsWith('/') ? provided : `${provided}/`
 }
 
+/** Auxiliary files LaTeX probes through kpathsea before opening them in the work
+ *  directory; never a mirror object, so never a prefetch entry. */
+const GENERATED_AUX_EXTENSIONS = [
+  'aux',
+  'toc',
+  'lof',
+  'lot',
+  'out',
+  'bbl',
+  'ind',
+  'nav',
+  'snm',
+  'vrb',
+  'glo',
+  'gls',
+  'acn',
+  'acr',
+  'loa',
+  'thm',
+  'xdy',
+] as const
+
 export class WasmTexCompiler {
   private engine: CompileEngine | null = null
   private engineKind: TexEngine = 'pdflatex'
@@ -555,10 +577,15 @@ export class WasmTexCompiler {
     result: CompileResult,
     reports: ReadonlyArray<ResolverEvidenceReport | undefined>,
   ): void {
+    const excludeNames = new Set<string>()
+    for (const path of this.fs.listFiles()) excludeNames.add(path.slice(path.lastIndexOf('/') + 1))
+    const mainBase = this.mainFile.replace(/\.tex$/i, '').slice(this.mainFile.lastIndexOf('/') + 1)
+    for (const ext of GENERATED_AUX_EXTENSIONS) excludeNames.add(`${mainBase}.${ext}`)
     const set = buildTexliveDependencySet(
       this.opts.texliveVersion ?? '2025',
       this.completionProfile(),
       reports,
+      { excludeNames },
     )
     if (!set) return
     result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }

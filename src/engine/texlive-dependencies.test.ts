@@ -80,6 +80,8 @@ describe('buildTexliveDependencySet', () => {
       { format: 33, filename: 'ptmr7t.vf', candidate: 'ptmr7t' },
       { format: 26, filename: 'article.cls' },
       { format: 26, filename: 'hyperref.sty' },
+      // pdfTeX loads the font map outside kpathsea; always part of a pdfTeX set.
+      { format: 11, filename: 'pdftex.map' },
     ])
     expect(set.notFound).toEqual([{ format: 26, filename: 'missing.sty' }])
   })
@@ -107,7 +109,10 @@ describe('buildTexliveDependencySet', () => {
       },
     ])
     const set = buildTexliveDependencySet('2026', profile, [cached, network])!
-    expect(set.files).toEqual([{ format: 3, filename: 'cmr12', candidate: 'cmr12.tfm' }])
+    expect(set.files).toEqual([
+      { format: 3, filename: 'cmr12', candidate: 'cmr12.tfm' },
+      { format: 11, filename: 'pdftex.map' },
+    ])
   })
 
   it('drops a not-found entry once any pass resolves the same request', () => {
@@ -130,7 +135,10 @@ describe('buildTexliveDependencySet', () => {
       },
     ])
     const set = buildTexliveDependencySet('2025', profile, [absent, resolved])!
-    expect(set.files).toEqual([{ format: 26, filename: 'late.sty' }])
+    expect(set.files).toEqual([
+      { format: 26, filename: 'late.sty' },
+      { format: 11, filename: 'pdftex.map' },
+    ])
     expect(set.notFound).toEqual([])
   })
 
@@ -149,7 +157,31 @@ describe('buildTexliveDependencySet', () => {
     )
     const set = buildTexliveDependencySet('2025', profile, [partial])!
     expect(set.complete).toBe(false)
-    expect(set.files).toEqual([])
+    expect(set.files).toEqual([{ format: 11, filename: 'pdftex.map' }])
     expect(set.notFound).toEqual([])
+  })
+
+  it('leaves excluded project/aux names out of notFound but never out of files', () => {
+    const pass = report([
+      {
+        stage: 'xetex',
+        requestedName: 'main.aux',
+        format: 26,
+        outcome: 'mirror-absent',
+        attempts: [{ source: 'network', outcome: 'not-found', status: 404 }],
+      },
+      {
+        stage: 'xetex',
+        requestedName: 'figure.png',
+        format: 26,
+        outcome: 'resolved',
+        attempts: [{ source: 'network', outcome: 'hit', candidate: 'figure.png', status: 200 }],
+      },
+    ])
+    const set = buildTexliveDependencySet('2025', profile, [pass], {
+      excludeNames: new Set(['main.aux', 'figure.png']),
+    })!
+    expect(set.notFound).toEqual([])
+    expect(set.files).toEqual([{ format: 26, filename: 'figure.png' }])
   })
 })

@@ -89,6 +89,10 @@ function parseEntry(stage: ResolverStage, raw: RawResolverEvidence): ResolverEvi
   }
 }
 
+function hasNetworkHit(entry: ResolverEvidence): boolean {
+  return entry.attempts.some((attempt) => attempt.source === 'network' && attempt.outcome === 'hit')
+}
+
 /** Per-driver, per-command collector for untrusted worker messages. Entries are
  *  keyed by stage/format/request so retries update one final outcome instead of
  *  producing contradictory results. */
@@ -118,8 +122,21 @@ export class ResolverEvidenceCollector {
     const entry = parseEntry(this.stage, raw)
     if (!entry) return
     const key = `${entry.stage}\0${entry.format}\0${entry.requestedName}`
-    if (!this.entries.has(key) && this.entries.size >= MAX_ENTRIES) {
+    const existing = this.entries.get(key)
+    if (!existing && this.entries.size >= MAX_ENTRIES) {
       this.dropped++
+      return
+    }
+    // A request is often looked up more than once per pass (a virtual font at
+    // definition and again at shipout). The repeat is a cache hit that carries no
+    // mirror name; keep the attempt list that saw the network so the candidate
+    // (the object name the mirror actually serves) survives for prefetch.
+    if (
+      existing?.outcome === 'resolved' &&
+      entry.outcome === 'resolved' &&
+      hasNetworkHit(existing) &&
+      !hasNetworkHit(entry)
+    ) {
       return
     }
     this.entries.set(key, entry)

@@ -22,6 +22,18 @@ import type {
  *  never a mirror prefetch target. */
 const FORMAT_FILE = 10
 
+/** pdfTeX reads the font map at shipout; the engine preloads it at init outside
+ *  kpathsea, so it never appears in resolver evidence but is always fetched. */
+const PDFTEX_MAP: TexliveDependency = { format: 11, filename: 'pdftex.map' }
+
+export interface TexliveDependencyOptions {
+  /** Request names to leave out of `notFound` — project inputs and generated
+   *  auxiliary files that kpathsea probes on the mirror before finding them in
+   *  the work directory. They are absent on every mirror and would only bloat
+   *  a persisted set. */
+  excludeNames?: ReadonlySet<string>
+}
+
 interface DependencyAccumulator {
   files: Map<string, TexliveDependency>
   notFound: Map<string, TexliveFileEntry>
@@ -66,15 +78,23 @@ export function buildTexliveDependencySet(
   texliveVersion: TexliveVersion,
   profile: CompletionSnapshotProfile,
   reports: ReadonlyArray<ResolverEvidenceReport | undefined>,
+  options: TexliveDependencyOptions = {},
 ): TexliveDependencySet | undefined {
   const present = reports.filter((report): report is ResolverEvidenceReport => !!report)
   if (present.length === 0) return undefined
 
   const acc: DependencyAccumulator = { files: new Map(), notFound: new Map(), complete: true }
+  let pdftex = false
   for (const report of present) {
     if (!report.complete) acc.complete = false
-    for (const entry of report.entries) recordEntry(acc, entry)
+    for (const entry of report.entries) {
+      if (entry.stage === 'pdftex') pdftex = true
+      if (options.excludeNames?.has(entry.requestedName) && entry.outcome !== 'resolved') continue
+      recordEntry(acc, entry)
+    }
   }
+  const mapKey = `${PDFTEX_MAP.format}/${PDFTEX_MAP.filename}`
+  if (pdftex && !acc.files.has(mapKey)) acc.files.set(mapKey, { ...PDFTEX_MAP })
 
   return {
     schemaVersion: 1,
