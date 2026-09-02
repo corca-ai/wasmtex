@@ -786,14 +786,18 @@ export class WasmTexCompiler {
 
   setMainFile(path: string): void {
     this.projectIndex.invalidateCompletionSnapshot()
+    const changed = path !== this.mainFile
     this.mainFile = path
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
-    // Re-point (not just reset) the incremental compiler: its mainFile is wired into the
-    // diff baseline / snapshot bookkeeping, so a bare reset() would leave it diffing the
-    // wrong file after the active main changes.
-    this.incremental?.setMainFile(path)
-    this.heap?.reset()
+    if (changed) {
+      // Re-point (not just reset) the incremental compiler: its mainFile is wired into the
+      // diff baseline / snapshot bookkeeping, so a bare reset() would leave it diffing the
+      // wrong file after the active main changes. Hosts that re-assert the same main file
+      // before every compile keep their checkpoints: nothing about the head changed.
+      this.incremental?.setMainFile(path)
+      this.heap?.reset()
+    }
     if (this.initialized && this.engine && !this.unavailable) this.engine.setMainFile(path)
   }
 
