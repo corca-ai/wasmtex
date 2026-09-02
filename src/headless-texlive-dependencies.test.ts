@@ -126,6 +126,14 @@ describe('headless texliveDependencies telemetry', () => {
       notFound: [{ format: 33, filename: 'ptmb7t.vf' }],
       complete: true,
     })
+
+    // A later compile hits the preamble snapshot and resolves only body files; the
+    // reported set is the session union, so the preamble's files are not lost.
+    ;(engine as unknown as { compileCount: number }).compileCount = 10
+    const later = await compiler.compile()
+    const names = later.telemetry?.texliveDependencies?.files.map((f) => f.filename)
+    expect(names).toContain('ptmr7t.vf')
+    expect(names).toContain('nameref.sty')
     compiler.dispose()
   })
 })

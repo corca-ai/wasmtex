@@ -105,3 +105,35 @@ export function buildTexliveDependencySet(
     complete: acc.complete,
   }
 }
+
+/** Union two sets observed under the same profile. A preamble-snapshot compile never
+ *  looks up the files the snapshot baked in, so a single compile's evidence is only the
+ *  body's; the session union keeps what earlier compiles resolved. The later set's
+ *  entry wins on a name clash (it may carry a fresher candidate); a request the later
+ *  set resolved leaves `notFound`. */
+export function mergeTexliveDependencySets(
+  previous: TexliveDependencySet | undefined,
+  next: TexliveDependencySet,
+): TexliveDependencySet {
+  if (!previous) return next
+  const files = new Map<string, TexliveDependency>()
+  for (const entry of previous.files) files.set(`${entry.format}/${entry.filename}`, entry)
+  for (const entry of next.files) {
+    const key = `${entry.format}/${entry.filename}`
+    const known = files.get(key)
+    files.set(key, known?.candidate && !entry.candidate ? known : entry)
+  }
+  const notFound = new Map<string, TexliveFileEntry>()
+  for (const entry of [...previous.notFound, ...next.notFound]) {
+    const key = `${entry.format}/${entry.filename}`
+    if (!files.has(key)) notFound.set(key, entry)
+  }
+  return {
+    schemaVersion: 1,
+    texliveVersion: next.texliveVersion,
+    profile: { ...next.profile },
+    files: [...files.values()],
+    notFound: [...notFound.values()],
+    complete: previous.complete && next.complete,
+  }
+}

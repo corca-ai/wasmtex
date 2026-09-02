@@ -34,7 +34,10 @@ import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
 import { RerunController, signatureOf } from './engine/rerun-controller'
-import { buildTexliveDependencySet } from './engine/texlive-dependencies'
+import {
+  buildTexliveDependencySet,
+  mergeTexliveDependencySets,
+} from './engine/texlive-dependencies'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { VirtualFS } from './fs/virtual-fs'
@@ -48,6 +51,7 @@ import type {
   CompletionSnapshotState,
   DependencyManifest,
   ResolverEvidenceReport,
+  TexliveDependencySet,
   TexliveVersion,
   WarmupCache,
 } from './types'
@@ -203,6 +207,10 @@ export class WasmTexCompiler {
   /** The last successful full result's manifest seeds only the informational input
    *  list on an incremental result; the incremental manifest remains incomplete. */
   private lastFullDependencyManifest: DependencyManifest | undefined
+  /** Union of every compile's resolver evidence since init — a preamble-snapshot compile
+   *  resolves only body files, so the per-compile set alone would shrink after the first
+   *  compile and a host persisting it would lose the preamble's files. */
+  private sessionDependencies: TexliveDependencySet | undefined
 
   constructor(options: WasmTexCompilerOptions = {}) {
     this.opts = options
@@ -286,6 +294,7 @@ export class WasmTexCompiler {
   }
 
   async init(): Promise<void> {
+    this.sessionDependencies = undefined
     if (this.initialized) return
     await this.ensureEngine()
     this.initialized = true
@@ -588,8 +597,9 @@ export class WasmTexCompiler {
       { excludeNames },
     )
     if (!set) return
+    this.sessionDependencies = mergeTexliveDependencySets(this.sessionDependencies, set)
     result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
-    result.telemetry.texliveDependencies = set
+    result.telemetry.texliveDependencies = this.sessionDependencies
   }
 
   private attachDependencyManifest(result: CompileResult): void {
