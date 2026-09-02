@@ -1,3 +1,12 @@
+import {
+  type AccessibleExportOptions,
+  CLASS_SUPPORT,
+  type DocumentMetadataInjection,
+  documentClassOf,
+  injectDocumentMetadata,
+  inspectPdfTagging,
+  kernelLacksTagging,
+} from './engine/accessible-export'
 import type { BackendRegistry } from './engine/backend-registry'
 import { runRemoteBiber } from './engine/biber-backend'
 import {
@@ -61,6 +70,7 @@ import { parseBibFile, rebuildBibIndex } from './lsp/bib-parser'
 import { ProjectIndex } from './lsp/project-index'
 import { parseTraceFile } from './lsp/trace-parser'
 import type {
+  AccessibleExportResult,
   CompileResult,
   CompletionSnapshotProfile,
   CompletionSnapshotState,
@@ -79,11 +89,13 @@ export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './
 // also pulling in the browser-component entry.
 export * from './backend-api'
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api'
+export type { AccessibleExportOptions } from './engine/accessible-export'
 export {
   COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
   COMPLETION_SNAPSHOT_SCHEMA_VERSION,
 } from './engine/completion-snapshot'
 export type {
+  AccessibleExportResult,
   CompilePhaseTimings,
   CompletionSnapshot,
   CompletionSnapshotCollection,
@@ -127,6 +139,107 @@ function pictureErrors(log: string): TexError[] {
         e.message,
       ),
   )
+}
+
+/**
+ * One-shot accessible export without an interactive compiler: builds a compiler from
+ * `options` (typically the TeX Live 2026 profile, whatever profile the editor uses), compiles
+ * the project once with the tagging declaration in the main file, and disposes it. For hosts
+ * whose preview profile predates the tagging kernel.
+ */
+export async function compileAccessiblePdf(
+  options: WasmTexCompilerOptions,
+  exportOptions: AccessibleExportOptions = {},
+): Promise<AccessibleExportResult> {
+  const mainFile = options.mainFile ?? 'main.tex'
+  const original = options.files?.[mainFile]
+  const source = typeof original === 'string' ? original : ''
+  const declaration = injectDocumentMetadata(source, exportOptions)
+  const documentClass = documentClassOf(source)
+  const classSupport = (documentClass && CLASS_SUPPORT[documentClass]) || 'unknown'
+  const notes = exportNotes(documentClass, classSupport, declaration.injected)
+  const compiler = new WasmTexCompiler({
+    ...options,
+    files: { ...options.files, [mainFile]: declaration.source },
+    incremental: false,
+    tikzExternalization: { mode: 'off' },
+  })
+  try {
+    await compiler.init()
+    const result = await compiler.compile()
+    return await describeAccessibleExport(result, declaration, documentClass, classSupport, notes)
+  } finally {
+    compiler.dispose()
+  }
+}
+
+async function describeAccessibleExport(
+  result: CompileResult,
+  declaration: DocumentMetadataInjection,
+  documentClass: string | null,
+  classSupport: AccessibleExportResult['classSupport'],
+  notes: string[],
+): Promise<AccessibleExportResult> {
+  const kernelSupported = !kernelLacksTagging(result.log)
+  if (!kernelSupported) {
+    notes.push(
+      "This engine's LaTeX kernel predates tagging support (TeX Live 2025); use the TeX Live 2026 profile for accessible export.",
+    )
+  }
+  const tagging = result.pdf ? await inspectPdfTagging(result.pdf) : null
+  if (tagging) notes.push(...taggingNotes(tagging, kernelSupported))
+  return {
+    result,
+    declaration: {
+      lang: declaration.lang,
+      standard: declaration.standard,
+      injected: declaration.injected,
+    },
+    documentClass,
+    classSupport,
+    kernelSupported,
+    tagging,
+    notes,
+  }
+}
+
+function exportNotes(
+  documentClass: string | null,
+  classSupport: AccessibleExportResult['classSupport'],
+  injected: boolean,
+): string[] {
+  const notes: string[] = []
+  if (classSupport === 'unsupported') {
+    notes.push(
+      `Document class '${documentClass}' is known not to work with the LaTeX tagging kernel; the export may fail or come out untagged.`,
+    )
+  } else if (classSupport === 'partial') {
+    notes.push(
+      `Document class '${documentClass}' produces a structure tree but logs tagging errors; check the exported PDF.`,
+    )
+  } else if (classSupport === 'unknown' && documentClass) {
+    notes.push(`Document class '${documentClass}' has not been verified with the tagging kernel.`)
+  }
+  if (!injected) {
+    notes.push('The document declares its own \\DocumentMetadata; it was exported as written.')
+  }
+  return notes
+}
+
+function taggingNotes(
+  tagging: NonNullable<AccessibleExportResult['tagging']>,
+  kernelSupported: boolean,
+): string[] {
+  const notes: string[] = []
+  if (!tagging.tagged && kernelSupported) {
+    notes.push('The compile produced no structure tree; the PDF is not tagged.')
+  }
+  if (tagging.figures > tagging.figuresWithAlt) {
+    notes.push(
+      `${tagging.figures - tagging.figuresWithAlt} of ${tagging.figures} figures have no text alternative (alt={…}).`,
+    )
+  }
+  return notes
 }
 
 function withTikzTelemetry(
@@ -298,6 +411,10 @@ export class WasmTexCompiler {
   private tikzAutoDisabled = false
   /** Why `mode: 'auto'` left the current document inline (for telemetry). */
   private tikzAutoBlocker: AutoExternalizationBlocker | null = null
+  /** Sibling compiler for accessible (tagged PDF) exports (#84); created on first export so
+   *  the interactive engine and its snapshot are never disturbed. */
+  private exportCompiler: WasmTexCompiler | null = null
+  private exportSynced = new Map<string, string | Uint8Array>()
 
   constructor(options: WasmTexCompilerOptions = {}) {
     this.opts = options
@@ -641,6 +758,9 @@ export class WasmTexCompiler {
     this.engine = null
     this.tikzPool?.dispose()
     this.tikzPool = null
+    this.exportCompiler?.dispose()
+    this.exportCompiler = null
+    this.exportSynced.clear()
     this.bibtexEngine?.terminate()
     this.bibtexEngine = null
     this.makeindexEngine?.terminate()
@@ -988,6 +1108,55 @@ export class WasmTexCompiler {
       const file = this.fs.getFile(path)
       if (file) yield [path, file.content]
     }
+  }
+
+  /**
+   * Compile the project as a tagged, PDF/UA-declared PDF (#84) on a sibling compiler: the
+   * main file gets `\DocumentMetadata{lang=…, pdfstandard=ua-2, tagging=on}` in front of
+   * `\documentclass` (unless it declares its own), everything else is the project as written.
+   * The interactive `compile()` path is untouched. Needs the TeX Live 2026 profile (the 2025
+   * kernel predates `tagging=on`); the result says so instead of failing silently.
+   */
+  async exportAccessiblePdf(
+    options: AccessibleExportOptions = {},
+  ): Promise<AccessibleExportResult> {
+    this.ensureInitialized()
+    const source = this.mainSource()
+    const declaration = injectDocumentMetadata(source, options)
+    const documentClass = documentClassOf(source)
+    const classSupport = (documentClass && CLASS_SUPPORT[documentClass]) || 'unknown'
+    const notes = exportNotes(documentClass, classSupport, declaration.injected)
+    const result = await this.compileForExport(declaration.source)
+    return describeAccessibleExport(result, declaration, documentClass, classSupport, notes)
+  }
+
+  /** Compile `mainSource` with the project's other files on the export sibling. */
+  private async compileForExport(mainSource: string): Promise<CompileResult> {
+    if (!this.exportCompiler) this.exportCompiler = this.spawnExportCompiler()
+    const compiler = this.exportCompiler
+    for (const [path, content] of this.projectFileEntries()) {
+      if (path === this.mainFile) continue
+      if (this.exportSynced.get(path) === content) continue
+      compiler.setFile(path, content)
+      this.exportSynced.set(path, content)
+    }
+    compiler.setFile(this.mainFile, mainSource)
+    await compiler.init()
+    return compiler.compile()
+  }
+
+  /** The export compiler: same profile, plain compile (no checkpoints, no externalization —
+   *  the tagging kernel wants the pictures in the document). */
+  private spawnExportCompiler(): WasmTexCompiler {
+    const { files: _files, ...base } = this.opts
+    this.exportSynced.clear()
+    return new WasmTexCompiler({
+      ...base,
+      mainFile: this.mainFile,
+      engine: this.engineKind,
+      incremental: false,
+      tikzExternalization: { mode: 'off' },
+    })
   }
 
   /** A sibling compiler for figure jobs: same profile, no externalization of its own. */

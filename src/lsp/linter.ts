@@ -22,6 +22,10 @@ export type LintRuleId =
   | 'math-operator-as-text'
   | 'footnote-spacing'
   | 'abbreviation-spacing'
+  | 'a11y-graphics-alt'
+  | 'a11y-float-caption'
+  | 'a11y-heading-skip'
+  | 'a11y-pdf-metadata'
 
 type Severity = 'error' | 'warning' | 'info'
 
@@ -44,6 +48,13 @@ export const DEFAULT_LINT_CONFIG: LintConfig = {
   'math-operator-as-text': { enabled: true, severity: 'warning' },
   'footnote-spacing': { enabled: true, severity: 'info' },
   'abbreviation-spacing': { enabled: false, severity: 'info' },
+  // Accessibility (tagged PDF / PDF-UA) readiness. Info by default: they describe what a
+  // screen reader will miss, not a typesetting fault; a host exporting accessible PDFs can
+  // raise them to warnings.
+  'a11y-graphics-alt': { enabled: true, severity: 'info' },
+  'a11y-float-caption': { enabled: true, severity: 'info' },
+  'a11y-heading-skip': { enabled: true, severity: 'info' },
+  'a11y-pdf-metadata': { enabled: true, severity: 'info' },
 }
 
 interface RawDiagnostic {
@@ -279,8 +290,134 @@ function displayMathDollars(ctx: LintContext): RawDiagnostic[] {
   return out
 }
 
+// --- Accessibility rules ------------------------------------------------------
+
+/** `\includegraphics` whose options carry no `alt=`: the image will be tagged without a
+ *  text alternative (graphicx ≥ 2021 supports `alt={…}` regardless of tagging). */
+function graphicsAlt(ctx: LintContext): RawDiagnostic[] {
+  const out: RawDiagnostic[] = []
+  const content = ctx.content
+  const command = '\\includegraphics'
+  let from = 0
+  for (;;) {
+    const offset = content.indexOf(command, from)
+    if (offset < 0) break
+    from = offset + command.length
+    if (ctx.isMasked(offset)) continue
+    let cursor = from
+    if (content[cursor] === '*') cursor++
+    // The optional argument is read without a regex: a `[^\]]*` scan per occurrence is
+    // quadratic on adversarial input (CodeQL js/polynomial-redos).
+    if (content[cursor] === '[') {
+      const close = content.indexOf(']', cursor + 1)
+      if (close >= 0 && /(?:^|,)\s*alt\s*=/.test(content.slice(cursor + 1, close))) continue
+    }
+    out.push({
+      offset,
+      length: command.length,
+      message:
+        'Image has no text alternative; add alt={…} to \\includegraphics so screen readers can describe it.',
+    })
+  }
+  return out
+}
+
+/** `figure`/`table` floats without a `\caption`: the tagged float has no accessible name. */
+function floatCaption(ctx: LintContext): RawDiagnostic[] {
+  const out: RawDiagnostic[] = []
+  const re = /\\begin\{(figure|table)\*?\}/g
+  for (const m of ctx.content.matchAll(re)) {
+    const offset = m.index ?? 0
+    if (ctx.isMasked(offset)) continue
+    const env = m[1]!
+    const endRe = new RegExp(String.raw`\\end\{${env}\*?\}`, 'g')
+    endRe.lastIndex = offset
+    const end = endRe.exec(ctx.content)
+    const body = ctx.content.slice(offset, end ? end.index : undefined)
+    if (/\\caption(?:of)?\b/.test(body)) continue
+    out.push({
+      offset,
+      length: m[0].length,
+      message: `This ${env} has no \\caption; tagged PDF readers announce floats by their caption.`,
+    })
+  }
+  return out
+}
+
+const HEADING_LEVELS: Record<string, number> = {
+  part: -1,
+  chapter: 0,
+  section: 1,
+  subsection: 2,
+  subsubsection: 3,
+  paragraph: 4,
+  subparagraph: 5,
+}
+
+/** A heading more than one level deeper than the previous one (e.g. `\section` straight to
+ *  `\subsubsection`) breaks the outline that assistive technology navigates by. */
+function headingSkip(ctx: LintContext): RawDiagnostic[] {
+  const out: RawDiagnostic[] = []
+  const re =
+    /\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?\s*(?=[[{])/g
+  let previous: number | null = null
+  for (const m of ctx.content.matchAll(re)) {
+    const offset = m.index ?? 0
+    if (ctx.isMasked(offset)) continue
+    const level = HEADING_LEVELS[m[1]!]!
+    if (previous !== null && level > previous + 1) {
+      out.push({
+        offset,
+        length: m[0].trimEnd().length,
+        message: `Heading level skipped: \\${m[1]} follows a level-${previous} heading; use the next level down so the document outline stays navigable.`,
+      })
+    }
+    previous = level
+  }
+  return out
+}
+
+/** Root files only: a PDF without a title or language is read out by file name and in the
+ *  reader's default language. Satisfied by `\DocumentMetadata{lang=…}`, `\hypersetup{pdftitle/pdflang}`,
+ *  or `\title{…}` (the tagging kernel and hyperref copy it into the PDF). */
+function pdfMetadata(ctx: LintContext): RawDiagnostic[] {
+  const content = ctx.content
+  const cls = /\\documentclass\b/.exec(content)
+  if (!cls || ctx.isMasked(cls.index)) return []
+  const out: RawDiagnostic[] = []
+  // Plain substring checks: `\\title` (with or without an optional argument), hyperref's
+  // pdftitle/pdflang, or `lang=` inside `\\DocumentMetadata{…}`.
+  const hasTitle = content.includes('\\title') || content.includes('pdftitle')
+  const metadataAt = content.indexOf('\\DocumentMetadata{')
+  const metadata =
+    metadataAt < 0
+      ? ''
+      : content.slice(metadataAt, content.indexOf('}', metadataAt) + 1 || undefined)
+  const hasLang = content.includes('pdflang') || /\blang ?=/.test(metadata)
+  if (!hasTitle) {
+    out.push({
+      offset: cls.index,
+      length: '\\documentclass'.length,
+      message: 'The PDF will carry no title: add \\title{…} or \\hypersetup{pdftitle={…}}.',
+    })
+  }
+  if (!hasLang) {
+    out.push({
+      offset: cls.index,
+      length: '\\documentclass'.length,
+      message:
+        'The PDF will carry no language: add \\DocumentMetadata{lang=en-US} before \\documentclass or \\hypersetup{pdflang={en-US}}.',
+    })
+  }
+  return out
+}
+
 function runRule(ctx: LintContext, id: LintRuleId): RawDiagnostic[] {
   if (id === 'display-math-dollars') return displayMathDollars(ctx)
+  if (id === 'a11y-graphics-alt') return graphicsAlt(ctx)
+  if (id === 'a11y-float-caption') return floatCaption(ctx)
+  if (id === 'a11y-heading-skip') return headingSkip(ctx)
+  if (id === 'a11y-pdf-metadata') return pdfMetadata(ctx)
   const rule = TEXT_RULES.find((r) => r.id === id)
   return rule ? runTextRule(ctx, rule) : []
 }

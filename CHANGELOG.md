@@ -17,6 +17,12 @@ Add entries here as you land changes. Group them under these headings:
 Keep them user-facing and concise. Example:
   ### Added
 
+- Accessible export (`WasmTexCompiler.exportAccessiblePdf()`): a tagged, PDF/UA-2 declared
+  PDF produced by the LaTeX tagging kernel (`\DocumentMetadata{tagging=on}`, TeX Live 2026
+  profile) on a sibling compiler, with the document language detected, a verified
+  document-class support matrix, and a read-back report (`inspectPdfTagging`) of structure
+  tree, language, figure alt coverage, headings and tables. Linter rules `a11y-graphics-alt`,
+  `a11y-float-caption`, `a11y-heading-skip`, `a11y-pdf-metadata` (info by default).
 - TikZ figure externalization (`tikzExternalization` on `WasmTexCompiler`): a document that
   calls `\tikzexternalize` now has its pictures rendered by a pool of sibling compilers
   (no shell escape) and reused across edits via the `external` library's own MD5 check;

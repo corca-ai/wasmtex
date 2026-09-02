@@ -1,13 +1,22 @@
+import { AccessibleExportOptions } from './engine/accessible-export';
 import { BackendRegistry } from './engine/backend-registry';
 import { EngineOption } from './engine/engine-select';
 import { TikzExternalizationOptions } from './engine/tikz-externalization';
 import { ProjectIndex } from './lsp/project-index';
-import { CompileResult, CompletionSnapshotState, TexliveVersion, WarmupCache } from './types';
+import { AccessibleExportResult, CompileResult, CompletionSnapshotState, TexliveVersion, WarmupCache } from './types';
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api';
 export * from './backend-api';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
+export type { AccessibleExportOptions } from './engine/accessible-export';
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
-export type { CompilePhaseTimings, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
+export type { AccessibleExportResult, CompilePhaseTimings, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
+/**
+ * One-shot accessible export without an interactive compiler: builds a compiler from
+ * `options` (typically the TeX Live 2026 profile, whatever profile the editor uses), compiles
+ * the project once with the tagging declaration in the main file, and disposes it. For hosts
+ * whose preview profile predates the tagging kernel.
+ */
+export declare function compileAccessiblePdf(options: WasmTexCompilerOptions, exportOptions?: AccessibleExportOptions): Promise<AccessibleExportResult>;
 export interface WasmTexCompilerOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -106,6 +115,10 @@ export declare class WasmTexCompiler {
     private tikzAutoDisabled;
     /** Why `mode: 'auto'` left the current document inline (for telemetry). */
     private tikzAutoBlocker;
+    /** Sibling compiler for accessible (tagged PDF) exports (#84); created on first export so
+     *  the interactive engine and its snapshot are never disturbed. */
+    private exportCompiler;
+    private exportSynced;
     constructor(options?: WasmTexCompilerOptions);
     /** Engine options shared by every engine kind (binary-specific bits are set
      *  by the factory). */
@@ -199,6 +212,19 @@ export declare class WasmTexCompiler {
      *  preamble snapshot's, or the main file's when snapshots are off. */
     private readTikzFigureList;
     private projectFileEntries;
+    /**
+     * Compile the project as a tagged, PDF/UA-declared PDF (#84) on a sibling compiler: the
+     * main file gets `\DocumentMetadata{lang=…, pdfstandard=ua-2, tagging=on}` in front of
+     * `\documentclass` (unless it declares its own), everything else is the project as written.
+     * The interactive `compile()` path is untouched. Needs the TeX Live 2026 profile (the 2025
+     * kernel predates `tagging=on`); the result says so instead of failing silently.
+     */
+    exportAccessiblePdf(options?: AccessibleExportOptions): Promise<AccessibleExportResult>;
+    /** Compile `mainSource` with the project's other files on the export sibling. */
+    private compileForExport;
+    /** The export compiler: same profile, plain compile (no checkpoints, no externalization —
+     *  the tagging kernel wants the pictures in the document). */
+    private spawnExportCompiler;
     /** A sibling compiler for figure jobs: same profile, no externalization of its own. */
     private spawnFigureCompiler;
     private syncModifiedFilesToEngine;
