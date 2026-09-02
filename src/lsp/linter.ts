@@ -385,8 +385,15 @@ function pdfMetadata(ctx: LintContext): RawDiagnostic[] {
   const cls = /\\documentclass\b/.exec(content)
   if (!cls || ctx.isMasked(cls.index)) return []
   const out: RawDiagnostic[] = []
-  const hasTitle = /\\title(?:\[[^\]]*\])?\{|pdftitle ?=/.test(content)
-  const hasLang = /\\DocumentMetadata\{[^}]*\blang ?=|pdflang ?=/.test(content)
+  // Plain substring checks: `\\title` (with or without an optional argument), hyperref's
+  // pdftitle/pdflang, or `lang=` inside `\\DocumentMetadata{…}`.
+  const hasTitle = content.includes('\\title') || content.includes('pdftitle')
+  const metadataAt = content.indexOf('\\DocumentMetadata{')
+  const metadata =
+    metadataAt < 0
+      ? ''
+      : content.slice(metadataAt, content.indexOf('}', metadataAt) + 1 || undefined)
+  const hasLang = content.includes('pdflang') || /\blang ?=/.test(metadata)
   if (!hasTitle) {
     out.push({
       offset: cls.index,

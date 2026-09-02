@@ -83,8 +83,33 @@ const BABEL_LANGS: Readonly<Record<string, string>> = {
   'chinese-traditional': 'zh-TW',
 }
 
+/** Drop `%` comments (a `%` preceded by an odd number of backslashes is literal). Written
+ *  as a scan, not a regex, so CodeQL's polynomial-regex check has nothing to flag. */
 function stripComments(source: string): string {
-  return source.replace(/(^|[^\\])(\\\\)*%.*$/gm, (_m, pre, esc) => `${pre}${esc ?? ''}`)
+  const lines = source.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    for (let j = 0; j < line.length; j++) {
+      if (line[j] === '\\') {
+        j++
+        continue
+      }
+      if (line[j] === '%') {
+        lines[i] = line.slice(0, j)
+        break
+      }
+    }
+  }
+  return lines.join('\n')
+}
+
+/** Apply an anchored (sticky) pattern right after the first occurrence of `keyword`. */
+function afterKeyword(text: string, keyword: string, pattern: RegExp): RegExpExecArray | null {
+  const at = text.indexOf(keyword)
+  if (at < 0) return null
+  const sticky = new RegExp(pattern.source, `${pattern.flags.replace('y', '')}y`)
+  sticky.lastIndex = at + keyword.length
+  return sticky.exec(text)
 }
 
 /** Skip `[…]` (one level, no regex — keeps CodeQL's polynomial-scan check quiet). */
@@ -111,13 +136,11 @@ export function documentClassOf(source: string): string | null {
  *  babel/polyglossia main language, kotex/CJK packages), as BCP 47; null when none. */
 export function detectDocumentLanguage(source: string): string | null {
   const code = stripComments(source)
-  let m = /pdflang ?= ?\{? ?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/.exec(code)
-  if (m) return m[1]!
-  m = /\\DocumentMetadata\{[^}]*\blang ?= ?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/.exec(code)
-  if (m) return m[1]!
+  const explicit = explicitLanguage(code)
+  if (explicit) return explicit
   // babel: the last option is the main language (\usepackage[french,english]{babel} → english),
   // unless `main=` says otherwise.
-  m = /\\usepackage\[([^\]]*)\]\{babel\}/.exec(code)
+  let m = /\\usepackage\[([^\]]*)\]\{babel\}/.exec(code)
   if (m) {
     const opts = m[1]!.split(',').map((o) => o.trim())
     const main = opts.find((o) => o.startsWith('main='))?.slice(5)
@@ -130,10 +153,18 @@ export function detectDocumentLanguage(source: string): string | null {
   m = /\\setmainlanguage(?:\[[^\]]*\])?\{([^}]*)\}/.exec(code)
   if (m) return BABEL_LANGS[m[1]!.trim()] ?? null
   if (/\\usepackage(?:\[[^\]]*\])?\{(?:kotex|xetexko|luatexko)\}/.test(code)) return 'ko-KR'
-  if (/\\usepackage\s*(?:\[[^\]]*\])?\s*\{(?:xeCJK|luatexja|luatexja-fontspec)\}/.test(code)) {
-    return null
-  }
   return null
+}
+
+/** hyperref's `pdflang=` or `\DocumentMetadata{lang=…}`, when declared. */
+function explicitLanguage(code: string): string | null {
+  const tag = /([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/
+  const pdflang = afterKeyword(code, 'pdflang', / ?= ?\{? ?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)/)
+  if (pdflang) return pdflang[1]!
+  const metadata = afterKeyword(code, '\\DocumentMetadata{', /[^}]*/)
+  if (!metadata) return null
+  const lang = afterKeyword(metadata[0], 'lang=', tag)
+  return lang ? lang[1]! : null
 }
 
 /** True when the main file already declares `\DocumentMetadata`. */
@@ -331,11 +362,12 @@ export async function inspectPdfTagging(pdf: Uint8Array): Promise<PdfTaggingRepo
   const text = await expandedPdfText(pdf)
   const structRoot = /\/StructTreeRoot\b/.test(text)
   const marked = /\/Marked\s+true\b/.test(text)
-  const lang = /\/Lang ?\(([^)]*)\)/.exec(text)?.[1] ?? null
+  const lang = afterKeyword(text, '/Lang', / ?\(([^)]*)\)/)?.[1] ?? null
   const ua = /pdfuaid:part\s*=\s*"(\d)"|<pdfuaid:part>\s*(\d)/.exec(text)
   const uaPart = ua ? Number(ua[1] ?? ua[2]) : null
   const titleMatch = /<dc:title>[\s\S]{0,400}?<rdf:li[^>]*>([^<]*)<\/rdf:li>/.exec(text)
-  const title = titleMatch?.[1]?.trim() || (/\/Title ?\(([^)]*)\)/.exec(text)?.[1] ?? null)
+  const title =
+    titleMatch?.[1]?.trim() || (afterKeyword(text, '/Title', / ?\(([^)]*)\)/)?.[1] ?? null)
   return {
     tagged: structRoot && marked,
     lang,
