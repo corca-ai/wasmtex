@@ -98,6 +98,33 @@ snapshot prefixes use `Cache-Control: public, max-age=31536000, immutable`.
 Do not cache missing-object responses across publication: verify representative
 404-to-200 paths or purge the affected negative cache before qualification.
 
+### Edge cache and compression rules
+
+An R2 custom domain is only cached at the edge for Cloudflare's default
+cacheable extensions, which exclude `.sty`, `.cls`, `.tfm`, `.pfb`, `.map` and
+most other TeX Live objects, and objects are served as
+`application/octet-stream`, which is never compressed by default. Without the
+zone rules below every package request travels to the bucket origin
+(`cf-cache-status: DYNAMIC`) uncompressed; a cold pdfLaTeX compile of a
+conference document then spends 12–30 s in serial fetches.
+
+The `corca.ai` zone therefore carries two rules, created 2026-09-02 through the
+API with the `cortex-zone-ops` token (zone-scoped: Cache Rules Edit, Response
+Compression Rules Edit, Cache Purge, Transform Rules Edit):
+
+| Phase | Expression | Action |
+| --- | --- | --- |
+| `http_request_cache_settings` | `http.host eq "texlive.corca.ai"` | Eligible for cache; edge and browser TTL respect origin; status 404 and 5xx are never cached |
+| `http_response_compression` | `http.host eq "texlive.corca.ai"` | Compress with brotli, then gzip |
+
+Verified: a repeated `amsmath.sty` request answers `cf-cache-status: HIT`
+with `content-encoding: br` (88 KB → 20 KB); `pdftex.map` shrinks from 5.4 MB
+to 424 KB; a missing object answers `cf-cache-status: BYPASS`. Because 404s are
+not cached, publishing a new snapshot prefix needs no purge. The rules are
+visible under Rules → Cache Rules / Compression Rules in the dashboard; the
+worker's `.gz`-suffix probe in `src/engine/fetch-gz.ts` stays as the fallback
+for hosts without edge compression.
+
 ## Publication and verification
 
 1. Generate or recover the exact annual release and its provenance.
