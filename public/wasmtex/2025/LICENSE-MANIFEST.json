@@ -27,6 +27,8 @@
       "patterns": [
         "wasmtex-pdftex.js",
         "wasmtex-pdftex.wasm",
+        "wasmtex-pdftex-checkpoint.js",
+        "wasmtex-pdftex-checkpoint.wasm",
         "wasmtex-pdftex.worker.js"
       ],
       "distributionTerms": [

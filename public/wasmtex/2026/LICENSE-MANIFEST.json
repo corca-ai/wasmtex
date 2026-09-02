@@ -24,12 +24,25 @@
   "artifactFamilies": [
     {
       "name": "pdftex",
-      "patterns": ["wasmtex-pdftex.js", "wasmtex-pdftex.wasm", "wasmtex-pdftex.worker.js"],
-      "distributionTerms": ["GPL-2.0-only", "LicenseRef-Linked-Component-Notices"]
+      "patterns": [
+        "wasmtex-pdftex.js",
+        "wasmtex-pdftex.wasm",
+        "wasmtex-pdftex-checkpoint.js",
+        "wasmtex-pdftex-checkpoint.wasm",
+        "wasmtex-pdftex.worker.js"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-only",
+        "LicenseRef-Linked-Component-Notices"
+      ]
     },
     {
       "name": "xetex",
-      "patterns": ["wasmtex-xetex.js", "wasmtex-xetex.wasm", "wasmtex-xetex.worker.js"],
+      "patterns": [
+        "wasmtex-xetex.js",
+        "wasmtex-xetex.wasm",
+        "wasmtex-xetex.worker.js"
+      ],
       "distributionTerms": [
         "GPL-2.0-only",
         "LicenseRef-XeTeX",
@@ -39,22 +52,44 @@
     },
     {
       "name": "dvipdfmx",
-      "patterns": ["wasmtex-dvipdfm.js", "wasmtex-dvipdfm.wasm", "wasmtex-dvipdfm.worker.js"],
-      "distributionTerms": ["GPL-2.0-or-later", "LicenseRef-Linked-Component-Notices"]
+      "patterns": [
+        "wasmtex-dvipdfm.js",
+        "wasmtex-dvipdfm.wasm",
+        "wasmtex-dvipdfm.worker.js"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
     },
     {
       "name": "luahbtex",
-      "patterns": ["wasmtex-luatex.js", "wasmtex-luatex.wasm", "wasmtex-luatex.worker.js"],
-      "distributionTerms": ["GPL-2.0-only", "MIT", "LicenseRef-Linked-Component-Notices"]
+      "patterns": [
+        "wasmtex-luatex.js",
+        "wasmtex-luatex.wasm",
+        "wasmtex-luatex.worker.js"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-only",
+        "MIT",
+        "LicenseRef-Linked-Component-Notices"
+      ]
     },
     {
       "name": "latex-formats",
-      "patterns": ["*.fmt", "*.fmt.gz"],
-      "distributionTerms": ["LicenseRef-TeXLive-Format-Inputs"]
+      "patterns": [
+        "*.fmt",
+        "*.fmt.gz"
+      ],
+      "distributionTerms": [
+        "LicenseRef-TeXLive-Format-Inputs"
+      ]
     },
     {
       "name": "bibtex",
-      "patterns": ["wasmtex-bibtex.*"],
+      "patterns": [
+        "wasmtex-bibtex.*"
+      ],
       "distributionTerms": [
         "LicenseRef-BibTeX-Web2C-Notices",
         "LGPL-2.1-or-later",
@@ -63,12 +98,19 @@
     },
     {
       "name": "bibtex8",
-      "patterns": ["wasmtex-bibtex8.*"],
-      "distributionTerms": ["GPL-2.0-or-later", "LicenseRef-Linked-Component-Notices"]
+      "patterns": [
+        "wasmtex-bibtex8.*"
+      ],
+      "distributionTerms": [
+        "GPL-2.0-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
     },
     {
       "name": "makeindex",
-      "patterns": ["wasmtex-makeindex.*"],
+      "patterns": [
+        "wasmtex-makeindex.*"
+      ],
       "distributionTerms": [
         "LicenseRef-MakeIndex-Distribution-Notice",
         "LGPL-2.1-or-later",
@@ -81,7 +123,9 @@
         "wasmtex-kpse-resolve.js",
         "wasmtex-*-resolver-evidence.js"
       ],
-      "distributionTerms": ["MIT"]
+      "distributionTerms": [
+        "MIT"
+      ]
     }
   ],
   "releaseBlockers": []

@@ -37,6 +37,10 @@ export interface WasmTexEngineOptions {
   assetBaseUrl?: string
   /** TexLive server endpoint. Defaults to `${location.origin}${BASE_URL}texlive/`. */
   texliveUrl?: string
+  /** Load the Asyncify engine build that can take resumable mid-run checkpoints (#81).
+   *  Roughly 20-30% slower per compile than the plain build, so hosts enable it only for
+   *  interactive incremental sessions. Browser workers only. */
+  heapCheckpoints?: boolean
   /** If true, do not attempt to preload the base .fmt file. */
   skipFormatPreload?: boolean
   /** If true, disable precompiled preamble snapshots and always run a full
@@ -168,6 +172,22 @@ export function mergeWarmupCaches(base: WarmupCache, override: WarmupCache): War
   return merged
 }
 
+/** Checkpoints the worker took during this run (#81), as reported in the response. */
+function applyHeapCheckpoints(result: CompileResult, data: WorkerMessage): void {
+  const raw = (data as { heapCheckpoints?: unknown }).heapCheckpoints
+  if (!Array.isArray(raw)) return
+  result.heapCheckpoints = raw.map((c) => {
+    const r = c as Record<string, unknown>
+    return {
+      id: String(r.id),
+      line: Number(r.line),
+      bytes: Number(r.bytes) || 0,
+      ms: Number(r.ms) || 0,
+      inputs: Array.isArray(r.inputs) ? r.inputs.map(String) : null,
+    }
+  })
+}
+
 export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> implements CompileEngine {
   private formatPath: string
   private skipFormatPreload: boolean
@@ -191,6 +211,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private bloomFilter: ArrayBuffer | undefined
   /** Main file name, tracked for source-based dependency extraction. */
   private mainFileName = 'main.tex'
+  private heapCheckpointsSupported = false
   /** Last-written text sources, so dependency extraction can read the main source
    *  synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
@@ -205,7 +226,12 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     const base = options?.assetBaseUrl ?? import.meta.env.BASE_URL
     const version = options?.texliveVersion ?? '2025'
     const binary = options?.engineBinary ?? 'pdftex'
-    super(engineWorkerUrl(base, version, binary), options?.texliveUrl ?? null)
+    super(
+      options?.heapCheckpoints
+        ? `${engineWorkerUrl(base, version, binary)}?engine=checkpoint`
+        : engineWorkerUrl(base, version, binary),
+      options?.texliveUrl ?? null,
+    )
     this.formatPath = engineFormatUrl(base, version, binary)
     this.skipFormatPreload = !!options?.skipFormatPreload
     this.version = version
@@ -336,6 +362,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!data.cmd && !data.msgId) {
       if (data.result === 'ok') {
         this.status = 'ready'
+        this.heapCheckpointsSupported =
+          (data as { heapCheckpoints?: unknown }).heapCheckpoints === true
         initResolve()
       } else {
         this.status = 'error'
@@ -674,15 +702,57 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     return new Uint8Array(data.pdf)
   }
 
-  async compile(): Promise<CompileResult> {
+  /** True once the worker reported the Asyncify build (see the `heapCheckpoints` option). */
+  get supportsHeapCheckpoints(): boolean {
+    return this.heapCheckpointsSupported
+  }
+
+  /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
+   *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
+  async compile(options?: {
+    checkpoints?: Array<{ id: string; line: number }>
+  }): Promise<CompileResult> {
+    const checkpoints = options?.checkpoints?.length ? options.checkpoints : undefined
+    return this.runCompile(
+      checkpoints ? { cmd: 'compilelatex', checkpoints } : { cmd: 'compilelatex' },
+    )
+  }
+
+  /** Resume a compile from a checkpoint taken earlier (#81): the worker restores that
+   *  state, reads the rest of the main file as the host last wrote it, and finishes the
+   *  run like a normal compile - a complete PDF and SyncTeX, no splicing. The caller
+   *  guarantees the checkpoint is still valid (unchanged bytes before its line, unchanged
+   *  inputs). Further `checkpoints` after the resume line can be taken on the way. */
+  async compileFromHeapCheckpoint(
+    id: string,
+    checkpoints?: Array<{ id: string; line: number }>,
+  ): Promise<CompileResult> {
+    if (!this.heapCheckpointsSupported) {
+      throw new Error('heap checkpoints are not supported by this engine')
+    }
+    return this.runCompile({
+      cmd: 'compileheapcheckpoint',
+      id,
+      ...(checkpoints?.length ? { checkpoints } : {}),
+    })
+  }
+
+  /** Free checkpoints in the worker (all when `ids` is omitted). */
+  async dropHeapCheckpoints(ids?: string[]): Promise<void> {
+    if (!this.worker || !this.heapCheckpointsSupported) return
+    await this.postMessageWithResponse(
+      { cmd: 'dropheapcheckpoints', ids },
+      'cmd:dropheapcheckpoints',
+    )
+  }
+
+  private async runCompile(command: Record<string, unknown>): Promise<CompileResult> {
     this.checkReady()
     const durablePreambleKey = this.preambleCache ? await this.restorePersistentPreamble() : null
     this.status = 'compiling'
-
     const start = performance.now()
-
     this.resolver.begin()
-    const data = await this.postMessageWithResponse({ cmd: 'compilelatex' }, 'cmd:compile')
+    const data = await this.postMessageWithResponse(command, 'cmd:compile')
     const resolver = this.resolver.finish()
     this.completionObservation = Array.isArray(data.completionObservations)
       ? parseEngineCompletionObservation(data.completionObservations)
@@ -719,6 +789,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     }
     const phaseTimings = this.validPhaseTimings(data.phaseTimings)
     if (phaseTimings) result.phaseTimings = phaseTimings
+    applyHeapCheckpoints(result, data)
     applyEngineCommandObservation(result, data)
     applyRecorderObservation(result, data)
     if (data.semanticTrace) {
@@ -805,6 +876,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       preambleExportMs,
       postProcessMs,
       texRunMs,
+      ...(candidate.checkpointResume === true ? { checkpointResume: true } : {}),
     }
   }
 

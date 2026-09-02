@@ -1,8 +1,24 @@
+/** A resumable engine checkpoint the worker took during a compile (#81): the run was
+ *  suspended before reading source line `line` of the main file and its whole state kept. */
+export interface HeapCheckpointRecord {
+    id: string;
+    /** 1-based line of the main file at which the run was suspended (the line is unread). */
+    line: number;
+    /** Bytes the sparse memory image occupies in the worker. */
+    bytes: number;
+    /** Milliseconds the snapshot took. */
+    ms: number;
+    /** Files TeX had opened by then (recorder), so a host can tell which project edits
+     *  invalidate it; null when the recorder file was unavailable. */
+    inputs: string[] | null;
+}
 export interface CompileResult {
     success: boolean;
     pdf: Uint8Array | null;
     log: string;
     errors: TexError[];
+    /** Checkpoints taken during this compile, when any were requested (#81). */
+    heapCheckpoints?: HeapCheckpointRecord[];
     /** Time in milliseconds */
     compileTime: number;
     /** Raw synctex data (uncompressed or gzipped) from pdfTeX -synctex=1 */
@@ -71,6 +87,8 @@ export interface CompilePhaseTimings {
     postProcessMs: number;
     /** Aggregate time inside the main pdfTeX run(s), excluding heap restore. */
     texRunMs: number;
+    /** True when this result came from resuming a heap checkpoint (#81) rather than a full run. */
+    checkpointResume?: boolean;
 }
 /** Stable, machine-readable classification of a compile diagnostic (#54). A host
  *  branches on `code` rather than scraping messages. Many of these are "compile

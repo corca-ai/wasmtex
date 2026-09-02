@@ -30,6 +30,7 @@ import {
   resolveEngine,
   type TexEngine,
 } from './engine/engine-select'
+import { HeapCheckpointCompiler } from './engine/heap-checkpoints'
 import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
 import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine/index-backend'
 import { MakeindexEngine } from './engine/makeindex-engine'
@@ -242,6 +243,11 @@ function taggingNotes(
   return notes
 }
 
+function isNodeRuntime(): boolean {
+  const proc = (globalThis as { process?: { versions?: { node?: string } } }).process
+  return typeof proc?.versions?.node === 'string'
+}
+
 function withTikzTelemetry(
   result: CompileResult,
   telemetry: TikzExternalizationTelemetry,
@@ -377,6 +383,9 @@ export class WasmTexCompiler {
   /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
    *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
   private incremental: IncrementalCompiler | null = null
+  /** Arbitrary-line checkpoints on the Asyncify engine build (#81); null when the engine
+   *  cannot take them, in which case `incremental` (page-break checkpoints, #55) applies. */
+  private heap: HeapCheckpointCompiler | null = null
   /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
   private prebuildInFlight: Promise<boolean> | null = null
   private compileInFlight = false
@@ -444,6 +453,9 @@ export class WasmTexCompiler {
       },
       resolverProfile: this.completionProfile(),
       texliveVersion: this.opts.texliveVersion ?? '2025',
+      // The checkpoint (Asyncify) engine build is a browser-worker asset; Node hosts keep
+      // the plain build and the page-break checkpoints.
+      heapCheckpoints: !!this.opts.incremental && !isNodeRuntime(),
       ...(this.opts.warmupCache ? { warmupCache: this.opts.warmupCache } : {}),
     }
     if (this.opts.texliveUrl) opts.texliveUrl = this.opts.texliveUrl
@@ -485,6 +497,10 @@ export class WasmTexCompiler {
     this.incremental =
       this.opts.incremental && this.engine instanceof WasmTexPdftexEngine
         ? new IncrementalCompiler(this.engine, { mainFile: this.mainFile })
+        : null
+    this.heap =
+      this.opts.incremental && this.engine instanceof WasmTexPdftexEngine
+        ? new HeapCheckpointCompiler(this.engine, { mainFile: this.mainFile })
         : null
     try {
       await this.engine.init()
@@ -539,7 +555,11 @@ export class WasmTexCompiler {
     const fast = await this.tryIncrementalFastPath(externalization)
     if (fast) return fast
 
-    let result = await engine.compile()
+    // Heap checkpoints (#81): resume the last run from before the edit when the engine holds
+    // a valid checkpoint (a complete compile comes out of it), else a full compile that arms
+    // checkpoints for the edited region.
+    let result =
+      (await this.tryHeapResume(externalization)) ?? (await engine.compile(this.heapArms()))
     // Resolver evidence is per pass; the prefetch manifest is their union (#80).
     const resolverReports = [result.telemetry?.resolver]
     result = await this.applyTikzExternalization(result, externalization, resolverReports)
@@ -559,10 +579,11 @@ export class WasmTexCompiler {
       )
       if (!decision.rerun && !auxInjected) break
       await this.syncModifiedFilesToEngine()
-      result = await engine.compile()
+      result = await engine.compile(this.heapArms())
       resolverReports.push(result.telemetry?.resolver)
       auxInjected = await this.runAuxStages(result)
     }
+    this.heap?.noteFull(this.mainSource(), this.projectTexFiles(), result)
     // Cross-reference reruns replace `result`; the figure telemetry describes this compile.
     if (tikzTelemetry) {
       result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
@@ -610,13 +631,56 @@ export class WasmTexCompiler {
     if (typeof content !== 'string' || !path.toLowerCase().endsWith('.tex')) return false
     const source = this.mainSource()
     const files = this.projectTexFiles()
-    const task = incremental.prebuildForEdit(source, files, path, offset ?? content.length)
+    const task = this.heap?.enabled
+      ? this.prepareHeapCheckpoint(source, files, path, offset ?? content.length)
+      : incremental.prebuildForEdit(source, files, path, offset ?? content.length)
     this.prebuildInFlight = task
     try {
       return await task
     } finally {
       if (this.prebuildInFlight === task) this.prebuildInFlight = null
     }
+  }
+
+  /** Arm a heap checkpoint before the cursor's paragraph with one idle full compile, unless
+   *  one already covers it. Included files map to their `\input` position like #55. */
+  private async prepareHeapCheckpoint(
+    source: string,
+    files: Map<string, string>,
+    path: string,
+    offset: number,
+  ): Promise<boolean> {
+    const heap = this.heap
+    const engine = this.engine
+    if (!heap || !engine || !(engine instanceof WasmTexPdftexEngine)) return false
+    let mainOffset = offset
+    if (path !== this.mainFile) {
+      const at = source.indexOf(`{${path.replace(/\.tex$/, '')}}`)
+      if (at < 0) return false
+      mainOffset = at
+    }
+    const arms = heap.armsForFullCompile(source, files, mainOffset)
+    if (arms.length === 0) return false
+    const result = await engine.compile({ checkpoints: arms })
+    heap.noteFull(source, files, result)
+    return (result.heapCheckpoints?.length ?? 0) > 0
+  }
+
+  /** Checkpoint arms for the full compile about to run (none without the heap engine). */
+  private heapArms(): { checkpoints?: Array<{ id: string; line: number }> } | undefined {
+    if (!this.heap?.enabled) return undefined
+    const arms = this.heap.armsForFullCompile(this.mainSource(), this.projectTexFiles())
+    return arms.length ? { checkpoints: arms } : undefined
+  }
+
+  /** Resume from a heap checkpoint when the edit allows an exact result; null otherwise. */
+  private async tryHeapResume(
+    externalization: TikzExternalizationKind | null,
+  ): Promise<CompileResult | null> {
+    if (!this.heap?.enabled || externalization) return null
+    const resume = await this.heap.tryResume(this.mainSource(), this.projectTexFiles())
+    if (!resume || !resume.final || !resume.result.pdf) return null
+    return resume.result
   }
 
   /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
@@ -667,6 +731,7 @@ export class WasmTexCompiler {
       // incremental diff. Drop checkpoints so the change forces a fresh full compile (which
       // also re-runs the bibtex/makeindex aux stages) rather than splicing a stale head.
       this.incremental?.reset()
+      this.heap?.reset()
     }
     this.updateIndexForFile(path, content)
   }
@@ -724,6 +789,7 @@ export class WasmTexCompiler {
     // diff baseline / snapshot bookkeeping, so a bare reset() would leave it diffing the
     // wrong file after the active main changes.
     this.incremental?.setMainFile(path)
+    this.heap?.reset()
     if (this.initialized && this.engine && !this.unavailable) this.engine.setMainFile(path)
   }
 

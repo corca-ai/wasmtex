@@ -402,6 +402,7 @@ an immutable snapshot rather than mutable discovery metadata.
 
 The editor requires several heavy assets to function:
 - `wasmtex-pdftex.worker.js` / `wasmtex-pdftex.js` / `wasmtex-pdftex.wasm`
+- `wasmtex-pdftex-checkpoint.js` / `wasmtex-pdftex-checkpoint.wasm` (the Asyncify build the same worker loads with `?engine=checkpoint`; see [Checkpoint engine build](#checkpoint-engine-build-wasmtex-pdftex-checkpoint))
 - `wasmtex-bibtex.worker.js` / `wasmtex-bibtex.js` / `wasmtex-bibtex.wasm`
 - corresponding controller/module/WASM sets for XeTeX + dvipdfmx and LuaTeX
   (optional — absence degrades to an actionable engine-unavailable result)
@@ -663,3 +664,17 @@ The editor uses a service worker to cache TeX packages fetched from the CDN.
 ## Related Documents
 - [docs/texlive-upgrade.md](texlive-upgrade.md): Detailed internals and TeX Live upgrade guide.
 - [docs/architecture.md](architecture.md): System architecture overview.
+
+## Checkpoint engine build (`wasmtex-pdftex-checkpoint.*`)
+
+The pdfTeX release ships twice: the plain build, and the same sources linked with
+Binaryen's Asyncify (`PDFTEX_CHECKPOINT_FLAGS` in `wasm-build/Makefile`: `-sASYNCIFY=1`
+with `fd_read` as the only import allowed to unwind, 1 MiB Asyncify stack). The worker
+controller is shared; loading it with `?engine=checkpoint` selects the Asyncify binary.
+On it the worker can suspend TeX inside a read of the main file, keep the unwound state
+as a **heap checkpoint** (a sparse copy of wasm memory plus MEMFS files and streams) and
+resume it any number of times with an edited tail — see the
+[API notes on heap checkpoints](api.md#heap-checkpoints-arbitrary-line-incremental-compilation).
+The instrumentation costs about 20–30% per compile and ~1 MB of `.wasm`, so the headless
+compiler loads this build only with `incremental: true` in a browser; Node hosts and the
+format extraction use the plain build. Both builds share `wasmtex-pdftex.fmt`.

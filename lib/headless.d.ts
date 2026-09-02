@@ -84,6 +84,9 @@ export declare class WasmTexCompiler {
     /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
      *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
     private incremental;
+    /** Arbitrary-line checkpoints on the Asyncify engine build (#81); null when the engine
+     *  cannot take them, in which case `incremental` (page-break checkpoints, #55) applies. */
+    private heap;
     /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
     private prebuildInFlight;
     private compileInFlight;
@@ -148,6 +151,13 @@ export declare class WasmTexCompiler {
      * preparation is running waits for it before using the worker.
      */
     prepareIncrementalCompile(path?: string, offset?: number): Promise<boolean>;
+    /** Arm a heap checkpoint before the cursor's paragraph with one idle full compile, unless
+     *  one already covers it. Included files map to their `\input` position like #55. */
+    private prepareHeapCheckpoint;
+    /** Checkpoint arms for the full compile about to run (none without the heap engine). */
+    private heapArms;
+    /** Resume from a heap checkpoint when the edit allows an exact result; null otherwise. */
+    private tryHeapResume;
     /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
      *  diagnostics; head errors can't recur (the head is unchanged), and metadata/cross-refs are
      *  unchanged for a `final` result, so the last full compile's project index still holds. The raw

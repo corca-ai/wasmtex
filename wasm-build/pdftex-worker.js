@@ -88,7 +88,7 @@ Module["preRun"] = function() {
 // After WASM initialization completes, snapshot the heap memory and notify
 // the host that the engine is ready.
 Module["postRun"] = function() {
-    self.postMessage({ "result": "ok" });
+    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported() });
     self.initmem = dumpHeapMemory();
 };
 
@@ -732,7 +732,7 @@ function kpse_find_pk_impl(nameptr, dpi) {
 //
 // The .synctex file contains source-to-PDF position mappings that enable
 // click-to-jump between the editor and PDF viewer.
-function compileLaTeXRoutine() {
+async function compileLaTeXRoutine(data) {
     var routineStart = performance.now();
     var phaseTimings = self._activePhaseTimings = {
         formatInstallMs: 0,
@@ -883,9 +883,12 @@ function compileLaTeXRoutine() {
     writeTexmfCnf();
     var compileStart = performance.now();
     var status;
+    // Heap checkpoints (#81): suspend at the requested lines of the file TeX is about to
+    // read and keep a resumable copy of the engine state; the run then continues.
+    hcArm(data && data["checkpoints"], { usedPreamble: usedPreamble, preambleLineCount: split ? split.preambleLineCount : 0 });
     try {
-        status = runMain("pdflatex", ["-interaction=nonstopmode", "-synctex=1",
-                                       "-recorder", "&pdflatex", self.mainfile]);
+        status = await runTexMain(["-interaction=nonstopmode", "-synctex=1",
+                                   "-recorder", "&pdflatex", self.mainfile]);
     } catch(e) {
         if (e instanceof ExitStatus) {
             status = e.status;
@@ -896,6 +899,7 @@ function compileLaTeXRoutine() {
             status = -254;
         }
     }
+    hcDisarm();
     var compileMs = Math.round(performance.now() - compileStart);
     phaseTimings.texRunMs += compileMs;
 
@@ -942,8 +946,8 @@ function compileLaTeXRoutine() {
         writeTexmfCnf();
         var fallbackStart = performance.now();
         try {
-            status = runMain("pdflatex", ["-interaction=nonstopmode", "-synctex=1",
-                                           "-recorder", "&pdflatex", self.mainfile]);
+            status = await runTexMain(["-interaction=nonstopmode", "-synctex=1",
+                                       "-recorder", "&pdflatex", self.mainfile]);
         } catch(e) {
             if (e instanceof ExitStatus) {
                 status = e.status;
@@ -955,6 +959,16 @@ function compileLaTeXRoutine() {
         phaseTimings.texRunMs += performance.now() - fallbackStart;
     }
 
+    finishCompile({ routineStart: routineStart, phaseTimings: phaseTimings, usedPreamble: usedPreamble, preambleRebuilt: preambleRebuilt }, status);
+}
+
+// Post-run bookkeeping shared by a normal compile and a checkpoint resume: engine
+// command scan, recorder inputs, semantic trace, PDF/SyncTeX read-back and the response.
+function finishCompile(ctx, status) {
+    var routineStart = ctx.routineStart;
+    var phaseTimings = ctx.phaseTimings;
+    var usedPreamble = ctx.usedPreamble;
+    var preambleRebuilt = ctx.preambleRebuilt;
     var postProcessStart = performance.now();
 
     // Semantic Trace: extract defined commands from pdfTeX hash table.
@@ -1079,7 +1093,8 @@ function compileLaTeXRoutine() {
             "completionObservations": completionObservations,
             "inputFiles": inputFiles,
             "inputFilesComplete": inputFilesComplete,
-            "semanticTrace": semanticTrace
+            "semanticTrace": semanticTrace,
+            "heapCheckpoints": hcTaken()
         };
 
         var transferables = [pdfArrayBuffer.buffer];
@@ -1135,10 +1150,6 @@ function compileLaTeXRoutine() {
     }
 }
 
-// compileFormatRoutine — Build a .fmt format file
-//
-// Format files are precompiled TeX macro packages (like LaTeX's pdflatex.fmt).
-// This routine compiles one and returns it as binary data.
 function compileFormatRoutine() {
     prepareExecutionContext();
     writeTexmfCnf();
@@ -1302,6 +1313,7 @@ function writeFileRoutine(filename, content) {
         // force a costly snapshot rebuild.
         invalidatePreambleForWrite(filename);
         FS.writeFile(WORKROOT + "/" + filename, content);
+        hcNoteHostWrite(filename, content);
         self.postMessage({ "result": "ok", "cmd": "writefile" });
     } catch(err) {
         console.error("Unable to write file " + filename);
@@ -1332,7 +1344,12 @@ self["onmessage"] = function(ev) {
     var cmd = data["cmd"];
 
     if (cmd === "compilelatex") {
-        compileLaTeXRoutine();
+        compileLaTeXRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
+    } else if (cmd === "compileheapcheckpoint") {
+        compileFromHeapCheckpointRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
+    } else if (cmd === "dropheapcheckpoints") {
+        hcDrop(data["ids"]);
+        self.postMessage({ "result": "ok", "cmd": "dropheapcheckpoints" });
     } else if (cmd === "compileformat") {
         compileFormatRoutine();
     } else if (cmd === "settexliveurl") {
@@ -1491,6 +1508,7 @@ self["onmessage"] = function(ev) {
         );
     } else if (cmd === "flushcache") {
         cleanDir(WORKROOT);
+        hcReset();
         // A snapshot can embed project-local inputs. It must never survive a
         // project replacement whose preamble text happens to hash identically.
         self._preambleFmtData = null;
@@ -1507,4 +1525,380 @@ self["onmessage"] = function(ev) {
 
 self.kpse_find_file_impl = kpse_find_file_impl;
 self.kpse_find_pk_impl = kpse_find_pk_impl;
-importScripts("wasmtex-kpse-resolve.js", "wasmtex-pdftex.js");
+
+// --- Heap checkpoints (#81) ---------------------------------------------------
+//
+// Only on the Asyncify engine build. TeX's read of the main file is cut short at a
+// requested byte offset; the read at that offset calls Asyncify.handleSleep, which
+// unwinds the whole call stack into linear memory. At that moment the engine state
+// is "memory + a few JS-side pieces" and a copy of it is a checkpoint that can be
+// restored ANY number of times: restore, rewind, and TeX continues reading the
+// (new) tail of the file, writing the PDF and SyncTeX to the end itself.
+//
+// Checkpoints are keyed by host-provided ids; the host decides where they go and
+// when a source edit may resume from one (the bytes before the offset must be
+// unchanged, and so must every project file TeX had opened by then).
+
+var HC_PAGE = 65536;
+self._hc = {
+    checkpoints: {},      // id -> snapshot
+    armed: [],            // [{id, line, offset, node}] sorted by offset, for the run in progress
+    taken: [],            // [{id, line, bytes, ms}] taken during the run in progress
+    pending: null,        // {wakeUp, cp} of the suspended run
+    resuming: null,       // {node} while a fork's first read must stop the rewind
+    hookInstalled: false,
+    dataPtr: 0,           // preallocated Asyncify data buffer
+    hostWrites: {},       // path -> latest content the host wrote (re-applied after a restore)
+    transform: null       // how the main file was rewritten for the run in progress
+};
+
+function hcSupported() {
+    return typeof Asyncify !== "undefined" && typeof _asyncify_start_rewind === "function";
+}
+
+function hcReset() {
+    self._hc.checkpoints = {};
+    self._hc.hostWrites = {};
+}
+
+function hcNoteHostWrite(filename, content) {
+    self._hc.hostWrites[filename] = content;
+}
+
+function hcReportCrash(cmd, e) {
+    console.error("[heap-checkpoint] " + (e && e.stack || e));
+    self.postMessage({ "result": "failed", "status": -254, "log": self.memlog + "\n" + String(e), "cmd": cmd });
+}
+
+function hcTaken() {
+    return self._hc.taken.slice();
+}
+
+function hcDrop(ids) {
+    if (!ids) { self._hc.checkpoints = {}; return; }
+    for (var i = 0; i < ids.length; i++) delete self._hc.checkpoints[ids[i]];
+}
+
+function hcLineOffset(text, line) {
+    if (line <= 1) return 0;
+    var at = -1;
+    for (var n = 1; n < line; n++) {
+        at = text.indexOf("\n", at + 1);
+        if (at < 0) return -1;
+    }
+    return new TextEncoder().encode(text.substring(0, at + 1)).length;
+}
+
+// Arm checkpoints for the run about to start. `checkpoints` is [{id, line}] in the
+// host's line numbering, which every rewrite of the main file preserves.
+function hcArm(checkpoints, transform) {
+    self._hc.armed = [];
+    self._hc.taken = [];
+    self._hc.transform = transform || null;
+    if (!checkpoints || !checkpoints.length || !hcSupported()) return;
+    hcInstallReadHook();
+    if (!self._hc.dataPtr) {
+        // One Asyncify data buffer per worker at a stable address; the runtime's own
+        // malloc/free per unwind would move it around the heap.
+        var ptr = _malloc(12 + Asyncify.StackSize);
+        self._hc.dataPtr = ptr;
+        Asyncify.allocateData = function() {
+            Asyncify.setDataHeader(ptr, ptr + 12, Asyncify.StackSize);
+            Asyncify.setDataRewindFunc(ptr);
+            return ptr;
+        };
+        var origFree = _free;
+        _free = function(p) { if (p === ptr) return; return origFree(p); };
+    }
+    var path = WORKROOT + "/" + self.mainfile;
+    var text = FS.readFile(path, { encoding: "utf8" });
+    var node = FS.lookupPath(path).node;
+    var seen = {};
+    for (var i = 0; i < checkpoints.length; i++) {
+        var cp = checkpoints[i];
+        var offset = hcLineOffset(text, cp.line);
+        if (offset < 0 || seen[offset]) continue;
+        seen[offset] = true;
+        self._hc.armed.push({ id: cp.id, line: cp.line, offset: offset, node: node });
+    }
+    self._hc.armed.sort(function(a, b) { return a.offset - b.offset; });
+}
+
+function hcDisarm() {
+    self._hc.armed = [];
+    self._hc.resuming = null;
+}
+
+function hcInstallReadHook() {
+    if (self._hc.hookInstalled) return;
+    self._hc.hookInstalled = true;
+    var origRead = FS.read;
+    FS.read = function(stream, buffer, offset, length, position) {
+        // While unwinding, serve nothing: fd_read's iov loop would otherwise keep
+        // reading and advance the stream past the checkpoint.
+        if (Asyncify.state === Asyncify.State.Unwinding) return 0;
+        if (length === 0) return origRead.call(FS, stream, buffer, offset, length, position);
+        // A resumed fork: the rewound import call must stop the rewind before it reads.
+        var rs = self._hc.resuming;
+        if (rs && Asyncify.state === Asyncify.State.Rewinding && stream.node === rs.node) {
+            Asyncify.handleSleep(function() {});
+            self._hc.resuming = null;
+            return origRead.call(FS, stream, buffer, offset, length, position);
+        }
+        var armed = self._hc.armed;
+        if (armed.length && stream.node === armed[0].node) {
+            var pos = (typeof position === "undefined") ? stream.position : position;
+            var cp = armed[0];
+            if (pos < cp.offset && pos + length > cp.offset) {
+                length = cp.offset - pos;              // stop exactly at the checkpoint
+            } else if (pos === cp.offset) {
+                if (Asyncify.state === Asyncify.State.Normal) {
+                    Asyncify.handleSleep(function(wakeUp) { self._hc.pending = { wakeUp: wakeUp, cp: cp }; });
+                    return 0;                          // unwinding; value ignored
+                }
+                if (Asyncify.state === Asyncify.State.Rewinding) {
+                    Asyncify.handleSleep(function() {}); // completes the rewind
+                    armed.shift();                       // this checkpoint is done
+                }
+            } else if (pos > cp.offset) {
+                armed.shift();                           // already past it; cannot stop there
+            }
+        }
+        return origRead.call(FS, stream, buffer, offset, length, position);
+    };
+}
+
+// Sparse memory image: only 64 KiB pages with a non-zero byte are kept (a grown heap
+// is mostly pages TeX never touched).
+function hcSparseImage() {
+    var src = new Uint8Array(wasmMemory.buffer);
+    var pages = Math.ceil(src.length / HC_PAGE), kept = [], bytes = 0;
+    for (var pi = 0; pi < pages; pi++) {
+        var a = pi * HC_PAGE, b = Math.min(src.length, a + HC_PAGE);
+        var words = new Int32Array(src.buffer, a, (b - a) >> 2);
+        var zero = true;
+        for (var k = 0; k < words.length; k++) { if (words[k]) { zero = false; break; } }
+        if (zero) continue;
+        kept.push({ at: a, data: src.slice(a, b) });
+        bytes += b - a;
+    }
+    return { length: src.length, pages: kept, bytes: bytes };
+}
+
+function hcSnapshotFS() {
+    var files = {};
+    (function walk(dir) {
+        var names = FS.readdir(dir);
+        for (var i = 0; i < names.length; i++) {
+            var n = names[i];
+            if (n === "." || n === "..") continue;
+            var p = dir + "/" + n;
+            var st = FS.stat(p);
+            if (FS.isDir(st.mode)) { walk(p); continue; }
+            if (/\.fmt$/.test(n)) continue;   // read before any checkpoint; multi-MB
+            var node = FS.lookupPath(p).node;
+            files[p] = node.contents ? node.contents.slice(0, node.usedBytes) : new Uint8Array(0);
+        }
+    })(WORKROOT);
+    var streams = [];
+    for (var fd = 3; fd < FS.streams.length; fd++) {
+        var s = FS.streams[fd];
+        if (!s) continue;
+        streams.push({ fd: fd, path: s.path, flags: s.flags, position: s.position });
+    }
+    return { files: files, streams: streams };
+}
+
+function hcRestoreFS(snap) {
+    closeFSStreams();
+    cleanDir(WORKROOT);
+    var p;
+    for (p in snap.files) {
+        var dir = p.substring(0, p.lastIndexOf("/"));
+        try { FS.mkdirTree(dir); } catch(e) {}
+        FS.writeFile(p, snap.files[p]);
+    }
+    // Project files are the host's: whatever it wrote last wins over the checkpoint's copy.
+    for (p in self._hc.hostWrites) {
+        var full = WORKROOT + "/" + p;
+        var d2 = full.substring(0, full.lastIndexOf("/"));
+        try { FS.mkdirTree(d2); } catch(e) {}
+        FS.writeFile(full, self._hc.hostWrites[p]);
+    }
+    var placeholders = [];
+    for (var i = 0; i < snap.streams.length; i++) {
+        var st = snap.streams[i];
+        var stream = FS.open(st.path, st.flags);
+        while (stream.fd < st.fd) {          // keep fd numbering identical to the C side
+            placeholders.push(stream);
+            stream = FS.open(st.path, st.flags);
+        }
+        if (stream.fd !== st.fd) throw new Error("heap checkpoint: fd " + stream.fd + " != " + st.fd);
+        stream.position = st.position;
+    }
+    for (var k = 0; k < placeholders.length; k++) { try { FS.close(placeholders[k]); } catch(e) {} }
+}
+
+function hcTakeSnapshot(cp) {
+    var t0 = performance.now();
+    var image = hcSparseImage();
+    var inputs = null;
+    try { inputs = readRecorderInputs(self.mainfile.substr(0, self.mainfile.length - 4)); } catch(e) {}
+    var snap = {
+        id: cp.id, line: cp.line, offset: cp.offset,
+        image: image, currData: Asyncify.currData, sp: stackSave(),
+        fs: hcSnapshotFS(), memlog: self.memlog,
+        transform: self._hc.transform, inputs: inputs,
+        bytes: image.bytes, ms: 0
+    };
+    snap.ms = performance.now() - t0;
+    return snap;
+}
+
+function hcRestoreMemory(snap) {
+    var need = snap.image.length, have = wasmMemory.buffer.byteLength;
+    if (need > have) {
+        wasmMemory.grow(Math.ceil((need - have) / HC_PAGE));
+        updateMemoryViews();
+    }
+    var dst = new Uint8Array(wasmMemory.buffer);
+    dst.fill(0);
+    for (var i = 0; i < snap.image.pages.length; i++) {
+        var pg = snap.image.pages[i];
+        dst.set(pg.data, pg.at);
+    }
+    stackRestore(snap.sp);
+}
+
+// The TeX main pass; on the Asyncify engine an armed checkpoint suspends it, we
+// snapshot, then let it continue. Resolves with the exit status once TeX finished.
+async function runTexMain(args) {
+    if (!hcSupported() || !self._hc.armed.length) return runMain("pdflatex", args);
+    return runMainAsync("pdflatex", args);
+}
+
+async function runMainAsync(programName, args) {
+    var savedProgram = thisProgram;
+    thisProgram = "./" + programName;
+    var fullArgs = [programName].concat(args);
+    var argPtrs = fullArgs.map(allocateString);
+    argPtrs.push(0);
+    var argv = _malloc(argPtrs.length * 4);
+    var dv = new DataView(wasmMemory.buffer);
+    for (var i = 0; i < argPtrs.length; i++) dv.setUint32(argv + i * 4, argPtrs[i], true);
+    var status;
+    try {
+        try {
+            status = _main(fullArgs.length, argv);
+        } catch(e) {
+            if (e instanceof ExitStatus) status = e.status; else throw e;
+        }
+        status = await hcContinueWhileSuspended(status);
+    } finally {
+        _free(argv);
+        thisProgram = savedProgram;
+    }
+    return status;
+}
+
+// After main() returned: if a checkpoint suspended it, snapshot and resume; repeat
+// for every armed checkpoint the run reaches.
+async function hcContinueWhileSuspended(status) {
+    while (Asyncify.currData && self._hc.pending) {
+        var pending = self._hc.pending;
+        self._hc.pending = null;
+        var snap = hcTakeSnapshot(pending.cp);
+        self._hc.checkpoints[snap.id] = snap;
+        self._hc.taken.push({ id: snap.id, line: snap.line, bytes: snap.bytes, ms: Math.round(snap.ms), inputs: snap.inputs });
+        var done = Asyncify.whenDone();
+        try {
+            pending.wakeUp(0);
+            status = await done;
+        } catch(e) {
+            if (e instanceof ExitStatus) status = e.status; else throw e;
+        }
+    }
+    return status;
+}
+
+// Rewrite the host's main file the way the checkpointed run saw it (preamble padding
+// and the semantic-trace injection keep line numbers, so offsets carry over).
+function hcTransformMain(text, transform) {
+    var out = text;
+    if (transform && transform.usedPreamble) {
+        var split = extractPreamble(out);
+        if (split) {
+            var padding = "";
+            for (var i = 1; i < transform.preambleLineCount; i++) padding += "%\n";
+            out = padding + split.body;
+        }
+    }
+    var bdTag = "\\begin{document}";
+    var bdIdx = out.indexOf(bdTag);
+    if (bdIdx >= 0) {
+        var afterBD = bdIdx + bdTag.length;
+        out = out.slice(0, afterBD) + "\\input{__strace}" + out.slice(afterBD);
+    }
+    return out;
+}
+
+// compileheapcheckpoint {id, checkpoints?}: resume the run from a checkpoint on the
+// project files as the host last wrote them, and finish like a normal compile.
+async function compileFromHeapCheckpointRoutine(data) {
+    var routineStart = performance.now();
+    var snap = self._hc.checkpoints[data["id"]];
+    var phaseTimings = self._activePhaseTimings = {
+        formatInstallMs: 0, heapSizeBytes: wasmMemory.buffer.byteLength, heapRestoreMs: 0,
+        heapSnapshotBytes: snap ? snap.bytes : 0, heapSnapshotMs: 0, preambleBuildMs: 0,
+        preambleExportMs: 0, postProcessMs: 0, texRunMs: 0, workerTotalMs: 0, checkpointResume: true
+    };
+    if (!snap || !hcSupported()) {
+        self.postMessage({ "result": "failed", "status": -1, "log": "no such heap checkpoint", "cmd": "compile" });
+        return;
+    }
+    var restoreStart = performance.now();
+    hcRestoreFS(snap.fs);
+    var hostMain = self._hc.hostWrites[self.mainfile];
+    if (typeof hostMain !== "string") {
+        try { hostMain = FS.readFile(WORKROOT + "/" + self.mainfile, { encoding: "utf8" }); } catch(e) { hostMain = ""; }
+    }
+    FS.writeFile(WORKROOT + "/" + self.mainfile, hcTransformMain(hostMain, snap.transform));
+    hcRestoreMemory(snap);
+    self.memlog = snap.memlog;
+    phaseTimings.heapRestoreMs = performance.now() - restoreStart;
+    hcArm(data["checkpoints"], snap.transform);
+    // Arms at or before the resume point can never be reached again.
+    while (self._hc.armed.length && self._hc.armed[0].offset <= snap.offset) self._hc.armed.shift();
+    self._hc.resuming = { node: FS.lookupPath(WORKROOT + "/" + self.mainfile).node };
+    var texStart = performance.now();
+    var status;
+    try {
+        Asyncify.state = Asyncify.State.Rewinding;
+        Asyncify.currData = snap.currData;
+        _asyncify_start_rewind(snap.currData);
+        try {
+            status = _main();
+        } catch(e) {
+            if (e instanceof ExitStatus) status = e.status; else throw e;
+        }
+        status = await hcContinueWhileSuspended(status);
+    } catch(e) {
+        console.error("[heap-checkpoint] resume crashed: " + e);
+        status = -254;
+    }
+    hcDisarm();
+    phaseTimings.texRunMs = performance.now() - texStart;
+    FS.writeFile(WORKROOT + "/" + self.mainfile, hostMain);
+    finishCompile({ routineStart: routineStart, phaseTimings: phaseTimings, usedPreamble: !!(snap.transform && snap.transform.usedPreamble), preambleRebuilt: false }, status);
+}
+
+// The engine binary: the plain build, or the Asyncify build that supports heap
+// checkpoints (#81) when the host loaded this worker with `?engine=checkpoint`.
+(function() {
+    var engine = "wasmtex-pdftex.js";
+    try {
+        var params = new URLSearchParams(self.location.search);
+        if (params.get("engine") === "checkpoint") engine = "wasmtex-pdftex-checkpoint.js";
+    } catch(e) {}
+    importScripts("wasmtex-kpse-resolve.js", engine);
+})();
