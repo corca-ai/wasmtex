@@ -46,8 +46,13 @@ export declare function findBeginDocument(source: string): number;
 export declare function documentExternalizes(source: string): boolean;
 /** True when the preamble loads tikz or pgfplots (directly). */
 export declare function loadsTikz(source: string): boolean;
-/** Decide whether (and how) a main source gets externalized under `mode`. */
-export declare function detectTikzExternalization(source: string, mode?: TikzExternalizationMode): TikzExternalizationKind | null;
+/** A per-document override in the main file's magic comments, next to `% !TEX program`:
+ *  `% !WASMTEX tikz-externalization = off | document | auto`. Lets an author (or a host
+ *  that defaults to `'auto'`) switch one project without a host setting. */
+export declare function documentExternalizationMode(source: string): TikzExternalizationMode | null;
+/** Decide whether (and how) a main source gets externalized under `mode` (the document's
+ *  own magic comment wins over the host's mode). */
+export declare function detectTikzExternalization(source: string, hostMode?: TikzExternalizationMode): TikzExternalizationKind | null;
 /** Main-job source: the document as written, with the library switched to
  *  `list and make` (and, for `'inject'`, activated) on the `\begin{document}` line so
  *  no line number moves. */
@@ -62,14 +67,18 @@ export declare function figureJobSource(source: string, kind: TikzExternalizatio
 export declare function parseFigureList(text: string | null | undefined): string[];
 /** The picture hash recorded in a `<figure>.md5` file (`\tikzexternallastkey{…}%`). */
 export declare function parseFigureMd5(text: string | null | undefined): string | null;
-/** Default figure-worker count: leave a core for the main engine, cap at three. */
-export declare function defaultFigureWorkers(hardwareConcurrency: number | undefined): number;
+/** Default figure-worker count: leave a core for the main engine, cap at three, one on
+ *  low-memory devices (`navigator.deviceMemory` ≤ 4 GiB). */
+export declare function defaultFigureWorkers(hardwareConcurrency: number | undefined, deviceMemoryGiB?: number): number;
 /** A figure rendered by a figure job, keyed by the library's own MD5. */
 export interface RenderedFigure {
     md5: string | null;
     pdf: Uint8Array;
     /** `<figure>.dpth` (baseline depth + smuggled aux data) when the library wrote one. */
     dpth: string | null;
+    /** The figure job's log: a picture error does not fail the job (TeX keeps going and
+     *  still ships the page), so its diagnostics live only here. */
+    log: string;
 }
 export interface FigureJobRequest {
     name: string;
@@ -105,9 +114,19 @@ export declare class TikzFigurePool {
     private readonly factory;
     private readonly size;
     private readonly mainFile;
+    /** Release the engine workers (not the rendered figures) after this much idle time. */
+    private readonly idleMs;
     private readonly workers;
     readonly cache: Map<string, RenderedFigure>;
-    constructor(factory: () => FigureCompiler, size: number, mainFile: string);
+    private idleTimer;
+    constructor(factory: () => FigureCompiler, size: number, mainFile: string, 
+    /** Release the engine workers (not the rendered figures) after this much idle time. */
+    idleMs?: number);
+    /** Number of live engine workers (for tests and telemetry). */
+    get liveWorkers(): number;
+    /** Terminate idle engine workers; rendered figures stay cached. */
+    releaseWorkers(): void;
+    private scheduleRelease;
     /** Figures whose cached render is still current for the listed MD5. */
     isCurrent(name: string, md5: string | null): boolean;
     /** Drop cached figures the document no longer lists. */
@@ -117,3 +136,22 @@ export declare class TikzFigurePool {
     private spawn;
     private syncProject;
 }
+/** Why `mode: 'auto'` leaves a document alone (the upstream library's documented limits). */
+export type AutoExternalizationBlocker = 'beamer' | 'remember-picture' | 'wrapped-environment' | 'too-few-pictures';
+/** Minimum `tikzpicture` count for `'auto'`: below it, spawning a figure worker (its own
+ *  preamble snapshot) costs more than the pictures save. */
+export declare const AUTO_MIN_PICTURES = 3;
+/** Count picture starts (`\begin{tikzpicture}` and the `\tikz` short form) outside comments
+ *  across the given sources. A static count: pictures produced by loops count once. */
+export declare function countPictures(sources: Iterable<string>): number;
+/** True when a loop may multiply the static picture count (`\foreach`, `\pgfplotsforeachungrouped`, …). */
+export declare function hasPictureLoops(sources: Iterable<string>): boolean;
+/**
+ * Patterns the `external` library cannot externalize faithfully without the author's
+ * cooperation (each picture becomes an isolated PDF, so nothing may reach across pictures
+ * or onto the page): page-anchored/overlay pictures (`remember picture`, `overlay`,
+ * `current page`, `\tikzmark`), beamer overlays, and pictures hidden inside user-defined
+ * environments (the library's picture skipping looks for a literal `\end{tikzpicture}`).
+ * `'document'` mode never consults this — an author who wrote `\tikzexternalize` opted in.
+ */
+export declare function detectAutoBlocker(mainSource: string, sources: Iterable<string>): AutoExternalizationBlocker | null;

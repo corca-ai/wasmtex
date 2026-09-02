@@ -102,6 +102,10 @@ export declare class WasmTexCompiler {
     private sessionDependencies;
     /** Sibling compilers rendering externalized TikZ figures (#82); created on first use. */
     private tikzPool;
+    /** `mode: 'auto'` switched itself off for this session after a figure job failed. */
+    private tikzAutoDisabled;
+    /** Why `mode: 'auto'` left the current document inline (for telemetry). */
+    private tikzAutoBlocker;
     constructor(options?: WasmTexCompilerOptions);
     /** Engine options shared by every engine kind (binary-specific bits are set
      *  by the factory). */
@@ -180,14 +184,20 @@ export declare class WasmTexCompiler {
     private tryIncrementalFastPath;
     /** Run figure jobs for `result` and, when any rendered, run the main job again so it
      *  includes them (the figure telemetry carries over to the final result). */
+    /** Externalize after the first pass when switched on; otherwise record why auto left the
+     *  document inline. */
+    private applyTikzExternalization;
     private externalizeTikzFigures;
     /**
-     * Render the figures the main job listed as missing or stale (#82) and return whether the
-     * main job must run again to include them. Figure jobs are ordinary compiles of the same
-     * document on sibling compilers, selected through the `external` library's own grab mode;
-     * see `engine/tikz-externalization.ts`.
+     * Render the figures the main job listed as missing or stale (#82). Figure jobs are ordinary
+     * compiles of the same document on sibling compilers, selected through the `external`
+     * library's own grab mode; see `engine/tikz-externalization.ts`. Returns null when the
+     * document lists no figures.
      */
     private runTikzFigureJobs;
+    /** The figure list the main job wrote, under whichever real job name it ran as: the
+     *  preamble snapshot's, or the main file's when snapshots are off. */
+    private readTikzFigureList;
     private projectFileEntries;
     /** A sibling compiler for figure jobs: same profile, no externalization of its own. */
     private spawnFigureCompiler;

@@ -87,12 +87,23 @@ export interface Diagnostic {
     glyph?: FontGlyphGap;
 }
 export interface TikzExternalizationTelemetry {
+    /** How externalization was switched on: the document's own `\tikzexternalize`, or
+     *  `mode: 'auto'` activating the library. */
+    mode: 'document' | 'auto';
     figures: number;
     compiled: number;
     reused: number;
     failed: string[];
     workers: number;
     figureTimeMs: number;
+    /** Errors TeX reported inside figure jobs (merged into `errors`); the job still ships
+     *  a PDF, so this is the only signal that a picture is broken. */
+    pictureErrors: number;
+    /** `mode: 'auto'` only: a figure job failed, so this compile fell back to an inline
+     *  (non-externalized) compile and auto stays off for the rest of the session. */
+    fallback?: boolean;
+    /** `mode: 'auto'` only: why the document was left inline. */
+    blocked?: 'beamer' | 'remember-picture' | 'wrapped-environment' | 'too-few-pictures';
 }
 export interface EngineTelemetry {
     diagnostics: Diagnostic[];

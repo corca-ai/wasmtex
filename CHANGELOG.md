@@ -20,9 +20,12 @@ Keep them user-facing and concise. Example:
 - TikZ figure externalization (`tikzExternalization` on `WasmTexCompiler`): a document that
   calls `\tikzexternalize` now has its pictures rendered by a pool of sibling compilers
   (no shell escape) and reused across edits via the `external` library's own MD5 check;
-  `mode: 'auto'` extends this to documents that load TikZ without calling it. A text-only
-  recompile of a 15-picture document drops from ~1.1 s to ~140 ms. Telemetry:
-  `telemetry.tikzExternalization`.
+  `mode: 'auto'` extends this to documents that load TikZ without calling it, with a
+  never-worse-than-inline contract (documented library limits are detected and left inline;
+  a failed figure job falls back to an inline compile). `\ref` inside pictures resolves and
+  picture errors are surfaced in `errors` at their source lines; a main file can pin its
+  mode with `% !WASMTEX tikz-externalization = off|document|auto`. A text-only recompile of a
+  15-picture document drops from ~1.1 s to ~140 ms. Telemetry: `telemetry.tikzExternalization`.
   - Server-side xindy backend for index generation.
 -->
 
