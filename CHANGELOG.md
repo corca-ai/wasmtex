@@ -24,6 +24,14 @@ Keep them user-facing and concise. Example:
 - Document Syntax Snapshot v8 exposes bounded, non-overlapping source-order blocks so
   downstream semantic engines can reason about adjacency without rescanning TeX.
 
+### Fixed
+
+- The pdfTeX worker stored host-preloaded TeX Live files (warmup and persistent
+  cache) under their bare request name, so a TFM and a same-named virtual font
+  (`ptmr7t`, every psnfss/Times document) overwrote each other and a rehydrated
+  session failed with `Bad metric (TFM) file`. Preloads now use the same
+  extension-normalized cache path as on-demand fetches (#80).
+
 ## [0.1.0] - 2026-07
 
 Initial development snapshot. WasmTex is an embeddable, browser-based LaTeX editor with
