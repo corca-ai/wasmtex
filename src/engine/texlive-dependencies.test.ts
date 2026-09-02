@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CompletionSnapshotProfile, ResolverEvidenceReport } from '../types'
-import { buildTexliveDependencySet } from './texlive-dependencies'
+import { buildTexliveDependencySet, mergeTexliveDependencySets } from './texlive-dependencies'
 
 const profile: CompletionSnapshotProfile = { id: 'p', texliveYear: '2025', mirrorRevision: 'r1' }
 
@@ -183,5 +183,45 @@ describe('buildTexliveDependencySet', () => {
     })!
     expect(set.notFound).toEqual([])
     expect(set.files).toEqual([{ format: 26, filename: 'figure.png' }])
+  })
+
+  it('merges a session: keeps earlier files, drops negatives a later compile resolved', () => {
+    const first = buildTexliveDependencySet('2025', profile, [
+      report([
+        {
+          stage: 'pdftex',
+          requestedName: 'IEEEtran.cls',
+          format: 26,
+          outcome: 'resolved',
+          attempts: [{ source: 'network', outcome: 'hit', candidate: 'IEEEtran.cls', status: 200 }],
+        },
+        {
+          stage: 'pdftex',
+          requestedName: 'later.sty',
+          format: 26,
+          outcome: 'mirror-absent',
+          attempts: [{ source: 'network', outcome: 'not-found', status: 404 }],
+        },
+      ]),
+    ])!
+    const second = buildTexliveDependencySet('2025', profile, [
+      report([
+        {
+          stage: 'pdftex',
+          requestedName: 'later.sty',
+          format: 26,
+          outcome: 'resolved',
+          attempts: [{ source: 'network', outcome: 'hit', candidate: 'later.sty', status: 200 }],
+        },
+      ]),
+    ])!
+    const merged = mergeTexliveDependencySets(first, second)
+    expect(merged.files.map((f) => f.filename).sort()).toEqual([
+      'IEEEtran.cls',
+      'later.sty',
+      'pdftex.map',
+    ])
+    expect(merged.notFound).toEqual([])
+    expect(mergeTexliveDependencySets(undefined, second)).toBe(second)
   })
 })

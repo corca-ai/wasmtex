@@ -89,6 +89,10 @@ export declare class WasmTexCompiler {
     /** The last successful full result's manifest seeds only the informational input
      *  list on an incremental result; the incremental manifest remains incomplete. */
     private lastFullDependencyManifest;
+    /** Union of every compile's resolver evidence since init — a preamble-snapshot compile
+     *  resolves only body files, so the per-compile set alone would shrink after the first
+     *  compile and a host persisting it would lose the preamble's files. */
+    private sessionDependencies;
     constructor(options?: WasmTexCompilerOptions);
     /** Engine options shared by every engine kind (binary-specific bits are set
      *  by the factory). */

@@ -25,7 +25,8 @@ Keep them user-facing and concise. Example:
   unioned across rerun passes, and `warmup({ dependencies })` to prefetch that set in
   parallel next session. Measured against the live mirror, replaying the set takes a cold
   IEEEtran first compile from 12–23 s to ~2.3 s and acmart from 57 s+ to ~6 s. The set
-  is fetched on top of the built-in manifest, never instead of it (#80).
+  is fetched on top of the built-in manifest, never instead of it, and is cumulative over
+  the compiler session so a preamble-snapshot compile does not shrink it (#80).
 - Resolver evidence retains up to 1024 entries per pass (was 256), so the dependency
   set of a large document stays complete.
 - Document Syntax Snapshot v8 exposes bounded, non-overlapping source-order blocks so

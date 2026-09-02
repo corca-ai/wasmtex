@@ -71,9 +71,11 @@ where a cold first compile goes (warm recompiles of the same documents take 0.1�
 | NeurIPS 2026 | 89 | 31 s | 26 s | 0.4 s (after 2.4 s) |
 | acmart sigconf | 185 | 57–175 s | 69 s | 0.8 s (after 5.0 s) |
 
-Every compile therefore reports its **exact TeX Live dependency set** as
-`telemetry.texliveDependencies` — the union, across rerun passes, of every resource the
-TeX passes resolved (with the mirror object name when it differs from the kpathsea
+Every compile therefore reports the **exact TeX Live dependency set** of the session as
+`telemetry.texliveDependencies` — the union, across rerun passes and across every compile
+since `init()` (a preamble-snapshot compile resolves only body files, so a single
+compile's evidence would shrink after the first one), of every resource the TeX passes
+resolved (with the mirror object name when it differs from the kpathsea
 request) or found absent. It contains names only, never bytes, and is bound to the TeX
 Live year and compile profile it was observed under.
 
