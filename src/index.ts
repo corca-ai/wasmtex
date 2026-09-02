@@ -1,6 +1,16 @@
 export * from './backend-api'
 export type { WasmTexEventMap, WasmTexOptions } from './component-types'
 export { ensureLanguagesRegistered } from './editor/setup'
+export type {
+  AccessibleExportOptions,
+  ClassSupport,
+  PdfStandard,
+  PdfTaggingReport,
+} from './engine/accessible-export'
+export {
+  detectDocumentLanguage,
+  inspectPdfTagging,
+} from './engine/accessible-export'
 export {
   COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
   COMPLETION_SNAPSHOT_SCHEMA_VERSION,
@@ -39,6 +49,7 @@ export {
   type ShardStore,
 } from './lsp/package-shard-loader'
 export type {
+  AccessibleExportResult,
   AppStatus,
   BoxGeometry,
   CachedTexliveFile,

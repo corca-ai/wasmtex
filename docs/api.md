@@ -367,6 +367,51 @@ straight to a full compile (no stale-reference flash). The SyncTeX splice covers
 multi-file documents — `\include`/`\input` chapters splice at their own file-relative lines; only a head
 that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
 
+#### Accessible export (tagged PDF / PDF-UA)
+
+`compiler.exportAccessiblePdf(options?)` compiles the project as a tagged, PDF/UA-declared
+PDF on a sibling compiler, leaving the interactive `compile()` path and its engine untouched.
+Nothing is reimplemented: the main file gets the LaTeX kernel's own switch,
+`\DocumentMetadata{lang=…, pdfversion=2.0, pdfstandard=ua-2, tagging=on}`, in front of
+`\documentclass` (on the same line, so no line number moves), unless it already declares its
+own `\DocumentMetadata`, which is then trusted as written.
+
+```ts
+const out = await compiler.exportAccessiblePdf({ lang: 'ko-KR' }) // lang/standard optional
+out.result.pdf        // the tagged PDF (a CompileResult: log, errors, …)
+out.declaration       // { lang, standard: 'ua-2' | 'ua-1', injected }
+out.documentClass     // 'article' …
+out.classSupport      // 'supported' | 'unsupported' | 'unknown'
+out.kernelSupported   // false on the TeX Live 2025 profile (kernel predates tagging=on)
+out.tagging           // read back from the PDF: { tagged, lang, uaPart, figures, figuresWithAlt, headings, tables, title }
+out.notes             // human-readable caveats for the host to show
+```
+
+- **Engine requirement**: the tagging kernel ships with LaTeX 2025-06, i.e. the **TeX Live
+  2026** profile. On 2025 the compile still runs but `kernelSupported` is false and the notes
+  say so.
+- **Language**: detected from `\hypersetup{pdflang=…}`, `\DocumentMetadata{lang=…}`, babel
+  (`main=` or the last option), polyglossia `\setmainlanguage`, or kotex; `en-US` otherwise.
+  Pass `lang` to override.
+- **Classes**: `classSupport` comes from a verified matrix (TeX Live 2026, veraPDF PDF/UA-2):
+  `supported` — the standard classes, amsart and KOMA-Script (which prints "Activated tagging
+  detected but not supported!" and still produces a clean structure tree); `partial` —
+  llncs, IEEEtran, elsarticle (structure tree, but tagging errors in the log; check the
+  output); `unsupported` — memoir, acmart, revtex, beamer (structure violations or
+  failed compiles). Unknown classes are attempted and reported. Every class, even
+  `article`, currently fails veraPDF clause 8.2.2 on a few rules (tabular `\hline`, the
+  footnote rule) the kernel does not yet mark as artifacts — that is the kernel's baseline,
+  not something the export can fix.
+- **Alt text**: `\includegraphics[alt={…}]{…}` becomes the figure's `/Alt`; a missing one is a
+  tagpdf error in the log and shows up in `tagging.figuresWithAlt` and the notes. The linter's
+  `a11y-graphics-alt`, `a11y-float-caption`, `a11y-heading-skip` and `a11y-pdf-metadata` rules
+  point at the sources of these gaps before export (info severity by default).
+- **Cost**: a tagged compile is roughly 3× a plain warm compile on the sibling (its own
+  preamble snapshot applies). Nothing is cached across sessions.
+
+`inspectPdfTagging(pdf)` (exported) produces the `tagging` report for any PDF bytes — it
+inflates object streams itself, so hosts need no PDF library for an accessibility summary.
+
 #### TikZ figure externalization
 
 `tikzExternalization` (default `{ mode: 'document' }`) makes the TikZ/pgfplots

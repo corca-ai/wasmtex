@@ -193,3 +193,73 @@ describe('linter', () => {
     })
   })
 })
+
+describe('accessibility rules', () => {
+  const a11y = (id: LintRuleId, content: string) =>
+    lintSource(content, 'main.tex', {
+      'a11y-graphics-alt': { enabled: id === 'a11y-graphics-alt' },
+      'a11y-float-caption': { enabled: id === 'a11y-float-caption' },
+      'a11y-heading-skip': { enabled: id === 'a11y-heading-skip' },
+      'a11y-pdf-metadata': { enabled: id === 'a11y-pdf-metadata' },
+    }).filter((d) => d.code.startsWith('a11y-'))
+
+  it('flags \\includegraphics without alt=', () => {
+    expect(a11y('a11y-graphics-alt', '\\includegraphics[width=2cm]{a.png}')).toHaveLength(1)
+    expect(a11y('a11y-graphics-alt', '\\includegraphics{a.png}')).toHaveLength(1)
+    expect(a11y('a11y-graphics-alt', '\\includegraphics[width=2cm, alt={A cat}]{a.png}')).toEqual(
+      [],
+    )
+    expect(a11y('a11y-graphics-alt', '\\includegraphics[alt=cat]{a.png}')).toEqual([])
+    expect(a11y('a11y-graphics-alt', '% \\includegraphics{a.png}')).toEqual([])
+    const d = a11y('a11y-graphics-alt', 'x\n\\includegraphics{a.png}')[0]!
+    expect([d.line, d.column, d.severity]).toEqual([2, 1, 'info'])
+  })
+
+  it('flags figure/table floats without a caption', () => {
+    expect(
+      a11y('a11y-float-caption', '\\begin{figure}\\includegraphics[alt=x]{a}\\end{figure}'),
+    ).toHaveLength(1)
+    expect(
+      a11y(
+        'a11y-float-caption',
+        '\\begin{table*}\\begin{tabular}{l}a\\end{tabular}\\caption{t}\\end{table*}',
+      ),
+    ).toEqual([])
+    expect(
+      a11y('a11y-float-caption', '\\begin{figure}\\captionof{figure}{x}\\end{figure}'),
+    ).toEqual([])
+    // Two floats, only the second captioned.
+    expect(
+      a11y(
+        'a11y-float-caption',
+        '\\begin{figure}a\\end{figure}\n\\begin{figure}b\\caption{c}\\end{figure}',
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('flags skipped heading levels', () => {
+    expect(a11y('a11y-heading-skip', '\\section{A}\\subsubsection{B}')).toHaveLength(1)
+    expect(a11y('a11y-heading-skip', '\\section{A}\\subsection{B}\\subsubsection{C}')).toEqual([])
+    expect(
+      a11y('a11y-heading-skip', '\\chapter{A}\\section{B}\\subsection{C}\\section{D}'),
+    ).toEqual([])
+    expect(a11y('a11y-heading-skip', '\\subsection*{A}')).toEqual([])
+    expect(a11y('a11y-heading-skip', '\\chapter{A}\\subsection{B}')).toHaveLength(1)
+  })
+
+  it('asks a root file for a title and a language', () => {
+    const root = '\\documentclass{article}\\usepackage{hyperref}\\begin{document}x\\end{document}'
+    expect(a11y('a11y-pdf-metadata', root)).toHaveLength(2)
+    expect(
+      a11y('a11y-pdf-metadata', root.replace('\\begin{document}', '\\title{T}\\begin{document}')),
+    ).toHaveLength(1)
+    expect(
+      a11y(
+        'a11y-pdf-metadata',
+        `\\DocumentMetadata{lang=en-US}${root.replace('\\begin{document}', '\\hypersetup{pdftitle={T}}\\begin{document}')}`,
+      ),
+    ).toEqual([])
+    // Included files are not roots.
+    expect(a11y('a11y-pdf-metadata', '\\section{A} text')).toEqual([])
+  })
+})

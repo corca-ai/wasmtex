@@ -101,6 +101,32 @@ export interface Diagnostic {
   glyph?: FontGlyphGap
 }
 
+/** Outcome of `WasmTexCompiler.exportAccessiblePdf()` (#84). */
+export interface AccessibleExportResult {
+  /** The tagged compile (its `pdf` is the export; `errors`/`log` are the compile's). */
+  result: CompileResult
+  /** What the export declared, or found already declared by the document. */
+  declaration: { lang: string; standard: 'ua-2' | 'ua-1'; injected: boolean }
+  /** `\documentclass` of the main file and how it is known to behave under tagging. */
+  documentClass: string | null
+  classSupport: 'supported' | 'partial' | 'unsupported' | 'unknown'
+  /** False when the engine's LaTeX kernel predates `tagging=on` (TeX Live 2025 profile). */
+  kernelSupported: boolean
+  /** Read back from the produced PDF; null when no PDF was produced. */
+  tagging: {
+    tagged: boolean
+    lang: string | null
+    uaPart: number | null
+    figures: number
+    figuresWithAlt: number
+    headings: number
+    tables: number
+    title: string | null
+  } | null
+  /** Human-readable notes a host can show next to the export (unsupported class, old kernel…). */
+  notes: string[]
+}
+
 export interface TikzExternalizationTelemetry {
   /** How externalization was switched on: the document's own `\tikzexternalize`, or
    *  `mode: 'auto'` activating the library. */

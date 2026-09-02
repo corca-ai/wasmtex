@@ -1,5 +1,5 @@
 import { Diagnostic } from './diagnostic-provider';
-export type LintRuleId = 'nbsp-before-ref' | 'space-before-punctuation' | 'doubled-space' | 'ellipsis' | 'straight-double-quotes' | 'display-math-dollars' | 'en-dash-range' | 'math-operator-as-text' | 'footnote-spacing' | 'abbreviation-spacing';
+export type LintRuleId = 'nbsp-before-ref' | 'space-before-punctuation' | 'doubled-space' | 'ellipsis' | 'straight-double-quotes' | 'display-math-dollars' | 'en-dash-range' | 'math-operator-as-text' | 'footnote-spacing' | 'abbreviation-spacing' | 'a11y-graphics-alt' | 'a11y-float-caption' | 'a11y-heading-skip' | 'a11y-pdf-metadata';
 type Severity = 'error' | 'warning' | 'info';
 export interface LintRuleConfig {
     enabled: boolean;
