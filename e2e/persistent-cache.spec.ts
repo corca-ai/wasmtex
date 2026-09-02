@@ -73,6 +73,52 @@ test.describe('Iteration 5: persistent TeX Live cache', () => {
     expect(warmDownloads).toBeLessThanOrEqual(Math.max(2, Math.floor(coldDownloads * 0.1)))
   })
 
+  // psnfss Times fonts: kpathsea requests the TFM (format 3) and the VF (format 33)
+  // under the same bare name (`ptmr7t`). A rehydrated cache must keep them apart,
+  // or the second session typesets with nullfont / fails with "Bad metric (TFM) file".
+  const TIMES_DOC = [
+    '\\documentclass{article}',
+    '\\usepackage{times}',
+    '\\begin{document}',
+    'Times roman \\textbf{bold} \\textit{italic} text.',
+    '\\end{document}',
+    '',
+  ].join('\n')
+
+  test('rehydrated same-named TFM and VF entries still typeset', async ({ page }) => {
+    await page.goto(`${APP_URL}?cache=1`)
+    await waitReady(page)
+    await page.evaluate(() => (window as any).__engine.clearCache())
+    await page.reload()
+    await waitReady(page)
+
+    await setDocAndCompile(page, TIMES_DOC)
+    const cold = await page.evaluate(async () => {
+      const w = window as any
+      await w.__engine.persistTexliveCache()
+      return { ok: w.__lastCompile?.success, bytes: w.__lastCompile?.pdf?.byteLength ?? 0 }
+    })
+    expect(cold.ok).toBe(true)
+
+    await page.reload()
+    await waitReady(page)
+    await setDocAndCompile(page, TIMES_DOC)
+    const warm = await page.evaluate(() => {
+      const w = window as any
+      return {
+        ok: w.__lastCompile?.success,
+        bytes: w.__lastCompile?.pdf?.byteLength ?? 0,
+        badMetric: /Bad metric \(TFM\) file|not loadable/.test(w.__lastCompile?.log ?? ''),
+        downloads: w.__engine.getDownloadCount() as number,
+      }
+    })
+    expect(warm.badMetric).toBe(false)
+    expect(warm.ok).toBe(true)
+    // Same fonts, same text: the rehydrated session must produce the same-sized PDF.
+    expect(warm.bytes).toBe(cold.bytes)
+    expect(warm.downloads).toBe(0)
+  })
+
   test('clearCache() forces a cold re-fetch on the next load', async ({ page }) => {
     await page.goto(`${APP_URL}?cache=1`)
     await waitReady(page)

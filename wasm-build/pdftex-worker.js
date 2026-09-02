@@ -506,6 +506,17 @@ function bloomMaybe(format, reqname) {
     return false;
 }
 
+// On-disk name inside the flat TEXCACHEROOT for a fetched or preloaded file.
+// Ensures standard extensions for known formats so same-named files of
+// different formats (TFM vs VF, BibTeX .bib vs .bst) never share a path.
+function cacheFileName(format, name) {
+    if (format === 3 && !name.endsWith(".tfm")) return name + ".tfm";
+    if (format === 6 && !name.endsWith(".bib")) return name + ".bib";
+    if (format === 7 && !name.endsWith(".bst")) return name + ".bst";
+    if (format === 10 && !name.endsWith(".fmt")) return name + ".fmt";
+    return name;
+}
+
 function kpse_find_file_impl(nameptr, format, _mustexist) {
     var reqname = UTF8ToString(nameptr);
     
@@ -614,14 +625,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         var arraybuffer = xhr.response;
         // fileid header comes from texlive server; static hosting won't have it
         var fileid = xhr.getResponseHeader("fileid") || reqname;
-        
-        // Ensure standard extensions for known formats if missing
-        if (format === 3 && !fileid.endsWith(".tfm")) fileid += ".tfm";
-        if (format === 6 && !fileid.endsWith(".bib")) fileid += ".bib";
-        if (format === 7 && !fileid.endsWith(".bst")) fileid += ".bst";
-        if (format === 10 && !fileid.endsWith(".fmt")) fileid += ".fmt";
-
-        var savepath = TEXCACHEROOT + "/" + fileid;
+        var savepath = TEXCACHEROOT + "/" + cacheFileName(format, fileid);
         var data = new Uint8Array(arraybuffer);
         FS.writeFile(savepath, data);
 
@@ -1353,7 +1357,12 @@ self["onmessage"] = function(ev) {
         var fileData = new Uint8Array(data["data"]);
         var msgId = data["msgId"];
         var cacheKey = format + "/" + filename;
-        var savepath = TEXCACHEROOT + "/" + filename;
+        // Same on-disk name as the fetch path: TEXCACHEROOT is flat, so a TFM
+        // (format 3) and a VF (format 33) requested under the same bare name
+        // (e.g. `ptmr7t`) must not overwrite each other. Without the extension
+        // normalization a preloaded/rehydrated VF clobbers the TFM and pdfTeX
+        // fails with "Bad metric (TFM) file".
+        var savepath = TEXCACHEROOT + "/" + cacheFileName(format, filename);
         FS.writeFile(savepath, fileData);
         texlive200_cache[cacheKey] = savepath;
         texlive200_source[cacheKey] = data["source"] === "persistent-cache"
