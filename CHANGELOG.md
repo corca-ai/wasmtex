@@ -23,6 +23,12 @@ Keep them user-facing and concise. Example:
   of with the headless compiler, so host shells that never enable incremental compiles do
   not ship it.
 
+### Fixed
+
+- `setMainFile()` with the unchanged main file no longer drops the heap and page-break
+  checkpoints. Hosts that re-assert the main file before every compile never resumed from
+  a checkpoint before this.
+
 ### Added
 
 - Heap checkpoints (`incremental: true` in browsers): a second pdfTeX build instrumented with

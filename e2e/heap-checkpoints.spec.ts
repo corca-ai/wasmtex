@@ -76,6 +76,9 @@ test('edits after a heap checkpoint resume the suspended run and match a full co
           'Paragraph 2 of section 39.',
           'Paragraph 2 of section 39 changed as well.',
         )
+        // Hosts like cortex re-assert the main file before every compile; that must not
+        // drop the checkpoints.
+        incremental.setMainFile('main.tex')
         incremental.setFile('main.tex', edit2)
         t0 = performance.now()
         const fast2 = await incremental.compile()
