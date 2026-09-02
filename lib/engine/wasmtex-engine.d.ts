@@ -14,6 +14,10 @@ export interface WasmTexEngineOptions {
     assetBaseUrl?: string;
     /** TexLive server endpoint. Defaults to `${location.origin}${BASE_URL}texlive/`. */
     texliveUrl?: string;
+    /** Load the Asyncify engine build that can take resumable mid-run checkpoints (#81).
+     *  Roughly 20-30% slower per compile than the plain build, so hosts enable it only for
+     *  interactive incremental sessions. Browser workers only. */
+    heapCheckpoints?: boolean;
     /** If true, do not attempt to preload the base .fmt file. */
     skipFormatPreload?: boolean;
     /** If true, disable precompiled preamble snapshots and always run a full
@@ -98,6 +102,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private bloomFilter;
     /** Main file name, tracked for source-based dependency extraction. */
     private mainFileName;
+    private heapCheckpointsSupported;
     /** Last-written text sources, so dependency extraction can read the main source
      *  synchronously (no worker round-trip). */
     private readonly sources;
@@ -160,7 +165,28 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
      *  Release tooling uses this instead of depending on an application-side event
      *  or reaching into the worker protocol directly. */
     buildFormat(): Promise<Uint8Array>;
-    compile(): Promise<CompileResult>;
+    /** True once the worker reported the Asyncify build (see the `heapCheckpoints` option). */
+    get supportsHeapCheckpoints(): boolean;
+    /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
+     *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
+    compile(options?: {
+        checkpoints?: Array<{
+            id: string;
+            line: number;
+        }>;
+    }): Promise<CompileResult>;
+    /** Resume a compile from a checkpoint taken earlier (#81): the worker restores that
+     *  state, reads the rest of the main file as the host last wrote it, and finishes the
+     *  run like a normal compile - a complete PDF and SyncTeX, no splicing. The caller
+     *  guarantees the checkpoint is still valid (unchanged bytes before its line, unchanged
+     *  inputs). Further `checkpoints` after the resume line can be taken on the way. */
+    compileFromHeapCheckpoint(id: string, checkpoints?: Array<{
+        id: string;
+        line: number;
+    }>): Promise<CompileResult>;
+    /** Free checkpoints in the worker (all when `ids` is omitted). */
+    dropHeapCheckpoints(ids?: string[]): Promise<void>;
+    private runCompile;
     private validPhaseTimings;
     private currentPreambleKey;
     private restorePersistentPreamble;

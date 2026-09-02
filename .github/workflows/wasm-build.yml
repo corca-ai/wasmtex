@@ -97,10 +97,11 @@ jobs:
       - name: Record raw 2026 pdfTeX and BibTeX build evidence
         if: env.TEXLIVE_YEAR == '2026'
         run: |
-          node -e "const fs=require('fs'); for (const name of ['wasmtex-pdftex','wasmtex-bibtex']) { const bytes=fs.readFileSync('wasm-build/dist/'+name+'.wasm'); if (!WebAssembly.validate(bytes)) process.exit(1); }"
+          node -e "const fs=require('fs'); for (const name of ['wasmtex-pdftex','wasmtex-pdftex-checkpoint','wasmtex-bibtex']) { const bytes=fs.readFileSync('wasm-build/dist/'+name+'.wasm'); if (!WebAssembly.validate(bytes)) process.exit(1); }"
           node scripts/gen-engine-build-receipt.mjs \
             pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex-raw.json \
             wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
+            wasmtex-pdftex-checkpoint.js wasmtex-pdftex-checkpoint.wasm \
             wasmtex-kpse-resolve.js wasmtex-pdftex-resolver-evidence.js
           node scripts/gen-engine-build-receipt.mjs \
             bibtex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.bibtex-raw.json \
@@ -113,6 +114,7 @@ jobs:
           name: wasm-pdftex-bibtex-2026-raw
           path: |
             wasm-build/dist/wasmtex-pdftex.*
+            wasm-build/dist/wasmtex-pdftex-checkpoint.*
             wasm-build/dist/wasmtex-bibtex.*
             wasm-build/dist/wasmtex-kpse-resolve.js
             wasm-build/dist/wasmtex-pdftex-resolver-evidence.js
@@ -130,6 +132,8 @@ jobs:
           cp wasm-build/dist/wasmtex-pdftex.js \
              wasm-build/dist/wasmtex-pdftex.worker.js \
              wasm-build/dist/wasmtex-pdftex.wasm \
+             wasm-build/dist/wasmtex-pdftex-checkpoint.js \
+             wasm-build/dist/wasmtex-pdftex-checkpoint.wasm \
              wasm-build/dist/wasmtex-kpse-resolve.js \
              wasm-build/dist/wasmtex-pdftex-resolver-evidence.js "public/wasmtex/$TEXLIVE_YEAR/"
           node scripts/extract-format.mjs "$TEXLIVE_YEAR"
@@ -144,6 +148,13 @@ jobs:
             const wasm = fs.readFileSync('wasm-build/dist/wasmtex-pdftex.wasm');
             if (!WebAssembly.validate(wasm)) process.exit(1);
             console.log('pdfTeX WASM OK (' + wasm.length + ' bytes)');
+            const checkpointWasm = fs.readFileSync('wasm-build/dist/wasmtex-pdftex-checkpoint.wasm');
+            if (!WebAssembly.validate(checkpointWasm)) process.exit(1);
+            const checkpointCore = fs.readFileSync('wasm-build/dist/wasmtex-pdftex-checkpoint.js', 'utf8');
+            for (const s of ['asyncify_start_rewind', 'wasmtex-pdftex-checkpoint.wasm']) {
+              if (!checkpointCore.includes(s)) { console.error('Checkpoint engine missing: ' + s); process.exit(1); }
+            }
+            console.log('checkpoint pdfTeX WASM OK (' + checkpointWasm.length + ' bytes)');
             const core = fs.readFileSync('wasm-build/dist/wasmtex-pdftex.js', 'utf8');
             const controller = fs.readFileSync('wasm-build/dist/wasmtex-pdftex.worker.js', 'utf8');
             const required = ['_scanHashTable', '_compileLaTeX', '_compileFormat', '_main', '_setMainEntry'];
@@ -177,6 +188,7 @@ jobs:
           node scripts/gen-engine-build-receipt.mjs \
             pdftex wasm-build/dist wasm-build/dist/BUILD-RECEIPT.pdftex.json \
             wasmtex-pdftex.js wasmtex-pdftex.worker.js wasmtex-pdftex.wasm \
+            wasmtex-pdftex-checkpoint.js wasmtex-pdftex-checkpoint.wasm \
             wasmtex-kpse-resolve.js wasmtex-pdftex-resolver-evidence.js wasmtex-pdftex.fmt
 
       - name: Record exact BibTeX build inputs and outputs

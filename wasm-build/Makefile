@@ -193,6 +193,12 @@ SYNCTEX_REDEFINE = \
 # keeping the snapshot bounded. Override this for build experiments/corpus bisects.
 PDFTEX_INITIAL_MEMORY ?= 67108864
 
+# Checkpoint engine (#81): the same pdfTeX, instrumented with Binaryen's Asyncify so the
+# worker can suspend TeX inside a read of the main file (the only import allowed to
+# unwind), keep the unwound state as a resumable snapshot, and resume it later. Costs
+# ~20-30% per compile, so hosts load it only for interactive incremental sessions.
+PDFTEX_CHECKPOINT_FLAGS = -sASYNCIFY=1 -sASYNCIFY_IMPORTS=["fd_read","wasi_snapshot_preview1.fd_read"] -sASYNCIFY_STACK_SIZE=1048576
+
 EMCC_FLAGS = \
 	-O2 \
 	-sEMIT_EMSCRIPTEN_LICENSE=1 \
@@ -208,7 +214,6 @@ EMCC_FLAGS = \
 	-sWASM=1 \
 	--js-library $(JSLIB) \
 	-Wl,--wrap=kpse_find_file \
-	-Wl,-Map=$(DIST)/wasmtex-pdftex.map
 
 # =============================================================================
 # Phase 1: Native Build
@@ -416,15 +421,11 @@ wasm-prep:
 	-cp $(BUILD_NATIVE)/texk/web2c/pdftexcoerce.h $(BUILD_WASM)/texk/web2c/ 2>/dev/null
 	@echo "  Native C files copied."
 
-# wasm-compile: Final emcc step — compile pdfTeX + SyncTeX to WASM.
-wasm-compile:
-	@echo "========================================"
-	@echo "Phase 2d: Final emcc compile"
-	@echo "========================================"
-	@echo ""
-	@echo "--- Compiling pdfTeX WASM ---"
+# The pdfTeX link, parameterized: $(1) = extra emcc flags, $(2) = output basename.
+# Used twice: the plain engine and the checkpoint (Asyncify) engine (#81).
+define PDFTEX_LINK
 	cd $(WEB2C_BUILD) && \
-		emcc $(EMCC_FLAGS) \
+		emcc $(EMCC_FLAGS) $(1) -Wl,-Map=$(DIST)/$(2).map \
 		$(SYNCTEX_REDEFINE) \
 		-DHAVE_CONFIG_H \
 		-DSYNCTEX_ENGINE_H='"synctex-pdftex.h"' \
@@ -465,7 +466,17 @@ wasm-compile:
 		$$(find $(BUILD_WASM) -name 'libz.a' | head -1) \
 		$$(find $(BUILD_WASM) -name 'libpng.a' | head -1) \
 		$$(find $(BUILD_WASM) -name 'libxpdf.a' | head -1) \
-		-o $(DIST)/wasmtex-pdftex.js
+		-o $(DIST)/$(2).js
+endef
+
+# wasm-compile: Final emcc step — compile pdfTeX + SyncTeX to WASM.
+wasm-compile:
+	@echo "========================================"
+	@echo "Phase 2d: Final emcc compile"
+	@echo "========================================"
+	@echo ""
+	@echo "--- Compiling pdfTeX WASM ---"
+	$(call PDFTEX_LINK,,wasmtex-pdftex)
 	@test -s $(DIST)/wasmtex-pdftex.map || { echo "pdfTeX link map was not generated" >&2; exit 1; }
 	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-pdftex.map; then \
 		echo "ERROR: forbidden pplib archive or symbol remains in the pdfTeX link map" >&2; exit 1; \
@@ -473,6 +484,14 @@ wasm-compile:
 	cp $(PDFTEX_WORKER) $(DIST)/wasmtex-pdftex.worker.js
 	cp $(KPSE_RESOLVE) $(DIST)/wasmtex-kpse-resolve.js
 	cp /src/resolver-evidence.js $(DIST)/wasmtex-pdftex-resolver-evidence.js
+	@echo ""
+	@echo "--- Compiling pdfTeX WASM, checkpoint (Asyncify) variant ---"
+	$(call PDFTEX_LINK,$(PDFTEX_CHECKPOINT_FLAGS),wasmtex-pdftex-checkpoint)
+	@test -s $(DIST)/wasmtex-pdftex-checkpoint.wasm || { echo "checkpoint pdfTeX engine was not generated" >&2; exit 1; }
+	@test -s $(DIST)/wasmtex-pdftex-checkpoint.map || { echo "checkpoint pdfTeX link map was not generated" >&2; exit 1; }
+	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-pdftex-checkpoint.map; then \
+		echo "ERROR: forbidden pplib archive or symbol remains in the checkpoint pdfTeX link map" >&2; exit 1; \
+	fi
 	@echo ""
 	@echo "WASM compilation complete."
 

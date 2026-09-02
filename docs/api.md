@@ -303,7 +303,7 @@ const result = await compiler.compile()
 | `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. No-ops without IndexedDB. |
 | `persistentPreambleCache` | `boolean` | `false` | Persist [pdfLaTeX preamble snapshots](engine.md#durable-preamble-snapshots) across compiler sessions. Requires an immutable `completionProfile.mirrorRevision` and IndexedDB. |
 | `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. |
-| `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only). |
+| `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. Today the headless compiler routes the `bibliography` stage through the registry — a registered server backend turns `{aux, bibFiles} → .bbl` and the client BibTeX (WASM) engine is skipped. See [Server backends](#server-backends). |
@@ -366,6 +366,36 @@ so the first edit is fast too. Same fallbacks as above; label/citation edits ski
 straight to a full compile (no stale-reference flash). The SyncTeX splice covers both single-file and
 multi-file documents — `\include`/`\input` chapters splice at their own file-relative lines; only a head
 that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
+
+#### Heap checkpoints (arbitrary-line incremental compilation)
+
+With `incremental: true` in a browser, the headless compiler loads the **checkpoint
+engine** (`wasmtex-pdftex-checkpoint.*`, the same pdfTeX instrumented with Binaryen's
+Asyncify) and the page-break checkpoints above are superseded by **heap checkpoints**
+(#81): a compile can be suspended before TeX reads a chosen line of the main file and its
+entire state — a sparse copy of wasm memory plus the worker's file state — kept as a
+checkpoint. An edit that leaves everything before that line unchanged *resumes* the
+suspended run: TeX typesets only the rest of the document and writes the complete PDF and
+SyncTeX itself (nothing is spliced, `pdf-lib` is not needed). A checkpoint is restored by a
+memory copy, so it serves any number of edits after it.
+
+- **Placement**: every full compile takes a checkpoint at the paragraph boundary before the
+  region the last edit touched (edits cluster), and `prepareIncrementalCompile(path, offset)`
+  takes one before the cursor's paragraph during idle time. Up to 4 are kept (LRU, ~35–80 MB
+  each as sparse images) and freed with the compiler.
+- **Validity**: the main-file bytes before the checkpoint line, and every project file TeX had
+  opened by then (from the run's recorder), must be unchanged. Preamble edits, edits before
+  the earliest checkpoint, and label/citation/numbering edits take the full path (the latter
+  because a resumed run reads cross-references from the `.aux` the original run loaded).
+- **Result**: a resumed compile is an ordinary `CompileResult` with `phaseTimings.checkpointResume`
+  set; `result.heapCheckpoints` lists the checkpoints a compile took.
+- **Cost**: the checkpoint engine is ~20–30% slower per full compile than the plain build and its
+  `.wasm` is ~1 MB larger, which is why it loads only with `incremental: true` and only in
+  browser workers (Node hosts keep the plain build and the page-break checkpoints).
+
+Measured on a 24-page article without a single `\clearpage` (release engine 2025, warm):
+full compile 151 ms, an edit resumed from a checkpoint 30 ms (71 ms when the resume also takes
+a new checkpoint), byte-identical to the full compile modulo per-run PDF stamps.
 
 #### Accessible export (tagged PDF / PDF-UA)
 

@@ -22,6 +22,12 @@ Keep them user-facing and concise. Example:
 
 ### Added
 
+- Heap checkpoints (`incremental: true` in browsers): a second pdfTeX build instrumented with
+  Asyncify (`wasmtex-pdftex-checkpoint.*`) lets a compile be suspended before any line of
+  the main file and resumed later with an edited tail, so edits anywhere after a checkpoint
+  cost only the rest of the document (24-page article: 151 ms full, 30 ms resumed) and the
+  checkpoint is reusable. Replaces the page-break-only checkpoints on that engine; Node hosts
+  and the plain build keep the previous behavior.
 - Accessible export (`WasmTexCompiler.exportAccessiblePdf()`): a tagged, PDF/UA-2 declared
   PDF produced by the LaTeX tagging kernel (`\DocumentMetadata{tagging=on}`, TeX Live 2026
   profile) on a sibling compiler, with the document language detected, a verified
