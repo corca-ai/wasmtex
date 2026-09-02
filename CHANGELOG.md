@@ -19,6 +19,9 @@ Keep them user-facing and concise. Example:
 
 - The accessible-export module and the TikZ figure-worker pool load on first use
   (dynamic imports) instead of with the headless compiler.
+- The heap checkpoint controller loads with the engine on `init()` (dynamic import) instead
+  of with the headless compiler, so host shells that never enable incremental compiles do
+  not ship it.
 
 ### Added
 

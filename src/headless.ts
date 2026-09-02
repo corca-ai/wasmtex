@@ -30,7 +30,7 @@ import {
   resolveEngine,
   type TexEngine,
 } from './engine/engine-select'
-import { HeapCheckpointCompiler } from './engine/heap-checkpoints'
+import type { HeapCheckpointCompiler } from './engine/heap-checkpoints'
 import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
 import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine/index-backend'
 import { MakeindexEngine } from './engine/makeindex-engine'
@@ -498,9 +498,13 @@ export class WasmTexCompiler {
       this.opts.incremental && this.engine instanceof WasmTexPdftexEngine
         ? new IncrementalCompiler(this.engine, { mainFile: this.mainFile })
         : null
+    // The heap checkpoint controller only matters once compiles run; load it beside the
+    // engine so hosts that never enable incremental compiles never ship it (#81).
     this.heap =
       this.opts.incremental && this.engine instanceof WasmTexPdftexEngine
-        ? new HeapCheckpointCompiler(this.engine, { mainFile: this.mainFile })
+        ? new (await import('./engine/heap-checkpoints')).HeapCheckpointCompiler(this.engine, {
+            mainFile: this.mainFile,
+          })
         : null
     try {
       await this.engine.init()
