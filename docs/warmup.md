@@ -89,9 +89,11 @@ const cache = await warmup({ dependencies: deps, concurrency: 16, texliveVersion
 const compiler = new WasmTexCompiler({ warmupCache: cache, texliveVersion, texliveUrl, files })
 ```
 
-`warmup` ignores a set whose `texliveVersion` differs from the requested one (it falls
-back to the built-in manifest), so a set recorded against one year can never seed the
-other year's mirror. `files` / `notFound` accept an explicit list when a host assembles
+The set is fetched **on top of** the built-in manifest (the union, deduplicated by
+request name): an engine that reports only network lookups records a set without the
+kernel files it received from warmup, and replacing the manifest would reintroduce
+those fetches. `warmup` ignores a set whose `texliveVersion` differs from the requested
+one, so a set recorded against one year can never seed the other year's mirror. `files` / `notFound` accept an explicit list when a host assembles
 its own manifest (a template pack, a union over several projects). Because the same
 engine runs byte-identically on a server (`wasmtex/node`), the set for a template or a
 shared project can be recorded once there and served to every client.

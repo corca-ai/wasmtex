@@ -6,10 +6,12 @@ export interface WarmupOptions {
     texliveUrl?: string;
     /** Max concurrent fetches. Defaults to 6. */
     concurrency?: number;
-    /** Replay a compile's exact dependency set (`telemetry.texliveDependencies`) instead of
-     *  the built-in first-compile manifest. Ignored — with the built-in manifest used
-     *  instead — when its `texliveVersion` does not match the requested one, so a set
-     *  recorded against another year can never seed the wrong mirror. */
+    /** Replay a compile's exact dependency set (`telemetry.texliveDependencies`) on top of
+     *  the built-in first-compile manifest (the union, deduplicated by request name). An
+     *  engine that only reports network lookups records a set without the kernel files it
+     *  got from warmup, so replacing the manifest would reintroduce those fetches. Ignored
+     *  when its `texliveVersion` does not match the requested one, so a set recorded
+     *  against another year can never seed the wrong mirror. */
     dependencies?: TexliveDependencySet;
     /** Explicit file list, overriding both the built-in manifest and `dependencies`.
      *  Each entry is fetched as `candidate ?? filename` and injected as `filename`. */
