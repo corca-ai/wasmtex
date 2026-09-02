@@ -39,7 +39,10 @@ import {
   mergeTexliveDependencySets,
 } from './engine/texlive-dependencies'
 import {
+  AUTO_MIN_PICTURES,
+  type AutoExternalizationBlocker,
   defaultFigureWorkers,
+  detectAutoBlocker,
   detectTikzExternalization,
   figureJobSource,
   mainJobSource,
@@ -63,6 +66,7 @@ import type {
   CompletionSnapshotState,
   DependencyManifest,
   ResolverEvidenceReport,
+  TexError,
   TexliveDependencySet,
   TexliveVersion,
   TikzExternalizationTelemetry,
@@ -101,6 +105,64 @@ export type {
   DependencyManifestSource,
   DependencyManifestStage,
 } from './types'
+
+/** Picture errors live in the figure logs, so re-surface the cached ones on every compile: a
+ *  broken picture stays broken (and reported) until its source changes. */
+function cachedPictureErrors(pool: TikzFigurePool, names: string[]): TexError[] {
+  const errors: TexError[] = []
+  for (const name of names) {
+    const log = pool.cache.get(name)?.log
+    if (log) errors.push(...pictureErrors(log))
+  }
+  return errors
+}
+
+/** TeX errors from a figure-job log. Cross-reference warnings are dropped: a figure job
+ *  typesets the whole body with whatever `.aux` it was handed, so its "undefined reference"
+ *  notes say nothing the main job's own log does not say better. */
+function pictureErrors(log: string): TexError[] {
+  return parseTexErrors(log).filter(
+    (e) =>
+      !/Reference .* undefined|Citation .* undefined|There were undefined (?:references|citations)|Label\(s\) may have changed|Rerun to get/i.test(
+        e.message,
+      ),
+  )
+}
+
+function withTikzTelemetry(
+  result: CompileResult,
+  telemetry: TikzExternalizationTelemetry,
+): CompileResult {
+  result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+  result.telemetry.tikzExternalization = telemetry
+  return result
+}
+
+/** A picture error does not fail its figure job (TeX keeps going and ships the page), so the
+ *  figure logs are the only place those diagnostics exist; merge them into the result. */
+function mergePictureErrors(result: CompileResult, errors: TexError[]): number {
+  const key = (e: TexError) => `${e.file ?? ''}:${e.line ?? ''}:${e.message}`
+  const seen = new Set(result.errors.map(key))
+  for (const error of errors) {
+    if (seen.has(key(error))) continue
+    seen.add(key(error))
+    result.errors.push(error)
+  }
+  return errors.length
+}
+
+function emptyTikzTelemetry(mode: 'document' | 'auto'): TikzExternalizationTelemetry {
+  return {
+    mode,
+    figures: 0,
+    compiled: 0,
+    reused: 0,
+    failed: [],
+    workers: 0,
+    figureTimeMs: 0,
+    pictureErrors: 0,
+  }
+}
 
 export interface WasmTexCompilerOptions {
   /** TeX Live version to use. Defaults to '2025'. */
@@ -232,6 +294,10 @@ export class WasmTexCompiler {
   private sessionDependencies: TexliveDependencySet | undefined
   /** Sibling compilers rendering externalized TikZ figures (#82); created on first use. */
   private tikzPool: TikzFigurePool | null = null
+  /** `mode: 'auto'` switched itself off for this session after a figure job failed. */
+  private tikzAutoDisabled = false
+  /** Why `mode: 'auto'` left the current document inline (for telemetry). */
+  private tikzAutoBlocker: AutoExternalizationBlocker | null = null
 
   constructor(options: WasmTexCompilerOptions = {}) {
     this.opts = options
@@ -359,9 +425,8 @@ export class WasmTexCompiler {
     let result = await engine.compile()
     // Resolver evidence is per pass; the prefetch manifest is their union (#80).
     const resolverReports = [result.telemetry?.resolver]
-    if (externalization && (result.success || result.pdf)) {
-      result = await this.externalizeTikzFigures(result, externalization, resolverReports)
-    }
+    result = await this.applyTikzExternalization(result, externalization, resolverReports)
+    const tikzTelemetry = result.telemetry?.tikzExternalization
     let auxInjected = await this.runAuxStages(result)
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
@@ -380,6 +445,11 @@ export class WasmTexCompiler {
       result = await engine.compile()
       resolverReports.push(result.telemetry?.resolver)
       auxInjected = await this.runAuxStages(result)
+    }
+    // Cross-reference reruns replace `result`; the figure telemetry describes this compile.
+    if (tikzTelemetry) {
+      result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+      result.telemetry.tikzExternalization = tikzTelemetry
     }
     this.attachTexliveDependencies(result, resolverReports)
 
@@ -716,7 +786,16 @@ export class WasmTexCompiler {
   }
 
   private tikzExternalizationKind(source = this.mainSource()): TikzExternalizationKind | null {
-    return detectTikzExternalization(source, this.opts.tikzExternalization?.mode ?? 'document')
+    const kind = detectTikzExternalization(
+      source,
+      this.opts.tikzExternalization?.mode ?? 'document',
+    )
+    if (kind !== 'inject') return kind
+    // Auto mode: only pictures the library can externalize faithfully, only when there are
+    // enough of them to pay for a figure worker, and never again after a figure job failed.
+    if (this.tikzAutoDisabled) return null
+    this.tikzAutoBlocker = detectAutoBlocker(source, this.projectTexFiles().values())
+    return this.tikzAutoBlocker ? null : kind
   }
 
   /**
@@ -739,6 +818,26 @@ export class WasmTexCompiler {
 
   /** Run figure jobs for `result` and, when any rendered, run the main job again so it
    *  includes them (the figure telemetry carries over to the final result). */
+  /** Externalize after the first pass when switched on; otherwise record why auto left the
+   *  document inline. */
+  private async applyTikzExternalization(
+    result: CompileResult,
+    kind: TikzExternalizationKind | null,
+    resolverReports: Array<ResolverEvidenceReport | undefined>,
+  ): Promise<CompileResult> {
+    if (kind && (result.success || result.pdf)) {
+      return this.externalizeTikzFigures(result, kind, resolverReports)
+    }
+    if (this.opts.tikzExternalization?.mode === 'auto' && this.tikzAutoBlocker) {
+      result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+      result.telemetry.tikzExternalization = {
+        ...emptyTikzTelemetry('auto'),
+        blocked: this.tikzAutoBlocker,
+      }
+    }
+    return result
+  }
+
   private async externalizeTikzFigures(
     result: CompileResult,
     kind: TikzExternalizationKind,
@@ -747,47 +846,63 @@ export class WasmTexCompiler {
     const engine = this.engine
     if (!engine) return result
     const snapshot = !!engine.setPreambleSnapshot && !this.opts.disablePreambleSnapshot
-    if (!(await this.runTikzFigureJobs(result, kind, snapshot))) return result
-    const figures = result.telemetry?.tikzExternalization
-    const next = await engine.compile()
-    resolverReports.push(next.telemetry?.resolver)
-    if (figures) {
-      next.telemetry ??= { diagnostics: buildDiagnostics(next.log) }
-      next.telemetry.tikzExternalization = figures
+    const jobs = await this.runTikzFigureJobs(result, kind, snapshot)
+    if (!jobs) return result
+    const { telemetry, errors, failureLog } = jobs
+    // Auto mode promised "no worse than inline": a failed figure job means this document is
+    // outside what the library handles (and too few pictures are not worth a worker), so
+    // compile it inline now and keep it inline.
+    if (kind === 'inject' && (jobs.inline || telemetry.failed.length > 0)) {
+      this.tikzAutoDisabled = true
+      if (!jobs.inline) telemetry.fallback = true
+      await engine.writeFile(this.mainFile, this.mainSource())
+      const inline = await engine.compile()
+      resolverReports.push(inline.telemetry?.resolver)
+      return withTikzTelemetry(inline, telemetry)
     }
-    return next
+    const next = telemetry.compiled > 0 ? await engine.compile() : result
+    if (next !== result) resolverReports.push(next.telemetry?.resolver)
+    telemetry.pictureErrors = mergePictureErrors(next, errors)
+    if (failureLog) next.log += failureLog
+    return withTikzTelemetry(next, telemetry)
   }
 
   /**
-   * Render the figures the main job listed as missing or stale (#82) and return whether the
-   * main job must run again to include them. Figure jobs are ordinary compiles of the same
-   * document on sibling compilers, selected through the `external` library's own grab mode;
-   * see `engine/tikz-externalization.ts`.
+   * Render the figures the main job listed as missing or stale (#82). Figure jobs are ordinary
+   * compiles of the same document on sibling compilers, selected through the `external`
+   * library's own grab mode; see `engine/tikz-externalization.ts`. Returns null when the
+   * document lists no figures.
    */
   private async runTikzFigureJobs(
     result: CompileResult,
     kind: TikzExternalizationKind,
     snapshot: boolean,
-  ): Promise<boolean> {
+  ): Promise<{
+    telemetry: TikzExternalizationTelemetry
+    errors: TexError[]
+    failureLog: string
+    /** Auto mode must redo this compile inline (and stay inline). */
+    inline?: boolean
+  } | null> {
     const engine = this.engine
-    if (!engine) return false
+    if (!engine) return null
     const mainBase = this.mainFile.replace(/\.tex$/i, '')
-    const candidates = snapshot
-      ? [PREAMBLE_SNAPSHOT_JOBNAME, mainBase]
-      : [mainBase, PREAMBLE_SNAPSHOT_JOBNAME]
-    let realJob: string | null = null
-    let names: string[] = []
-    for (const job of candidates) {
-      names = parseFigureList(await engine.readFile(`${job}.figlist`))
-      if (names.length > 0) {
-        realJob = job
-        break
-      }
+    const listed = await this.readTikzFigureList(mainBase, snapshot)
+    if (!listed) return null
+    const { realJob, names } = listed
+    // Auto mode with too few pictures to pay for a figure worker: the static check could not
+    // tell (loops), so the first compile's figure list decides. Fall back to inline.
+    if (kind === 'inject' && names.length < AUTO_MIN_PICTURES) {
+      const telemetry = { ...emptyTikzTelemetry('auto'), figures: names.length }
+      telemetry.blocked = 'too-few-pictures'
+      result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+      result.telemetry.tikzExternalization = telemetry
+      return { telemetry, errors: [], failureLog: '', inline: true }
     }
-    if (!realJob) return false
+    const nav = globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined
     const workers =
       this.opts.tikzExternalization?.workers ??
-      defaultFigureWorkers(globalThis.navigator?.hardwareConcurrency)
+      defaultFigureWorkers(nav?.hardwareConcurrency, nav?.deviceMemory)
     this.tikzPool ??= new TikzFigurePool(() => this.spawnFigureCompiler(), workers, this.mainFile)
     const pool = this.tikzPool
     pool.retain(names)
@@ -795,28 +910,47 @@ export class WasmTexCompiler {
     const jobs = names
       .map((name, i) => ({ name, md5: parseFigureMd5(md5s[i]) }))
       .filter((job) => !pool.isCurrent(job.name, job.md5))
-    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
     const telemetry: TikzExternalizationTelemetry = {
+      ...emptyTikzTelemetry(kind === 'inject' ? 'auto' : 'document'),
       figures: names.length,
-      compiled: 0,
       reused: names.length - jobs.length,
-      failed: [],
       workers: Math.min(workers, Math.max(1, jobs.length)),
-      figureTimeMs: 0,
     }
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
     result.telemetry.tikzExternalization = telemetry
-    if (jobs.length === 0) return false
+    if (jobs.length === 0)
+      return { telemetry, errors: cachedPictureErrors(pool, names), failureLog: '' }
     const source = this.mainSource()
+    // The library resolves `\ref`/`\pageref` inside a picture from the real job's `.aux`
+    // (it renames `\jobname` to the real job in figure mode), so hand the main job's aux to
+    // the figure workers under that name.
+    // `\include`d chapters keep their own `.aux`, which the main aux `\@input`s.
+    const auxEntries: Array<[string, string]> = []
+    const aux = await engine.readFile(`${mainBase}.aux`)
+    if (aux !== null) auxEntries.push([`${realJob}.aux`, aux])
+    for (const path of this.projectTexFiles().keys()) {
+      if (path === this.mainFile) continue
+      const chapterAux = `${path.replace(/\.tex$/i, '')}.aux`
+      const content = await engine.readFile(chapterAux)
+      if (content !== null) auxEntries.push([chapterAux, content])
+    }
+    const files = (): Iterable<[string, string | Uint8Array]> => [
+      ...this.projectFileEntries(),
+      ...auxEntries,
+    ]
     const run = await pool.render(
       jobs,
       (figure) => figureJobSource(source, kind, realJob, figure),
-      () => this.projectFileEntries(),
+      files,
     )
     telemetry.compiled = run.rendered.size
     telemetry.failed = run.failures.map((f) => f.name)
     telemetry.figureTimeMs = Math.round(run.elapsedMs)
+    const errors = cachedPictureErrors(pool, names)
+    let failureLog = ''
     for (const failure of run.failures) {
-      result.log += `\n[wasmtex] TikZ figure job '${failure.name}' failed:\n${failure.log.slice(-2000)}\n`
+      errors.push(...pictureErrors(failure.log))
+      failureLog += `\n[wasmtex] TikZ figure job '${failure.name}' failed:\n${failure.log.slice(-2000)}\n`
     }
     const paths: string[] = []
     for (const name of run.rendered.keys()) paths.push(`${name}.pdf`)
@@ -827,7 +961,25 @@ export class WasmTexCompiler {
         ...(figure.dpth !== null ? [engine.writeFile(`${name}.dpth`, figure.dpth)] : []),
       ]),
     )
-    return run.rendered.size > 0
+    return { telemetry, errors, failureLog }
+  }
+
+  /** The figure list the main job wrote, under whichever real job name it ran as: the
+   *  preamble snapshot's, or the main file's when snapshots are off. */
+  private async readTikzFigureList(
+    mainBase: string,
+    snapshot: boolean,
+  ): Promise<{ realJob: string; names: string[] } | null> {
+    const engine = this.engine
+    if (!engine) return null
+    const candidates = snapshot
+      ? [PREAMBLE_SNAPSHOT_JOBNAME, mainBase]
+      : [mainBase, PREAMBLE_SNAPSHOT_JOBNAME]
+    for (const realJob of candidates) {
+      const names = parseFigureList(await engine.readFile(`${realJob}.figlist`))
+      if (names.length > 0) return { realJob, names }
+    }
+    return null
   }
 
   private *projectFileEntries(): Iterable<[string, string | Uint8Array]> {

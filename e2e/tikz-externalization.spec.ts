@@ -87,3 +87,98 @@ test('externalized figures render once and are reused across text edits', async 
   expect(out.d.figures).toMatchObject({ figures: 3, compiled: 1, reused: 2 })
   expect(out.d.notFound).toBe(0)
 })
+
+const PLAIN = (labels: string[], body = '') =>
+  [
+    '\\documentclass{article}',
+    '\\usepackage{tikz}',
+    '\\usetikzlibrary{positioning}',
+    '\\begin{document}',
+    '\\section{Intro}\\label{sec:intro}',
+    body,
+    ...labels.map(PICTURE),
+    '\\end{document}',
+    '',
+  ].join('\n')
+
+test('auto mode externalizes plain TikZ documents, resolves refs, surfaces picture errors, and refuses the unsafe ones', async ({
+  page,
+}) => {
+  await page.goto(APP_URL)
+  const out = await page.evaluate(
+    async ({ plain, ref, broken, overlay, few, fatal }) => {
+      const { WasmTexCompiler } = await import('/src/headless.ts')
+      const compile = async (files: Record<string, string>, times = 1) => {
+        const c = new WasmTexCompiler({
+          texliveVersion: '2025',
+          engine: 'pdflatex',
+          files,
+          tikzExternalization: { mode: 'auto', workers: 2 },
+        })
+        try {
+          await c.init()
+          let r = await c.compile()
+          for (let i = 1; i < times; i++) r = await c.compile()
+          return {
+            success: r.success,
+            figures: r.telemetry?.tikzExternalization ?? null,
+            errors: r.errors.map((e) => `${e.line}:${e.message.slice(0, 40)}`),
+            undefinedRefs: r.log.split('\n').filter((l) => /undefined refer/i.test(l)).length,
+          }
+        } finally {
+          c.dispose()
+        }
+      }
+      return {
+        plain: await compile({ 'main.tex': plain }),
+        ref: await compile({ 'main.tex': ref }, 2),
+        broken: await compile({ 'main.tex': broken }),
+        overlay: await compile({ 'main.tex': overlay }),
+        few: await compile({ 'main.tex': few }),
+        fatal: await compile({ 'main.tex': fatal }),
+        brokenLine: broken.split('\n').findIndex((l) => l.includes('undefinedmacro')) + 1,
+      }
+    },
+    {
+      plain: PLAIN(['A', 'B', 'C']),
+      ref: PLAIN(['A', 'B', 'see \\ref{sec:intro}']),
+      broken: PLAIN(['A', 'B']) .replace(
+        '\\end{document}',
+        '\\begin{tikzpicture}\\node{\\undefinedmacro};\\end{tikzpicture}\n\\end{document}',
+      ),
+      overlay: PLAIN(['A', 'B', 'C'], '\\begin{tikzpicture}[remember picture, overlay]\\end{tikzpicture}'),
+      few: PLAIN(['A', 'B']),
+      // A runaway argument: the figure job ends with "no output PDF file produced".
+      fatal: PLAIN(['A', 'B']).replace(
+        '\\end{document}',
+        '\\begin{tikzpicture}\\draw (0,0) -- (1,;\\end{tikzpicture}\n\\end{document}',
+      ),
+    },
+  )
+
+  expect(out.plain.success).toBe(true)
+  expect(out.plain.figures).toMatchObject({ mode: 'auto', figures: 3, compiled: 3, failed: [] })
+
+  // \ref inside a picture resolves from the main job's aux (second compile settles it).
+  expect(out.ref.success).toBe(true)
+  expect(out.ref.figures).toMatchObject({ mode: 'auto', figures: 3 })
+  expect(out.ref.undefinedRefs, 'ref inside an externalized picture stayed undefined').toBe(0)
+
+  // A broken picture does not fail its figure job, but its error reaches `errors` at the
+  // right line.
+  expect(out.broken.figures).toMatchObject({ mode: 'auto', figures: 3 })
+  expect(out.broken.figures?.pictureErrors).toBeGreaterThan(0)
+  expect(out.broken.errors.some((e) => e.startsWith(`${out.brokenLine}:`)), JSON.stringify(out.broken.errors)).toBe(true)
+
+  // Page-anchored pictures and too few pictures stay inline, and say why.
+  expect(out.overlay.figures).toMatchObject({ mode: 'auto', figures: 0, blocked: 'remember-picture' })
+  expect(out.few.figures).toMatchObject({ mode: 'auto', figures: 0, blocked: 'too-few-pictures' })
+
+  // A picture that kills its figure job either falls back to an inline compile or is reported;
+  // never a silent placeholder.
+  expect(out.fatal.figures?.mode).toBe('auto')
+  expect(
+    out.fatal.figures?.fallback === true || (out.fatal.figures?.pictureErrors ?? 0) > 0,
+    JSON.stringify(out.fatal),
+  ).toBe(true)
+})

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  countPictures,
   defaultFigureWorkers,
+  detectAutoBlocker,
   detectTikzExternalization,
+  documentExternalizationMode,
   documentExternalizes,
   type FigureCompiler,
   figureJobSource,
@@ -51,6 +54,20 @@ describe('detection', () => {
     expect(loadsTikz('\\usepackage{amsmath,tikz}')).toBe(true)
     expect(loadsTikz('\\usepackage{tikzducks-not}')).toBe(false)
     expect(loadsTikz('% \\usepackage{tikz}')).toBe(false)
+  })
+
+  it('lets a magic comment in the main file override the host mode', () => {
+    const plain = DOC.replace('\\usetikzlibrary{external}\\tikzexternalize', '')
+    expect(
+      detectTikzExternalization(`% !WASMTEX tikz-externalization = off\n${DOC}`, 'auto'),
+    ).toBeNull()
+    expect(
+      detectTikzExternalization(`% !WASMTEX tikz-externalization: auto\n${plain}`, 'off'),
+    ).toBe('inject')
+    expect(
+      detectTikzExternalization(`%!WASMTEX tikz-externalisation=document\n${plain}`, 'auto'),
+    ).toBeNull()
+    expect(documentExternalizationMode('% !TEX program = pdflatex')).toBeNull()
   })
 
   it('maps mode to kind', () => {
@@ -115,11 +132,69 @@ describe('library file parsing', () => {
     expect(parseFigureMd5(null)).toBeNull()
   })
 
-  it('sizes the pool below the core count', () => {
+  it('sizes the pool below the core count and to one on small devices', () => {
     expect(defaultFigureWorkers(undefined)).toBe(1)
     expect(defaultFigureWorkers(2)).toBe(1)
     expect(defaultFigureWorkers(4)).toBe(3)
     expect(defaultFigureWorkers(16)).toBe(3)
+    expect(defaultFigureWorkers(16, 4)).toBe(1)
+    expect(defaultFigureWorkers(16, 8)).toBe(3)
+  })
+})
+
+describe('auto-mode blockers', () => {
+  const pic = '\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}\n'
+  const main = (body: string, cls = 'article') =>
+    `\\documentclass{${cls}}\\usepackage{tikz}\\begin{document}\n${body}\\end{document}\n`
+
+  it('counts pictures outside comments across files', () => {
+    expect(countPictures([pic + pic, `% ${pic}`, pic])).toBe(3)
+    expect(countPictures(['\\tikz{\\draw (0,0);} \\tikz[baseline]{x}'])).toBe(2)
+  })
+
+  it('needs enough pictures to pay for a worker', () => {
+    expect(detectAutoBlocker(main(pic + pic), [main(pic + pic)])).toBe('too-few-pictures')
+    expect(detectAutoBlocker(main(pic), [main(pic), pic + pic])).toBeNull()
+    // A loop can multiply the count; the first compile's figure list decides then.
+    const looped = main(`\\foreach \\i in {1,...,5}{${pic}}`)
+    expect(detectAutoBlocker(looped, [looped])).toBeNull()
+  })
+
+  it('refuses beamer and page-anchored pictures', () => {
+    const three = pic + pic + pic
+    expect(detectAutoBlocker(main(three, 'beamer'), [main(three, 'beamer')])).toBe('beamer')
+    for (const bad of [
+      '\\begin{tikzpicture}[remember picture, overlay]\\end{tikzpicture}',
+      '\\begin{tikzpicture}[overlay]\\end{tikzpicture}',
+      '\\node at (current page.center) {};',
+      '\\tikzmark{a}',
+      '\\usetikzlibrary{tikzmark}',
+    ]) {
+      expect(detectAutoBlocker(main(three), [main(three), bad]), bad).toBe('remember-picture')
+    }
+    // Prose mentioning an overlay is not a picture option.
+    expect(detectAutoBlocker(main(three), [main(three), 'The overlay network is fast.'])).toBeNull()
+    // Commented-out uses do not count.
+    expect(detectAutoBlocker(main(three), [main(three), '% [overlay]'])).toBeNull()
+  })
+
+  it('refuses pictures wrapped in user-defined environments or commands', () => {
+    const three = pic + pic + pic
+    expect(
+      detectAutoBlocker(main(three), [
+        main(three),
+        '\\newenvironment{fig}{\\begin{tikzpicture}}{\\end{tikzpicture}}',
+      ]),
+    ).toBe('wrapped-environment')
+    expect(
+      detectAutoBlocker(main(three), [
+        main(three),
+        '\\newcommand{\\dot}{\\begin{tikzpicture}\\fill circle(1pt);\\end{tikzpicture}}',
+      ]),
+    ).toBe('wrapped-environment')
+    expect(
+      detectAutoBlocker(main(three), [main(three), '\\newcommand{\\R}{\\mathbb{R}}']),
+    ).toBeNull()
   })
 })
 

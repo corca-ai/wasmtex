@@ -80,11 +80,23 @@ export function loadsTikz(source: string): boolean {
   )
 }
 
-/** Decide whether (and how) a main source gets externalized under `mode`. */
+/** A per-document override in the main file's magic comments, next to `% !TEX program`:
+ *  `% !WASMTEX tikz-externalization = off | document | auto`. Lets an author (or a host
+ *  that defaults to `'auto'`) switch one project without a host setting. */
+export function documentExternalizationMode(source: string): TikzExternalizationMode | null {
+  const m = /^\s*%\s*!WASMTEX\s+tikz-externali[sz]ation\s*[=:]\s*(off|document|auto)\b/im.exec(
+    source,
+  )
+  return m ? (m[1]!.toLowerCase() as TikzExternalizationMode) : null
+}
+
+/** Decide whether (and how) a main source gets externalized under `mode` (the document's
+ *  own magic comment wins over the host's mode). */
 export function detectTikzExternalization(
   source: string,
-  mode: TikzExternalizationMode = 'document',
+  hostMode: TikzExternalizationMode = 'document',
 ): TikzExternalizationKind | null {
+  const mode = documentExternalizationMode(source) ?? hostMode
   if (mode === 'off') return null
   if (findBeginDocument(source) < 0) return null
   if (documentExternalizes(source)) return 'document'
@@ -149,10 +161,17 @@ export function parseFigureMd5(text: string | null | undefined): string | null {
   return m ? m[1]!.trim() || null : null
 }
 
-/** Default figure-worker count: leave a core for the main engine, cap at three. */
-export function defaultFigureWorkers(hardwareConcurrency: number | undefined): number {
+/** Default figure-worker count: leave a core for the main engine, cap at three, one on
+ *  low-memory devices (`navigator.deviceMemory` ≤ 4 GiB). */
+export function defaultFigureWorkers(
+  hardwareConcurrency: number | undefined,
+  deviceMemoryGiB?: number,
+): number {
   const cores = Math.max(2, hardwareConcurrency ?? 2)
-  return Math.max(1, Math.min(3, cores - 1))
+  const byCores = Math.max(1, Math.min(3, cores - 1))
+  // Every worker is a full engine heap; on a small device keep it to one.
+  if (deviceMemoryGiB !== undefined && deviceMemoryGiB <= 4) return 1
+  return byCores
 }
 
 /** A figure rendered by a figure job, keyed by the library's own MD5. */
@@ -161,6 +180,9 @@ export interface RenderedFigure {
   pdf: Uint8Array
   /** `<figure>.dpth` (baseline depth + smuggled aux data) when the library wrote one. */
   dpth: string | null
+  /** The figure job's log: a picture error does not fail the job (TeX keeps going and
+   *  still ships the page), so its diagnostics live only here. */
+  log: string
 }
 
 export interface FigureJobRequest {
@@ -204,11 +226,33 @@ export class TikzFigurePool {
   private readonly workers: FigureWorker[] = []
   readonly cache = new Map<string, RenderedFigure>()
 
+  private idleTimer: ReturnType<typeof setTimeout> | null = null
+
   constructor(
     private readonly factory: () => FigureCompiler,
     private readonly size: number,
     private readonly mainFile: string,
+    /** Release the engine workers (not the rendered figures) after this much idle time. */
+    private readonly idleMs = 5 * 60_000,
   ) {}
+
+  /** Number of live engine workers (for tests and telemetry). */
+  get liveWorkers(): number {
+    return this.workers.length
+  }
+
+  /** Terminate idle engine workers; rendered figures stay cached. */
+  releaseWorkers(): void {
+    for (const worker of this.workers) worker.compiler.dispose()
+    this.workers.length = 0
+    if (this.idleTimer) clearTimeout(this.idleTimer)
+    this.idleTimer = null
+  }
+
+  private scheduleRelease(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer)
+    this.idleTimer = setTimeout(() => this.releaseWorkers(), this.idleMs)
+  }
 
   /** Figures whose cached render is still current for the listed MD5. */
   isCurrent(name: string, md5: string | null): boolean {
@@ -231,6 +275,7 @@ export class TikzFigurePool {
     const rendered = new Map<string, RenderedFigure>()
     const failures: FigureJobFailure[] = []
     if (jobs.length === 0) return { rendered, failures, elapsedMs: 0 }
+    if (this.idleTimer) clearTimeout(this.idleTimer)
     const count = Math.max(1, Math.min(this.size, jobs.length))
     while (this.workers.length < count) this.workers.push(this.spawn())
     let next = 0
@@ -247,18 +292,18 @@ export class TikzFigurePool {
           continue
         }
         const dpth = await worker.compiler.readOutput(`${job.name}.dpth`)
-        const figure: RenderedFigure = { md5: job.md5, pdf: result.pdf, dpth }
+        const figure: RenderedFigure = { md5: job.md5, pdf: result.pdf, dpth, log: result.log }
         rendered.set(job.name, figure)
         this.cache.set(job.name, figure)
       }
     }
     await Promise.all(this.workers.slice(0, count).map(run))
+    this.scheduleRelease()
     return { rendered, failures, elapsedMs: performance.now() - t0 }
   }
 
   dispose(): void {
-    for (const worker of this.workers) worker.compiler.dispose()
-    this.workers.length = 0
+    this.releaseWorkers()
     this.cache.clear()
   }
 
@@ -275,4 +320,81 @@ export class TikzFigurePool {
       worker.synced.set(path, content)
     }
   }
+}
+
+/** Why `mode: 'auto'` leaves a document alone (the upstream library's documented limits). */
+export type AutoExternalizationBlocker =
+  | 'beamer'
+  | 'remember-picture'
+  | 'wrapped-environment'
+  | 'too-few-pictures'
+
+/** Minimum `tikzpicture` count for `'auto'`: below it, spawning a figure worker (its own
+ *  preamble snapshot) costs more than the pictures save. */
+export const AUTO_MIN_PICTURES = 3
+
+/** Count picture starts (`\begin{tikzpicture}` and the `\tikz` short form) outside comments
+ *  across the given sources. A static count: pictures produced by loops count once. */
+export function countPictures(sources: Iterable<string>): number {
+  let n = 0
+  for (const source of sources) {
+    const code = stripComments(source)
+    n += code.match(/\\begin\s*\{tikzpicture\}|\\tikz\s*[[{]/g)?.length ?? 0
+  }
+  return n
+}
+
+/** True when a loop may multiply the static picture count (`\foreach`, `\pgfplotsforeachungrouped`, …). */
+export function hasPictureLoops(sources: Iterable<string>): boolean {
+  for (const source of sources) {
+    if (
+      /\\(?:foreach|pgfplotsforeachungrouped|pgfplotsinvokeforeach)\b/.test(stripComments(source))
+    )
+      return true
+  }
+  return false
+}
+
+/**
+ * Patterns the `external` library cannot externalize faithfully without the author's
+ * cooperation (each picture becomes an isolated PDF, so nothing may reach across pictures
+ * or onto the page): page-anchored/overlay pictures (`remember picture`, `overlay`,
+ * `current page`, `\tikzmark`), beamer overlays, and pictures hidden inside user-defined
+ * environments (the library's picture skipping looks for a literal `\end{tikzpicture}`).
+ * `'document'` mode never consults this — an author who wrote `\tikzexternalize` opted in.
+ */
+export function detectAutoBlocker(
+  mainSource: string,
+  sources: Iterable<string>,
+): AutoExternalizationBlocker | null {
+  const all = [...sources]
+  const mainCode = stripComments(mainSource)
+  if (/\\documentclass\s*(?:\[[^\]]*\])?\s*\{beamer\}/.test(mainCode)) return 'beamer'
+  for (const source of all) {
+    const code = stripComments(source)
+    if (
+      /remember\s+picture|(?:\[|,)\s*overlay\s*(?:,|\]|=)|current\s+page|\\tikzmark\b|\\usetikzlibrary\s*\{[^}]*\btikzmark\b/.test(
+        code,
+      )
+    ) {
+      return 'remember-picture'
+    }
+    if (
+      /\\(?:re)?newenvironment\s*\*?\s*\{[^}]*\}(?:\s*\[[^\]]*\])*\s*\{[^{}]*\\begin\s*\{tikzpicture\}/.test(
+        code,
+      ) ||
+      /\\NewDocumentEnvironment\s*\{[^}]*\}\s*\{[^}]*\}\s*\{[^{}]*\\begin\s*\{tikzpicture\}/.test(
+        code,
+      ) ||
+      /\\(?:re)?newcommand\s*\*?\s*\{?\\[A-Za-z@]+\}?(?:\s*\[[^\]]*\])*\s*\{[^{}]*\\begin\s*\{tikzpicture\}/.test(
+        code,
+      )
+    ) {
+      return 'wrapped-environment'
+    }
+  }
+  // The figure list from the first compile is the authority on the count (loops); the
+  // static count only rules out the obvious cases up front.
+  if (countPictures(all) < AUTO_MIN_PICTURES && !hasPictureLoops(all)) return 'too-few-pictures'
+  return null
 }
