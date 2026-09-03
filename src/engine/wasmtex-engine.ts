@@ -8,6 +8,7 @@ import type {
   WarmupCache,
 } from '../types'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
+import { fetchBloomFilter } from './bloom-filter'
 import type { CompileEngine } from './compile-engine'
 import {
   type EngineCompletionObservation,
@@ -507,10 +508,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Fetch bloom filter from CDN and send it to the worker. */
   private async fetchAndSendBloomFilter(): Promise<void> {
     try {
-      const url = `${resolveTexliveUrl(this.texliveUrl, this.version)}bloom-filter.bin`
-      const resp = await fetch(url)
-      if (!resp.ok) return
-      const buf = await resp.arrayBuffer()
+      const buf = await fetchBloomFilter(resolveTexliveUrl(this.texliveUrl, this.version))
+      if (!buf) return
       // Retain a copy for the durable cache before the original is transferred.
       if (this.persistentCacheEnabled) this.bloomFilter = buf.slice(0)
       this.worker!.postMessage({ cmd: 'loadbloom', data: buf }, [buf])

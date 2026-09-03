@@ -11,6 +11,7 @@ import type {
   WarmupCache,
 } from '../types'
 import { resolveTexliveUrl } from './base-worker-engine'
+import { fetchBloomFilter } from './bloom-filter'
 import { KNOWN_404S, PRELOAD_FILES } from './texlive-manifest'
 
 export interface WarmupOptions {
@@ -89,9 +90,7 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
   }
 
   // Fetch bloom filter in parallel with file preloads
-  const bloomPromise = fetch(`${baseUrl}bloom-filter.bin`, signal ? { signal } : {})
-    .then((r) => (r.ok ? r.arrayBuffer() : null))
-    .catch(() => null)
+  const bloomPromise = fetchBloomFilter(baseUrl, signal ? { signal } : undefined).catch(() => null)
 
   const workers = Array.from({ length: Math.min(concurrency, total) }, () => worker())
   await Promise.all(workers)
