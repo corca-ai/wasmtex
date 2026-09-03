@@ -56,15 +56,15 @@
         "objects": 168942
       },
       "engine": {
-        "releaseId": "2026-4f5a81441b5f5fff",
-        "tag": "engine-2026-4f5a81441b5f5fff",
+        "releaseId": "2026-60d599ede070564a",
+        "tag": "engine-2026-60d599ede070564a",
         "sourceRevisions": [
           "06f1937c502188fe04f0931fed702d06c2b78ab3",
-          "ffc2f06b6469a8ad59c3e848c8cf071506335394"
+          "1d8f269455dba4b903f202dd54152916ce66f401"
         ],
-        "correspondingSourceSha256": "7d19446910b3f67eab177545c0fefc8e03a5623345449119c6bd649864730300",
+        "correspondingSourceSha256": "2e67c4a5f6904f4957504c3a4a54a31d2e8b358b818a678da41d91bd281b0938",
         "buildRuns": {
-          "pdftex-bibtex": 33662768337,
+          "pdftex-bibtex": 33706997521,
           "bibtex8": 33163172428,
           "makeindex": 33163174571,
           "xetex": 33163176440,
