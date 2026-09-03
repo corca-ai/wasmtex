@@ -84,6 +84,7 @@ export type {
   FontGlyphGap,
   GlyphCoverageReport,
   GlyphMiss,
+  LoadProgressEvent,
   PageGeometry,
   ResolverAttempt,
   ResolverAttemptOutcome,

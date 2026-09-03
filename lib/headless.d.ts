@@ -3,7 +3,7 @@ import { BackendRegistry } from './engine/backend-registry';
 import { EngineOption } from './engine/engine-select';
 import { TikzExternalizationOptions } from './engine/tikz-externalization';
 import { ProjectIndex } from './lsp/project-index';
-import { AccessibleExportResult, CompileResult, CompletionSnapshotState, TexliveVersion, WarmupCache } from './types';
+import { AccessibleExportResult, CompileResult, CompletionSnapshotState, LoadProgressEvent, TexliveVersion, WarmupCache } from './types';
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api';
 export * from './backend-api';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
@@ -43,6 +43,10 @@ export interface WasmTexCompilerOptions {
     persistentPreambleCache?: boolean;
     /** Pre-fetched TeX Live files from `warmup()`. */
     warmupCache?: WarmupCache;
+    /** Called as the engine loads: the format download percentage and every TeX Live
+     *  file fetched on demand. Hosts render a progress bar or the current file name
+     *  instead of a blank wait. Warmup has its own `onProgress` (files done / total). */
+    onLoadProgress?: (event: LoadProgressEvent) => void;
     /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
      *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),
      *  falling back to pdfLaTeX. Set an explicit engine to override detection. */
@@ -125,6 +129,8 @@ export declare class WasmTexCompiler {
     constructor(options?: WasmTexCompilerOptions);
     /** Engine options shared by every engine kind (binary-specific bits are set
      *  by the factory). */
+    /** Forward the engine's load callbacks to the host as `LoadProgressEvent`s. */
+    private attachLoadProgress;
     private engineBaseOpts;
     /** Current main-file content as a string (for engine detection). */
     private mainSource;

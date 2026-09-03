@@ -68,6 +68,7 @@ import type {
   CompletionSnapshotProfile,
   CompletionSnapshotState,
   DependencyManifest,
+  LoadProgressEvent,
   ResolverEvidenceReport,
   TexError,
   TexliveDependencySet,
@@ -309,6 +310,10 @@ export interface WasmTexCompilerOptions {
   persistentPreambleCache?: boolean
   /** Pre-fetched TeX Live files from `warmup()`. */
   warmupCache?: WarmupCache
+  /** Called as the engine loads: the format download percentage and every TeX Live
+   *  file fetched on demand. Hosts render a progress bar or the current file name
+   *  instead of a blank wait. Warmup has its own `onProgress` (files done / total). */
+  onLoadProgress?: (event: LoadProgressEvent) => void
   /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
    *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),
    *  falling back to pdfLaTeX. Set an explicit engine to override detection. */
@@ -441,6 +446,18 @@ export class WasmTexCompiler {
 
   /** Engine options shared by every engine kind (binary-specific bits are set
    *  by the factory). */
+  /** Forward the engine's load callbacks to the host as `LoadProgressEvent`s. */
+  private attachLoadProgress(engine: CompileEngine): void {
+    const listener = this.opts.onLoadProgress
+    if (!listener) return
+    let count = 0
+    engine.onProgress = (percent) => listener({ phase: 'format', percent })
+    engine.onFileDownload = (file) => {
+      count += 1
+      listener({ phase: 'file', file, count })
+    }
+  }
+
   private engineBaseOpts(): WasmTexEngineOptions {
     const opts: WasmTexEngineOptions = {
       assetBaseUrl: this.assetBaseUrl,
@@ -492,6 +509,7 @@ export class WasmTexCompiler {
     this.engine?.terminate()
     this.engineKind = this.detection.engine
     this.engine = createCompileEngine(this.detection.engine, this.engineBaseOpts())
+    this.attachLoadProgress(this.engine)
     // Incremental checkpoints are a pdfLaTeX-only feature (the worker commands live in
     // the pdfTeX worker); other engines always take the full path.
     this.incremental =

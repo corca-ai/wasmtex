@@ -43,6 +43,9 @@ Keep them user-facing and concise. Example:
 
 ### Added
 
+- `onLoadProgress` constructor option: the format download percentage and every TeX Live
+  file fetched on demand, so a host can show a progress bar and the current file during a
+  cold start instead of a blank wait. `warmup({ onProgress })` already covers the prefetch.
 - Heap checkpoints (`incremental: true` in browsers): a second pdfTeX build instrumented with
   Asyncify (`wasmtex-pdftex-checkpoint.*`) lets a compile be suspended before any line of
   the main file and resumed later with an edited tail, so edits anywhere after a checkpoint
