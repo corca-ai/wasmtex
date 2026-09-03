@@ -2,7 +2,11 @@
 // as a classic worker helper); the .d.cts beside it types these named exports.
 
 import { describe, expect, it } from 'vitest'
-import { bloomCandidates, retryExtensions } from '../../wasm-build/kpse-resolve.cjs'
+import {
+  bloomCandidates,
+  fetchCandidates,
+  retryExtensions,
+} from '../../wasm-build/kpse-resolve.cjs'
 
 describe('retryExtensions', () => {
   it('lists the source-file extensions for format 26', () => {
@@ -53,5 +57,33 @@ describe('bloomCandidates', () => {
 
   it('returns just the exact key for an unknown format', () => {
     expect(bloomCandidates(99, 'whatever')).toEqual(['99/whatever'])
+  })
+})
+
+describe('fetchCandidates', () => {
+  it('keeps every name in kpathsea order without a bloom filter', () => {
+    expect(fetchCandidates(33, 'ptmb7t.vf', null)).toEqual(['ptmb7t.vf', 'ptmb7t'])
+    expect(fetchCandidates(26, 'natbib.cfg', null)).toEqual([
+      'natbib.cfg',
+      'natbib',
+      'natbib.cfg.tex',
+      'natbib.cfg.sty',
+      'natbib.cfg.cls',
+      'natbib.cfg.def',
+      'natbib.cfg.ltx',
+    ])
+  })
+
+  it('fetches the stored bare name first when the bloom rules out the requested one', () => {
+    const stored = new Set(['33/ptmb7t', '3/ptmb7t', '26/xkeyval.tex'])
+    const mayExist = (key: string) => stored.has(key)
+    expect(fetchCandidates(33, 'ptmb7t.vf', mayExist)).toEqual(['ptmb7t'])
+    expect(fetchCandidates(3, 'ptmb7t.tfm', mayExist)).toEqual(['ptmb7t'])
+    expect(fetchCandidates(26, 'xkeyval', mayExist)).toEqual(['xkeyval.tex'])
+  })
+
+  it('collapses a false-positive cascade to the colliding names only', () => {
+    const mayExist = (key: string) => key === '26/rerunfilecheck.cfg.def'
+    expect(fetchCandidates(26, 'rerunfilecheck.cfg', mayExist)).toEqual(['rerunfilecheck.cfg.def'])
   })
 })

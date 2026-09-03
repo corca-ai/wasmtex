@@ -36,6 +36,34 @@ function bloomCandidates(format, reqname) {
     return keys;
 }
 
+// The bucket names the fallback should actually fetch, in order, for a
+// request: the exact name, the extension-stripped form, then each appended
+// format extension — but only those the bloom filter does not rule out. Without
+// a bloom filter (`mayExist` is null) every candidate is kept, as before.
+//
+// Why per-candidate filtering matters: kpathsea asks for "ptmb7t.vf" while the
+// bucket stores "33/ptmb7t", so fetching the exact name first was one guaranteed
+// 404 per virtual or metric font; and a genuinely missing config file used to
+// cost up to seven 404s (the name, the stripped name, and every extension) as
+// soon as any one of those keys collided with the bloom filter. Each 404 is a
+// full origin round trip when the edge has not cached it yet.
+function fetchCandidates(format, reqname, mayExist) {
+    var names = [reqname];
+    if (reqname.indexOf(".") >= 0) {
+        names.push(reqname.substring(0, reqname.lastIndexOf(".")));
+    }
+    var exts = retryExtensions(format);
+    for (var i = 0; i < exts.length; i++) {
+        if (!reqname.endsWith(exts[i])) names.push(reqname + exts[i]);
+    }
+    if (typeof mayExist !== "function") return names;
+    var kept = [];
+    for (var j = 0; j < names.length; j++) {
+        if (mayExist(format + "/" + names[j])) kept.push(names[j]);
+    }
+    return kept;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { retryExtensions, bloomCandidates };
+    module.exports = { retryExtensions, bloomCandidates, fetchCandidates };
 }

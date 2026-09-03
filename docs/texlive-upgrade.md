@@ -18,7 +18,7 @@ an immutable package mirror and its matching engine release.
 ### 1. WASM Engine & File Lookup
 The WASM engine uses a customized `kpathsea` library. When the C code attempts to find a file (style, font, etc.), it follows this flow:
 1. **Local Check (MEMFS)**: It first looks in the Emscripten virtual filesystem (including the pre-loaded `/tex` cache).
-2. **JS Fallback**: If not found, a wrapper (`wasm-build/kpse-hook.c`) intercepts the call and triggers the JS fallback `kpse_find_file_js` (`wasm-build/library.js`), which calls into the authored worker controller (for pdfTeX, `wasm-build/pdftex-worker.js`).
+2. **JS Fallback**: If not found, a wrapper (`wasm-build/kpse-hook.c`) intercepts the call and triggers the JS fallback `kpse_find_file_js` (`wasm-build/library.js`), which calls into the authored worker controller (for pdfTeX, `wasm-build/pdftex-worker.js`). The fallback tries the bucket names kpathsea could mean (the request, its extension-stripped form, then each retry extension) but, once the bloom filter is loaded, only the names the filter cannot rule out — fonts are stored bare, so `ptmb7t.vf` is fetched as `33/ptmb7t` directly (`wasm-build/kpse-resolve.cjs`, `fetchCandidates`).
 3. **Synchronous XHR**: The JS worker performs a **synchronous XMLHttpRequest** to the TeX Live CDN. Synchronous calls are used because the C-side `kpathsea` lookup is blocking.
 
 ### 2. Object-store/CDN package structure

@@ -25,7 +25,14 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
-- `setMainFile()` with the unchanged main file no longer drops the heap and page-break
+- The pdfTeX worker's CDN fallback now fetches only the bucket names the bloom filter cannot
+  rule out, in kpathsea order. Virtual and metric fonts are stored without their extension,
+  so every `.vf`/`.tfm` lookup used to cost one guaranteed 404 before the hit, and a missing
+  configuration file could cost up to seven (the name, the stripped name, and each retry
+  extension) whenever one of those keys collided with the bloom filter. Measured on a
+  `times`+`natbib`+`microtype` article against the production mirror: 11 misses (4.0 s of
+  serial round trips) → 2 (0.3 s).
+- `setMainFile() with the unchanged main file no longer drops the heap and page-break
   checkpoints. Hosts that re-assert the main file before every compile never resumed from
   a checkpoint before this.
 
