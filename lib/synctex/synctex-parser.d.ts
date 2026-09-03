@@ -106,8 +106,41 @@ export declare class SynctexParser {
     forwardLookupAll(data: SynctexData, file: string, line: number): PdfLocation[];
     /** Forward search for a specific line. Two-pass: non-box first, then all. */
     private forwardForLine;
-    /** Compute forward search result from matched nodes */
+    /**
+     * Forward search result from matched nodes: one region per typeset line.
+     *
+     * Every match — a glue or kern inside a word, a math node inside a fraction, an
+     * inner hbox such as `\textit{…}` — is lifted to the *line box* that contains it:
+     * the outermost hbox below the nearest vbox, which is how TeX nests a paragraph
+     * line (or an equation line) inside its page, column, or minipage vbox. Lifting to
+     * the nearest hbox instead painted every nested box of a formula as its own
+     * fragment, and painting leaves as they came left inline constructs as splinters
+     * beside the line. Structural boxes never survive: a box that contains another
+     * result is dropped, and so is any box taller than half its page (a column or
+     * page container reached from an output-routine node). A line with only vbox
+     * matches yields nothing rather than a page-sized region.
+     */
     private forwardFromNodes;
+    /**
+     * The typeset line containing a node: the outermost hbox above it that is not a
+     * page or column container, climbing through formula-sized vboxes (a fraction, a
+     * stacked sub/superscript) but stopping at a larger one (a page, a column, a
+     * minipage, a tabular), whose rows are lines of their own.
+     */
+    private lineBoxFor;
+    /**
+     * Distinct line regions: containers of other results and page-scale boxes are
+     * dropped, then boxes on the same baseline band that touch or overlap are joined
+     * so a line never paints as several abutting pieces. Boxes in different columns
+     * sit apart by the column gap and stay separate.
+     */
+    private locationsFromLineBoxes;
+    /**
+     * A box as tall as half of its own outermost ancestor is a column or page
+     * container reached from an output-routine node, never a typeset line. A box with
+     * no ancestor has nothing to compare against and is kept.
+     */
+    private isPageScale;
     /** Point-in-box test (reference: _synctex_point_in_box_v2) */
     private pointInBox;
     /** Vertical ordered distance (reference: _synctex_point_v_ordered_distance_v2) */
@@ -134,13 +167,6 @@ export declare class SynctexParser {
      * Reference: __synctex_closest_deep_child_v2
      */
     private closestDeepChild;
-    /** Walk up from a leaf to find the nearest ancestor hbox */
-    private findAncestorHbox;
-    /**
-     * Convert result nodes to distinct regions without allowing structural page or
-     * column boxes to swallow their more precise descendants.
-     */
-    private locationsFromNodes;
     /** Compute a bounding box enclosing the given nodes */
     private bboxFromNodes;
 }

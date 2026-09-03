@@ -927,7 +927,7 @@ Count:0
   describe('forwardLookup', () => {
     it('preserves disjoint regions when one source line crosses columns', () => {
       const pageBox: SynctexNode = {
-        type: 'hbox',
+        type: 'vbox',
         input: 1,
         line: 5,
         column: 0,
@@ -1011,6 +1011,184 @@ Count:0
         width: 220,
         height: 15,
       })
+    })
+
+    it('lifts formula fragments and inline boxes to their typeset line', () => {
+      const mk = (partial: Partial<SynctexNode>): SynctexNode => ({
+        type: 'glue',
+        input: 1,
+        line: 7,
+        column: 0,
+        page: 1,
+        h: 0,
+        v: 0,
+        width: 0,
+        height: 0,
+        depth: 0,
+        parent: null,
+        children: [],
+        ...partial,
+      })
+      const page = mk({ type: 'vbox', h: 50, v: 750, width: 500, height: 700 })
+      const line = mk({
+        type: 'hbox',
+        h: 70,
+        v: 400,
+        width: 345,
+        height: 9,
+        depth: 3,
+        parent: page,
+      })
+      const italic = mk({
+        type: 'hbox',
+        h: 120,
+        v: 400,
+        width: 40,
+        height: 7,
+        depth: 2,
+        parent: line,
+      })
+      const fraction = mk({
+        type: 'vbox',
+        h: 200,
+        v: 402,
+        width: 20,
+        height: 14,
+        depth: 6,
+        parent: line,
+      })
+      const numerator = mk({
+        type: 'hbox',
+        h: 200,
+        v: 392,
+        width: 20,
+        height: 5,
+        depth: 1,
+        parent: fraction,
+      })
+      const denominator = mk({
+        type: 'hbox',
+        h: 200,
+        v: 407,
+        width: 20,
+        height: 5,
+        depth: 1,
+        parent: fraction,
+      })
+      const leaves = [
+        mk({ h: 80, v: 400, parent: line }),
+        mk({ type: 'math', h: 190, v: 400, parent: line }),
+        mk({ type: 'kern', h: 205, v: 392, parent: numerator }),
+        mk({ type: 'kern', h: 205, v: 407, parent: denominator }),
+        mk({ h: 125, v: 400, parent: italic }),
+      ]
+      page.children.push(line)
+      line.children.push(italic, fraction)
+      fraction.children.push(numerator, denominator)
+      const data: SynctexData = {
+        inputs: new Map([[1, 'main.tex']]),
+        pages: new Map([[1, [page, line, italic, fraction, numerator, denominator, ...leaves]]]),
+        pageRoots: new Map([[1, [page]]]),
+        friendIndex: new Map([['1:7', [...leaves, italic, numerator, denominator]]]),
+        magnification: 1000,
+        unit: 1,
+        xOffset: 0,
+        yOffset: 0,
+      }
+      // One region: the line box, at its real height (no 10pt floor).
+      expect(parser.forwardLookupAll(data, 'main.tex', 7)).toEqual([
+        { page: 1, x: 70, y: 391, width: 345, height: 12 },
+      ])
+    })
+
+    it('never answers with a column or page box', () => {
+      const mk = (partial: Partial<SynctexNode>): SynctexNode => ({
+        type: 'glue',
+        input: 1,
+        line: 40,
+        column: 0,
+        page: 1,
+        h: 0,
+        v: 0,
+        width: 0,
+        height: 0,
+        depth: 0,
+        parent: null,
+        children: [],
+        ...parent(partial),
+      })
+      const parent = (p: Partial<SynctexNode>) => p
+      const page = mk({ type: 'vbox', h: 50, v: 750, width: 500, height: 700 })
+      // twocolumn: the output routine puts both column vboxes in one page-wide hbox.
+      const columns = mk({ type: 'hbox', h: 50, v: 750, width: 500, height: 680, parent: page })
+      const outputLeaf = mk({ h: 50, v: 750, parent: columns })
+      page.children.push(columns)
+      columns.children.push(outputLeaf)
+      const base = {
+        inputs: new Map([[1, 'main.tex']]),
+        pageRoots: new Map([[1, [page]]]),
+        magnification: 1000,
+        unit: 1,
+        xOffset: 0,
+        yOffset: 0,
+      }
+      // The \end{document} line owns only output-routine nodes: nothing to paint.
+      expect(
+        parser.forwardLookupAll(
+          {
+            ...base,
+            pages: new Map([[1, [page, columns, outputLeaf]]]),
+            friendIndex: new Map([['1:40', [outputLeaf]]]),
+          },
+          'main.tex',
+          40,
+        ),
+      ).toEqual([])
+      // A line whose only match is the page vbox itself: also nothing.
+      expect(
+        parser.forwardLookupAll(
+          { ...base, pages: new Map([[1, [page]]]), friendIndex: new Map([['1:40', [page]]]) },
+          'main.tex',
+          40,
+        ),
+      ).toEqual([])
+    })
+
+    it('joins boxes that abut on one baseline and keeps columns apart', () => {
+      const mk = (partial: Partial<SynctexNode>): SynctexNode => ({
+        type: 'hbox',
+        input: 1,
+        line: 12,
+        column: 0,
+        page: 1,
+        h: 0,
+        v: 500,
+        width: 0,
+        height: 8,
+        depth: 2,
+        parent: null,
+        children: [],
+        ...partial,
+      })
+      const page = mk({ type: 'vbox', h: 50, v: 750, width: 500, height: 700, depth: 0 })
+      const left = mk({ h: 70, width: 100, parent: page })
+      const leftTail = mk({ h: 172, width: 118, parent: page }) // 2pt gap: same line, two boxes
+      const right = mk({ h: 310, width: 220, parent: page }) // other column, same baseline
+      page.children.push(left, leftTail, right)
+      const data: SynctexData = {
+        inputs: new Map([[1, 'main.tex']]),
+        pages: new Map([[1, [page, left, leftTail, right]]]),
+        pageRoots: new Map([[1, [page]]]),
+        friendIndex: new Map([['1:12', [left, leftTail, right]]]),
+        magnification: 1000,
+        unit: 1,
+        xOffset: 0,
+        yOffset: 0,
+      }
+      expect(parser.forwardLookupAll(data, 'main.tex', 12)).toEqual([
+        { page: 1, x: 70, y: 492, width: 220, height: 10 },
+        { page: 1, x: 310, y: 492, width: 220, height: 10 },
+      ])
     })
 
     it('finds PDF position for a source line', () => {
