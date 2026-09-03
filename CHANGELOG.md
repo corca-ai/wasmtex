@@ -25,6 +25,11 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
+- The engine now fetches `bloom-filter.v2.bin` from the mirror and falls back to
+  `bloom-filter.bin`. v2 is built at a 1e-4 false-positive rate (about 19 bits per key,
+  ~380 KB) instead of 1e-2, so a cold compile no longer pays a mirror round trip for the
+  handful of absent names that collided with the old filter. `scripts/gen-bloom-filter.mjs`
+  can build it from a snapshot's published `texlive-provenance.json`.
 - The pdfTeX worker's CDN fallback now fetches only the bucket names the bloom filter cannot
   rule out, in kpathsea order. Virtual and metric fonts are stored without their extension,
   so every `.vf`/`.tfm` lookup used to cost one guaranteed 404 before the hit, and a missing

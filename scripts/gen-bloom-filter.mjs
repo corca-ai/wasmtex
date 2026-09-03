@@ -8,7 +8,15 @@
  * Usage:
  *   node scripts/gen-bloom-filter.mjs                  # list the configured object store
  *   TEXLIVE_MIRROR_ROOT=/release node scripts/gen-bloom-filter.mjs
+ *   TEXLIVE_PROVENANCE=texlive-provenance.json node scripts/gen-bloom-filter.mjs
  *   node scripts/gen-bloom-filter.mjs --upload
+ *
+ * Output: `bloom-filter.v2.bin` at a 1e-4 false-positive rate (~19 bits per key,
+ * ~390 KB for a 160k-file snapshot). The engine fetches this name first and
+ * falls back to the original `bloom-filter.bin` (1e-2, ~193 KB) on snapshots
+ * published before it existed. A false positive costs one mirror round trip
+ * per compile for every document that asks for that name, so the tighter rate
+ * pays for its size on the first cold compile.
  *
  * Prerequisites:
  *   A scoped CLI profile configured for the TeX Live R2 bucket.
@@ -22,7 +30,7 @@
  * Hash: FNV-1a double hashing — h_i = (h1 + i * h2) mod m
  */
 
-import { readdirSync, writeFileSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -34,10 +42,12 @@ const STORE = objectStoreConfig()
 const YEAR = process.env.TEXLIVE_YEAR || '2025'
 const MIRROR_ROOT = objectUri(STORE, YEAR, 'pdftex')
 const LOCAL_MIRROR_ROOT = process.env.TEXLIVE_MIRROR_ROOT
-const OUTPUT_FILE = process.env.TEXLIVE_BLOOM_OUTPUT || join(__dirname, '..', 'bloom-filter.bin')
+const PROVENANCE_FILE = process.env.TEXLIVE_PROVENANCE
+export const BLOOM_OBJECT_NAME = 'bloom-filter.v2.bin'
+const OUTPUT_FILE = process.env.TEXLIVE_BLOOM_OUTPUT || join(__dirname, '..', BLOOM_OBJECT_NAME)
 
 // Bloom filter parameters
-const FALSE_POSITIVE_RATE = 0.01
+const FALSE_POSITIVE_RATE = Number(process.env.TEXLIVE_BLOOM_FALSE_POSITIVE_RATE || 0.0001)
 
 // --- FNV-1a hash (matches pdftex-worker.js) ----------------------------------
 
@@ -57,6 +67,20 @@ function fnv1a(str) {
 // --- R2 file listing ---------------------------------------------------------
 
 function listMirrorFiles() {
+  if (PROVENANCE_FILE) {
+    // The published provenance manifest already names every object under
+    // `pdftex/`, so a snapshot's filter can be rebuilt from the mirror alone.
+    console.log(`Listing files from ${PROVENANCE_FILE}...`)
+    const manifest = JSON.parse(readFileSync(PROVENANCE_FILE, 'utf8'))
+    const marker = 'pdftex/'
+    const keys = []
+    for (const file of manifest.files) {
+      if (typeof file.key !== 'string' || !file.key.startsWith(marker)) continue
+      const rel = file.key.slice(marker.length)
+      if (!rel.startsWith('pk/')) keys.push(rel)
+    }
+    return keys.sort()
+  }
   if (LOCAL_MIRROR_ROOT) {
     const pdftexRoot = join(LOCAL_MIRROR_ROOT, 'pdftex')
     console.log(`Listing files from ${pdftexRoot}/...`)
@@ -179,7 +203,7 @@ function main() {
 
   // Upload if --upload flag is set
   if (process.argv.includes('--upload')) {
-    const objectDest = objectUri(STORE, YEAR, 'bloom-filter.bin')
+    const objectDest = objectUri(STORE, YEAR, BLOOM_OBJECT_NAME)
     console.log(`\nUploading to ${objectDest}...`)
     runObjectStore(STORE, ['s3', 'cp', OUTPUT_FILE, objectDest, '--content-type',
       'application/octet-stream', '--cache-control', 'public, max-age=31536000, immutable'], { stdio: 'inherit' })
@@ -187,4 +211,4 @@ function main() {
   }
 }
 
-main()
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main()

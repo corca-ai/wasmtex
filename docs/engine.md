@@ -386,7 +386,7 @@ Packages are fetched via synchronous XHR inside the WASM worker.
 
 - **Mirror**: Immutable snapshots are served from Cloudflare R2 through `texlive.corca.ai`; no configuration is needed for basic usage.
 - **Structure**: Files are organized by mirror revision, TeX Live version, and format IDs (for example, `snapshots/<revision>/2025/pdftex/26/` for `.sty` files).
-- **Bloom Filter**: A ~180 KB bloom filter (`bloom-filter.bin`) is fetched at startup and loaded into the worker. It allows the worker to skip sync XHR for files that definitely do not exist on the mirror. Regenerate with `node scripts/gen-bloom-filter.mjs`.
+- **Bloom Filter**: A ~380 KB bloom filter (`bloom-filter.v2.bin`, 1e-4 false positives; older snapshots fall back to the ~190 KB `bloom-filter.bin` at 1e-2) is fetched at startup and loaded into the worker. It allows the worker to skip sync XHR for files that definitely do not exist on the mirror. Regenerate with `node scripts/gen-bloom-filter.mjs`.
 - **Caching**: A Service Worker (`public/sw.js`) caches these files locally to enable offline compilation and speed up subsequent runs.
 
 ### URL Resolution Order

@@ -21,6 +21,8 @@ import type {
   TexliveVersion,
   WarmupCache,
 } from '../types'
+import { fetchBloomFilter } from './bloom-filter'
+
 import type { CompileEngine } from './compile-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import { engineFormatUrl, engineWorkerUrl } from './engine-assets'
@@ -295,7 +297,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
         return null
       }
     }
-    const bloomP = fetchBuf(`${texliveUrl}bloom-filter.bin`)
+    const bloomP = fetchBloomFilter(texliveUrl).catch(() => null)
 
     const files: Array<{ format: number; filename: string; data: ArrayBuffer }> = []
     let next = 0

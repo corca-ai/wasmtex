@@ -250,8 +250,12 @@ LUAOTFLOAD_NAMES_OUTPUT=<release>/pdftex/51/luaotfload-names.lua \
   node scripts/gen-luaotfload-names.mjs --generate --fonts-dir <dir>
 
 # Include the generated DB keys in a deterministic local bloom filter.
-TEXLIVE_MIRROR_ROOT=<release> TEXLIVE_BLOOM_OUTPUT=<release>/bloom-filter.bin \
+TEXLIVE_MIRROR_ROOT=<release> TEXLIVE_BLOOM_OUTPUT=<release>/bloom-filter.v2.bin \
   node scripts/gen-bloom-filter.mjs
+# For an already-published snapshot, rebuild it from the mirror's own manifest:
+# TEXLIVE_PROVENANCE=texlive-provenance.json node scripts/gen-bloom-filter.mjs
+# The engine asks for bloom-filter.v2.bin (1e-4 false positives) and falls back to
+# bloom-filter.bin (1e-2); a false positive costs one mirror round trip per cold compile.
 ```
 
 Then regenerate the bloom filter and purge the public mirror cache (the fonts these DBs reference

@@ -35,7 +35,7 @@ The root `import { warmup } from 'wasmtex'` above remains for the all-in-one edi
 
 1. `warmup()` injects a `<link rel="preconnect">` hint for the CDN
 2. Fetches all 64 known TeX Live files in parallel (concurrency pool of 6)
-3. Fetches the bloom filter (`bloom-filter.bin`) in parallel with file preloads
+3. Fetches the bloom filter (`bloom-filter.v2.bin`, falling back to `bloom-filter.bin` on snapshots published before it existed) in parallel with file preloads
 4. Returns a `WarmupCache` `{ files, notFound, bloomFilter? }` — the fetched `ArrayBuffer`s, the known-404 entries (`KNOWN_404S`), and the bloom filter when it loaded
 5. When passed to the constructor, the engine sends all files to the worker via `postMessage` (with transferables) before compilation starts
 6. Known-404 entries are batch-injected into the worker's 404 cache, preventing wasted XHR
