@@ -1,5 +1,17 @@
 /** A resumable engine checkpoint the worker took during a compile (#81): the run was
  *  suspended before reading source line `line` of the main file and its whole state kept. */
+/** Progress of the one-time engine load, for a host that wants to show what a cold
+ *  start is waiting on (#105). `format` reports the precompiled format download as a
+ *  percentage; `file` reports every TeX Live file the worker fetches on demand during
+ *  init or a compile, with a running count for the session. */
+export type LoadProgressEvent = {
+    phase: 'format';
+    percent: number;
+} | {
+    phase: 'file';
+    file: string;
+    count: number;
+};
 export interface HeapCheckpointRecord {
     id: string;
     /** 1-based line of the main file at which the run was suspended (the line is unread). */
