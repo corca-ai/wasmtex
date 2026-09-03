@@ -590,35 +590,19 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         }
     }
 
-    var xhr = tryFetch(reqname);
-
-    // If the request failed (some object stores return 403, not 404, for missing keys),
-    // be smart about extensions.
-    if (xhr && xhr.status >= 400) {
-        // Case 1: Request had extension, try without it
-        if (reqname.includes(".")) {
-            var bare = reqname.substring(0, reqname.lastIndexOf("."));
-            var retryXhr = tryFetch(bare);
-            if (retryXhr && retryXhr.status === 200) {
-                xhr = retryXhr;
-                reqname = bare;
-            }
+    // Fetch only the names the bloom filter cannot rule out, in kpathsea's
+    // preference order (exact, stripped, appended extensions); stop at the
+    // first hit. bloomMaybe above already guaranteed at least one candidate.
+    var candidates = fetchCandidates(format, reqname, bloom_bits ? bloomCheck : null);
+    var xhr = null;
+    for (var ci = 0; ci < candidates.length; ci++) {
+        var candidateXhr = tryFetch(candidates[ci]);
+        if (candidateXhr && candidateXhr.status === 200) {
+            xhr = candidateXhr;
+            reqname = candidates[ci];
+            break;
         }
-        
-        // Case 2: Request didn't have extension (or Case 1 failed), try common ones
-        if (xhr.status >= 400) {
-            var exts = retryExtensions(format);
-
-            for (var i = 0; i < exts.length; i++) {
-                if (reqname.endsWith(exts[i])) continue;
-                var retryXhr = tryFetch(reqname + exts[i]);
-                if (retryXhr && retryXhr.status === 200) {
-                    xhr = retryXhr;
-                    reqname += exts[i];
-                    break;
-                }
-            }
-        }
+        if (candidateXhr) xhr = candidateXhr;
     }
 
     if (xhr && xhr.status === 200) {
