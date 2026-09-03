@@ -10,7 +10,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33662763719,
+          "runId": 33706920546,
           "artifacts": [
             "wasm-pdftex",
             "wasm-bibtex"
@@ -55,7 +55,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33662768337,
+          "runId": 33706997521,
           "artifacts": [
             "wasm-pdftex-2026",
             "wasm-bibtex-2026"
