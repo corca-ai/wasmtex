@@ -174,6 +174,21 @@ function isBox(node: SynctexNode): boolean {
   )
 }
 
+/** A vbox no taller than this (PDF points) is part of a formula on its line, not a block of lines. */
+const FORMULA_VBOX_MAX_EXTENT = 40
+
+/** Two rectangles share a baseline band when they overlap vertically by most of the smaller one. */
+function sameLineBand(a: PdfLocation, b: PdfLocation): boolean {
+  const overlap = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+  return overlap >= 0.5 * Math.min(a.height, b.height)
+}
+
+/** Horizontally overlapping or within a small gap — a word gap, never a column gutter. */
+function horizontallyTouching(a: PdfLocation, b: PdfLocation): boolean {
+  const gap = Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width)
+  return gap <= 3
+}
+
 /** Node type prefix → type name mapping */
 const NODE_PREFIXES: Record<string, NodeType> = {
   '[': 'vbox',
@@ -687,41 +702,110 @@ export class SynctexParser {
     return this.forwardFromNodes(onPage)
   }
 
-  /** Compute forward search result from matched nodes */
+  /**
+   * Forward search result from matched nodes: one region per typeset line.
+   *
+   * Every match — a glue or kern inside a word, a math node inside a fraction, an
+   * inner hbox such as `\textit{…}` — is lifted to the *line box* that contains it:
+   * the outermost hbox below the nearest vbox, which is how TeX nests a paragraph
+   * line (or an equation line) inside its page, column, or minipage vbox. Lifting to
+   * the nearest hbox instead painted every nested box of a formula as its own
+   * fragment, and painting leaves as they came left inline constructs as splinters
+   * beside the line. Structural boxes never survive: a box that contains another
+   * result is dropped, and so is any box taller than half its page (a column or
+   * page container reached from an output-routine node). A line with only vbox
+   * matches yields nothing rather than a page-sized region.
+   */
   private forwardFromNodes(nodes: SynctexNode[]): PdfLocation[] {
-    // Filter to first page
     const firstPage = nodes[0]!.page
     const pageNodes = nodes.filter((n) => n.page === firstPage)
     if (pageNodes.length === 0) return []
 
-    // For leaf nodes, resolve to ancestor hbox for proper bounds
-    const resolvedBoxes = new Set<SynctexNode>()
-    const directBoxes: SynctexNode[] = []
-
+    const lineBoxes = new Set<SynctexNode>()
     for (const node of pageNodes) {
-      if (node.type === 'hbox' || node.type === 'void_hbox') {
-        directBoxes.push(node)
-      } else if (node.type === 'vbox' || node.type === 'void_vbox') {
-        // skip vbox — too broad
-      } else {
-        // Leaf node: walk to ancestor hbox
-        const hbox = this.findAncestorHbox(node)
-        if (hbox) resolvedBoxes.add(hbox)
+      const box = this.lineBoxFor(node)
+      if (box) lineBoxes.add(box)
+    }
+    if (lineBoxes.size > 0) return this.locationsFromLineBoxes([...lineBoxes], firstPage)
+
+    // No hbox anywhere above the matches: leaves sitting directly in a vbox (a glue
+    // between paragraphs). Box the leaves themselves at baseline size rather than the
+    // vbox, which would be a page or column.
+    const leaves = pageNodes.filter((n) => !isBox(n) && !(n.parent && this.isPageScale(n.parent)))
+    return leaves.length > 0 ? [this.bboxFromNodes(leaves, firstPage)] : []
+  }
+
+  /**
+   * The typeset line containing a node: the outermost hbox above it that is not a
+   * page or column container, climbing through formula-sized vboxes (a fraction, a
+   * stacked sub/superscript) but stopping at a larger one (a page, a column, a
+   * minipage, a tabular), whose rows are lines of their own.
+   */
+  private lineBoxFor(node: SynctexNode): SynctexNode | null {
+    let current: SynctexNode | null = node.type === 'hbox' ? node : node.parent
+    let line: SynctexNode | null = null
+    while (current) {
+      if (current.type === 'hbox') {
+        if (this.isPageScale(current)) break
+        line = current
+      } else if (current.type === 'vbox' || current.type === 'void_vbox') {
+        if (current.height + current.depth > FORMULA_VBOX_MAX_EXTENT) break
+      }
+      current = current.parent
+    }
+    return line
+  }
+
+  /**
+   * Distinct line regions: containers of other results and page-scale boxes are
+   * dropped, then boxes on the same baseline band that touch or overlap are joined
+   * so a line never paints as several abutting pieces. Boxes in different columns
+   * sit apart by the column gap and stay separate.
+   */
+  private locationsFromLineBoxes(boxes: SynctexNode[], page: number): PdfLocation[] {
+    const candidateSet = new Set(boxes)
+    const containers = new Set<SynctexNode>()
+    for (const node of boxes) {
+      let parent = node.parent
+      while (parent) {
+        if (candidateSet.has(parent)) containers.add(parent)
+        parent = parent.parent
       }
     }
+    const precise = boxes.filter((box) => !containers.has(box) && !this.isPageScale(box))
 
-    // Prefer resolved boxes from leaves (more precise — matches actual content).
-    // Preserve each result: SyncTeX's reference query is an iterator, and one
-    // source line may legitimately map to disjoint boxes across columns.
-    if (resolvedBoxes.size > 0) {
-      return this.locationsFromNodes([...resolvedBoxes], firstPage)
+    // Source order is reading order: a line that continues in the next column keeps
+    // its left-column part first even though that part sits lower on the page.
+    const merged: PdfLocation[] = []
+    for (const box of precise) {
+      const rect = this.bboxFromNodes([box], page)
+      const target = merged.find((m) => sameLineBand(m, rect) && horizontallyTouching(m, rect))
+      if (!target) {
+        merged.push(rect)
+        continue
+      }
+      const right = Math.max(target.x + target.width, rect.x + rect.width)
+      const bottom = Math.max(target.y + target.height, rect.y + rect.height)
+      target.x = Math.min(target.x, rect.x)
+      target.y = Math.min(target.y, rect.y)
+      target.width = right - target.x
+      target.height = bottom - target.y
     }
-    if (directBoxes.length > 0) {
-      return this.locationsFromNodes(directBoxes, firstPage)
-    }
+    return merged
+  }
 
-    // Fallback: use whatever we have
-    return this.locationsFromNodes(pageNodes, firstPage)
+  /**
+   * A box as tall as half of its own outermost ancestor is a column or page
+   * container reached from an output-routine node, never a typeset line. A box with
+   * no ancestor has nothing to compare against and is kept.
+   */
+  private isPageScale(box: SynctexNode): boolean {
+    let root: SynctexNode | null = box.parent
+    while (root?.parent) root = root.parent
+    // A parentless vbox with extent is the page itself.
+    if (!root) return box.type === 'vbox' && box.height + box.depth > 0
+    const extent = root.height + root.depth
+    return extent > 0 && box.height + box.depth > extent / 2
   }
 
   /** Point-in-box test (reference: _synctex_point_in_box_v2) */
@@ -932,51 +1016,6 @@ export class SynctexParser {
     return best
   }
 
-  /** Walk up from a leaf to find the nearest ancestor hbox */
-  private findAncestorHbox(node: SynctexNode): SynctexNode | null {
-    let current = node.parent
-    while (current) {
-      if (current.type === 'hbox') return current
-      current = current.parent
-    }
-    return null
-  }
-
-  /**
-   * Convert result nodes to distinct regions without allowing structural page or
-   * column boxes to swallow their more precise descendants.
-   */
-  private locationsFromNodes(nodes: SynctexNode[], page: number): PdfLocation[] {
-    const candidates = [...new Set(nodes)]
-    const candidateSet = new Set(candidates)
-    const containers = new Set<SynctexNode>()
-
-    // Walk each parent chain once rather than comparing every pair. Friend
-    // buckets are unbounded in real documents, so an O(n²) containment pass
-    // would turn a large but valid source line into a main-thread stall.
-    for (const node of candidates) {
-      let parent = node.parent
-      while (parent) {
-        if (candidateSet.has(parent)) containers.add(parent)
-        parent = parent.parent
-      }
-    }
-
-    const preciseNodes = candidates.filter((candidate) => !containers.has(candidate))
-    const locations: PdfLocation[] = []
-    const seenGeometry = new Set<string>()
-
-    for (const node of preciseNodes) {
-      const location = this.bboxFromNodes([node], page)
-      const geometryKey = `${location.x}:${location.y}:${location.width}:${location.height}`
-      if (seenGeometry.has(geometryKey)) continue
-      seenGeometry.add(geometryKey)
-      locations.push(location)
-    }
-
-    return locations
-  }
-
   /** Compute a bounding box enclosing the given nodes */
   private bboxFromNodes(nodes: SynctexNode[], page: number): PdfLocation {
     let minH = Infinity
@@ -993,18 +1032,25 @@ export class SynctexParser {
       if (bottom > maxBottom) maxBottom = bottom
     }
 
-    // Zero-dimension leaf nodes: estimate height from baseline
+    // Zero-dimension leaf nodes: estimate a baseline-sized box
     if (maxBottom - minTop < 2) {
       minTop = nodes[0]!.v - 12
       maxBottom = nodes[0]!.v + 3
+      return {
+        page,
+        x: minH,
+        y: minTop,
+        width: Math.max(maxH - minH, 10),
+        height: maxBottom - minTop,
+      }
     }
 
     return {
       page,
       x: minH,
       y: minTop,
-      width: Math.max(maxH - minH, 10),
-      height: Math.max(maxBottom - minTop, 10),
+      width: Math.max(maxH - minH, 1),
+      height: Math.max(maxBottom - minTop, 1),
     }
   }
 }

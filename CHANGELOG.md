@@ -25,6 +25,12 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
+- Forward search (`forwardLookupAll`) returns one region per typeset line. Matches are
+  lifted to their line box (crossing formula-sized vboxes such as a fraction), so a formula
+  no longer paints as dozens of nested fragments and an inline `\textit{…}` no longer leaves
+  a splinter beside its line; boxes that abut on one baseline are joined; page and column
+  containers are never returned (a line that owns only output-routine nodes yields nothing
+  instead of a page-sized box); regions keep their real height instead of a 10 pt floor.
 - The engine now fetches `bloom-filter.v2.bin` from the mirror and falls back to
   `bloom-filter.bin`. v2 is built at a 1e-4 false-positive rate (about 19 bits per key,
   ~380 KB) instead of 1e-2, so a cold compile no longer pays a mirror round trip for the
