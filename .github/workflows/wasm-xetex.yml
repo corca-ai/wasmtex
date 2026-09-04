@@ -64,8 +64,17 @@ on:
 jobs:
   build-xetex:
     runs-on: ubuntu-latest
+    # A dispatch builds the year it was asked for. A push builds every
+    # supported year, because a change to `wasm-build/` belongs to all of them
+    # and a default would silently build one: the job-name output fix (#107)
+    # was merged, built 2025 alone, and would have released an engine that
+    # still had the bug for every 2026 project.
+    strategy:
+      fail-fast: false
+      matrix:
+        texlive_year: ${{ fromJSON(inputs.texlive_year && format('["{0}"]', inputs.texlive_year) || '["2025","2026"]') }}
     env:
-      TEXLIVE_YEAR: ${{ inputs.texlive_year || '2025' }}
+      TEXLIVE_YEAR: ${{ matrix.texlive_year }}
     steps:
       - uses: actions/checkout@v7
 

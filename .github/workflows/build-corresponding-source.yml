@@ -26,9 +26,18 @@ on:
         type: choice
         options: ['2025', '2026']
         default: '2026'
+      publish:
+        description: >-
+          Attach the verified archive to its engine release. Off by default:
+          a release is a distribution, and this is the step that makes one.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  # `contents` is write only so the publish step can attach the archive to its
+  # engine release; every other path here reads.
+  contents: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && 'write' || 'read' }}
   actions: read
 
 jobs:
@@ -69,3 +78,26 @@ jobs:
           name: corresponding-source-${{ inputs.texlive_year || '2026' }}
           path: source-release/
           retention-days: 90
+      # Recipients are entitled to the source for the exact bytes they were
+      # given, so the archive belongs on the release that ships those bytes.
+      # Building it here and attaching it by hand from another machine is how
+      # it was done once; this closes that gap, and refuses rather than
+      # replaces if the tag already carries an archive.
+      - name: Publish to the engine release
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_id="$(jq -r .releaseId "public/wasmtex/$TEXLIVE_YEAR/manifest.json")"
+          tag="engine-$release_id"
+          archive="source-release/wasmtex-$release_id-source.tar.xz"
+          test -f "$archive"
+          if gh release view "$tag" --json assets \
+            --jq '.assets[].name' 2>/dev/null | grep -qx "$(basename "$archive")"; then
+            echo "::error::$tag already carries $(basename "$archive"); a published release is immutable"
+            exit 1
+          fi
+          gh release view "$tag" >/dev/null 2>&1 ||
+            gh release create "$tag" --title "Engine $release_id" \
+              --notes "Corresponding source for the TeX Live $TEXLIVE_YEAR engine release \`$release_id\`."
+          gh release upload "$tag" "$archive" "$archive.sha256"

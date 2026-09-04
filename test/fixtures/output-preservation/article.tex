@@ -1,0 +1,21 @@
+% A plain article: document class, sectioning, maths, a table and a reference.
+% Enough of the engine's ordinary path that a change in typesetting shows up.
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\title{Output preservation}
+\author{Corpus}
+\begin{document}
+\maketitle
+\section{Introduction}\label{sec:intro}
+Text with \emph{emphasis}, a citation-like mark, and an inline formula $E=mc^2$.
+\begin{equation}\label{eq:one}
+  \int_0^1 x^2 \, dx = \frac{1}{3}
+\end{equation}
+Section~\ref{sec:intro} and equation~\eqref{eq:one} exercise cross-references,
+which travel through the \texttt{.aux} file the engine writes beside its PDF.
+\begin{tabular}{lr}
+  Left & Right \\
+  A & 1 \\
+\end{tabular}
+\end{document}
