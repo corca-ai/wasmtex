@@ -24,7 +24,7 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
   assert.equal(value.texliveYear, '2026')
   assert.deepEqual(
     value.profiles.map((profile) => profile.id),
-    ['2026-initial', '2026-20260826'],
+    ['2026-initial', '2026-20260826', '2026-20260826-8b79469'],
   )
   for (const profile of value.profiles) {
     assert.match(profile.mirror.revision, revision)
