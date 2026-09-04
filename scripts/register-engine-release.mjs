@@ -75,7 +75,10 @@ for (const required of ['year', 'profile-id', 'release-id', 'source-sha256']) {
 }
 const year = single.year
 const releaseId = single['release-id']
-if (!new RegExp(`^${year}-[a-f0-9]{16}$`).test(releaseId)) {
+// Split rather than build a pattern from the year: a regular expression made
+// out of an argument is one an argument can also change the meaning of.
+const [releaseYear, releaseDigest = ''] = releaseId.split('-')
+if (releaseYear !== year || !/^[a-f0-9]{16}$/.test(releaseDigest)) {
   fail(`--release-id must look like ${year}-<16 hex>`)
 }
 if (!/^[a-f0-9]{64}$/.test(single['source-sha256'])) fail('--source-sha256 must be 64 hex')
@@ -136,9 +139,14 @@ writeJson(licensePath, license)
 const testPath = join(root, 'scripts/texlive-profiles.test.mjs')
 const test = readFileSync(testPath, 'utf8')
 const ids = profiles.profiles.map((profile) => `'${profile.id}'`).join(', ')
-const listed = new RegExp(`\\[\\s*'${year}-[^\\]]*\\]`, 'm')
-if (!listed.test(test)) fail(`could not find the ${year} profile-id list in ${testPath}`)
-writeFileSync(testPath, test.replace(listed, `[${ids}]`))
+// The list is bounded by literal brackets, so it can be found by index. The
+// year comes from the command line and must not reach a pattern.
+const opened = test.indexOf(`['${year}-`)
+const closed = opened < 0 ? -1 : test.indexOf(']', opened)
+if (opened < 0 || closed < 0) {
+  fail(`could not find the ${year} profile-id list in ${testPath}`)
+}
+writeFileSync(testPath, `${test.slice(0, opened)}[${ids}]${test.slice(closed + 1)}`)
 
 console.log(`Registered ${registered.id} (engine ${releaseId})`)
 console.log(`  profiles          ${profilesPath}`)
