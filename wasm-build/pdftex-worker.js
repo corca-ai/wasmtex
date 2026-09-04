@@ -295,6 +295,16 @@ function runMain(programName, args) {
 // distinguish /work project files from /tex/system files and normalize against
 // its authoritative project VFS. Filtering by extension here would silently lose
 // \includegraphics, \input-ed data, and project-local fonts.
+// TeX names its outputs after the job, not after the path it was given. A run
+// over `paper/main.tex` writes `main.pdf`, `main.log` and `main.synctex.gz`
+// into the working directory, so an output path built from the full input path
+// names a file that was never written: the compile succeeds, and the caller is
+// handed no PDF. The job name is the input's base name without its extension.
+function jobNameForMain(mainFile) {
+  var name = mainFile.slice(mainFile.lastIndexOf('/') + 1)
+  return name.replace(/\.[^.]+$/, '')
+}
+
 function readRecorderInputs(jobName) {
     var flsPath = WORKROOT + "/" + jobName + ".fls";
     var inputs = null;
@@ -1004,7 +1014,7 @@ function finishCompile(ctx, status) {
     // Read .fls (file recorder output) to discover every engine input. A cached
     // preamble format hides its reads from the body pass, so union the recorder
     // list captured when that exact preamble snapshot was built.
-    var baseName = self.mainfile.substr(0, self.mainfile.length - 4);
+    var baseName = jobNameForMain(self.mainfile);
     var bodyInputFiles = readRecorderInputs(baseName);
     var inputFiles = usedPreamble
         ? mergeRecorderInputs(self._preambleInputFiles, bodyInputFiles)
@@ -1727,7 +1737,7 @@ function hcTakeSnapshot(cp) {
     var t0 = performance.now();
     var image = hcSparseImage();
     var inputs = null;
-    try { inputs = readRecorderInputs(self.mainfile.substr(0, self.mainfile.length - 4)); } catch(e) {}
+    try { inputs = readRecorderInputs(jobNameForMain(self.mainfile)); } catch(e) {}
     var snap = {
         id: cp.id, line: cp.line, offset: cp.offset,
         image: image, currData: Asyncify.currData, sp: stackSave(),

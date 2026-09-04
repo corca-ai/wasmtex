@@ -137,6 +137,16 @@ function cleanDir(dir) {
 /** Run dvipdfmx on the .xdv the driver wrote, then post back the produced .pdf.
  *  Restores the pristine heap first so repeated compiles on one worker each start
  *  from a clean dvipdfmx state (#82). */
+// TeX names its outputs after the job, not after the path it was given. A run
+// over `paper/main.tex` writes `main.pdf`, `main.log` and `main.synctex.gz`
+// into the working directory, so an output path built from the full input path
+// names a file that was never written: the compile succeeds, and the caller is
+// handed no PDF. The job name is the input's base name without its extension.
+function jobNameForMain(mainFile) {
+  var name = mainFile.slice(mainFile.lastIndexOf('/') + 1)
+  return name.replace(/\.[^.]+$/, '')
+}
+
 function compilePDFRoutine() {
   self.memlog = ''
   restoreHeapMemory()
@@ -156,8 +166,8 @@ function compilePDFRoutine() {
   }
   try {
     // The driver sets the main file to the .xdv (e.g. main.xdv); dvipdfmx writes
-    // main.pdf. Strip whatever final extension the main file has, not just .tex.
-    const pdf = FS.readFile(`${WORKROOT}/${self.mainfile.replace(/\.[^.]+$/, '')}.pdf`, {
+    // main.pdf beside it in the working directory, under the job name.
+    const pdf = FS.readFile(`${WORKROOT}/${jobNameForMain(self.mainfile)}.pdf`, {
       encoding: 'binary',
     })
     self.postMessage(

@@ -127,4 +127,49 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
       compiler.dispose()
     }
   }, 120_000)
+
+  it('returns the PDF for a document inside a folder', async () => {
+    // The engine writes `main.pdf` into the working directory whatever path it
+    // was given, so a worker that built the output path from `test/main.tex`
+    // read a file that was never written: a successful log, and no PDF. Only a
+    // real compile shows it — the log looks perfect.
+    const { installNodeWorkerHost } = await import('./node-host')
+    const { WasmTexCompiler } = await import('../headless')
+
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+    const ASSET = 'http://assets.local/'
+    const texliveProfile = smokeTexliveProfile()
+    installNodeWorkerHost({
+      publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
+      assetBaseUrl: ASSET,
+    })
+
+    const doc = ['\\documentclass{article}', '\\begin{document}Hi\\end{document}', ''].join('\n')
+    const compileAt = async (mainFile: string) => {
+      const compiler = new WasmTexCompiler({
+        engine: 'pdflatex',
+        assetBaseUrl: ASSET,
+        texliveVersion: texliveProfile.version,
+        texliveUrl: texliveProfile.url,
+        files: { [mainFile]: doc },
+        mainFile,
+      })
+      try {
+        await compiler.init()
+        const result = await compiler.compile()
+        return { pdfBytes: result.pdf?.length ?? 0, success: result.success }
+      } finally {
+        compiler.dispose()
+      }
+    }
+
+    const atRoot = await compileAt('main.tex')
+    const inFolder = await compileAt('test/main.tex')
+    console.log(`[node-smoke] root=${atRoot.pdfBytes} folder=${inFolder.pdfBytes}`)
+    expect(atRoot).toMatchObject({ success: true })
+    expect(atRoot.pdfBytes).toBeGreaterThan(0)
+    // The same document, so the same bytes: a folder changes where the source
+    // lives, not what the engine produces.
+    expect(inFolder).toEqual(atRoot)
+  }, 300_000)
 })
