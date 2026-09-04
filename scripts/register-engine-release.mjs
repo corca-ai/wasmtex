@@ -27,7 +27,7 @@
  * no `--run` keep that profile's pinned run, which is what the corresponding
  * source rules require for a family whose inputs did not change.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -70,7 +70,9 @@ function writeJson(path, value) {
 }
 
 const { runs, single, sourceRevisions } = options(process.argv.slice(2))
-for (const required of ['year', 'profile-id', 'release-id', 'source-sha256']) {
+// `--profile-id` is required only for a line that publishes profiles, which
+// the check below decides once the year's files are known.
+for (const required of ['year', 'release-id', 'source-sha256']) {
   if (!single[required]) fail(`--${required} is required`)
 }
 const year = single.year
@@ -83,22 +85,35 @@ if (releaseYear !== year || !/^[a-f0-9]{16}$/.test(releaseDigest)) {
 }
 if (!/^[a-f0-9]{64}$/.test(single['source-sha256'])) fail('--source-sha256 must be 64 hex')
 
+// Only a line that publishes distribution profiles has this file. The 2025 line
+// records its releases in the pinned components and the license manifest alone,
+// so the profile and the profile-id list simply do not apply there.
 const profilesPath = join(root, `scripts/texlive-profiles-${year}.json`)
-const profiles = readJson(profilesPath)
-const from = single.from ?? profiles.distributionProfileId
-const base = profiles.profiles.find((profile) => profile.id === from)
-if (!base) fail(`no profile ${from} in ${profilesPath}`)
-if (profiles.profiles.some((profile) => profile.id === single['profile-id'])) {
+const profiles = existsSync(profilesPath) ? readJson(profilesPath) : null
+if (profiles === null && single['profile-id']) {
+  fail(`${year} publishes no distribution profiles, so --profile-id does not apply`)
+}
+if (profiles !== null && !single['profile-id']) fail('--profile-id is required')
+const from = single.from ?? profiles?.distributionProfileId
+const base = profiles?.profiles.find((profile) => profile.id === from)
+if (profiles !== null && !base) fail(`no profile ${from} in ${profilesPath}`)
+if (profiles?.profiles.some((profile) => profile.id === single['profile-id'])) {
   fail(`profile ${single['profile-id']} already exists; a published profile is immutable`)
 }
 
-const buildRuns = { ...base.engine.buildRuns }
+const components0 = readJson(join(root, 'scripts/engine-release-components.json'))
+const buildRuns = {
+  ...(base?.engine.buildRuns ??
+    Object.fromEntries(
+      (components0.years[year]?.downloads ?? []).map((entry) => [entry.id, entry.runId]),
+    )),
+}
 for (const [family, runId] of Object.entries(runs)) {
   if (!(family in buildRuns)) fail(`unknown build family: ${family}`)
   buildRuns[family] = runId
 }
 
-const registered = {
+const registered = base === undefined || base === null ? null : {
   ...JSON.parse(JSON.stringify(base)),
   id: single['profile-id'],
   label: single.label ?? base.label,
@@ -110,10 +125,12 @@ const registered = {
     buildRuns,
   },
 }
-profiles.profiles.push(registered)
-profiles.distributionProfileId = registered.id
-if (profiles.discovery?.profileId === from) profiles.discovery.profileId = registered.id
-writeJson(profilesPath, profiles)
+if (profiles !== null && registered !== null) {
+  profiles.profiles.push(registered)
+  profiles.distributionProfileId = registered.id
+  if (profiles.discovery?.profileId === from) profiles.discovery.profileId = registered.id
+  writeJson(profilesPath, profiles)
+}
 
 // 2. The pinned components the release assembler downloads.
 const componentsPath = join(root, 'scripts/engine-release-components.json')
@@ -137,20 +154,24 @@ writeJson(licensePath, license)
 
 // 4. The profile-id list the tests hold, so adding one stays a deliberate edit.
 const testPath = join(root, 'scripts/texlive-profiles.test.mjs')
-const test = readFileSync(testPath, 'utf8')
-const ids = profiles.profiles.map((profile) => `'${profile.id}'`).join(', ')
-// The list is bounded by literal brackets, so it can be found by index. The
-// year comes from the command line and must not reach a pattern.
-const opened = test.indexOf(`['${year}-`)
-const closed = opened < 0 ? -1 : test.indexOf(']', opened)
-if (opened < 0 || closed < 0) {
-  fail(`could not find the ${year} profile-id list in ${testPath}`)
+const test = profiles === null ? null : readFileSync(testPath, 'utf8')
+if (profiles !== null && test !== null) {
+  const ids = profiles.profiles.map((profile) => `'${profile.id}'`).join(', ')
+  // The list is bounded by literal brackets, so it can be found by index. The
+  // year comes from the command line and must not reach a pattern.
+  const opened = test.indexOf(`['${year}-`)
+  const closed = opened < 0 ? -1 : test.indexOf(']', opened)
+  if (opened < 0 || closed < 0) {
+    fail(`could not find the ${year} profile-id list in ${testPath}`)
+  }
+  writeFileSync(testPath, `${test.slice(0, opened)}[${ids}]${test.slice(closed + 1)}`)
 }
-writeFileSync(testPath, `${test.slice(0, opened)}[${ids}]${test.slice(closed + 1)}`)
 
-console.log(`Registered ${registered.id} (engine ${releaseId})`)
-console.log(`  profiles          ${profilesPath}`)
-console.log(`  pinned components ${componentsPath}`)
-console.log(`  license manifest  ${licensePath}`)
-console.log(`  profile-id list   ${testPath}`)
-console.log('\nRun `npm run test:license-tools` to confirm the four agree.')
+const written = [
+  ['pinned components', componentsPath],
+  ['license manifest', licensePath],
+  ...(profiles === null ? [] : [['profiles', profilesPath], ['profile-id list', testPath]]),
+]
+console.log(`Registered ${registered?.id ?? releaseId} (engine ${releaseId})`)
+for (const [what, where] of written) console.log(`  ${what.padEnd(17)} ${where}`)
+console.log('\nRun `npm run test:license-tools` to confirm they agree.')
