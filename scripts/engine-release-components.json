@@ -55,7 +55,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33706997521,
+          "runId": 33885489901,
           "artifacts": [
             "wasm-pdftex-2026",
             "wasm-bibtex-2026"
@@ -77,14 +77,14 @@
         },
         {
           "id": "xetex",
-          "runId": 33163176440,
+          "runId": 33885502236,
           "artifacts": [
             "wasm-xetex-2026"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 33163178493,
+          "runId": 33885505118,
           "artifacts": [
             "wasm-luatex-2026"
           ]
