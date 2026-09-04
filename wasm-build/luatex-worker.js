@@ -261,6 +261,16 @@ function readRecorderInputs(jobName) {
  *  (e.g. optional files missing) while still producing a valid PDF/format, so we
  *  report `ok` whenever the file is readable and surface the raw exit code only on
  *  failure. */
+// TeX names its outputs after the job, not after the path it was given. A run
+// over `paper/main.tex` writes `main.pdf`, `main.log` and `main.synctex.gz`
+// into the working directory, so an output path built from the full input path
+// names a file that was never written: the compile succeeds, and the caller is
+// handed no PDF. The job name is the input's base name without its extension.
+function jobNameForMain(mainFile) {
+  var name = mainFile.slice(mainFile.lastIndexOf('/') + 1)
+  return name.replace(/\.[^.]+$/, '')
+}
+
 function postOutput(relPath, status, recorderJobName) {
   const inputFiles = recorderJobName ? readRecorderInputs(recorderJobName) : undefined
   try {
@@ -294,7 +304,7 @@ function compileLaTeXRoutine() {
   cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
   const status = runEngine(_compileLaTeX)
   // LuaTeX writes PDF directly — no XDV, no dvipdfmx.
-  const jobName = self.mainfile.replace(/\.tex$/, '')
+  const jobName = jobNameForMain(self.mainfile)
   postOutput(`${WORKROOT}/${jobName}.pdf`, status, jobName)
 }
 

@@ -218,6 +218,16 @@ function readRecorderInputs(jobName) {
 
 /** Read an engine output file and post it back (xdv for compile, fmt for format).
  *  `status` is the engine exit code; if the output file is missing we surface it. */
+// TeX names its outputs after the job, not after the path it was given. A run
+// over `paper/main.tex` writes `main.pdf`, `main.log` and `main.synctex.gz`
+// into the working directory, so an output path built from the full input path
+// names a file that was never written: the compile succeeds, and the caller is
+// handed no PDF. The job name is the input's base name without its extension.
+function jobNameForMain(mainFile) {
+  var name = mainFile.slice(mainFile.lastIndexOf('/') + 1)
+  return name.replace(/\.[^.]+$/, '')
+}
+
 function postOutput(relPath, status, recorderJobName) {
   const inputFiles = recorderJobName ? readRecorderInputs(recorderJobName) : undefined
   try {
@@ -250,7 +260,7 @@ function compileLaTeXRoutine() {
   prepareExecutionContext()
   cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
   const status = runEngine(_compileLaTeX)
-  const jobName = self.mainfile.replace(/\.tex$/, '')
+  const jobName = jobNameForMain(self.mainfile)
   postOutput(`${WORKROOT}/${jobName}.xdv`, status, jobName)
 }
 
