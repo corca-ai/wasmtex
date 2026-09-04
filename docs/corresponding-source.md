@@ -29,6 +29,32 @@ build inputs changed; reuse the exact artifact and receipt together for every
 unaffected family. The assembler rejects any receipt whose immutable TeX Live mirror
 differs from the annual mirror pinned beside those run IDs.
 
+## Release an engine, end to end
+
+A push to `wasm-build/**` builds every supported annual line, not a default
+one. Then:
+
+```bash
+# 1. Register the built runs. One command writes the four files that must
+#    agree: pinned components, distribution profile, license manifest, and the
+#    profile-id list the tests hold.
+node scripts/register-engine-release.mjs \
+  --year 2026 --profile-id <new profile id> --release-id <computed release id> \
+  --source-sha256 <archive sha256> --run pdftex-bibtex=<run> ...
+
+# 2. Prove the release does not change what it typesets, if that is the claim.
+#    A host may move pinned projects onto a release only when this passes.
+node scripts/check-output-preservation.mjs \
+  --baseline <old assets> --candidate <new assets> --texlive-url <mirror>
+```
+
+Run the *Build corresponding source* workflow with `publish` to build, verify
+and attach the archive to its engine release. It refuses to replace an archive
+a tag already carries, because a published release is immutable.
+
+The release ID and the archive hash come from the build and the archive; the
+commands above only record them consistently.
+
 ## Create and verify an archive
 
 Use a Linux environment with GNU tar for deterministic ownership, ordering, and

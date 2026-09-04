@@ -1,0 +1,18 @@
+% Font selection and line breaking: the parts most likely to move if a format
+% file or an engine binary changed underneath a release.
+\documentclass[11pt]{article}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\begin{document}
+\section{Paragraphs}
+A paragraph long enough to break over several lines, so that any change in
+hyphenation, protrusion or font metrics moves a glyph and shows up as a
+different page. Microtype adjusts the margins character by character, which
+makes this sensitive to the exact font programme the engine loads.
+\subsection{Symbols}
+Symbols from latexsym: $\Box$, $\Diamond$, $\lhd$, and ordinary maths
+$\alpha\beta\gamma$.
+\end{document}

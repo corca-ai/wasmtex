@@ -60,7 +60,15 @@ test('all engine workflows bind builds and receipts to the selected annual sourc
     assert.match(workflow, /texlive_url:/, name)
     assert.match(workflow, /mirror_revision:/, name)
     assert.match(workflow, /provenance_sha256:/, name)
-    assert.match(workflow, /TEXLIVE_YEAR: \$\{\{ inputs\.texlive_year \|\| '2025' \}\}/, name)
+    // A dispatch builds the year it names; a push builds every supported year.
+    // A default year here would silently build one line and release the other
+    // unchanged, which is how the job-name fix (#107) first went out.
+    assert.match(workflow, /TEXLIVE_YEAR: \$\{\{ matrix\.texlive_year \}\}/, name)
+    assert.match(
+      workflow,
+      /texlive_year: \$\{\{ fromJSON\(inputs\.texlive_year && format\('\["\{0\}"\]', inputs\.texlive_year\) \|\| '\["2025","2026"\]'\) \}\}/,
+      name,
+    )
     assert.match(workflow, /node scripts\/configure-engine-build-mirror\.mjs/, name)
     assert.match(workflow, /INPUT_MIRROR_REVISION: \$\{\{ inputs\.mirror_revision \}\}/, name)
     assert.match(workflow, /INPUT_PROVENANCE_SHA256: \$\{\{ inputs\.provenance_sha256 \}\}/, name)
