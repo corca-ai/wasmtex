@@ -1,6 +1,7 @@
 import {
   collectUserMacroDefinitions,
   expandUserMacroCalls,
+  macroDefinitionSpansFromTokens,
   parseLatexFile,
   type UserMacroArgument,
   type UserMacroDefinition,
@@ -945,7 +946,12 @@ function syntaxScopes(
   ]
   if (document.language === 'markdown') appendMarkdownSectionScopes(scopes, document)
   else appendSectionScopes(scopes, document, tokensByStart, symbols)
-  appendEnvironmentScopes(scopes, document, tokens)
+  const templates = macroDefinitionSpansFromTokens(document.content, tokens)
+  appendEnvironmentScopes(
+    scopes,
+    document,
+    tokens.filter((token) => !inside(token.start, templates)),
+  )
   return scopes
 }
 

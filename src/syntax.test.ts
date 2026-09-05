@@ -443,6 +443,38 @@ describe('LatexSyntaxService', () => {
     expect(prose).toBe('Visible abstract prose.')
   })
 
+  it('keeps macro definitions out of active section and environment scopes', () => {
+    const content = [
+      '\\renewcommand\\subsection[1]{#1}',
+      '\\newcommand{\\template}{\\section{Hidden}\\begin{theorem}body\\end{theorem}}',
+      '\\def\\other{\\section{Also hidden}}',
+      '\\begin{document}',
+      '\\section{Visible}',
+      '$x$',
+      '\\end{document}',
+    ].join('\n')
+    const service = new LatexSyntaxService()
+    const syntax = service.upsert({ fileId: 'main', path: 'main.tex', content, documentVersion: 1 })
+    expect(
+      syntax.scopes.filter((scope) => scope.kind === 'section').map((scope) => scope.name),
+    ).toEqual(['Visible'])
+    expect(
+      syntax.scopes.filter((scope) => scope.kind === 'environment').map((scope) => scope.name),
+    ).toEqual(['document'])
+    for (const scope of syntax.scopes) {
+      if (scope.parent === null) continue
+      const parent = syntax.scopes[scope.parent]!
+      expect(scope.range.startOffset).toBeGreaterThanOrEqual(parent.range.startOffset)
+      expect(scope.range.endOffset).toBeLessThanOrEqual(parent.range.endOffset)
+    }
+    expect(
+      service
+        .getProjectIndex()
+        .getFileSymbols('main.tex')
+        ?.sections.map((section) => section.title),
+    ).toEqual(['Visible'])
+  })
+
   it('records nested section and environment scope spans with recovery', () => {
     const content = [
       '\\section{One}',

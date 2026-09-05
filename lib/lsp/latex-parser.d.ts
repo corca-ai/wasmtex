@@ -23,6 +23,8 @@ export interface UserMacroArgument {
     inputStart: number;
     inputEnd: number;
 }
+/** Reuses the owning token stream to ignore comments and verbatim text. */
+export declare function macroDefinitionSpansFromTokens(content: string, tokens: readonly Token[]): Array<[number, number]>;
 export interface UserMacroExpansion {
     name: string;
     inputStart: number;
