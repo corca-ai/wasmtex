@@ -1292,17 +1292,35 @@ const MACRO_SCOPE_RE = new RegExp(
   String.raw`\\(?:${NEWCMD_CMDS})\*?\s*(?:\{\s*\\[\w@]+\s*\}|\\[\w@]+)\s*(?:\[\d+\]\s*)?(?:\[[^\]]*\]\s*)?\{`,
   'g',
 )
-const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@][^{}]*\{/g
+const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@]+/g
 
 function macroDefinitionSpans(masked: string): Array<[number, number]> {
-  const spans: Array<[number, number]> = []
   const ends = indexGroupEnds(masked)
-  for (const pattern of [MACRO_SCOPE_RE, DEF_SCOPE_RE]) {
-    for (const match of masked.matchAll(pattern)) {
-      const open = match.index + match[0].length - 1
-      const body = extractBraceContent(masked, open, ends)
-      spans.push([match.index, body === null ? masked.length : open + body.length + 2])
-    }
+  const spans = primitiveDefinitionSpans(masked, ends)
+  for (const match of masked.matchAll(MACRO_SCOPE_RE)) {
+    const open = match.index + match[0].length - 1
+    const body = extractBraceContent(masked, open, ends)
+    spans.push([match.index, body === null ? masked.length : open + body.length + 2])
+  }
+  return spans
+}
+
+function primitiveDefinitionSpans(masked: string, ends: GroupEndIndex): Array<[number, number]> {
+  const spans: Array<[number, number]> = []
+  const scanner = new RegExp(DEF_SCOPE_RE)
+  const group = /[{}]/g
+  for (let match = scanner.exec(masked); match; match = scanner.exec(masked)) {
+    // Consume each parameter/replacement span once, including malformed input.
+    group.lastIndex = scanner.lastIndex
+    const boundary = group.exec(masked)
+    if (!boundary) break
+    scanner.lastIndex = boundary.index + 1
+    if (boundary[0] !== '{') continue
+    const open = boundary.index
+    const body = extractBraceContent(masked, open, ends)
+    const end = body === null ? masked.length : open + body.length + 2
+    spans.push([match.index, end])
+    scanner.lastIndex = end
   }
   return spans
 }

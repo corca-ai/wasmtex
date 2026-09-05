@@ -475,6 +475,17 @@ describe('LatexSyntaxService', () => {
     ).toEqual(['Visible'])
   })
 
+  it('bounds scanning of repeated incomplete primitive definitions', () => {
+    const content = '\\def\\x'.repeat(20_000)
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    expect(syntax.scopes.filter((scope) => scope.kind === 'section')).toEqual([])
+  })
+
   it('nests display environments inside the actual surrounding section', () => {
     const content =
       '\\begin{document}\n\\section{One}\n\\subsection{Local}\nLet $x$ be fixed.\n\\begin{align}x=1\\end{align}\n\\end{document}\n'
