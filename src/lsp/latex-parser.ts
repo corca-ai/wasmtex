@@ -1292,7 +1292,7 @@ const MACRO_SCOPE_RE = new RegExp(
   String.raw`\\(?:${NEWCMD_CMDS})\*?\s*(?:\{\s*\\[\w@]+\s*\}|\\[\w@]+)\s*(?:\[\d+\]\s*)?(?:\[[^\]]*\]\s*)?\{`,
   'g',
 )
-const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@]+[^{}]*\{/g
+const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@][^{}]*\{/g
 
 function macroDefinitionSpans(masked: string): Array<[number, number]> {
   const spans: Array<[number, number]> = []
