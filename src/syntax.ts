@@ -2,6 +2,7 @@ import {
   collectUserMacroDefinitions,
   expandUserMacroCalls,
   macroDefinitionSpansFromTokens,
+  maskSpansFromTokens,
   parseLatexFile,
   type UserMacroArgument,
   type UserMacroDefinition,
@@ -754,7 +755,7 @@ function visibleProseSpans(
   mathRegions: readonly LatexMathRegion[],
 ): LatexVisibleProseSpan[] {
   const excluded: Array<readonly [number, number]> = [
-    ...conditionalMaskSpans(tokens, document.content.length),
+    ...maskSpansFromTokens([...tokens]),
     ...(document.language === 'markdown' ? markdownExcludedSpans(document.content) : []),
     ...mathRegions.map(
       (region) => [region.fullRange.startOffset, region.fullRange.endOffset] as const,
@@ -946,13 +947,65 @@ function syntaxScopes(
   ]
   if (document.language === 'markdown') appendMarkdownSectionScopes(scopes, document)
   else appendSectionScopes(scopes, document, tokensByStart, symbols)
-  const templates = macroDefinitionSpansFromTokens(document.content, tokens)
+  const templates = [
+    ...macroDefinitionSpansFromTokens(document.content, tokens),
+    ...maskSpansFromTokens([...tokens]),
+  ]
   appendEnvironmentScopes(
     scopes,
     document,
     tokens.filter((token) => !inside(token.start, templates)),
   )
-  return scopes
+  return nestSyntaxScopes(scopes)
+}
+
+function nestSyntaxScopes(scopes: LatexSyntaxScope[]): LatexSyntaxScope[] {
+  // Section extent ends at its enclosing environment as well as the next heading.
+  // Resolve parents after all extents are known: a document environment can wrap
+  // sections, which in turn wrap theorem or display environments.
+  const bounded = scopes.map((scope) => {
+    if (scope.kind !== 'section') return scope
+    let endOffset = scope.range.endOffset
+    for (const container of scopes) {
+      if (
+        container.kind === 'environment' &&
+        container.state === 'complete' &&
+        container.range.startOffset < scope.range.startOffset &&
+        scope.range.startOffset < container.range.endOffset
+      ) {
+        endOffset = Math.min(endOffset, container.range.endOffset)
+      }
+    }
+    return { ...scope, range: { ...scope.range, endOffset } }
+  })
+  return bounded.map((scope, index) => {
+    if (index === 0) return scope
+    let parent = 0
+    let width = bounded[0]!.range.endOffset - bounded[0]!.range.startOffset
+    for (let candidate = 1; candidate < bounded.length; candidate++) {
+      if (candidate === index) continue
+      const range = bounded[candidate]!.range
+      if (!scopeContains(range, scope.range, candidate < index)) continue
+      const candidateWidth = range.endOffset - range.startOffset
+      if (candidateWidth <= width) {
+        parent = candidate
+        width = candidateWidth
+      }
+    }
+    return { ...scope, parent }
+  })
+}
+
+function scopeContains(
+  parent: LatexSyntaxRange,
+  child: LatexSyntaxRange,
+  earlier: boolean,
+): boolean {
+  return (
+    parent.startOffset <= child.startOffset &&
+    parent.endOffset >= child.endOffset &&
+    (earlier || parent.startOffset < child.startOffset || parent.endOffset > child.endOffset)
+  )
 }
 
 interface MarkdownSection {
@@ -1608,7 +1661,7 @@ function findMathRegions(
   markdown: boolean,
 ): LatexMathRegion[] {
   const excluded = [
-    ...conditionalMaskSpans(allTokens, source.length),
+    ...maskSpansFromTokens([...allTokens]),
     ...(markdown ? markdownExcludedSpans(source) : []),
   ]
   const tokens = allTokens.filter(
@@ -1755,73 +1808,6 @@ function markdownLines(source: string): Array<readonly [number, string]> {
     start += line.length + 1
   }
   return lines
-}
-
-interface ConditionalFrame {
-  falseStart: number
-  kind: 'false' | 'other' | 'true'
-  sawElse: boolean
-}
-
-function conditionalMaskSpans(
-  tokens: readonly Token[],
-  sourceLength: number,
-): Array<readonly [number, number]> {
-  const spans: Array<readonly [number, number]> = []
-  const stack: ConditionalFrame[] = []
-  for (const token of tokens) {
-    if (token.type === 'command') updateConditionalState(token, stack, spans)
-  }
-  for (const frame of stack) {
-    if (frame.falseStart >= 0) spans.push([frame.falseStart, sourceLength])
-  }
-  return spans
-}
-
-function updateConditionalState(
-  token: Token,
-  stack: ConditionalFrame[],
-  spans: Array<readonly [number, number]>,
-): void {
-  if (token.value === 'iffalse') {
-    stack.push({ falseStart: token.end, kind: 'false', sawElse: false })
-    return
-  }
-  if (token.value === 'iftrue') {
-    stack.push({ falseStart: -1, kind: 'true', sawElse: false })
-    return
-  }
-  if (token.value === 'else') {
-    updateConditionalElse(stack[stack.length - 1], token, spans)
-    return
-  }
-  if (token.value === 'fi') {
-    closeConditional(stack.pop(), token, spans)
-    return
-  }
-  if (token.value.startsWith('if') && token.value !== 'iff')
-    stack.push({ falseStart: -1, kind: 'other', sawElse: false })
-}
-
-function updateConditionalElse(
-  frame: ConditionalFrame | undefined,
-  token: Token,
-  spans: Array<readonly [number, number]>,
-): void {
-  if (!frame || frame.sawElse) return
-  frame.sawElse = true
-  if (frame.kind === 'false') spans.push([frame.falseStart, token.start])
-  else if (frame.kind === 'true') frame.falseStart = token.end
-}
-
-function closeConditional(
-  frame: ConditionalFrame | undefined,
-  token: Token,
-  spans: Array<readonly [number, number]>,
-): void {
-  if (!frame) return
-  if (frame.kind === 'false' && !frame.sawElse) spans.push([frame.falseStart, token.start])
-  else if (frame.kind === 'true' && frame.sawElse) spans.push([frame.falseStart, token.start])
 }
 
 function inside(offset: number, spans: readonly (readonly [number, number])[]): boolean {

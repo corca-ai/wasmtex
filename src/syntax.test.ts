@@ -475,6 +475,48 @@ describe('LatexSyntaxService', () => {
     ).toEqual(['Visible'])
   })
 
+  it('nests display environments inside the actual surrounding section', () => {
+    const content =
+      '\\begin{document}\n\\section{One}\n\\subsection{Local}\nLet $x$ be fixed.\n\\begin{align}x=1\\end{align}\n\\end{document}\n'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const section = syntax.scopes.findIndex((scope) => scope.name === 'Local')
+    const equation = syntax.scopes.find((scope) => scope.name === 'align')!
+    expect(equation.parent).toBe(section)
+    for (const scope of syntax.scopes) {
+      if (scope.parent === null) continue
+      expect(scope.range.endOffset).toBeLessThanOrEqual(
+        syntax.scopes[scope.parent]!.range.endOffset,
+      )
+    }
+  })
+
+  it('excludes verbatim and comment bodies from mathematical source structure', () => {
+    const content =
+      '\\begin{comment}\nLet $x$ be a vector.\\begin{equation}x=y\\end{equation}\n\\end{comment}\nVisible $z$.\n\\begin{verbatim}$q$\\end{verbatim}'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    expect(
+      syntax.mathRoots.map((root) =>
+        content.slice(root.contentRange.startOffset, root.contentRange.endOffset),
+      ),
+    ).toEqual(['z'])
+    expect(syntax.scopes.some((scope) => scope.name === 'equation')).toBe(false)
+    expect(
+      syntax.visibleProse
+        .map((span) => content.slice(span.range.startOffset, span.range.endOffset))
+        .join(' '),
+    ).not.toContain('vector')
+  })
+
   it('records nested section and environment scope spans with recovery', () => {
     const content = [
       '\\section{One}',
