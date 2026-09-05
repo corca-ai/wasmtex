@@ -527,7 +527,9 @@ function extractCitations(ctx: Ctx, symbols: FileSymbols): void {
 }
 
 function extractSections(ctx: Ctx, symbols: FileSymbols): void {
+  const definitions = macroDefinitionSpans(ctx.masked)
   for (const m of ctx.masked.matchAll(SECTION_RE)) {
+    if (definitions.some(([start, end]) => start <= m.index && m.index < end)) continue
     const title = extractBraceContent(ctx.masked, m.index + m[0].length - 1, ctx.groupEnds)
     if (title) {
       symbols.sections.push({ level: m[1] as SectionLevel, title, location: locAt(ctx, m.index) })
@@ -1282,6 +1284,54 @@ const MACRO_NEWCMD_RE = new RegExp(
 )
 const MACRO_DEF_RE = /\\def\\(\w+)((?:#\d)*)\s*\{/g
 const MACRO_OPERATOR_RE = /\\DeclareMathOperator(\*)?\{\\(\w+)\}\s*\{/g
+
+// A definition's name and replacement text are templates, not executed structure.
+// Keep this separate from calledMacroBodySpans: section/environment scopes must
+// exclude uncalled templates too, while label navigation has its own call policy.
+const MACRO_SCOPE_RE = new RegExp(
+  String.raw`\\(?:${NEWCMD_CMDS})\*?\s*(?:\{\s*\\[\w@]+\s*\}|\\[\w@]+)\s*(?:\[\d+\]\s*)?(?:\[[^\]]*\]\s*)?\{`,
+  'g',
+)
+const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@]+/g
+
+function macroDefinitionSpans(masked: string): Array<[number, number]> {
+  const ends = indexGroupEnds(masked)
+  const spans = primitiveDefinitionSpans(masked, ends)
+  for (const match of masked.matchAll(MACRO_SCOPE_RE)) {
+    const open = match.index + match[0].length - 1
+    const body = extractBraceContent(masked, open, ends)
+    spans.push([match.index, body === null ? masked.length : open + body.length + 2])
+  }
+  return spans
+}
+
+function primitiveDefinitionSpans(masked: string, ends: GroupEndIndex): Array<[number, number]> {
+  const spans: Array<[number, number]> = []
+  const scanner = new RegExp(DEF_SCOPE_RE)
+  const group = /[{}]/g
+  for (let match = scanner.exec(masked); match; match = scanner.exec(masked)) {
+    // Consume each parameter/replacement span once, including malformed input.
+    group.lastIndex = scanner.lastIndex
+    const boundary = group.exec(masked)
+    if (!boundary) break
+    scanner.lastIndex = boundary.index + 1
+    if (boundary[0] !== '{') continue
+    const open = boundary.index
+    const body = extractBraceContent(masked, open, ends)
+    const end = body === null ? masked.length : open + body.length + 2
+    spans.push([match.index, end])
+    scanner.lastIndex = end
+  }
+  return spans
+}
+
+/** Reuses the owning token stream to ignore comments and verbatim text. */
+export function macroDefinitionSpansFromTokens(
+  content: string,
+  tokens: readonly Token[],
+): Array<[number, number]> {
+  return macroDefinitionSpans(maskContent(content, [...tokens]))
+}
 
 /** Collect user macro definitions (\newcommand / \def / \DeclareMathOperator). */
 function collectMacros(masked: string): Map<string, UserMacroDefinition> {

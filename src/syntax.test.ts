@@ -443,6 +443,91 @@ describe('LatexSyntaxService', () => {
     expect(prose).toBe('Visible abstract prose.')
   })
 
+  it('keeps macro definitions out of active section and environment scopes', () => {
+    const content = [
+      '\\renewcommand\\subsection[1]{#1}',
+      '\\newcommand{\\template}{\\section{Hidden}\\begin{theorem}body\\end{theorem}}',
+      '\\def\\other{\\section{Also hidden}}',
+      '\\begin{document}',
+      '\\section{Visible}',
+      '$x$',
+      '\\end{document}',
+    ].join('\n')
+    const service = new LatexSyntaxService()
+    const syntax = service.upsert({ fileId: 'main', path: 'main.tex', content, documentVersion: 1 })
+    expect(
+      syntax.scopes.filter((scope) => scope.kind === 'section').map((scope) => scope.name),
+    ).toEqual(['Visible'])
+    expect(
+      syntax.scopes.filter((scope) => scope.kind === 'environment').map((scope) => scope.name),
+    ).toEqual(['document'])
+    for (const scope of syntax.scopes) {
+      if (scope.parent === null) continue
+      const parent = syntax.scopes[scope.parent]!
+      expect(scope.range.startOffset).toBeGreaterThanOrEqual(parent.range.startOffset)
+      expect(scope.range.endOffset).toBeLessThanOrEqual(parent.range.endOffset)
+    }
+    expect(
+      service
+        .getProjectIndex()
+        .getFileSymbols('main.tex')
+        ?.sections.map((section) => section.title),
+    ).toEqual(['Visible'])
+  })
+
+  it('bounds scanning of repeated incomplete primitive definitions', () => {
+    const content = '\\def\\x'.repeat(20_000)
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    expect(syntax.scopes.filter((scope) => scope.kind === 'section')).toEqual([])
+  })
+
+  it('nests display environments inside the actual surrounding section', () => {
+    const content =
+      '\\begin{document}\n\\section{One}\n\\subsection{Local}\nLet $x$ be fixed.\n\\begin{align}x=1\\end{align}\n\\end{document}\n'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    const section = syntax.scopes.findIndex((scope) => scope.name === 'Local')
+    const equation = syntax.scopes.find((scope) => scope.name === 'align')!
+    expect(equation.parent).toBe(section)
+    for (const scope of syntax.scopes) {
+      if (scope.parent === null) continue
+      expect(scope.range.endOffset).toBeLessThanOrEqual(
+        syntax.scopes[scope.parent]!.range.endOffset,
+      )
+    }
+  })
+
+  it('excludes verbatim and comment bodies from mathematical source structure', () => {
+    const content =
+      '\\begin{comment}\nLet $x$ be a vector.\\begin{equation}x=y\\end{equation}\n\\end{comment}\nVisible $z$.\n\\begin{verbatim}$q$\\end{verbatim}'
+    const syntax = new LatexSyntaxService().upsert({
+      fileId: 'main',
+      path: 'main.tex',
+      content,
+      documentVersion: 1,
+    })
+    expect(
+      syntax.mathRoots.map((root) =>
+        content.slice(root.contentRange.startOffset, root.contentRange.endOffset),
+      ),
+    ).toEqual(['z'])
+    expect(syntax.scopes.some((scope) => scope.name === 'equation')).toBe(false)
+    expect(
+      syntax.visibleProse
+        .map((span) => content.slice(span.range.startOffset, span.range.endOffset))
+        .join(' '),
+    ).not.toContain('vector')
+  })
+
   it('records nested section and environment scope spans with recovery', () => {
     const content = [
       '\\section{One}',
