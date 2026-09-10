@@ -31,6 +31,12 @@ differs from the annual mirror pinned beside those run IDs.
 
 ## Release an engine, end to end
 
+For a transparent performance release, also follow the
+[engine optimization policy](engine-optimization-policy.md). Keep the mirror and
+baseline formats unchanged and record their real provenance. Integrators qualify
+their own successor transitions separately. The output-comparison command below is one required
+check, not the entire compatibility or application-rollout gate.
+
 A push to `wasm-build/**` builds every supported annual line, not a default
 one. Then:
 

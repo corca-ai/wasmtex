@@ -182,6 +182,10 @@ compiler.
 
 ## Guardrails
 
+Transparent engine performance releases also follow the
+[engine optimization policy](engine-optimization-policy.md): existing format and
+mirror bytes, output preservation, and verified adoption by pinned CorTeX projects.
+
 - **Client-first default is non-negotiable.** No server dependency in the default path.
 - **The determinism contract is load-bearing.** No shipping a boundary feature without
   the cross-host parity gate.
