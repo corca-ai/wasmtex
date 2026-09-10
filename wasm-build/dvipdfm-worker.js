@@ -58,16 +58,21 @@ function _allocate(content) {
 // with "No font selected!" and the 3rd crashes (#82). Snapshot the pristine post-init
 // heap and restore it before every compile. The font/map cache lives in MEMFS (JS
 // side, outside the wasm heap), so it survives the restore — no re-fetch. Mirrors the
-// xetex worker. `.set(initmem)` into a (possibly grown) buffer rewrites only the
-// pristine prefix; the grown tail is unused capacity, which is correct.
+// xetex worker. Retain the nonzero prefix and the original extent, so restoring
+// the omitted zero suffix preserves the full snapshot without retaining it.
 function dumpHeapMemory() {
   const src = HEAPU8.buffer
-  const dst = new Uint8Array(src.byteLength)
-  dst.set(new Uint8Array(src))
-  return dst
+  const words = new Uint32Array(src)
+  let end = words.length
+  while (end > 0 && words[end - 1] === 0) end--
+  return { bytes: new Uint8Array(src, 0, end * 4).slice(), byteLength: src.byteLength }
 }
 function restoreHeapMemory() {
-  if (self.initmem) new Uint8Array(HEAPU8.buffer).set(self.initmem)
+  if (!self.initmem) return
+  const dst = new Uint8Array(HEAPU8.buffer)
+  dst.set(self.initmem.bytes)
+  dst.fill(0, self.initmem.bytes.length, self.initmem.byteLength)
+  // Preserve the old reset boundary after growth; the later extent is untouched.
 }
 
 /** Run an engine entry point. The from-texlive-source dvipdfmx ends by calling
