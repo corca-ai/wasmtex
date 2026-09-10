@@ -183,3 +183,17 @@ release assembly or a substitute for corresponding-source qualification.
 One family option may be omitted to verify an earlier completed build; the other
 family then retains its baseline assets and receipt. Select the rebuilt engine's
 tests explicitly and do not count the unchanged family as a qualified rebuild.
+
+### Compile pipeline probe
+
+`e2e/compile-pipeline-probe.ts` exports `measureCompilePipeline(options)` for
+a standalone development page. Supply explicit engine assets, mirror and a
+text `main.tex`; it runs cold, unchanged, body-edit, preamble-edit and restore
+cases through the real headless SDK. Run probes serially in one JS context.
+Worker command round-trips include synchronous I/O and message overhead. File
+writes and parent fetch-header timings can overlap and must not be summed into
+wall time. Unsupported worker CPU/network timings remain unobserved rather than
+being reported as zero. Integrators measure their own debounce, queue and viewer
+paint separately; this helper imports no application code and is not shipped
+in the SDK bundle. Use a fixed test clock for PDF hash comparisons and record
+both preload and initialization cost when evaluating a warmup candidate.
