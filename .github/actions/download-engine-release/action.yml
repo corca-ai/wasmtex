@@ -32,3 +32,22 @@ runs:
             '.years[$year].downloads[] | .runId as $run | .artifacts[] | [$run, .] | @tsv' \
             scripts/engine-release-components.json
         )
+    - name: Reuse exact baseline formats with their generation receipts
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TEXLIVE_YEAR: ${{ inputs.texlive-year }}
+        DESTINATION: ${{ inputs.destination }}
+      run: |
+        while IFS=$'\t' read -r family run_id artifact; do
+          format_inputs="$(mktemp -d)"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+            --name "$artifact" --dir "$format_inputs"
+          node scripts/reuse-engine-formats.mjs --year "$TEXLIVE_YEAR" \
+            --assets "$DESTINATION" --formats "$format_inputs" --family "$family"
+          rm -rf "$format_inputs"
+        done < <(
+          jq -r --arg year "$TEXLIVE_YEAR" \
+            '.years[$year].reusedFormats[]? | [.family, .runId, .artifact] | @tsv' \
+            scripts/engine-release-components.json
+        )

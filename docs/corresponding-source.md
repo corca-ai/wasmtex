@@ -29,6 +29,16 @@ build inputs changed; reuse the exact artifact and receipt together for every
 unaffected family. The assembler rejects any receipt whose immutable TeX Live mirror
 differs from the annual mirror pinned beside those run IDs.
 
+For a transparent optimization, `reusedFormats` in the same annual component
+manifest pins the original format workflow runs separately. The download action
+verifies both complete generation receipts and composes schema-2 assembly
+receipts through `scripts/reuse-engine-formats.mjs`. Only the exact original
+`.fmt`/`.fmt.gz` files replace newly generated formats. Engine and format
+receipts must agree on year, upstream source, toolchain, and immutable mirror.
+Both complete original receipts remain embedded, and the source archive includes
+both WasmTex generation revisions. Schema-1 receipts remain valid for ordinary
+builds; an assembly receipt never claims copied formats were newly generated.
+
 ## Release an engine, end to end
 
 For a transparent performance release, also follow the

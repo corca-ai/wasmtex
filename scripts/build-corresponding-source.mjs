@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { receiptSourceRevisions } from './lib/engine-build-receipt.mjs'
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
@@ -181,7 +182,7 @@ async function main() {
       join(bundle, 'release/ENGINE-COMPONENTS.json'),
     )
 
-    const revisions = [...new Set(inspected.receipts.map((receipt) => receipt.value.sourceRevision))].sort()
+    const revisions = [...new Set(inspected.receipts.flatMap((receipt) => receiptSourceRevisions(receipt.value)))].sort()
     const wasmtexRepository = ensureRepository({
       name: 'wasmtex',
       url: config.wasmtex.repository,
