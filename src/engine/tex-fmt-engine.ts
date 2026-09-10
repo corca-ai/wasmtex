@@ -122,7 +122,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   private readonly warmup: TexFmtWarmupPlan | undefined
   /** The warmup/durable set resolved at init, retained so an auxiliary worker (e.g. xetex's
    *  dvipdfmx) can be rehydrated from it after *its* own init completes. */
-  private lastWarmSet: TexFmtWarmSet | null = null
+  private lastWarmSets: TexFmtWarmSet[] = []
   /** Durable IndexedDB cache of fetched assets (when persistentCache is on). */
   private durableCache: PersistentCache | null = null
   /** Bloom-filter bytes retained so the durable cache can store them too. */
@@ -141,6 +141,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     warmup?: TexFmtWarmupPlan,
     persistentCache?: { version: TexliveVersion },
     resolverProfile?: CompletionSnapshotProfile,
+    private readonly suppliedWarmup?: WarmupCache,
   ) {
     this.tex = tex
     this.fmtFile = fmtFile
@@ -181,8 +182,16 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
         : await this.fetchWarmupAssets()
     await initP
     await fmtP
-    this.lastWarmSet = assets
-    this.injectWarmupAssets(this.tex, assets)
+    this.lastWarmSets = [assets]
+    if (this.suppliedWarmup) {
+      this.lastWarmSets.push({
+        bloom: this.suppliedWarmup.bloomFilter ?? null,
+        files: this.suppliedWarmup.files,
+        notFound: this.suppliedWarmup.notFound,
+        source: 'warmup-cache',
+      })
+    }
+    for (const set of this.lastWarmSets) this.injectWarmupAssets(this.tex, set)
   }
 
   /** Count a file fetched by an auxiliary worker (e.g. xetex's dvipdfmx) toward the
@@ -203,7 +212,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
    *  AFTER that worker's own init() so its preload queue is live — preloads are fire-and-forget
    *  and a not-yet-ready worker silently drops them. */
   protected rehydrateExtraDriver(driver: CompileWorkerDriver): void {
-    if (this.lastWarmSet) this.injectWarmupAssets(driver, this.lastWarmSet)
+    for (const set of this.lastWarmSets) this.injectWarmupAssets(driver, set)
   }
 
   /** Load the durable cache (if enabled) from a prior session. The durable set is
@@ -297,13 +306,19 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
         return null
       }
     }
-    const bloomP = fetchBloomFilter(texliveUrl).catch(() => null)
+    const bloomP = this.suppliedWarmup?.bloomFilter
+      ? Promise.resolve(this.suppliedWarmup.bloomFilter)
+      : fetchBloomFilter(texliveUrl).catch(() => null)
+    const supplied = new Set(
+      this.suppliedWarmup?.files.map((file) => `${file.format}/${file.filename}`) ?? [],
+    )
 
     const files: Array<{ format: number; filename: string; data: ArrayBuffer }> = []
     let next = 0
     const worker = async (): Promise<void> => {
       while (next < preload.length) {
         const entry = preload[next++]!
+        if (supplied.has(`${entry.format}/${entry.name}`)) continue
         const buf = await fetchBuf(`${texliveUrl}pdftex/${entry.dir}/${entry.name}`)
         if (buf) files.push({ format: entry.format, filename: entry.name, data: buf })
       }

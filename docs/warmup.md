@@ -41,6 +41,11 @@ The root `import { warmup } from 'wasmtex'` above remains for the all-in-one edi
 6. Known-404 entries are batch-injected into the worker's 404 cache, preventing wasted XHR
 7. The bloom filter is sent to the worker, which uses it to skip XHR for files not on the CDN (if warmup is not used, the engine fetches the bloom filter directly during `init()`)
 
+The supplied cache is consumed by pdfLaTeX, XeLaTeX (both TeX and PDF-conversion
+workers), and LuaLaTeX. Unicode workers copy transferred buffers so the caller
+can reuse its cache; supplied positives also avoid duplicate built-in prefetches.
+A partial cache remains best-effort: missing files use the normal resolver.
+
 ## Options
 
 ```ts

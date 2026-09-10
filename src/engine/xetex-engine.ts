@@ -44,6 +44,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
         texliveYear: version,
         mirrorRevision: null,
       },
+      options.warmupCache,
     )
     this.dvipdfm = createCompileWorker('dvipdfm', options)
   }
