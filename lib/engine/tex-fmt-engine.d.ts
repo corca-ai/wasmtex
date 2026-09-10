@@ -37,7 +37,6 @@ export interface TexFmtWarmupPlan {
     concurrency?: number;
 }
 export declare abstract class BaseTexFmtEngine implements CompileEngine {
-    private readonly suppliedWarmup?;
     protected tex: CompileWorkerDriver;
     /** Filename under which the built format is re-injected for `compilelatex`
      *  (e.g. `wasmtex-xetex.fmt`, `wasmtex-luatex.fmt`). */
@@ -59,6 +58,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** The warmup/durable set resolved at init, retained so an auxiliary worker (e.g. xetex's
      *  dvipdfmx) can be rehydrated from it after *its* own init completes. */
     private lastWarmSets;
+    private readonly suppliedWarmup;
     /** Durable IndexedDB cache of fetched assets (when persistentCache is on). */
     private durableCache;
     /** Bloom-filter bytes retained so the durable cache can store them too. */
@@ -71,7 +71,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     onFileDownload?: (filename: string) => void;
     protected constructor(tex: CompileWorkerDriver, fmtFile: string, formatUrl?: string, warmup?: TexFmtWarmupPlan, persistentCache?: {
         version: TexliveVersion;
-    }, resolverProfile?: CompletionSnapshotProfile, suppliedWarmup?: WarmupCache | undefined);
+    }, resolverProfile?: CompletionSnapshotProfile, suppliedWarmup?: WarmupCache);
     abstract init(): Promise<void>;
     abstract compile(): Promise<CompileResult>;
     abstract flushCache(): Promise<void>;

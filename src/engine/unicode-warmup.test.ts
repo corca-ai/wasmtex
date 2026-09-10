@@ -46,7 +46,11 @@ it.each([
     texliveVersion: '2026',
     persistentCache: false,
     warmupCache: {
-      files: [{ format: 11, filename: 'pdftex.map', data: bytes }],
+      files: [
+        { format: 11, filename: 'pdftex.map', data: bytes },
+        { format: 3, filename: 'same-font', data: new Uint8Array([1]).buffer },
+        { format: 33, filename: 'same-font', data: new Uint8Array([2]).buffer },
+      ],
       notFound: [{ format: 26, filename: 'absent.sty' }],
       bloomFilter: new Uint8Array([1, 2, 3, 4]).buffer,
     },
@@ -71,6 +75,11 @@ it.each([
       ).toBe(true)
     }
     expect(fetch.mock.calls.some((args) => String(args[0]).includes('bloom-filter'))).toBe(false)
+    expect(
+      workers
+        .flat()
+        .some((message) => message.cmd === 'preloadtexlive' && message.filename === 'same-font'),
+    ).toBe(false)
     expect(bytes.byteLength).toBe(4)
     expect(fetch.mock.calls.some((args) => String(args[0]).endsWith('/11/pdftex.map'))).toBe(false)
   } finally {
