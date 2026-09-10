@@ -42,7 +42,7 @@ export interface NodeWorkerHostInstallation {
 // The worker thread program. Reuses the browser controller with host shims + a wasmBinary
 // injection. `workerData` carries the resolved local controller and WASM paths.
 const BOOTSTRAP = `
-const { parentPort, workerData } = require('node:worker_threads')
+const { parentPort, workerData, threadId } = require('node:worker_threads')
 const { readFileSync, unlinkSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { dirname, resolve } = require('node:path')
@@ -71,7 +71,7 @@ globalThis.XMLHttpRequest = class {
   get responseType() { return this._rt }
   getResponseHeader(name) { return this._headers[String(name).toLowerCase()] || null }
   send() {
-    const hf = require('node:path').join(require('node:os').tmpdir(), 'wasmtex-h-' + process.pid + '-' + (++__xhrSeq))
+    const hf = require('node:path').join(require('node:os').tmpdir(), 'wasmtex-h-' + process.pid + '-' + threadId + '-' + (++__xhrSeq))
     try {
       // --compressed: send Accept-Encoding and transparently decode Content-Encoding:gzip,
       // matching the browser's XHR. Without it, a gzip-encoded CDN asset (e.g. the ICU data
