@@ -35,14 +35,14 @@ on:
         default: false
 
 permissions:
-  # `contents` is write only so the publish step can attach the archive to its
-  # engine release; every other path here reads.
-  contents: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && 'write' || 'read' }}
+  contents: read
   actions: read
 
 jobs:
   source:
     runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.archive.outputs.release_id }}
     env:
       TEXLIVE_YEAR: ${{ inputs.texlive_year || '2026' }}
     steps:
@@ -62,6 +62,7 @@ jobs:
           node scripts/gen-asset-manifest.mjs "$TEXLIVE_YEAR"
           node scripts/check-release-notices.mjs --assets "public/wasmtex/$TEXLIVE_YEAR"
       - name: Build and verify complete corresponding source
+        id: archive
         run: |
           mkdir -p source-release
           node scripts/build-corresponding-source.mjs \
@@ -69,6 +70,7 @@ jobs:
             --output-dir source-release \
             --config "scripts/corresponding-source-$TEXLIVE_YEAR.json"
           archive="source-release/wasmtex-$(jq -r .releaseId public/wasmtex/$TEXLIVE_YEAR/manifest.json)-source.tar.xz"
+          echo "release_id=$(jq -r .releaseId public/wasmtex/$TEXLIVE_YEAR/manifest.json)" >> "$GITHUB_OUTPUT"
           xz --test "$archive"
           node scripts/check-corresponding-source.mjs \
             "$archive" "public/wasmtex/$TEXLIVE_YEAR/manifest.json" \
@@ -78,17 +80,31 @@ jobs:
           name: corresponding-source-${{ inputs.texlive_year || '2026' }}
           path: source-release/
           retention-days: 90
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TEXLIVE_YEAR: ${{ inputs.texlive_year }}
+      RELEASE_ID: ${{ needs.source.outputs.release_id }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: corresponding-source-${{ inputs.texlive_year }}
+          path: source-release/
       # Recipients are entitled to the source for the exact bytes they were
       # given, so the archive belongs on the release that ships those bytes.
       # Building it here and attaching it by hand from another machine is how
       # it was done once; this closes that gap, and refuses rather than
       # replaces if the tag already carries an archive.
       - name: Publish to the engine release
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          release_id="$(jq -r .releaseId "public/wasmtex/$TEXLIVE_YEAR/manifest.json")"
+          release_id="$RELEASE_ID"
           tag="engine-$release_id"
           archive="source-release/wasmtex-$release_id-source.tar.xz"
           test -f "$archive"
