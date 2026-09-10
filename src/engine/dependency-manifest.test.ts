@@ -166,6 +166,27 @@ describe('buildDependencyManifest', () => {
     ).toBe(true)
   })
 
+  it('includes observed conversion inputs without claiming completeness or importing system/generated files', () => {
+    const manifest = buildDependencyManifest({
+      engine: 'xelatex',
+      root: 'main.tex',
+      projectFiles: ['main.tex', 'assets/chart.pdf', 'unused.pdf', 'main.xdv'],
+      generatedFiles: ['main.xdv'],
+      result: compileResult({
+        inputFiles: ['/work/main.tex'],
+        inputFilesComplete: true,
+        pdfConversionInputs: ['/work/assets/chart.pdf', '/work/main.xdv', '/tex/font.otf'],
+      }),
+    })
+    expect(manifest.projectInputs).toEqual(['assets/chart.pdf', 'main.tex'])
+    expect(manifest.complete).toBe(false)
+    expect(manifest.coverage).toContainEqual({
+      stage: 'pdf-conversion',
+      source: 'filesystem',
+      complete: false,
+    })
+  })
+
   it('makes a successful LuaLaTeX recorder result complete', () => {
     const manifest = buildDependencyManifest({
       engine: 'lualatex',

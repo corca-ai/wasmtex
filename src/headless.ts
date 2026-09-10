@@ -258,6 +258,14 @@ function withTikzTelemetry(
   return result
 }
 
+function collectConversionInputs(inputs: Set<string>, result: CompileResult): void {
+  for (const input of result.pdfConversionInputs ?? []) inputs.add(input)
+}
+
+function attachConversionInputs(result: CompileResult, inputs: Set<string>): void {
+  if (inputs.size) result.pdfConversionInputs = [...inputs].sort()
+}
+
 /** A picture error does not fail its figure job (TeX keeps going and ships the page), so the
  *  figure logs are the only place those diagnostics exist; merge them into the result. */
 function mergePictureErrors(result: CompileResult, errors: TexError[]): number {
@@ -583,8 +591,10 @@ export class WasmTexCompiler {
     let result =
       (await this.tryHeapResume(externalization)) ?? (await engine.compile(this.heapArms()))
     // Resolver evidence is per pass; the prefetch manifest is their union (#80).
+    const conversionInputs = new Set(result.pdfConversionInputs ?? [])
     const resolverReports = [result.telemetry?.resolver]
     result = await this.applyTikzExternalization(result, externalization, resolverReports)
+    collectConversionInputs(conversionInputs, result)
     const tikzTelemetry = result.telemetry?.tikzExternalization
     let auxInjected = await this.runAuxStages(result)
 
@@ -603,6 +613,7 @@ export class WasmTexCompiler {
       await this.syncModifiedFilesToEngine()
       result = await engine.compile(this.heapArms())
       resolverReports.push(result.telemetry?.resolver)
+      collectConversionInputs(conversionInputs, result)
       auxInjected = await this.runAuxStages(result)
     }
     this.heap?.noteFull(this.mainSource(), this.projectTexFiles(), result)
@@ -611,6 +622,7 @@ export class WasmTexCompiler {
       result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
       result.telemetry.tikzExternalization = tikzTelemetry
     }
+    attachConversionInputs(result, conversionInputs)
     this.attachTexliveDependencies(result, resolverReports)
 
     // Parse metadata (aux/trace) once on the final, stabilized result — intermediate

@@ -711,3 +711,19 @@ resume it any number of times with an edited tail — see the [API notes on heap
 The instrumentation costs about 20–30% per compile and ~1 MB of `.wasm`, so the headless
 compiler loads this build only with `incremental: true` in a browser; Node hosts and the
 format extraction use the plain build. Both builds share `wasmtex-pdftex.fmt`.
+
+## PDF conversion input evidence
+
+XeLaTeX additionally reports `pdfConversionInputs`: bounded successful file-read
+opens observed inside dvipdfmx. This includes native/MEMFS hits that bypass the
+HTTP resolver. TeX's `inputFiles` recorder and its completeness retain their
+existing meaning. The headless SDK unions conversion observations across reruns
+and filters project paths into the dependency manifest, excluding generated and
+system inputs. Mirror files actually opened also contribute their cache-backed
+resource identity to dependency prefetch. Unused cache entries do not count.
+
+The observer does not change file selection or read bytes. It limits records to
+4,096 paths of at most 4,096 characters, excluding temporary internal files.
+Already-open streams and unsupported I/O paths remain unproven; conversion
+coverage stays incomplete even when no limit is reached. A host must retain its
+conservative invalidation fallback. Older workers omit the additional evidence.

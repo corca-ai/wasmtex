@@ -113,6 +113,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       xelatex.inputFilesComplete,
       [xelatex.resolver, dvi.resolver],
     )
+    if (dvi.inputFiles) result.pdfConversionInputs = dvi.inputFiles
     // Parse the XDV once (xelatex.out is the XeTeX output, before dvipdfmx) — headless,
     // no engine patch — and use it for both products: page/box geometry telemetry
     // (#54 slice 3) and the .notdef overlay positions (#89 L2b).
