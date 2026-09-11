@@ -35,3 +35,10 @@ It runs the differential test on Linux with ASan/UBSan. These artifacts have exp
 source revisions and hashes but are not a release unit. Normal release builds still
 use the full XeTeX family workflow and receipt/source qualification; original formats
 and all unaffected engine artifacts must be reused during qualification/assembly.
+
+The initial missing-SFD diagnostic blocker is separately corrected by PR #134.
+The requalification against that fixed baseline passes both annual speed targets
+and strict output/log comparisons, including the retained missing-SFD case; see
+[the current decision](../../docs/compile-performance.md#requalification-after-the-sfd-fix).
+PR #134 must land before #132. Full engine release/source qualification and
+consumer adoption remain separate; these diagnostic assets are not releases.
