@@ -1,0 +1,43 @@
+name: Missing-SFD memory safety
+
+on:
+  pull_request:
+    paths:
+      - 'wasm-build/dvipdfmx-fixes/**'
+      - 'wasm-build/texlive-source-*.ref'
+      - 'scripts/test-dvipdfmx-missing-sfd.py'
+      - '.github/workflows/dvipdfmx-missing-sfd.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-build/dvipdfmx-fixes/**'
+      - 'wasm-build/texlive-source-*.ref'
+      - 'scripts/test-dvipdfmx-missing-sfd.py'
+      - '.github/workflows/dvipdfmx-missing-sfd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        year: ['2025', '2026']
+    steps:
+      - uses: actions/checkout@v7
+      - id: pin
+        env:
+          YEAR: ${{ matrix.year }}
+        run: echo "ref=$(cat "wasm-build/texlive-source-$YEAR.ref")" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          repository: TeX-Live/texlive-source
+          ref: ${{ steps.pin.outputs.ref }}
+          path: upstream
+          sparse-checkout: texk/dvipdfm-x
+      - name: Reproduce upstream UAF and verify the fix under ASan/UBSan
+        run: python3 scripts/test-dvipdfmx-missing-sfd.py --source upstream/texk/dvipdfm-x --sanitize --cc clang

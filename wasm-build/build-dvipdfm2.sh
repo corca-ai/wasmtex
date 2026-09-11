@@ -19,6 +19,10 @@ OUT=/dist
 GLUE=/src
 mkdir -p "$OUT"
 
+# Keep the missing-SFD diagnostic argument alive until WARN has consumed it.
+git -C "$SRC" apply --check "$GLUE/dvipdfmx-fixes/missing-sfd.patch"
+git -C "$SRC" apply "$GLUE/dvipdfmx-fixes/missing-sfd.patch"
+
 echo "=== ports: libpng/zlib (+ freetype, in case) via emscripten ==="
 SYSROOT="$(em-config CACHE)/sysroot"
 embuilder build zlib libpng freetype >/tmp/ports.out 2>&1 || { echo "ports failed"; tail -10 /tmp/ports.out; exit 1; }

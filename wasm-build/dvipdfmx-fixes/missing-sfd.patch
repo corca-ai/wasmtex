@@ -1,0 +1,13 @@
+--- a/texk/dvipdfm-x/fontmap.c
++++ b/texk/dvipdfm-x/fontmap.c
+@@ -835,9 +835,9 @@
+     int    n = 0;
+     subfont_ids = sfd_get_subfont_ids(sfd_name, &n);
+     if (!subfont_ids) {
++      WARN("Could not open SFD file: %s", sfd_name);
+       RELEASE(fnt_name);
+       RELEASE(sfd_name);
+-      WARN("Could not open SFD file: %s", sfd_name);
+       return NULL;
+     }
+     if (dpx_conf.verbose_level > 3)
