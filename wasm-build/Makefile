@@ -199,7 +199,12 @@ PDFTEX_INITIAL_MEMORY ?= 67108864
 # ~20-30% per compile, so hosts load it only for interactive incremental sessions.
 PDFTEX_CHECKPOINT_FLAGS = -sASYNCIFY=1 -sASYNCIFY_IMPORTS=["fd_read","wasi_snapshot_preview1.fd_read"] -sASYNCIFY_STACK_SIZE=1048576
 
+ifeq ($(WASMTEX_PROFILE_NAMES),1)
+PDFTEX_PROFILE_FLAGS = --profiling-funcs
+endif
+
 EMCC_FLAGS = \
+	$(PDFTEX_PROFILE_FLAGS) \
 	-O2 \
 	-sEMIT_EMSCRIPTEN_LICENSE=1 \
 	-Wno-implicit-function-declaration \

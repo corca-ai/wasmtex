@@ -12,6 +12,10 @@ name: WASM LuaTeX (from source)
 on:
   workflow_dispatch:
     inputs:
+      profile_names:
+        description: Retain function names for non-release CPU diagnostics
+        type: boolean
+        default: false
       texlive_year:
         description: TeX Live engine year
         required: true
@@ -67,6 +71,7 @@ jobs:
         texlive_year: ${{ fromJSON(inputs.texlive_year && format('["{0}"]', inputs.texlive_year) || '["2025","2026"]') }}
     env:
       TEXLIVE_YEAR: ${{ matrix.texlive_year }}
+      WASMTEX_PROFILE_NAMES: ${{ inputs.profile_names && '1' || '0' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -108,7 +113,7 @@ jobs:
       - name: Run Phase 2 (emcc cross-compile + glue relink)
         run: |
           mkdir -p wasm-build/dist-luatex
-          docker run --platform linux/amd64 \
+          docker run --platform linux/amd64 -e WASMTEX_PROFILE_NAMES \
             -v ${{ github.workspace }}/wasm-build/dist-luatex:/dist \
             luatex-wasm
 

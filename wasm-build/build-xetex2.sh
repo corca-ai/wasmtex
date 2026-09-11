@@ -242,7 +242,11 @@ fi
 # grow it on demand. Qualify changes against existing formats (optimization policy).
 # XEOBJS must expand to separate linker arguments.
 # shellcheck disable=SC2086
-em++ -O2 -g0 \
+PROFILE_FLAGS=(-g0)
+if [ "${WASMTEX_PROFILE_NAMES:-0}" = "1" ]; then
+  PROFILE_FLAGS=(--profiling-funcs)
+fi
+em++ -O2 "${PROFILE_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   kpse-hook.o xetex-entry.o fontconfig-shim.o icu-data-loader.o \
   $XEOBJS \

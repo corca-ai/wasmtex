@@ -87,7 +87,7 @@ docker run --rm --platform linux/amd64 --tmpfs /work \
   ' || { echo "LuaHBTeX pdfe/pdfscanner gate failed"; exit 1; }
 
 echo "Running Phase 2 (emcc cross-compile + glue relink) ..."
-docker run --rm --platform linux/amd64 \
+docker run --rm --platform linux/amd64 -e WASMTEX_PROFILE_NAMES \
   -v "$REPO_ROOT/$OUT_DIR":/dist \
   "$IMAGE"
 
