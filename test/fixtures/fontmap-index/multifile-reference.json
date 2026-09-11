@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.tex": "\\documentclass{article}\n\\usepackage{fontspec,amsmath,graphicx,hyperref}\n\\setmainfont{Latin Modern Roman}\n\\begin{document}\n\\tableofcontents\n\\section{Fonts and references}\\label{sec:one}\n\\input{chapter.tex}\nSee section~\\ref{sec:one}. {\\sffamily Sans} {\\ttfamily Mono} {\\bfseries Bold}.\n\\end{document}",
+    "chapter.tex": "Math $\\sum_{i=1}^{n} i=\\frac{n(n+1)}2$. \\rule{20mm}{10mm}"
+  },
+  "stages": {
+    "body-edit": "\\documentclass{article}\n\\usepackage{fontspec,amsmath,graphicx,hyperref}\n\\setmainfont{Latin Modern Roman}\n\\begin{document}\n\\tableofcontents\n\\section{Fonts and references}\\label{sec:one}\n\\input{chapter.tex}\nEdited section~\\ref{sec:one}. {\\sffamily Sans} {\\ttfamily Mono} {\\bfseries Bold}.\n\\end{document}",
+    "preamble-edit": "\\documentclass[12pt]{article}\n\\usepackage{fontspec,amsmath,graphicx,hyperref}\n\\setmainfont{Latin Modern Roman}\n\\begin{document}\n\\tableofcontents\n\\section{Fonts and references}\\label{sec:one}\n\\input{chapter.tex}\nSee section~\\ref{sec:one}. {\\sffamily Sans} {\\ttfamily Mono} {\\bfseries Bold}.\n\\end{document}"
+  }
+}

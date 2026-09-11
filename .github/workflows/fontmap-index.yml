@@ -1,0 +1,45 @@
+name: Font-map index compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'wasm-build/fontmap-index/**'
+      - 'wasm-build/texlive-source-*.ref'
+      - 'scripts/test-fontmap-index.py'
+      - '.github/workflows/fontmap-index.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-build/fontmap-index/**'
+      - 'wasm-build/texlive-source-*.ref'
+      - 'scripts/test-fontmap-index.py'
+      - '.github/workflows/fontmap-index.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        year: ['2025', '2026']
+    steps:
+      - uses: actions/checkout@v7
+      - id: pin
+        env:
+          YEAR: ${{ matrix.year }}
+        run: echo "ref=$(cat "wasm-build/texlive-source-$YEAR.ref")" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          repository: TeX-Live/texlive-source
+          ref: ${{ steps.pin.outputs.ref }}
+          path: upstream
+          sparse-checkout: texk/dvipdfm-x
+      - name: Reject patch drift
+        run: git -C upstream apply --check ../wasm-build/fontmap-index/fontmap-index.patch
+      - name: Compare with upstream under ASan and UBSan
+        run: python3 scripts/test-fontmap-index.py --source upstream/texk/dvipdfm-x --sanitize --cc clang
