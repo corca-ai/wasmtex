@@ -1,4 +1,19 @@
-import type * as pdfjsLib from 'pdfjs-dist'
+/** Minimal renderer contract; coordinates are PDF user space at scale one. */
+export interface TextMapperPage {
+  getTextContent(): Promise<{
+    readonly items: readonly (TextMapperItem | { readonly type: string })[]
+  }>
+  getViewport(options: { scale: number }): {
+    convertToViewportPoint(x: number, y: number): readonly number[]
+  }
+}
+
+export interface TextMapperItem {
+  readonly str: string
+  readonly transform: readonly number[]
+  readonly width: number
+  readonly height: number
+}
 
 export interface SourceLocation {
   file: string
@@ -47,7 +62,7 @@ export class TextMapper {
   }
 
   /** Extract text blocks from a PDF page */
-  async indexPage(page: pdfjsLib.PDFPageProxy, pageNum: number): Promise<void> {
+  async indexPage(page: TextMapperPage, pageNum: number): Promise<void> {
     const textContent = await page.getTextContent()
     const viewport = page.getViewport({ scale: 1.0 })
     const blocks: TextBlock[] = []
@@ -68,9 +83,9 @@ export class TextMapper {
 
       blocks.push({
         text: item.str,
-        x: vx,
+        x: vx!,
         // vy is the baseline position; shift up by height so highlight covers the text
-        y: vy - height,
+        y: vy! - height,
         width: item.width ?? 0,
         height,
       })

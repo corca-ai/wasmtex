@@ -111,6 +111,9 @@
   "peerDependenciesMeta": {
     "pdf-lib": {
       "optional": true
+    },
+    "pdfjs-dist": {
+      "optional": true
     }
   },
   "devDependencies": {
