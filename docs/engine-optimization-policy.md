@@ -125,8 +125,9 @@ Preloading extensionless aliases can make a file exist too early; preloading
 canonical names can suppress aliases that the baseline creates on demand.
 Both can change valid `\IfFileExists` branches. Preserve those state transitions,
 including existing baseline cache behavior, rather than assuming canonical
-filenames or ordinary PDF equality establish safety. See the
-[withdrawn Unicode experiment](compile-performance.md#withdrawn-unicode-startup-experiment).
+filenames or ordinary PDF equality establish safety. The
+[withdrawn Unicode experiment](compile-performance.md#withdrawn-unicode-startup-experiment)
+records the concrete counterexample.
 
 ## Integrator adoption and rollback
 
