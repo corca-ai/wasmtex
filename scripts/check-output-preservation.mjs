@@ -28,7 +28,7 @@
  * projects forward automatically.
  */
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -75,7 +75,10 @@ async function compileWith({ assets, document, engine, texliveUrl, texliveVersio
   // its output by the wrong name only fails for the nested one, and a corpus
   // that never nests would call that release output-preserving.
   const results = []
-  for (const mainFile of ['main.tex', 'nested/main.tex']) {
+  const scope = arg('scope', 'all')
+  if (!['all', 'root', 'nested'].includes(scope)) throw Error('Scope must be all, root, or nested')
+  const mainFiles = scope === 'root' ? ['main.tex'] : scope === 'nested' ? ['nested/main.tex'] : ['main.tex', 'nested/main.tex']
+  for (const mainFile of mainFiles) {
     const compiler = new WasmTexCompiler({
       assetBaseUrl,
       engine,
@@ -92,6 +95,8 @@ async function compileWith({ assets, document, engine, texliveUrl, texliveVersio
         digest: result.pdf ? typesetDigest(result.pdf) : null,
         bytes: result.pdf?.length ?? 0,
         success: result.success,
+        pdfBase64: arg('report') && result.pdf ? Buffer.from(result.pdf).toString('base64') : undefined,
+        log: result.log, errors: result.errors, diagnostics: result.telemetry?.diagnostics,
       })
     } finally {
       compiler.dispose()
@@ -115,6 +120,7 @@ async function main() {
   if (documents.length === 0) fail(`no .tex documents in ${corpus}`)
 
   const differences = []
+  const comparisons = []
   for (const document of documents) {
     const before = await compileWith({
       assets: baseline,
@@ -130,6 +136,7 @@ async function main() {
       texliveUrl,
       texliveVersion,
     })
+    comparisons.push({ document: document.name, before, after })
     for (const [index, baselineRun] of before.entries()) {
       const candidateRun = after[index]
       const where = `${document.name} (${baselineRun.mainFile})`
@@ -157,11 +164,14 @@ async function main() {
     }
   }
 
+  const report = arg('report')
+  if (report) writeFileSync(report, JSON.stringify({ baseline, candidate, engine, texliveVersion, texliveUrl, scope: arg('scope', 'all'), comparisons, differences }, null, 2))
+
   if (differences.length > 0) {
     fail(`this release changes what it typesets:\n- ${differences.join('\n- ')}`)
   }
   console.log(
-    `\nOutput preserved across ${documents.length} document(s): the candidate may supersede the baseline for pinned projects.`,
+    `\nOutput preserved across ${documents.length} document(s), scope=${arg('scope', 'all')}. This is scoped evidence, not release qualification.`,
   )
 }
 

@@ -103,6 +103,17 @@ const server = createServer(async (req, res) => {
 })
 await new Promise((done) => server.listen(0, '127.0.0.1', done))
 const base = `http://127.0.0.1:${server.address().port}`
+// Also expose the same immutable-byte cache to synchronous Node-worker tests.
+// This avoids unbounded remote curl connections without changing engine lookup.
+if (arg('serve-only', 'false') === 'true') {
+  console.log(`${base}/mirror/`)
+  await new Promise((done) => {
+    const stop = () => { server.closeAllConnections(); server.close(done) }
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+  })
+  process.exit(0)
+}
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
