@@ -619,3 +619,27 @@ await latex.init()
 - **[Engine Configuration](engine.md)**: How to configure WASM assets and CDN.
 - **[Bibliography backends](bibliography.md)**: BibTeX vs biblatex/Biber selection.
 - **[Warmup / Preload](warmup.md)**: Eliminate first-compile cold start.
+
+## Preparing transport for the selected engine
+
+The headless compiler owns engine detection. A host can observe its actual selection
+without repeating magic-comment or package rules:
+
+```ts
+const compiler = new WasmTexCompiler({
+  files: { "main.tex": source },
+  engine: "auto",
+  onEngineSelected: ({ engine }) => {
+    // Cancel prior optional preparation, then start transport for this engine.
+    // Do not await it or change compiler inputs from this observer.
+    prepareTransport(engine)
+  },
+})
+```
+
+The callback runs after engine options are fixed and before engine initialization,
+once on initial selection and again when the engine kind changes. It reports an
+attempt, not successful readiness. Promises do not block initialization; synchronous
+and asynchronous failures are logged without changing compile results. The host owns
+cancellation on engine transitions and disposal. HTTP preparation must preserve engine
+file materialization and lookup transitions, as required by the [optimization policy](engine-optimization-policy.md#sdk-preparation-is-part-of-compatibility).

@@ -88,6 +88,7 @@ export {
   COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES,
   COMPLETION_SNAPSHOT_SCHEMA_VERSION,
 } from './engine/completion-snapshot'
+export type { EngineDetection } from './engine/engine-select'
 export type {
   AccessibleExportResult,
   CompilePhaseTimings,
@@ -326,6 +327,10 @@ export interface WasmTexCompilerOptions {
    *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),
    *  falling back to pdfLaTeX. Set an explicit engine to override detection. */
   engine?: EngineOption
+  /** Observe each newly selected engine before initialization, including Auto changes.
+   *  Optional host preparation must not mutate compiler inputs. Returned promises are
+   *  not awaited; observer failures are reported without failing compilation. */
+  onEngineSelected?: (selection: Readonly<EngineDetection>) => void | Promise<void>
   /** Enable incremental compilation via mid-document checkpoints (#55, pdfLaTeX only):
    *  body edits after a page break re-typeset just the tail and splice it onto a cached
    *  head PDF — much faster on long documents. Needs the optional `pdf-lib` peer for
@@ -518,6 +523,16 @@ export class WasmTexCompiler {
     this.engineKind = this.detection.engine
     this.engine = createCompileEngine(this.detection.engine, this.engineBaseOpts())
     this.attachLoadProgress(this.engine)
+    // The engine options (including warmup inputs) are fixed before notifying hosts.
+    // Pass a detached value so a consumer cannot rewrite our selection state.
+    if (this.opts.onEngineSelected) {
+      const report = (error: unknown) => console.error('Engine selection observer failed', error)
+      try {
+        void Promise.resolve(this.opts.onEngineSelected({ ...this.detection })).catch(report)
+      } catch (error) {
+        report(error)
+      }
+    }
     // Incremental checkpoints are a pdfLaTeX-only feature (the worker commands live in
     // the pdfTeX worker); other engines always take the full path.
     this.incremental =
