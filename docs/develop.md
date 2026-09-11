@@ -71,6 +71,35 @@ its function names as evidence about that binary. A mismatch means the diagnosti
 build needs separate qualification; a linker map alone cannot identify functions
 in a differently optimized binary.
 
+The standalone diagnostic accepts an explicit flat engine asset directory (the
+files normally under `wasmtex/<year>/`) and an immutable mirror URL:
+
+```bash
+node scripts/compare-wasm-profile.mjs baseline.wasm diagnostic.wasm
+node scripts/profile-font-cpu.mjs --assets /path/to/engine-assets \
+  --texlive-url https://mirror.example/snapshots/REVISION/2026/ \
+  --year 2026 --repetitions 3 --out /tmp/font-cpu
+node scripts/summarize-font-profile.mjs /tmp/font-cpu/*.trace.json > /tmp/font-cpu/summary.json
+```
+
+`--engine` accepts `all` (default), `pdflatex`, `pdflatex-checkpoint`, `xelatex`,
+or `lualatex`. Preparation exercises every edit against a local caching proxy;
+measurement rejects any upstream cache miss. Loopback transfers remain, so use
+the request-free repeat/body stages to isolate engine work. The report retains
+asset hashes, preparation retries, per-stage requests, PDF hashes, and raw logs.
+Worker clocks are fixed after initialization for reproducible metadata. Raw
+Chromium traces preserve separate worker samples. Counts and sampled deltas are
+diagnostic evidence, not exact CPU timers; Lua interpreter samples do not identify
+individual Lua routines. `--trace false` disables profiling overhead.
+
+For the narrower Lua names-database loading probe, use `--engine lualatex
+--lua-names-probe true --trace false`. It measures source loading, bytecode
+loading, chunk execution, and bytecode creation separately inside Lua. This
+probe deliberately keeps the real worker clock because `os.clock()` uses that
+clock in this build. Its additional loops and collections make it a microbenchmark,
+not ordinary compilation timing or output-preservation evidence. The report also
+lists the existing Lua font-cache files without changing or exporting them.
+
 For font investigation, include all three engines and distinguish XeTeX from its
 separate dvipdfmx worker. Measure initialization, repeat compilation, body edits,
 and preamble edits with downloads already satisfied. Record network activity
