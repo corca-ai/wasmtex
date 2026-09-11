@@ -1,0 +1,107 @@
+--- a/texk/dvipdfm-x/fontmap.c
++++ b/texk/dvipdfm-x/fontmap.c
+@@ -31,6 +31,7 @@
+ #include "dpxconf.h"
+ #include "dpxfile.h"
+ #include "dpxutil.h"
++#include "wasmtex-fontmap-index.h"
+ 
+ #include "subfont.h"
+ 
+@@ -741,14 +742,14 @@
+       tfm_name = make_subfont_name(kp, sfd_name, subfont_ids[n]);
+       if (!tfm_name)
+         continue;
+-      mrec = ht_lookup_table(fontmap, tfm_name, strlen(tfm_name));
++      mrec = wasmtex_fontmap_lookup(fontmap, tfm_name, strlen(tfm_name));
+       if (!mrec) {
+         mrec = NEW(1, fontmap_rec);
+         pdf_init_fontmap_record(mrec);
+         mrec->map_name = mstrdup(kp); /* link */
+         mrec->charmap.sfd_name   = mstrdup(sfd_name);
+         mrec->charmap.subfont_id = mstrdup(subfont_ids[n]);
+-        ht_insert_table(fontmap, tfm_name, strlen(tfm_name), mrec);
++        wasmtex_fontmap_insert(fontmap, tfm_name, strlen(tfm_name), mrec);
+       }
+       RELEASE(tfm_name);
+     }
+@@ -756,7 +757,7 @@
+     RELEASE(sfd_name);
+   }
+ 
+-  mrec = ht_lookup_table(fontmap, kp, strlen(kp));
++  mrec = wasmtex_fontmap_lookup(fontmap, kp, strlen(kp));
+   if (!mrec) {
+     mrec = NEW(1, fontmap_rec);
+     pdf_copy_fontmap_record(mrec, vp);
+@@ -764,7 +765,7 @@
+       RELEASE(mrec->map_name);
+       mrec->map_name = NULL;
+     }
+-    ht_insert_table(fontmap, kp, strlen(kp), mrec);
++    wasmtex_fontmap_insert(fontmap, kp, strlen(kp), mrec);
+   }
+   if (dpx_conf.verbose_level > 3)
+     MESG("\n");
+@@ -799,14 +800,14 @@
+         continue;
+       if (dpx_conf.verbose_level > 3)
+         MESG(" %s", tfm_name);
+-      ht_remove_table(fontmap, tfm_name, strlen(tfm_name));
++      wasmtex_fontmap_remove(fontmap, tfm_name, strlen(tfm_name));
+       RELEASE(tfm_name);
+     }
+     RELEASE(fnt_name);
+     RELEASE(sfd_name);
+   }
+ 
+-  ht_remove_table(fontmap, kp, strlen(kp));
++  wasmtex_fontmap_remove(fontmap, kp, strlen(kp));
+ 
+   if (dpx_conf.verbose_level > 3)
+     MESG("\n");
+@@ -853,7 +854,7 @@
+       mrec->map_name = mstrdup(kp); /* link to this entry */
+       mrec->charmap.sfd_name   = mstrdup(sfd_name);
+       mrec->charmap.subfont_id = mstrdup(subfont_ids[n]);
+-      ht_insert_table(fontmap, tfm_name, strlen(tfm_name), mrec);
++      wasmtex_fontmap_insert(fontmap, tfm_name, strlen(tfm_name), mrec);
+       RELEASE(tfm_name);
+     }
+     RELEASE(fnt_name);
+@@ -866,7 +867,7 @@
+     RELEASE(mrec->map_name);
+     mrec->map_name = NULL;
+   }
+-  ht_insert_table(fontmap, kp, strlen(kp), mrec);
++  wasmtex_fontmap_insert(fontmap, kp, strlen(kp), mrec);
+ 
+   if (dpx_conf.verbose_level > 3)
+     MESG("\n");
+@@ -1139,7 +1140,7 @@
+   fontmap_rec *mrec = NULL;
+ 
+   if (fontmap && tfm_name)
+-    mrec = ht_lookup_table(fontmap, tfm_name, strlen(tfm_name));
++    mrec = wasmtex_fontmap_lookup(fontmap, tfm_name, strlen(tfm_name));
+ 
+   return  mrec;
+ }
+@@ -1148,15 +1149,14 @@
+ void
+ pdf_init_fontmaps (void)
+ {
+-  fontmap = NEW(1, struct ht_table);
+-  ht_init_table(fontmap, hval_free);
++  fontmap = wasmtex_fontmap_new(hval_free);
+ }
+ 
+ void
+ pdf_close_fontmaps (void)
+ {
+   if (fontmap) {
+-    ht_clear_table(fontmap);
++    wasmtex_fontmap_clear(fontmap);
+     RELEASE(fontmap);
+   }
+   fontmap = NULL;

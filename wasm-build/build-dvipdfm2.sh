@@ -23,6 +23,11 @@ mkdir -p "$OUT"
 git -C "$SRC" apply --check "$GLUE/dvipdfmx-fixes/missing-sfd.patch"
 git -C "$SRC" apply "$GLUE/dvipdfmx-fixes/missing-sfd.patch"
 
+# Select only the font-map table; retain the original bucket traversal order.
+git -C "$SRC" apply --check "$GLUE/fontmap-index/fontmap-index.patch"
+git -C "$SRC" apply "$GLUE/fontmap-index/fontmap-index.patch"
+cp "$GLUE/fontmap-index/fontmap-index.h" "$SRC/texk/dvipdfm-x/wasmtex-fontmap-index.h"
+
 echo "=== ports: libpng/zlib (+ freetype, in case) via emscripten ==="
 SYSROOT="$(em-config CACHE)/sysroot"
 embuilder build zlib libpng freetype >/tmp/ports.out 2>&1 || { echo "ports failed"; tail -10 /tmp/ports.out; exit 1; }

@@ -58,6 +58,7 @@ on:
       - 'wasm-build/xetex-dvipdfm-library.js'
       - 'wasm-build/build-dvipdfm2.sh'
       - 'wasm-build/dvipdfmx-fixes/**'
+      - 'wasm-build/fontmap-index/**'
       - 'wasm-build/dvipdfm-entry.c'
       - 'wasm-build/dvipdfm-stubs.c'
       - 'scripts/build-xetex-fromsource.sh'
@@ -247,6 +248,11 @@ jobs:
           docker run --rm --entrypoint python3 \
             -v "$PWD:/repo:ro" dvipdfmx-diagnostic \
             /repo/scripts/test-dvipdfmx-missing-sfd.py --source /src/texlive-source/texk/dvipdfm-x --sanitize --cc /usr/bin/clang
+      - name: Font-map index differential under ASan/UBSan
+        run: |
+          docker run --rm --entrypoint python3 \
+            -v "$PWD:/repo:ro" dvipdfmx-diagnostic \
+            /repo/scripts/test-fontmap-index.py --source /src/texlive-source/texk/dvipdfm-x --sanitize --cc /usr/bin/clang
       - name: Build dvipdfmx WASM
         run: |
           mkdir -p wasm-build/dist-dvipdfmx
