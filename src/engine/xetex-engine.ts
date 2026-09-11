@@ -17,10 +17,8 @@
  * `compile*` protocol via {@link CompileWorkerDriver}.
  */
 import type { CompileResult } from '../types'
-import { resolveTexliveUrl } from './base-worker-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import { BaseTexFmtEngine, createCompileWorker, unicodeFormatUrl } from './tex-fmt-engine'
-import { XETEX_PRELOAD } from './unicode-runtime-manifest'
 import type { WasmTexEngineOptions } from './wasmtex-engine'
 import type { CompileWorkerDriver } from './wasmtex-worker'
 import { attachPlacements, parseXdv } from './xdv'
@@ -32,20 +30,14 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     const version = options.texliveVersion ?? '2025'
     // Preload a prebuilt wasmtex-xetex.fmt (if shipped) so the first compile
     // skips the per-session format build — the dominant cold-start cost. A
-    // missing asset → ensureFormat() builds it (unchanged behavior). Runtime
-    // prefetch overlaps worker boot; both XeTeX and dvipdfmx receive the bytes.
+    // missing asset → ensureFormat() builds it (unchanged behavior). XeTeX ships
+    // no warmup manifest yet (4th arg undefined), but it MUST honor persistentCache
+    // (5th arg) so a `persistentCache: true` host rehydrates/persists like LuaTeX/pdfTeX.
     super(
       createCompileWorker('xetex', options),
       'wasmtex-xetex.fmt',
       unicodeFormatUrl('xetex', options),
-      {
-        texliveUrl: resolveTexliveUrl(options.texliveUrl ?? null, version),
-        preload: XETEX_PRELOAD,
-        // Bound demand preparation without making small documents wait behind
-        // several serial batches of optional font inputs.
-        concurrency: 16,
-        notFound: [],
-      },
+      undefined,
       options.persistentCache ? { version } : undefined,
       options.resolverProfile ?? {
         id: `texlive-${version}`,

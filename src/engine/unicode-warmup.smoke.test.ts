@@ -7,11 +7,11 @@ import { smokeTexliveProfile } from './smoke-texlive-profile'
 const RUN = process.env.WASMTEX_UNICODE_WARMUP_SMOKE === '1'
 const PROFILE = smokeTexliveProfile()
 
-describe.runIf(RUN)('Unicode runtime preparation preserves file lookup semantics', () => {
+describe.runIf(RUN)('Unicode file lookup preserves demand-created aliases', () => {
   it.each([
     'xelatex',
     'lualatex',
-  ] as const)('%s does not invent extensionless files', async (engine) => {
+  ] as const)('%s creates aliases only after the corresponding runtime lookup', async (engine) => {
     const { installNodeWorkerHost } = await import('./node-host')
     const { WasmTexCompiler } = await import('../headless')
     const { CompileWorkerDriver } = await import('./wasmtex-worker')
@@ -22,11 +22,9 @@ describe.runIf(RUN)('Unicode runtime preparation preserves file lookup semantics
       assetBaseUrl,
     })
     const probe = engine === 'xelatex' ? 'lmroman10-bold' : 'fontspec'
-    const canonical = engine === 'xelatex' ? 'lmroman10-bold.otf' : 'fontspec.lua'
     const source = String.raw`\documentclass{article}
 \begin{document}
 \IfFileExists{${probe}}{\typeout{ALIAS-PRESENT}PRESENT}{\typeout{ALIAS-ABSENT}ABSENT}
-\IfFileExists{${canonical}}{\typeout{CANONICAL-PRESENT}}{\typeout{CANONICAL-ABSENT}}
 \end{document}`
     const compiler = new WasmTexCompiler({
       engine,
@@ -38,14 +36,21 @@ describe.runIf(RUN)('Unicode runtime preparation preserves file lookup semantics
     })
     try {
       await compiler.init()
-      for (let repeat = 0; repeat < 2; repeat++) {
+      for (const loaded of [false, true, true]) {
+        compiler.setFile(
+          'main.tex',
+          loaded
+            ? source.replace(
+                '\\begin{document}',
+                '\\usepackage{fontspec}\\setmainfont{Latin Modern Roman}\n\\begin{document}',
+              )
+            : source,
+        )
         const result = await compiler.compile()
         expect(result.success, result.log).toBe(true)
         expect(result.pdf?.length).toBeGreaterThan(0)
-        expect(result.log).toContain('ALIAS-ABSENT')
-        expect(result.log).not.toContain('ALIAS-PRESENT')
-        expect(result.log).toContain('CANONICAL-PRESENT')
-        expect(result.log).not.toContain('CANONICAL-ABSENT')
+        expect(result.log).toContain(loaded ? 'ALIAS-PRESENT' : 'ALIAS-ABSENT')
+        expect(result.log).not.toContain(loaded ? 'ALIAS-ABSENT' : 'ALIAS-PRESENT')
       }
       expect(runs.mock.calls.some(([command]) => command === 'compileformat')).toBe(false)
     } finally {

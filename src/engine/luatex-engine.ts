@@ -16,7 +16,6 @@ import type { CompileResult } from '../types'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { LUATEX_KNOWN_404, LUATEX_PRELOAD } from './luatex-manifest'
 import { BaseTexFmtEngine, createCompileWorker, unicodeFormatUrl } from './tex-fmt-engine'
-import { LUATEX_RUNTIME_PRELOAD } from './unicode-runtime-manifest'
 import type { WasmTexEngineOptions } from './wasmtex-engine'
 
 export class WasmTexLuatexEngine extends BaseTexFmtEngine {
@@ -28,7 +27,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       unicodeFormatUrl('luatex', options),
       {
         texliveUrl: resolveTexliveUrl(options.texliveUrl ?? null, version),
-        preload: [...LUATEX_PRELOAD, ...LUATEX_RUNTIME_PRELOAD],
+        preload: LUATEX_PRELOAD,
         notFound: LUATEX_KNOWN_404,
       },
       options.persistentCache ? { version } : undefined,
