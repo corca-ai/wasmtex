@@ -35,6 +35,9 @@ if (!variants.length) throw Error('Unknown engine')
 const traceOption = arg('trace', 'true')
 if (!['true', 'false'].includes(traceOption)) throw Error('Trace must be true or false')
 const traceEnabled = traceOption === 'true'
+const projectPath = arg('project', null)
+const project = projectPath ? JSON.parse(await readFile(resolve(projectPath), 'utf8')) : null
+if (project && (!project.files || typeof project.files[project.mainFile || 'main.tex'] !== 'string')) throw Error('Project must contain its main TeX file')
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 await mkdir(out, { recursive: true })
 await mkdir(cacheDir, { recursive: true })
@@ -104,7 +107,7 @@ const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
   schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions,
-  traceEnabled, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
+  traceEnabled, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   harnessSha256: hash(await readFile(fileURLToPath(import.meta.url))),
   node: process.version, platform: process.platform, architecture: process.arch,
@@ -112,7 +115,8 @@ const report = {
   limitations: [
     'Mirror responses are populated before measurement; measured runs prohibit upstream misses. Loopback HTTP transfers remain and are not counted as font CPU.',
     'New contexts have empty browser caches; same-worker repeat/edit retains SDK and MEMFS caches. No file aliases are pre-injected.',
-    'Tracing adds overhead. These timings diagnose costs; they are not optimization speedup evidence.',
+    traceEnabled ? 'Tracing adds overhead; traced timings are diagnostic only.' : 'Tracing is disabled; compare alternating baseline/candidate runs on the same machine.',
+    'conversionMs measures the dvipdfmx worker routine, including its heap reset and file I/O; timings exclude post-compile artifact hashing.',
     'C/WASM sampling does not identify interpreted Lua functions. Inspect luaotfload separately before proposing a Lua cache.',
     'Worker clocks are fixed after initialization for reproducible PDF metadata; performance.now remains real.',
     'The small Latin/math corpus is a profiling probe, not release compatibility qualification.',
@@ -151,11 +155,12 @@ async function runVariant(variant, repetition, measured) {
     await page.evaluate(async () => { globalThis.Compiler = (await import('/lib/headless.js')).WasmTexCompiler })
     for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit']) {
       const networkStart = network.length
-      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe }) => {
+      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, project }) => {
         const font = variant.startsWith('pdflatex')
           ? '\\usepackage[T1]{fontenc}\\usepackage{lmodern}'
           : '\\usepackage{fontspec}\\setmainfont{Latin Modern Roman}'
         let source = '\\documentclass{article}\n' + font + '\n\\usepackage{amsmath}\n\\begin{document}\nFont CPU probe. {\\bfseries Bold text.} {\\itshape Italic text.} $E=mc^2$.\n\\end{document}'
+        if (project) source = project.files[project.mainFile || 'main.tex']
         if (checkpointProbe) source = source.replace('Font CPU probe.', ('A completed paragraph before the edit. '.repeat(30) + '\\par\n\n').repeat(6) + 'Completed paragraphs.\n\nFont CPU probe.')
         if (luaNamesProbe) source = source.replace('\\begin{document}', String.raw`\begin{document}
 \directlua{
@@ -185,7 +190,7 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
             engine: variant === 'pdflatex-checkpoint' ? 'pdflatex' : variant,
             incremental: variant === 'pdflatex-checkpoint',
             texliveVersion: year, texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
-            persistentCache: false, files: { 'main.tex': source },
+            persistentCache: false, files: project?.files || { 'main.tex': source }, mainFile: project?.mainFile || 'main.tex',
           })
           await globalThis.compiler.init()
           return { ms: performance.now() - start }
@@ -194,12 +199,22 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           const prepared = await globalThis.compiler.prepareIncrementalCompile('main.tex', source.indexOf('Font CPU probe.'))
           return { ms: performance.now() - start, checkpointPrepared: prepared }
         }
-        if (stage === 'body-edit') globalThis.compiler.setFile('main.tex', source.replace('Font CPU probe.', 'Body edited: another font CPU probe.'))
-        if (stage === 'preamble-edit') globalThis.compiler.setFile('main.tex', source.replace('\\documentclass{article}', '\\documentclass[12pt]{article}'))
+        if (!project && stage === 'body-edit') globalThis.compiler.setFile('main.tex', source.replace('Font CPU probe.', 'Body edited: another font CPU probe.'))
+        if (!project && stage === 'preamble-edit') globalThis.compiler.setFile('main.tex', source.replace('\\documentclass{article}', '\\documentclass[12pt]{article}'))
+        if (project) globalThis.compiler.setFile(project.mainFile || 'main.tex', project.stages?.[stage] ?? source)
         const result = await globalThis.compiler.compile()
-        if (!result.success) throw Error(result.log)
+        const expectedSuccess = project?.expectedSuccess?.[stage] ?? true
+        if (result.success !== expectedSuccess) throw Error(result.log)
         if (checkpointProbe && stage === 'body-edit' && !result.phaseTimings?.checkpointResume) throw Error('Body edit did not resume a checkpoint')
         const elapsed = performance.now() - start
+        const artifacts = {}
+        const mainBase = (project?.mainFile || 'main.tex').replace(/\.tex$/, '')
+        for (const suffix of ['aux', 'toc', 'out', 'bbl']) {
+          const data = await globalThis.compiler.readOutput(`${mainBase}.${suffix}`)
+          if (data !== null) artifacts[suffix] = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data))), (b) => b.toString(16).padStart(2, '0')).join('')
+        }
+        if (result.synctex) artifacts.synctex = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', result.synctex)), (b) => b.toString(16).padStart(2, '0')).join('')
+        if (!result.pdf) return { ms: elapsed, success: result.success, artifacts, synctexPresent: result.synctex != null, errors: result.errors, diagnostics: result.telemetry?.diagnostics, geometry: result.telemetry?.geometry, dependencies: result.telemetry?.dependencies, pdfConversionInputs: result.pdfConversionInputs, glyphCoverage: result.glyphCoverage, log: result.log }
         const bytes = result.pdf
         const digest = await crypto.subtle.digest('SHA-256', bytes)
         let text = ''
@@ -207,14 +222,33 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
         const normalized = text.replace(/\/(?:CreationDate|ModDate)\s*\([^)]*\)/g, '').replace(/\/ID\s*\[[^\]]*\]/g, '')
         const normalizedDigest = await crypto.subtle.digest('SHA-256', Uint8Array.from(normalized, (c) => c.charCodeAt(0)))
         return {
-          ms: elapsed, pdfBytes: bytes.length,
+          ms: elapsed, success: result.success, artifacts, synctexPresent: result.synctex != null, errors: result.errors, diagnostics: result.telemetry?.diagnostics, geometry: result.telemetry?.geometry, dependencies: result.telemetry?.dependencies, pdfConversionInputs: result.pdfConversionInputs, glyphCoverage: result.glyphCoverage, pdfBytes: bytes.length,
           pdfSha256: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join(''),
           typesetSha256: Array.from(new Uint8Array(normalizedDigest), (b) => b.toString(16).padStart(2, '0')).join(''),
           log: result.log, phaseTimings: result.phaseTimings ?? null,
           preambleSnapshot: result.preambleSnapshot ?? null, preambleRebuilt: result.preambleRebuilt ?? null,
         }
-      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe })
+      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, project })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
+      if (stage === 'init') {
+        for (const worker of page.workers()) {
+          if (!worker.url().includes('dvipdfm')) continue
+          await worker.evaluate(() => {
+            globalThis.diagnosticConversionMs = []
+            const original = compilePDFRoutine
+            compilePDFRoutine = function (...args) {
+              const started = performance.now()
+              try { return original.apply(this, args) }
+              finally { globalThis.diagnosticConversionMs.push(performance.now() - started) }
+            }
+          })
+        }
+      }
+      result.conversionMs = []
+      for (const worker of page.workers()) {
+        if (!worker.url().includes('dvipdfm')) continue
+        result.conversionMs.push(...await worker.evaluate(() => globalThis.diagnosticConversionMs.splice(0)))
+      }
       if (stage === 'init' && !luaNamesProbe) {
         // Match the existing deterministic benchmark convention. Change only the
         // JS clock used for output metadata, after engine initialization.
