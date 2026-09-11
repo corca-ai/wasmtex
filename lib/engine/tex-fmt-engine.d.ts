@@ -27,7 +27,6 @@ export interface TexFmtWarmupPlan {
         format: number;
         name: string;
         dir: string;
-        candidate?: string;
     }>;
     /** Lookups that 404/403 during a first compile (pre-seeded to skip XHR). */
     notFound: ReadonlyArray<{
@@ -59,8 +58,6 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** The warmup/durable set resolved at init, retained so an auxiliary worker (e.g. xetex's
      *  dvipdfmx) can be rehydrated from it after *its* own init completes. */
     private lastWarmSets;
-    /** Successful prefetch aliases needed by the host's next-session replay. */
-    private readonly warmupCandidates;
     private readonly suppliedWarmup;
     /** Durable IndexedDB cache of fetched assets (when persistentCache is on). */
     private durableCache;

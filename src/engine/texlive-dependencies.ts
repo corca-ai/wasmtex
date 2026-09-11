@@ -43,10 +43,7 @@ interface DependencyAccumulator {
 /** The mirror object name that answered a request, when it differs from the request. */
 function mirrorCandidate(entry: ResolverEvidence): string | undefined {
   const hit = entry.attempts.find(
-    (attempt) =>
-      (attempt.source === 'network' || attempt.source === 'warmup-cache') &&
-      attempt.outcome === 'hit' &&
-      !!attempt.candidate,
+    (attempt) => attempt.source === 'network' && attempt.outcome === 'hit',
   )
   return hit?.candidate && hit.candidate !== entry.requestedName ? hit.candidate : undefined
 }

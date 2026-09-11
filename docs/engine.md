@@ -151,8 +151,8 @@ engine **prefetches** the known first-compile file set in parallel (overlapping
 worker boot) and injects successful downloads via `preloadtexlive`. Remaining
 inputs still resolve on demand. LuaLaTeX's generated `src/engine/luatex-manifest.ts`
 is supplemented by `src/engine/unicode-runtime-manifest.ts`; the latter also owns
-XeLaTeX's runtime hints. The shared loader preserves extensionless lookup aliases
-and uses the selected mirror. See [Unicode runtime preparation](warmup.md#unicode-runtime-preparation)
+XeLaTeX's runtime hints. The shared loader materializes only canonical filenames from the selected mirror;
+extensionless aliases remain demand-resolved to preserve file-existence semantics. See [Unicode runtime preparation](warmup.md#unicode-runtime-preparation)
 for failure and measurement semantics. The sends are fire-and-forget, so a worker
 without these commands simply ignores them and fetches on demand.
 

@@ -56,9 +56,9 @@ the resulting bytes with its PDF conversion worker; LuaLaTeX supplements its gen
 with current Lua runtime and Latin Modern lookups. These lists are hints for the
 selected mirror, not a complete document dependency set.
 
-A hint keeps the engine's requested name separate from the resolved CDN filename.
-Successful prefetch aliases remain in resolver evidence for subsequent dependency
-replay. A failed prefetch supplies neither bytes nor a new negative entry, so
+Only canonical mirror filenames are materialized. Extensionless aliases are
+resolved on demand: creating them speculatively changes unrelated TeX
+file-existence checks and can change document output. A failed prefetch supplies neither bytes nor a new negative entry, so
 normal resolution remains available. Base formats, engine binaries, and mirror
 objects are unchanged. Measure initialization plus first compilation together:
 preparation moves work before compilation and is not free.
