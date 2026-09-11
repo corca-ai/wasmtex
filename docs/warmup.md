@@ -48,6 +48,21 @@ Unicode preloads sharing one basename with conflicting bytes are omitted to
 preserve the normal resolver behavior of their flat cache directories. A partial
 cache remains best-effort: missing files use the normal resolver.
 
+## Unicode runtime preparation
+
+XeLaTeX and LuaLaTeX also prepare engine-specific runtime files during `init()`.
+The bounded eight-request pool overlaps worker boot. XeLaTeX shares the resulting
+bytes with its PDF conversion worker; LuaLaTeX supplements its generated manifest
+with current Lua runtime and Latin Modern lookups. These lists are hints for the
+selected mirror, not a complete document dependency set.
+
+A hint keeps the engine's requested name separate from the resolved CDN filename.
+Successful prefetch aliases remain in resolver evidence for subsequent dependency
+replay. A failed prefetch supplies neither bytes nor a new negative entry, so
+normal resolution remains available. Base formats, engine binaries, and mirror
+objects are unchanged. Measure initialization plus first compilation together:
+preparation moves work before compilation and is not free.
+
 ## Options
 
 ```ts

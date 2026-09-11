@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { WasmTexLuatexEngine } from './luatex-engine'
+import { buildTexliveDependencySet } from './texlive-dependencies'
 import { type EngineWorker, setWorkerFactory } from './worker-host'
 import { WasmTexXetexEngine } from './xetex-engine'
 
@@ -82,6 +83,142 @@ it.each([
     ).toBe(false)
     expect(bytes.byteLength).toBe(4)
     expect(fetch.mock.calls.some((args) => String(args[0]).endsWith('/11/pdftex.map'))).toBe(false)
+  } finally {
+    engine.terminate()
+  }
+})
+
+it.each([
+  WasmTexXetexEngine,
+  WasmTexLuatexEngine,
+])('prefetches resolved URLs but preserves extensionless lookup keys (%s)', async (Engine) => {
+  const workers: Message[][] = []
+  setWorkerFactory(() => {
+    const messages: Message[] = []
+    workers.push(messages)
+    const worker: EngineWorker = {
+      onmessage: null,
+      onerror: null,
+      postMessage(value) {
+        messages.push(value as Message)
+      },
+      terminate() {},
+    }
+    queueMicrotask(() => worker.onmessage?.({ data: { result: 'ok' } }))
+    return worker
+  })
+  const bytes = new Uint8Array([79, 84, 84, 79])
+  const fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    return url.endsWith('/47/lmroman10-regular.otf')
+      ? new Response(bytes)
+      : new Response(null, { status: 404 })
+  })
+  vi.stubGlobal('fetch', fetch)
+  const engine = new Engine({
+    assetBaseUrl: 'https://assets.invalid/',
+    texliveUrl: 'https://mirror.invalid/snapshots/selected/2025/',
+    texliveVersion: '2025',
+  })
+  try {
+    await engine.init()
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/47/lmroman10-regular'))).toBe(
+      false,
+    )
+    expect(
+      fetch.mock.calls.some(
+        ([url]) =>
+          String(url) ===
+          'https://mirror.invalid/snapshots/selected/2025/pdftex/47/lmroman10-regular.otf',
+      ),
+    ).toBe(true)
+    for (const messages of workers) {
+      const loaded = messages.find(
+        (message) =>
+          message.cmd === 'preloadtexlive' &&
+          message.format === 47 &&
+          message.filename === 'lmroman10-regular',
+      )
+      expect(loaded).toBeDefined()
+      expect(new Uint8Array(loaded!.data!)).toEqual(bytes)
+      // A failed speculative request is not proof that a runtime lookup is absent.
+      expect(
+        messages
+          .filter((message) => message.cmd === 'preload404')
+          .flatMap((message) => message.entries ?? [])
+          .some((entry) => entry.filename === 'lmroman10-bold'),
+      ).toBe(false)
+    }
+  } finally {
+    engine.terminate()
+  }
+})
+
+it('keeps a successful prefetch candidate in replayable resolver evidence', async () => {
+  setWorkerFactory(() => {
+    const worker: EngineWorker = {
+      onmessage: null,
+      onerror: null,
+      postMessage(value) {
+        const message = value as Message
+        if (message.cmd === 'writefile')
+          queueMicrotask(() => worker.onmessage?.({ data: { cmd: 'writefile', result: 'ok' } }))
+        if (message.cmd === 'compilelatex')
+          queueMicrotask(() => {
+            worker.onmessage?.({
+              data: {
+                cmd: 'resolver',
+                evidence: {
+                  requestedName: 'ltluatex',
+                  format: 51,
+                  outcome: 'resolved',
+                  attempts: [{ source: 'warmup-cache', outcome: 'hit' }],
+                },
+              },
+            })
+            worker.onmessage?.({
+              data: {
+                cmd: 'compile',
+                result: 'ok',
+                status: 0,
+                log: '',
+                pdf: new Uint8Array([37, 80, 68, 70]).buffer,
+              },
+            })
+          })
+      },
+      terminate() {},
+    }
+    queueMicrotask(() => {
+      worker.onmessage?.({ data: { cmd: 'resolverready' } })
+      worker.onmessage?.({ data: { result: 'ok' } })
+    })
+    return worker
+  })
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith('.fmt')) return new Response(new Uint8Array(65537).fill(65))
+    if (url.endsWith('/51/ltluatex.lua')) return new Response('return {}')
+    return new Response(null, { status: 404 })
+  })
+  const profile = { id: 'selected', texliveYear: '2026', mirrorRevision: 'immutable' } as const
+  const engine = new WasmTexLuatexEngine({
+    assetBaseUrl: 'https://assets.invalid/',
+    texliveUrl: 'https://mirror.invalid/',
+    texliveVersion: '2026',
+    resolverProfile: profile,
+  })
+  try {
+    await engine.init()
+    const result = await engine.compile()
+    expect(result.success).toBe(true)
+    const report = result.telemetry?.resolver
+    expect(report?.entries[0]?.attempts).toEqual([
+      { source: 'warmup-cache', outcome: 'hit', candidate: 'ltluatex.lua' },
+    ])
+    expect(buildTexliveDependencySet('2026', profile, [report])?.files).toEqual([
+      { format: 51, filename: 'ltluatex', candidate: 'ltluatex.lua' },
+    ])
   } finally {
     engine.terminate()
   }

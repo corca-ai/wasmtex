@@ -85,7 +85,7 @@ export interface TexFmtWarmupPlan {
   /** Resolved CDN endpoint (e.g. `https://…/2025/`). */
   texliveUrl: string
   /** Files that 200 during a first compile, with their CDN format dir. */
-  preload: ReadonlyArray<{ format: number; name: string; dir: string }>
+  preload: ReadonlyArray<{ format: number; name: string; dir: string; candidate?: string }>
   /** Lookups that 404/403 during a first compile (pre-seeded to skip XHR). */
   notFound: ReadonlyArray<{ format: number; filename: string }>
   /** Max parallel prefetch requests. Defaults to 8. */
@@ -142,6 +142,8 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   /** The warmup/durable set resolved at init, retained so an auxiliary worker (e.g. xetex's
    *  dvipdfmx) can be rehydrated from it after *its* own init completes. */
   private lastWarmSets: TexFmtWarmSet[] = []
+  /** Successful prefetch aliases needed by the host's next-session replay. */
+  private readonly warmupCandidates = new Map<string, string>()
   private readonly suppliedWarmup: WarmupCache | undefined
   /** Durable IndexedDB cache of fetched assets (when persistentCache is on). */
   private durableCache: PersistentCache | null = null
@@ -345,8 +347,14 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       while (next < preload.length) {
         const entry = preload[next++]!
         if (supplied.has(`${entry.format}/${entry.name}`)) continue
-        const buf = await fetchBuf(`${texliveUrl}pdftex/${entry.dir}/${entry.name}`)
-        if (buf) files.push({ format: entry.format, filename: entry.name, data: buf })
+        const buf = await fetchBuf(
+          `${texliveUrl}pdftex/${entry.dir}/${entry.candidate ?? entry.name}`,
+        )
+        if (buf) {
+          files.push({ format: entry.format, filename: entry.name, data: buf })
+          if (entry.candidate && entry.candidate !== entry.name)
+            this.warmupCandidates.set(`${entry.format}/${entry.name}`, entry.candidate)
+        }
       }
     }
     await Promise.all([...Array.from({ length: Math.min(concurrency, preload.length) }, worker)])
@@ -430,6 +438,28 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     inputFilesComplete?: boolean,
     resolverReports: ReadonlyArray<ResolverEvidenceReport | undefined> = [],
   ): CompileResult {
+    // The worker knows its preload key, not the URL fetched by the SDK. Keep
+    // that successful URL in warmup-hit evidence so a host can replay the same
+    // object next session without turning an extensionless name into a 404.
+    const reports = resolverReports.map(
+      (report) =>
+        report && {
+          ...report,
+          entries: report.entries.map((entry) => {
+            const candidate = this.warmupCandidates.get(`${entry.format}/${entry.requestedName}`)
+            return candidate
+              ? {
+                  ...entry,
+                  attempts: entry.attempts.map((attempt) =>
+                    attempt.source === 'warmup-cache' && attempt.outcome === 'hit'
+                      ? { ...attempt, candidate }
+                      : attempt,
+                  ),
+                }
+              : entry
+          }),
+        },
+    )
     const glyphGaps = parseGlyphGaps(log)
     if (glyphGaps.length > 0) enrichGlyphSuggestions(glyphGaps)
     return {
@@ -445,7 +475,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       telemetry: {
         diagnostics: buildDiagnostics(log, glyphGaps),
         ...(resolverReports.some(Boolean)
-          ? { resolver: mergeResolverReports(this.resolverProfile, resolverReports) }
+          ? { resolver: mergeResolverReports(this.resolverProfile, reports) }
           : {}),
         // Source enrichment here covers LuaLaTeX (uses this result() directly) and the
         // XeLaTeX failure path (early return). XeLaTeX's success path re-derives this
