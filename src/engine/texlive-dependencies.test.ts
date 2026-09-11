@@ -224,4 +224,18 @@ describe('buildTexliveDependencySet', () => {
     expect(merged.notFound).toEqual([])
     expect(mergeTexliveDependencySets(undefined, second)).toBe(second)
   })
+
+  it('never carries learned files across a profile, year, or mirror boundary', () => {
+    const next = buildTexliveDependencySet('2025', profile, [report([])])!
+    const previous = { ...next, files: [{ format: 26, filename: 'old.sty' }] }
+    for (const other of [
+      { ...previous, texliveVersion: '2026' as const },
+      { ...previous, profile: { ...profile, id: 'another' } },
+      { ...previous, profile: { ...profile, texliveYear: '2026' as const } },
+      { ...previous, profile: { ...profile, mirrorRevision: 'r2' } },
+    ]) {
+      expect(mergeTexliveDependencySets(other, next)).toBe(next)
+    }
+    expect(previous.files).toEqual([{ format: 26, filename: 'old.sty' }])
+  })
 })

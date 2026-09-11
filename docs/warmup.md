@@ -148,3 +148,14 @@ Measured with Playwright (Chromium, localhost dev server):
 | Time to first PDF | ~4.9s | ~2.9s |
 
 The warmup fetch runs concurrently with other page initialization (Monaco loading, DOM setup), so the effective cost is near zero when called early enough.
+
+## Retaining learned prefetch sets
+
+A later warm run can report fewer resolver lookups because native cache hits
+bypass the HTTP resolver. Hosts can merge the previous learned set with a new
+one using `mergeTexliveDependencySets(previous, next)` from `wasmtex/warmup`.
+It unions resources and absences, preserves resolved candidate names, and lets
+a positive resource override a negative. Different profile IDs, years, or mirror
+revisions do not merge: the new set wins. Inputs are not mutated. Hosts still
+own bounded storage, project identity, and atomic updates. This is speculative
+prefetch evidence, not permission to mark project invalidation complete.
