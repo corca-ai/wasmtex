@@ -67,8 +67,8 @@ function corpusDocuments(directory) {
 }
 
 async function compileWith({ assets, document, engine, texliveUrl, texliveVersion }) {
-  const { installNodeWorkerHost } = await import('./../src/engine/node-host.ts')
-  const { WasmTexCompiler } = await import('./../src/headless.ts')
+  const { installNodeWorkerHost } = await import('../lib/node.js')
+  const { WasmTexCompiler } = await import('../lib/headless.js')
   const assetBaseUrl = 'http://assets.local/'
   installNodeWorkerHost({ publicDir: assets, assetBaseUrl })
   // Compile from inside a folder as well as at the root: a release that reads
