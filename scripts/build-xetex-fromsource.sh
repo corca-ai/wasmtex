@@ -57,7 +57,7 @@ docker run --rm --platform linux/amd64 --tmpfs /work \
     sha256sum -c /expected.sha256
   '
 
-docker run --rm --platform linux/amd64 -v "$OUT_ABS:/dist" wasmtex-xetex-wasm
+docker run --rm --platform linux/amd64 -e WASMTEX_PROFILE_NAMES -v "$OUT_ABS:/dist" wasmtex-xetex-wasm
 [ -f "$OUT_DIR/wasmtex-xetex.wasm" ] || { echo "xetex build produced no wasm"; exit 1; }
 echo "Built: $(wc -c < "$OUT_DIR/wasmtex-xetex.js") + $(wc -c < "$OUT_DIR/wasmtex-xetex.wasm") bytes"
 
@@ -68,7 +68,7 @@ echo "Built: $(wc -c < "$OUT_DIR/wasmtex-xetex.js") + $(wc -c < "$OUT_DIR/wasmte
 #    (it reads its glue from /src and writes the engine to /dist).
 # =============================================================================
 echo "Building wasmtex-dvipdfm from texlive-source ..."
-docker run --rm --platform linux/amd64 --entrypoint bash \
+docker run --rm --platform linux/amd64 -e WASMTEX_PROFILE_NAMES --entrypoint bash \
   -v "$REPO_ROOT/wasm-build:/glue:ro" -v "$OUT_ABS:/dist" wasmtex-xetex-wasm -c '
     set -euo pipefail
     cp /glue/dvipdfm-entry.c /glue/dvipdfm-stubs.c /glue/kpse-hook.c \

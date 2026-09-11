@@ -169,7 +169,7 @@ if [ -n "$NM" ]; then
   fi
 fi
 LUATEX_DEBUG_FLAGS=(-g0)
-if [ "${WASMTEX_LUATEX_PROFILE_NAMES:-0}" = "1" ]; then
+if [ "${WASMTEX_PROFILE_NAMES:-${WASMTEX_LUATEX_PROFILE_NAMES:-0}}" = "1" ]; then
   # Release debugging aid: retain WebAssembly function names without changing
   # optimization, so a browser trap can be mapped back to the linked routine.
   LUATEX_DEBUG_FLAGS=(--profiling-funcs)

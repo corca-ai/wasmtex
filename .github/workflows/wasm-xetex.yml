@@ -12,6 +12,10 @@ name: WASM XeTeX (from source)
 on:
   workflow_dispatch:
     inputs:
+      profile_names:
+        description: Retain function names for non-release CPU diagnostics
+        type: boolean
+        default: false
       texlive_year:
         description: TeX Live engine year
         required: true
@@ -75,6 +79,7 @@ jobs:
         texlive_year: ${{ fromJSON(inputs.texlive_year && format('["{0}"]', inputs.texlive_year) || '["2025","2026"]') }}
     env:
       TEXLIVE_YEAR: ${{ matrix.texlive_year }}
+      WASMTEX_PROFILE_NAMES: ${{ inputs.profile_names && '1' || '0' }}
     steps:
       - uses: actions/checkout@v7
 

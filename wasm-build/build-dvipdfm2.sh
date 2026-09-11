@@ -99,7 +99,11 @@ if [ -n "$NM" ]; then
     echo "ERROR: kpse_find_file not defined in '$KPSE' — -Wl,--wrap=kpse_find_file would no-op (interposition drift)" >&2; exit 1
   fi
 fi
-emcc -O2 -g0 \
+PROFILE_FLAGS=(-g0)
+if [ "${WASMTEX_PROFILE_NAMES:-0}" = "1" ]; then
+  PROFILE_FLAGS=(--profiling-funcs)
+fi
+emcc -O2 "${PROFILE_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   kpse-hook.o dvipdfm-entry.o dvipdfm-stubs.o $DPXOBJS \
   -Wl,--wrap=kpse_find_file \
