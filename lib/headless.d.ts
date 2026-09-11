@@ -1,6 +1,6 @@
 import { AccessibleExportOptions } from './engine/accessible-export';
 import { BackendRegistry } from './engine/backend-registry';
-import { EngineOption } from './engine/engine-select';
+import { EngineDetection, EngineOption } from './engine/engine-select';
 import { TikzExternalizationOptions } from './engine/tikz-externalization';
 import { ProjectIndex } from './lsp/project-index';
 import { AccessibleExportResult, CompileResult, CompletionSnapshotState, LoadProgressEvent, TexliveVersion, WarmupCache } from './types';
@@ -9,6 +9,7 @@ export * from './backend-api';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
 export type { AccessibleExportOptions } from './engine/accessible-export';
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
+export type { EngineDetection } from './engine/engine-select';
 export type { AccessibleExportResult, CompilePhaseTimings, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
 /**
  * One-shot accessible export without an interactive compiler: builds a compiler from
@@ -51,6 +52,10 @@ export interface WasmTexCompilerOptions {
      *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),
      *  falling back to pdfLaTeX. Set an explicit engine to override detection. */
     engine?: EngineOption;
+    /** Observe each newly selected engine before initialization, including Auto changes.
+     *  Optional host preparation must not mutate compiler inputs. Returned promises are
+     *  not awaited; observer failures are reported without failing compilation. */
+    onEngineSelected?: (selection: Readonly<EngineDetection>) => void | Promise<void>;
     /** Enable incremental compilation via mid-document checkpoints (#55, pdfLaTeX only):
      *  body edits after a page break re-typeset just the tail and splice it onto a cached
      *  head PDF — much faster on long documents. Needs the optional `pdf-lib` peer for
