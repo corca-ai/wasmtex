@@ -51,8 +51,8 @@ cache remains best-effort: missing files use the normal resolver.
 ## Unicode runtime preparation
 
 XeLaTeX and LuaLaTeX also prepare engine-specific runtime files during `init()`.
-The bounded eight-request pool overlaps worker boot. XeLaTeX shares the resulting
-bytes with its PDF conversion worker; LuaLaTeX supplements its generated manifest
+The bounded pools (XeLaTeX: 16, LuaLaTeX: 8) overlap worker boot. XeLaTeX shares
+the resulting bytes with its PDF conversion worker; LuaLaTeX supplements its generated manifest
 with current Lua runtime and Latin Modern lookups. These lists are hints for the
 selected mirror, not a complete document dependency set.
 

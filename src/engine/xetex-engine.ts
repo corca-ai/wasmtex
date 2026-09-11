@@ -41,6 +41,9 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       {
         texliveUrl: resolveTexliveUrl(options.texliveUrl ?? null, version),
         preload: XETEX_PRELOAD,
+        // Bound demand preparation without making small documents wait behind
+        // several serial batches of optional font inputs.
+        concurrency: 16,
         notFound: [],
       },
       options.persistentCache ? { version } : undefined,
