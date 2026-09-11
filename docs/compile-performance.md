@@ -28,6 +28,28 @@ Worker round-trips include synchronous I/O and messaging; they are not CPU
 profiles. A consumer must measure its own queue, cache lifecycle, and PDF paint.
 See [development measurements](develop.md) and [warmup](warmup.md).
 
+## Unicode startup follow-up
+
+[PR #123](https://github.com/corca-ai/wasmtex/pull/123) adds canonical XeTeX
+runtime hints and supplements the LuaTeX manifest with Lua modules and Latin
+Modern fonts. These overlap worker initialization; see
+[Unicode preparation](warmup.md#unicode-runtime-preparation). The SDK-only
+change leaves all released engine, format and mirror bytes unchanged.
+
+The extensionless-alias variant was rejected even though ordinary fontspec
+PDFs matched: it made `\IfFileExists{lmroman10-bold}` on XeTeX and
+`\IfFileExists{fontspec}` on LuaTeX change from absent to present in plain
+article documents. The final design materializes only canonical filenames and
+removes the alias-enrichment code. `src/engine/unicode-warmup.smoke.test.ts`
+verifies this boundary, canonical-file availability and repeated compiles on
+both annual lines without regenerating formats.
+
+Run that standalone smoke with `WASMTEX_UNICODE_WARMUP_SMOKE=1`, an explicitly
+supplied `WASMTEX_SMOKE_PUBLIC_DIR`, and the paired `WASMTEX_SMOKE_TEXLIVE_VERSION`
+and `WASMTEX_SMOKE_TEXLIVE_URL` variables described in [development](develop.md).
+It requires no integrating-application checkout. Consumer timing and visible
+PDF qualification belong to the consumer's own tests and release record.
+
 ## Deferred experiments
 
 | Experiment | Decision and retry condition |
