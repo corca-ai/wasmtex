@@ -97,7 +97,12 @@ function sourceReadme(releaseId) {
 
 function rebuildReadme(manifest) {
   const revisions = manifest.sources.wasmtex.map((source) => `- \`${source.commit}\``).join('\n')
-  return `# Rebuild inputs\n\nThe exact WasmTex source snapshots used by the build receipts are:\n\n${revisions}\n\nThe pinned TeX Live source is under \`source/texlive/\`; the unused legacy\n\`libs/pplib\` directory is deliberately absent. WTPDF/Xpdf integration, SHA-2 source,\nDockerfiles, worker glue, and build scripts are in each WasmTex snapshot.\n\nEmscripten source is under \`source/emscripten/\`. Exact source archives for every\nEmscripten port used by these builds are under \`source/ports/\`. The build image is\n\`${manifest.buildEnvironment.dockerImage}\`.\n\nRun the original build workflow from the snapshot named by each receipt. A release is\nnot approved until a clean builder rebuild has been compared with the receipt-bound\nartifact bytes and any deterministic differences have been recorded.\n`
+  return `# Rebuild inputs\n\nThe exact WasmTex source snapshots used by the build receipts are:\n\n${revisions}\n\nThe pinned TeX Live source is under \`source/texlive/\`; the unused legacy\n\`libs/pplib\` directory is deliberately absent. WTPDF/Xpdf integration, SHA-2 source,\nDockerfiles, worker glue, and build scripts are in each WasmTex snapshot.\n\nEmscripten source is under \`source/emscripten/\`. Exact source archives for every\nEmscripten port used by these builds are under \`source/ports/\`. The build image is\n\`${manifest.buildEnvironment.dockerImage}\`.\n\nSchema-2 receipts retain separate engine and original format generation receipts.
+Rebuild runtime files from the engine generation snapshot and preserve the format
+generation provenance. The exact composition script and its MIT license are under
+\`assembly/\` when a release reuses formats.
+
+Run the original build workflow from the snapshot named by each receipt. A release is\nnot approved until a clean builder rebuild has been compared with the receipt-bound\nartifact bytes and any deterministic differences have been recorded.\n`
 }
 
 function relinkReadme(manifest) {
@@ -243,6 +248,19 @@ async function main() {
       copyFileSync(cached, join(bundle, 'source/ports', port.filename))
     }
 
+    // Assembly tooling may be newer than either engine generation. Bundle its
+    // source explicitly rather than importing an unrelated SDK/app source unit.
+    const assemblyTools = []
+    if (inspected.receipts.some((receipt) => receipt.value.schemaVersion === 2)) {
+      for (const name of ['LICENSE', 'scripts/reuse-engine-formats.mjs',
+        'scripts/lib/engine-build-receipt.mjs', `scripts/corresponding-source-${config.texliveYear}.json`]) {
+        const path = `assembly/${name}`
+        mkdirSync(dirname(join(bundle, path)), { recursive: true })
+        copyFileSync(join(root, name), join(bundle, path))
+        assemblyTools.push({ path, sha256: hashFile('sha256', join(bundle, path)) })
+      }
+    }
+
     const sourceManifest = {
       schemaVersion: 1,
       releaseId: assetManifest.releaseId,
@@ -254,6 +272,7 @@ async function main() {
         path: 'release/LICENSE-MANIFEST.json',
         sha256: hashFile('sha256', join(assets, 'LICENSE-MANIFEST.json')),
       },
+      ...(assemblyTools.length ? { assemblyTools } : {}),
       buildEnvironment: { dockerImage: config.emscripten.dockerImage },
       sources: {
         wasmtex: wasmtexSources,

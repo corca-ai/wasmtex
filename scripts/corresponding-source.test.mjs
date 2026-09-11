@@ -172,3 +172,15 @@ test('rejects the unused legacy pplib source from a release bundle', () => {
     /libs\/pplib/,
   )
 })
+
+
+test('checks separately bundled assembly source hashes', () => {
+  const value = fixture()
+  const path = 'assembly/scripts/reuse-engine-formats.mjs'
+  put(value.root, path, 'assembly source')
+  value.sourceManifest.assemblyTools = [{ path, sha256: sha('sha256', 'assembly source') }]
+  put(value.root, 'SOURCE-MANIFEST.json', JSON.stringify(value.sourceManifest))
+  assert.deepEqual(checkCorrespondingSourceDirectory({ directory: value.root, config: value.config, assetManifest: value.assetManifest }), [])
+  put(value.root, path, 'changed assembly source')
+  assert.ok(checkCorrespondingSourceDirectory({ directory: value.root, config: value.config, assetManifest: value.assetManifest }).some(x => x.includes('assembly source SHA-256 mismatch')))
+})

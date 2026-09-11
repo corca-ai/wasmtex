@@ -36,7 +36,9 @@ receipts through `scripts/reuse-engine-formats.mjs`. Only the exact original
 `.fmt`/`.fmt.gz` files replace newly generated formats. Engine and format
 receipts must agree on year, upstream source, toolchain, and immutable mirror.
 Both complete original receipts remain embedded, and the source archive includes
-both WasmTex generation revisions. Schema-1 receipts remain valid for ordinary
+both WasmTex generation revisions. The composition script, receipt validator,
+annual source config, and MIT license are additionally bundled under `assembly/`
+with verified hashes; those tools may be newer than either engine generation. Schema-1 receipts remain valid for ordinary
 builds; an assembly receipt never claims copied formats were newly generated.
 
 ## Release an engine, end to end
