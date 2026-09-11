@@ -7,6 +7,9 @@ released as transparent optimizations. Read it before designing such a change.
 An internal engine patch is permitted when it satisfies this contract; its
 location alone is not a reason to reject an optimization.
 
+The [compile performance record](compile-performance.md) applies this contract
+to the September 2026 experiments and links their qualification evidence.
+
 ## Required outcome
 
 Integrating applications must be able to deliver the optimization to existing projects without editing
