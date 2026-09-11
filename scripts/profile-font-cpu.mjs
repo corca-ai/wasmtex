@@ -26,6 +26,8 @@ const cacheDir = resolve(arg('cache-dir', `${out}/mirror-cache`))
 const repetitions = Number(arg('repetitions', '3'))
 if (!Number.isInteger(repetitions) || repetitions < 1 || repetitions > 20) throw Error('Invalid repetitions')
 const selected = arg('engine', 'all')
+const checkpointProbe = arg('checkpoint-probe', 'false') === 'true'
+if (checkpointProbe && selected !== 'pdflatex-checkpoint') throw Error('Checkpoint probe requires --engine pdflatex-checkpoint')
 const luaNamesProbe = arg('lua-names-probe', 'false') === 'true'
 if (luaNamesProbe && selected !== 'lualatex') throw Error('Lua names probe requires --engine lualatex')
 const variants = ['pdflatex', 'pdflatex-checkpoint', 'xelatex', 'lualatex'].filter((v) => selected === 'all' || selected === v)
@@ -45,7 +47,11 @@ const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, 'http://localhost').pathname
     if (pathname.startsWith('/mirror/')) {
-      const url = new URL(pathname.slice('/mirror/'.length), mirror).href
+      const target = new URL(mirror.href)
+      // Keep the configured origin fixed: a request path is never a URL.
+      target.pathname = mirror.pathname + pathname.slice('/mirror/'.length)
+      if (!target.pathname.startsWith(mirror.pathname)) { res.writeHead(400).end('Outside snapshot'); return }
+      const url = target.href
       // No query-string rewriting or fallback to a different snapshot.
       const key = hash(url)
       let entry = memo.get(key)
@@ -60,7 +66,7 @@ const server = createServer(async (req, res) => {
           }
           let response
           for (let attempt = 0; attempt < 3; attempt++) {
-            try { response = await fetch(url, { signal: AbortSignal.timeout(30_000) }); break }
+            try { response = await fetch(url, { signal: AbortSignal.timeout(30_000), redirect: 'error' }); break }
             catch (error) {
               preparationRetries.push({ url, attempt, error: String(error), cause: String(error.cause), details: error.cause?.errors?.map((e) => String(e)) })
               if (attempt === 2) throw error
@@ -98,7 +104,7 @@ const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
   schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions,
-  traceEnabled, luaNamesProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
+  traceEnabled, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   harnessSha256: hash(await readFile(fileURLToPath(import.meta.url))),
   node: process.version, platform: process.platform, architecture: process.arch,
@@ -143,13 +149,14 @@ async function runVariant(variant, repetition, measured) {
   try {
     await page.goto(base)
     await page.evaluate(async () => { globalThis.Compiler = (await import('/lib/headless.js')).WasmTexCompiler })
-    for (const stage of ['init', 'first', 'repeat', 'body-edit', 'preamble-edit']) {
+    for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit']) {
       const networkStart = network.length
-      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe }) => {
+      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe }) => {
         const font = variant.startsWith('pdflatex')
           ? '\\usepackage[T1]{fontenc}\\usepackage{lmodern}'
           : '\\usepackage{fontspec}\\setmainfont{Latin Modern Roman}'
         let source = '\\documentclass{article}\n' + font + '\n\\usepackage{amsmath}\n\\begin{document}\nFont CPU probe. {\\bfseries Bold text.} {\\itshape Italic text.} $E=mc^2$.\n\\end{document}'
+        if (checkpointProbe) source = source.replace('Font CPU probe.', ('A completed paragraph before the edit. '.repeat(30) + '\\par\n\n').repeat(6) + 'Completed paragraphs.\n\nFont CPU probe.')
         if (luaNamesProbe) source = source.replace('\\begin{document}', String.raw`\begin{document}
 \directlua{
 local p = "/tex/texmf-var/luatex-cache/generic/names/luaotfload-names.lua"
@@ -183,10 +190,15 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           await globalThis.compiler.init()
           return { ms: performance.now() - start }
         }
+        if (stage === 'prepare-checkpoint') {
+          const prepared = await globalThis.compiler.prepareIncrementalCompile('main.tex', source.indexOf('Font CPU probe.'))
+          return { ms: performance.now() - start, checkpointPrepared: prepared }
+        }
         if (stage === 'body-edit') globalThis.compiler.setFile('main.tex', source.replace('Font CPU probe.', 'Body edited: another font CPU probe.'))
         if (stage === 'preamble-edit') globalThis.compiler.setFile('main.tex', source.replace('\\documentclass{article}', '\\documentclass[12pt]{article}'))
         const result = await globalThis.compiler.compile()
         if (!result.success) throw Error(result.log)
+        if (checkpointProbe && stage === 'body-edit' && !result.phaseTimings?.checkpointResume) throw Error('Body edit did not resume a checkpoint')
         const elapsed = performance.now() - start
         const bytes = result.pdf
         const digest = await crypto.subtle.digest('SHA-256', bytes)
@@ -198,9 +210,10 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           ms: elapsed, pdfBytes: bytes.length,
           pdfSha256: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join(''),
           typesetSha256: Array.from(new Uint8Array(normalizedDigest), (b) => b.toString(16).padStart(2, '0')).join(''),
-          log: result.log, incremental: result.incremental ?? false,
+          log: result.log, phaseTimings: result.phaseTimings ?? null,
+          preambleSnapshot: result.preambleSnapshot ?? null, preambleRebuilt: result.preambleRebuilt ?? null,
         }
-      }, { stage, variant, year, base, luaNamesProbe })
+      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
       if (stage === 'init' && !luaNamesProbe) {
         // Match the existing deterministic benchmark convention. Change only the

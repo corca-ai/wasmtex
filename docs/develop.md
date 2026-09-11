@@ -83,7 +83,12 @@ node scripts/summarize-font-profile.mjs /tmp/font-cpu/*.trace.json > /tmp/font-c
 ```
 
 `--engine` accepts `all` (default), `pdflatex`, `pdflatex-checkpoint`, `xelatex`,
-or `lualatex`. Preparation exercises every edit against a local caching proxy;
+or `lualatex`. The default checkpoint variant measures the Asyncify binary on a
+short document, not a prepared heap resume. Add `--checkpoint-probe true` with
+`--engine pdflatex-checkpoint` for a longer naturally paginated document; this
+records explicit preparation and requires the body edit to report a real heap
+resume. Natural pagination keeps the separate page-splicing path out of this
+probe. Preparation exercises every edit against a local caching proxy;
 measurement rejects any upstream cache miss. Loopback transfers remain, so use
 the request-free repeat/body stages to isolate engine work. The report retains
 asset hashes, preparation retries, per-stage requests, PDF hashes, and raw logs.
