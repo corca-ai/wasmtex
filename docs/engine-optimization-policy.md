@@ -116,6 +116,18 @@ that one current command enforces the complete policy. A missing check is work
 to complete before promotion, not permission to assume preservation. Do not
 refresh golden outputs to accept a difference in an optimization release.
 
+### SDK preparation is part of compatibility
+
+Apply the same contract to SDK warmup and filesystem preparation even when
+engine binaries and format bytes are unchanged. Test lookup outcomes before
+and after real package/font loading, then repeat and change the document.
+Preloading extensionless aliases can make a file exist too early; preloading
+canonical names can suppress aliases that the baseline creates on demand.
+Both can change valid `\IfFileExists` branches. Preserve those state transitions,
+including existing baseline cache behavior, rather than assuming canonical
+filenames or ordinary PDF equality establish safety.
+The [withdrawn Unicode experiment](compile-performance.md#withdrawn-unicode-startup-experiment) records the counterexample.
+
 ## Integrator adoption and rollback
 
 WasmTex remains host-agnostic. An integrating application owns the following

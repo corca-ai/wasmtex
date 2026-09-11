@@ -28,27 +28,28 @@ Worker round-trips include synchronous I/O and messaging; they are not CPU
 profiles. A consumer must measure its own queue, cache lifecycle, and PDF paint.
 See [development measurements](develop.md) and [warmup](warmup.md).
 
-## Unicode startup follow-up
+## Withdrawn Unicode startup experiment
 
-[PR #123](https://github.com/corca-ai/wasmtex/pull/123) adds canonical XeTeX
-runtime hints and supplements the LuaTeX manifest with Lua modules and Latin
-Modern fonts. These overlap worker initialization; see
-[Unicode preparation](warmup.md#unicode-runtime-preparation). The SDK-only
-change leaves all released engine, format and mirror bytes unchanged.
+[PR #123](https://github.com/corca-ai/wasmtex/pull/123) added runtime preloads
+and was published prematurely as `sdk-20260911-unicode-startup`. That release
+is **withdrawn** and must not be adopted. Its immutable tag/assets remain as
+audit evidence, with prerelease status and an explicit withdrawal notice.
+The runtime change has been reverted; existing engine and mirror releases stay
+unchanged. The consumer adoption was not merged.
 
-The extensionless-alias variant was rejected even though ordinary fontspec
-PDFs matched: it made `\IfFileExists{lmroman10-bold}` on XeTeX and
-`\IfFileExists{fontspec}` on LuaTeX change from absent to present in plain
-article documents. The final design materializes only canonical filenames and
-removes the alias-enrichment code. `src/engine/unicode-warmup.smoke.test.ts`
-verifies this boundary, canonical-file availability and repeated compiles on
-both annual lines without regenerating formats.
+Both preload variants violate the optimization compatibility policy. Injecting
+extensionless aliases makes a plain document's `\IfFileExists` succeed too
+early. Injecting canonical names avoids creating demand-time aliases, so the
+same check becomes false after fontspec where the baseline returns true.
+This affects `lmroman10-bold` in XeTeX and `fontspec` in LuaTeX. Ordinary
+fontspec PDFs matching is insufficient: both states and their transition must
+be covered. `src/engine/unicode-warmup.smoke.test.ts` tests that contract with
+unchanged engine assets on both annual lines.
 
-Run that standalone smoke with `WASMTEX_UNICODE_WARMUP_SMOKE=1`, an explicitly
-supplied `WASMTEX_SMOKE_PUBLIC_DIR`, and the paired `WASMTEX_SMOKE_TEXLIVE_VERSION`
-and `WASMTEX_SMOKE_TEXLIVE_URL` variables described in [development](develop.md).
-It requires no integrating-application checkout. Consumer timing and visible
-PDF qualification belong to the consumer's own tests and release record.
+Retry only with a design that preserves resolver state transitions as well as
+file bytes, including existing cache behavior. A transport-only prefetch or
+format-scoped deferred byte cache may be a candidate, but neither is qualified
+here. Startup gains from the rejected variants are not an adopted optimization.
 
 ## Deferred experiments
 
