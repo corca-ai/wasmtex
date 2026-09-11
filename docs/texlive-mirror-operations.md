@@ -9,6 +9,9 @@ mirror objects and their revision. Publish its engine assets under a new engine
 release identity; do not create a package snapshot or replace R2 objects merely
 because an engine binary changed.
 
+See [HTTP compression qualification](http-compression.md) for read-only transfer
+measurements and payload/HTTP encoding distinctions.
+
 ## Destination contract
 
 All publication, audit, bloom, and font-database tools use the same variables:

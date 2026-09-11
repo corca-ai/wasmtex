@@ -51,6 +51,12 @@ file bytes, including existing cache behavior. A transport-only prefetch or
 format-scoped deferred byte cache may be a candidate, but neither is qualified
 here. Startup gains from the rejected variants are not an adopted optimization.
 
+## HTTP compression follow-up
+
+The [HTTP compression qualification](http-compression.md) provides an independent
+public-asset diagnostic and records why additional format compression was
+deferred. Existing HTTP encoding and gzip payloads must be distinguished.
+
 ## Deferred experiments
 
 | Experiment | Decision and retry condition |
