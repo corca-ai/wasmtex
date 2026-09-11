@@ -1,10 +1,10 @@
 {
   "schemaVersion": 3,
   "texliveYear": "2026",
-  "distributionProfileId": "2026-20260826-8b79469",
+  "distributionProfileId": "2026-20260826-189e605",
   "discovery": {
     "name": "2026-latest",
-    "profileId": "2026-20260826-8b79469",
+    "profileId": "2026-20260826-189e605",
     "frozenAtFinal": false
   },
   "profiles": [
@@ -106,6 +106,45 @@
           "makeindex": 33163174571,
           "xetex": 33885502236,
           "luahbtex": 33885505118
+        }
+      },
+      "qualification": {
+        "browserGoldens": 7,
+        "nodeBrowserParity": 7,
+        "representativeEngines": [
+          "pdflatex",
+          "xelatex",
+          "lualatex"
+        ]
+      }
+    },
+    {
+      "id": "2026-20260826-189e605",
+      "label": "TeX Live 2026 latest (2026-08-26, engine 189e605)",
+      "snapshot": "2026-08-26",
+      "snapshotDate": "2026-08-26",
+      "mirror": {
+        "revision": "2026-ba38749b8714505a",
+        "url": "https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/",
+        "provenanceSha256": "7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00",
+        "objects": 168942
+      },
+      "engine": {
+        "releaseId": "2026-189e605bad83d618",
+        "tag": "engine-2026-189e605bad83d618",
+        "sourceRevisions": [
+          "06f1937c502188fe04f0931fed702d06c2b78ab3",
+          "0dddc924cc6e69bd2a4b4630e02efe414f84515e",
+          "5308ebadf5326ae685efb9223d401c5b02f021cd",
+          "ab3ec56d58b3d293a3dbbb610d4156296fd2c204"
+        ],
+        "correspondingSourceSha256": "3f836deaec56860df390c426f3198d5847a28c217950b693ce87a9e6a9cb583a",
+        "buildRuns": {
+          "pdftex-bibtex": 33885489901,
+          "bibtex8": 33163172428,
+          "makeindex": 33163174571,
+          "xetex": 34543873867,
+          "luahbtex": 34485572514
         }
       },
       "qualification": {
