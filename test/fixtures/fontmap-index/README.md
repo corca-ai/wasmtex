@@ -19,10 +19,10 @@ projects supplement the native table differential test and standard output corpu
 they do not alone qualify an engine release.
 
 `missing-subfont.json` deliberately omits `Unicode.sfd`. Both pinned upstream
-versions free its name before printing the missing-SFD warning (#133). Its
-baseline/candidate comparison **must fail** on `log`; that failure holds #132.
-Keep this case when requalifying a separately corrected baseline. Do not normalize
-the garbage warning or replace expected output to make the optimization pass.
+versions free its name before printing the missing-SFD warning (#133). The initial
+`evidence-20260912.tar.gz` comparison fails on `log`, which held #132. After the
+separate #134 correctness fix, fixed-baseline versus indexed comparison must pass
+with exact logs. Both generations of evidence are retained; no warning is normalized.
 
 `evidence-20260912.tar.gz` is immutable experiment evidence, not a golden-output
 update. It contains complete raw reports for five alternating timing pairs per
@@ -50,3 +50,13 @@ records matching harness hashes. The comparator also verifies original format an
 unaffected engine bytes, actual preloaded-format use and zero upstream misses.
 The small corpus has no returned XeTeX SyncTeX; geometry equality is recorded
 separately. Neither the raw reports nor the diagnostic build constitute a release.
+
+
+`requalification-20260912.tar.gz` records the fixed baseline (`67ee33d`) versus
+fixed-plus-index (`ce7ba66`): five alternating timing pairs and four compatibility
+projects per year, Node root results, and both artifact hash sets. All 40 timing
+and 64 compatibility pairs match. This includes `missing-subfont.json`, whose
+warning was the initial blocker. Extract it and run the same strict comparator
+with `fixed/report.json` and `indexed/report.json`; the initial archive instead
+uses `baseline` and `candidate` names. See the current decision and limits in
+[compile performance](../../../docs/compile-performance.md#font-map-index-qualification).

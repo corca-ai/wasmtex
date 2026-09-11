@@ -143,7 +143,9 @@ can be promoted. CorTeX adoption and its actual checkpoint/paint behavior remain
 separate integrator measurements.
 
 
-## Font-map index: speed target met, promotion held
+## Font-map index qualification
+
+### Initial hold
 
 [Draft PR #132](https://github.com/corca-ai/wasmtex/pull/132) retains the original
 503 bucket lists and traversal/destruction order, adding a font-map-only lookup
@@ -183,7 +185,7 @@ font styles. All 48 paired compiles in those projects also match, including
 structured diagnostics and XDV geometry. XeTeX returns no SyncTeX in these
 runs; that absence is recorded and is not a claim of SyncTeX qualification.
 
-**Do not promote this candidate.** A separate missing-SFD case reaches an
+The initial candidate was held. A separate missing-SFD case reaches an
 upstream use-after-free: `pdf_insert_fontmap_record` frees `sfd_name` before
 printing it in a warning. Changed heap layout changes the garbage diagnostic,
 so strict comparison fails even though the PDF matches. The table-only ASan
@@ -196,3 +198,47 @@ The [experiment fixtures and raw reports](../test/fixtures/fontmap-index/README.
 retain reproduction commands and the failed case. Normal engine release receipts,
 corresponding-source qualification, broader corpus/host checks, and application
 adoption remain outstanding. No new engine release or CorTeX profile is published.
+
+
+### Requalification after the SFD fix
+
+[PR #134](https://github.com/corca-ai/wasmtex/pull/134) separately corrects the
+filename lifetime and verifies the intended warning change. [PR #132](https://github.com/corca-ai/wasmtex/pull/132)
+is based on that fix; its optimization comparison requires exact logs again.
+The initial rejected evidence is retained, and no warning normalization is added.
+
+The fixed baseline is diagnostic source `67ee33d`; fixed-plus-index source is
+`ce7ba66`. Index builds are [2025](https://github.com/corca-ai/wasmtex/actions/runs/34655552676)
+and [2026](https://github.com/corca-ai/wasmtex/actions/runs/34655554829).
+The same original XeTeX/worker/format files and immutable mirrors listed above
+are retained. Five alternating untraced pairs per year produce these medians:
+
+| Stage | 2025 fixed → indexed | 2026 fixed → indexed |
+| --- | --- | --- |
+| Initialization | 63.0 → 63.1 ms | 63.1 → 65.8 ms |
+| First compile | 427.1 → 409.6 ms | 422.7 → 411.2 ms |
+| Repeat compile | 248.5 → 233.4 ms (6.1%) | 248.6 → 232.3 ms (6.6%) |
+| Body edit | 244.4 → 227.6 ms (6.9%) | 237.0 → 224.6 ms (5.2%) |
+| Preamble edit | 261.3 → 244.8 ms | 255.2 → 240.0 ms |
+| Repeat conversion routine | 59.4 → 44.0 ms (25.9%) | 64.8 → 48.2 ms (25.6%) |
+
+Both years meet the original 10% conversion and 5% warm end-to-end targets.
+The largest initialization median regression is 4.3% (2.7 ms); first compilation
+improves. These are controlled small-corpus measurements, not production percentiles.
+The index allocation remains about 0.50 MiB for the measured map.
+
+All 40 paired timing compiles and 64 additional paired compatibility compiles
+match, including the formerly failing missing-SFD log, real map/subfont changes,
+error recovery, multi-file references, auxiliaries, diagnostics, geometry,
+dependencies and conversion inputs. Additional Node comparisons preserve both
+standard root documents on each year. Node tests fix the clock through a CommonJS
+preload; raw compressed creation dates otherwise make even A/A checks differ.
+The default Node checker still exposes the pre-existing nested-output defect
+[#135](https://github.com/corca-ai/wasmtex/issues/135); identical failure outcomes
+and logs are recorded, not described as successful nested support.
+
+Decision: the index is a qualified adoption candidate after the separate correctness
+fix. The [raw requalification bundle](../test/fixtures/fontmap-index/README.md)
+records both sides and build inputs. The ordered PRs, full engine-family release
+receipts/corresponding-source qualification and integrator adoption are still
+separate steps; no production engine or CorTeX profile has been changed here.

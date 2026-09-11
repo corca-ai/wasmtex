@@ -117,7 +117,7 @@ For paired dvipdfmx experiments, `profile-font-cpu.mjs --project <project.json>
 It records conversion routine spans, auxiliary hashes, diagnostics, geometry and
 file dependencies. `scripts/compare-fontmap-reports.mjs baseline/report.json
 candidate/report.json` rejects output, log, dependency or unaffected-asset changes.
-See the [font-map experiment decision](compile-performance.md#font-map-index-speed-target-met-promotion-held).
+See the [font-map experiment decision](compile-performance.md#font-map-index-qualification).
 
 ## The committed `lib/` bundle
 
