@@ -2,6 +2,10 @@
 
 This guide is for developers contributing to the `wasmtex` codebase.
 
+Before modifying engine internals, build flags, memory handling, or execution
+glue for performance, read the [engine optimization policy](engine-optimization-policy.md).
+It defines standalone compatibility evidence and the separate integrator adoption boundary.
+
 ## Quick Start
 
 ```bash
@@ -114,3 +118,82 @@ NODE_COMPILE_SMOKE=1 npx vitest run src/engine/node-compile.smoke.test.ts
 # Client/server parity vs the browser golden — pdflatex + lualatex + xelatex + bibtex
 CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 ```
+
+For the Unicode initialization-heap optimization, stage baseline and candidate
+asset trees separately, retaining identical WASM, generated JS, and base formats.
+`worker-heap-restore.test.ts` exercises authored controllers through compile
+messages, including zero suffixes, memory growth, and ICU re-snapshotting. The
+opt-in real-engine differential checks PDFs, auxiliary files, diagnostics, and
+repeated body/preamble edits, and rejects fallback format generation. It stages
+temporary controller copies with an identical fixed clock on both sides:
+dvipdfmx can embed dates inside compressed PDF objects, which the ordinary
+PDF date-field normalization does not remove. Release files are untouched.
+
+```bash
+WASMTEX_HEAP_BASELINE_DIR=/path/to/baseline-public \
+WASMTEX_SMOKE_PUBLIC_DIR=/path/to/candidate-public \
+WASMTEX_SMOKE_TEXLIVE_VERSION=2026 \
+WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+npx vitest run src/engine/unicode-heap-restore.smoke.test.ts
+```
+
+Repeat with the matching 2025 profile when both annual lines are affected.
+For an engine binary or build-flag change, also set
+`WASMTEX_HEAP_REBUILT_ENGINE=1`. This permits different WASM/generated JS while
+still requiring byte-identical compressed formats and rejecting format
+regeneration. Record how each candidate was built; this flag does not verify
+source provenance or qualify a binary edited outside the source build pipeline.
+This focused differential complements the browser and release gates in the
+[engine optimization policy](engine-optimization-policy.md); it does not itself
+qualify a CorTeX successor.
+
+For the broader Unicode feature comparison, use the same baseline/candidate and
+annual mirror variables with `WASMTEX_UNICODE_COMPAT=1`, then run
+`npx vitest run src/engine/unicode-compatibility.smoke.test.ts`. It reuses the
+baseline compressed formats and compares repeated Unicode math, PDF import,
+TikZ, project-local and Korean fonts, BibTeX, index, TeX error, nested main files, and
+recovery runs in the same worker. PDF bytes,
+available SyncTeX, geometry, diagnostics, recorder inputs, dependency graphs,
+glyph coverage, and bibliography/index outputs must match. This remains a
+focused corpus; source build and CorTeX rollout gates are separate requirements.
+The nested XeTeX case explicitly records an existing dvipdfmx output-path defect:
+after a previous successful root compile, it returns that previous PDF. Matching
+this known failure is evidence of unchanged behavior, not successful nested-path
+support. A separate correctness fix must update that expectation and qualify its
+intended output change. The fixtures are shared in
+`e2e/unicode-compatibility-corpus.ts` for browser differential runs.
+
+Stage downloaded source builds for these tests without substituting their newly
+generated formats:
+
+```bash
+node scripts/stage-unicode-qualification.mjs \
+  --year 2026 --source <full-candidate-commit> \
+  --baseline /path/to/baseline-public/wasmtex/2026 \
+  --xetex /path/to/downloaded-xetex-artifact \
+  --luahbtex /path/to/downloaded-luatex-artifact \
+  --output-public /path/to/new-qualification-public
+```
+
+The stager verifies receipts and artifact hashes, the source pin, toolchain,
+mirror, and expected candidate commit. It keeps the baseline formats, records
+both generation histories in `QUALIFICATION-INPUTS.json`, and removes release
+metadata that would describe the wrong bytes. Its output is test-only, not a
+release assembly or a substitute for corresponding-source qualification.
+One family option may be omitted to verify an earlier completed build; the other
+family then retains its baseline assets and receipt. Select the rebuilt engine's
+tests explicitly and do not count the unchanged family as a qualified rebuild.
+
+### Compile pipeline probe
+
+`e2e/compile-pipeline-probe.ts` exports `measureCompilePipeline(options)` for
+a standalone development page. Supply explicit engine assets, mirror and a
+text `main.tex`; it runs cold, unchanged, body-edit, preamble-edit and restore
+cases through the real headless SDK. Run probes serially in one JS context.
+Worker command round-trips include synchronous I/O and message overhead. File
+writes and parent fetch-header timings can overlap and must not be summed into
+wall time. Unsupported worker CPU/network timings remain unobserved rather than
+being reported as zero. Integrators measure their own debounce, queue and viewer
+paint separately; this helper imports no application code and is not shipped
+in the SDK bundle. Use a fixed test clock for PDF hash comparisons and record
+both preload and initialization cost when evaluating a warmup candidate.

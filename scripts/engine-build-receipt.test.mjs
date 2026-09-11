@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
 import {
   createBuildReceipt,
+  composeFormatReceipt,
+  receiptSourceRevisions,
   validateBuildReceipt,
   validateSourceConfig,
 } from './lib/engine-build-receipt.mjs'
@@ -229,4 +231,35 @@ test('rejects a missing or mutable mirror identity', () => {
       }),
     /immutable mirror revision/,
   )
+})
+
+
+test('reuses exact formats with both generation histories and rejects a relabelled composition', () => {
+  const { artifacts, config } = fixture()
+  const make = (revision) => createBuildReceipt({
+    family: 'xetex', directory: artifacts,
+    filenames: ['engine.js', 'engine.wasm', 'wasmtex-xetex.fmt.gz'],
+    sourceRevision: revision, texliveSourceCommit: COMMIT, mirror: MIRROR, config,
+  })
+  writeFileSync(join(artifacts, 'wasmtex-xetex.fmt.gz'), 'published compressed format')
+  const formats = make(COMMIT)
+  writeFileSync(join(artifacts, 'engine.js'), 'optimized engine')
+  writeFileSync(join(artifacts, 'wasmtex-xetex.fmt.gz'), 'regenerated format: do not publish')
+  const engine = make('f'.repeat(40))
+  const receipt = composeFormatReceipt({ engine, formats, config })
+  assert.deepEqual(receiptSourceRevisions(receipt), [COMMIT, 'f'.repeat(40)])
+  assert.deepEqual(receipt.generationReceipts, { engine, formats })
+  assert.ok(validateBuildReceipt(receipt, { config, actualDirectory: artifacts }).some(x => x.includes('SHA-256 mismatch')))
+  writeFileSync(join(artifacts, 'wasmtex-xetex.fmt.gz'), 'published compressed format')
+  assert.deepEqual(validateBuildReceipt(receipt, { config, actualDirectory: artifacts }), [])
+  const tampered = structuredClone(receipt)
+  tampered.sourceRevision = COMMIT
+  assert.ok(validateBuildReceipt(tampered, { config }).some(x => x.includes('sourceRevision')))
+  const changedFiles = structuredClone(receipt)
+  changedFiles.files = engine.files
+  assert.ok(validateBuildReceipt(changedFiles, { config }).some(x => x.includes('files')))
+  const badOrigin = structuredClone(formats)
+  badOrigin.files[0].sha256 = '0'.repeat(64)
+  assert.throws(() => composeFormatReceipt({ engine, formats: badOrigin, config }), /buildId/)
+  assert.throws(() => composeFormatReceipt({ engine: receipt, formats, config }), /original schema-1/)
 })

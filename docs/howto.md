@@ -19,7 +19,8 @@ bun add github:corca-ai/wasmtex#main
 
 **Notes:**
 - `monaco-editor` and `pdfjs-dist` are peer dependencies and must be installed
-  separately (see [Worker Setup](#worker-setup-required)).
+  separately for the built-in editor and viewer (see [Worker Setup](#worker-setup-required)).
+  `pdfjs-dist` is optional for headless and SyncTeX consumers using their own renderer.
 - A GitHub install builds the library locally via the `prepare` script, so the
   install machine needs the toolchain (**Node.js ≥ 24**). Pin a tag/commit
   instead of `#main` for reproducible builds.

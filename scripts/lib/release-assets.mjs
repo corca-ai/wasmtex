@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { validateBuildReceipt } from './engine-build-receipt.mjs'
+import { receiptSourceRevisions, validateBuildReceipt } from './engine-build-receipt.mjs'
 
 const RECEIPT_NAME = /^BUILD-RECEIPT\.([a-zA-Z0-9_-]+)\.json$/
 
@@ -71,6 +71,7 @@ export function inspectReleaseAssets({ directory, legal, sourceConfig }) {
       family: receipt.family,
       buildId: receipt.buildId,
       sourceRevision: receipt.sourceRevision,
+      ...(receipt.schemaVersion === 2 ? { sourceRevisions: receiptSourceRevisions(receipt) } : {}),
     })
   }
 

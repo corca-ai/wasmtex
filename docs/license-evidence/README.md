@@ -6,6 +6,12 @@ revision in its name; they are records, not living documents — supersede them
 with a new snapshot instead of editing history. `npm run check:licenses`
 requires the load-bearing set to stay tracked.
 
+## Compile performance successors (`de011da`)
+
+[`compile-performance-de011da.md`](compile-performance-de011da.md) records
+the 2025-final/2026-dated optimization releases, reused format provenance,
+source hashes, clean rebuild comparisons, and independent compatibility gates.
+
 ## TeX Live 2025 final profile (`e7cfc9d`)
 
 | File | What it evidences |

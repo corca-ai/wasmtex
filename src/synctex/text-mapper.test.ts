@@ -1,8 +1,7 @@
-import type * as pdfjsLib from 'pdfjs-dist'
 import { describe, expect, it } from 'vitest'
-import { TextMapper } from './text-mapper'
+import { TextMapper, type TextMapperPage } from './text-mapper'
 
-// Mock PDFPageProxy with minimal getTextContent + getViewport
+// A renderer supplies only text and coordinate conversion.
 function mockPage(
   items: Array<{ str: string; transform: number[]; width: number; height: number }>,
 ) {
@@ -14,7 +13,7 @@ function mockPage(
       // Standard non-rotated page: flip Y from bottom-left to top-left origin
       convertToViewportPoint: (x: number, y: number) => [x, 800 - y],
     }),
-  } as unknown as pdfjsLib.PDFPageProxy
+  } satisfies TextMapperPage
 }
 
 /** Create a mockPage, index it, and return the mapper for lookups. */

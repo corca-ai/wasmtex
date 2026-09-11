@@ -64,6 +64,9 @@ export interface CompileResult {
      *  this result (including a reused preamble snapshot). Absent means unproven,
      *  which preserves safety with older worker assets. */
     inputFilesComplete?: boolean;
+    /** Bounded successful read opens from PDF conversion. Additional evidence only;
+     * completeness remains unproven (e.g. already-open streams). Older assets omit it. */
+    pdfConversionInputs?: string[];
     /** Raw .trace file content from semantic trace hooks */
     semanticTrace?: string;
     /** Fonts that lack glyphs for characters the document actually uses. Present
@@ -303,7 +306,7 @@ export type CompletionSnapshotState = {
     snapshot: CompletionSnapshot;
 };
 export type DependencyManifestStage = 'latex' | 'bibliography' | 'index' | 'pdf-conversion';
-export type DependencyManifestSource = 'recorder' | 'backend-request' | 'log' | 'source' | 'xdv';
+export type DependencyManifestSource = 'recorder' | 'backend-request' | 'log' | 'source' | 'xdv' | 'filesystem';
 export type DependencyManifestIncompleteReason = 'compile-failed' | 'recorder-unavailable' | 'engine-recorder-unavailable' | 'pdf-conversion-recorder-unavailable' | 'incremental-dependencies-unavailable' | 'auxiliary-stage-failed';
 export interface DependencyManifestCoverage {
     stage: DependencyManifestStage;

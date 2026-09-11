@@ -4,6 +4,11 @@ WasmTex publishes immutable TeX Live snapshots to Cloudflare R2 through the
 public custom domain `https://texlive.corca.ai`. Mirror identity remains derived from object bytes and
 does not contain either the bucket or public hostname.
 
+An [engine-only optimization](engine-optimization-policy.md) reuses these exact
+mirror objects and their revision. Publish its engine assets under a new engine
+release identity; do not create a package snapshot or replace R2 objects merely
+because an engine binary changed.
+
 ## Destination contract
 
 All publication, audit, bloom, and font-database tools use the same variables:

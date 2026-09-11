@@ -5,6 +5,7 @@
 // here so a warmup-only context never drags in the full editor bundle. `warmup` is also
 // re-exported from the root `wasmtex` barrel for the all-in-one editor case.
 
+export { mergeTexliveDependencySets } from './engine/texlive-dependencies'
 export { type WarmupOptions, warmup } from './engine/warmup'
 export type {
   CachedTexliveFile,

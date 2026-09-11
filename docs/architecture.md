@@ -10,6 +10,10 @@
 
 ## High-Level Overview
 
+Engine performance changes must follow the [engine optimization policy](engine-optimization-policy.md):
+preserve formats, output, and the TeX Live mirror while publishing a separately
+identified engine release that existing CorTeX projects can adopt transparently.
+
 ```
 [ Host Application ]
       ↓

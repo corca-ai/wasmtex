@@ -50,3 +50,14 @@ test('requires every composed receipt to bind the pinned mirror', () => {
     /receipt mirror does not match the pinned release mirror/,
   )
 })
+
+test('pins reused formats separately and rejects cross-year or duplicate origins', () => {
+  const candidate = structuredClone(config)
+  candidate.years['2026'].reusedFormats = [{ family: 'xetex', runId: 1, artifact: 'wasm-xetex-2026' }]
+  assert.doesNotThrow(() => validateEngineReleaseComponents(candidate, '2026'))
+  candidate.years['2026'].reusedFormats[0].artifact = 'wasm-xetex'
+  assert.throws(() => validateEngineReleaseComponents(candidate, '2026'), /format workflow/)
+  candidate.years['2026'].reusedFormats[0].artifact = 'wasm-xetex-2026'
+  candidate.years['2026'].reusedFormats.push({ ...candidate.years['2026'].reusedFormats[0] })
+  assert.throws(() => validateEngineReleaseComponents(candidate, '2026'), /duplicate reused format/)
+})

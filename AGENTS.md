@@ -16,7 +16,9 @@ To provide a high-performance, **embeddable LaTeX component** for academic platf
 - **[API Reference](docs/api.md)**: Comprehensive documentation of the `WasmTex` class methods, constructor options, and event system. Refer to this for any API changes or additions.
 - **[Bibliography Backends](docs/bibliography.md)**: BibTeX vs biblatex/Biber detection and the pluggable backend interface.
 - **[Warmup / Preload](docs/warmup.md)**: Eliminating first-compile cold start by pre-fetching TeX Live files.
+- **[Compile Performance](docs/compile-performance.md)**: Adopted and deferred engine/SDK experiments, measurement limits, and release qualification.
 - **[WASM & TeX Live](docs/engine.md)**: Overview of the compilation engine and CDN.
+- **[Engine Optimization Policy](docs/engine-optimization-policy.md)**: Required before engine-internal, memory, build-flag, or execution optimizations. Preserve existing TeX Live mirrors, format bytes, and output; deliver to existing CorTeX projects without migrations or additional TeX Live choices.
 - **[TeX Live Internals & Upgrade](docs/texlive-upgrade.md)**: Deep dive into the kpathsea fallback, immutable R2 structure, the [upstream-maintenance philosophy (interpose, don't patch)](docs/texlive-upgrade.md#upstream-maintenance-interpose-dont-patch), and the guide for upgrading to a new TeX Live year.
 - **[TeX Live mirror operations](docs/texlive-mirror-operations.md)**: Provider-neutral publication, R2 custom-domain configuration, immutable snapshots, verification, rollback, and origin retirement.
 - **[Development Guide](docs/develop.md)**: Essential guide for contributors, covering environment setup, CLI commands, and testing strategies (Vitest/Playwright).

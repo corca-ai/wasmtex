@@ -186,6 +186,8 @@ elif [ -f libluaharfbuzzsubset.a ]; then
   # introduces the split subset binding before its year-specific gate lands.
   LUATEX_HARFBUZZ_ARCHIVES+=(libluaharfbuzzsubset.a)
 fi
+# Keep the initial heap at 128 MiB to bound snapshot/reset work; larger documents
+# grow it on demand. Qualify changes against existing formats (optimization policy).
 em++ -O2 "${LUATEX_DEBUG_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   luatex-entry.o kpse-hook.o \
@@ -202,7 +204,7 @@ em++ -O2 "${LUATEX_DEBUG_FLAGS[@]}" \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
   -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
-  -sINITIAL_MEMORY=805306368 \
+  -sINITIAL_MEMORY=134217728 \
   --js-library "$GLUE/luatex-library.js" \
   -o "$OUT/wasmtex-luatex.js"
 [ -s "$OUT/wasmtex-luatex.map" ] || { echo "LuaHBTeX link map was not generated"; exit 1; }

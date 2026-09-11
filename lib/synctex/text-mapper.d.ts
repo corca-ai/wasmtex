@@ -1,4 +1,22 @@
-import type * as pdfjsLib from 'pdfjs-dist';
+/** Minimal renderer contract; coordinates are PDF user space at scale one. */
+export interface TextMapperPage {
+    getTextContent(): Promise<{
+        readonly items: readonly (TextMapperItem | {
+            readonly type: string;
+        })[];
+    }>;
+    getViewport(options: {
+        scale: number;
+    }): {
+        convertToViewportPoint(x: number, y: number): readonly number[];
+    };
+}
+export interface TextMapperItem {
+    readonly str: string;
+    readonly transform: readonly number[];
+    readonly width: number;
+    readonly height: number;
+}
 export interface SourceLocation {
     file: string;
     line: number;
@@ -26,7 +44,7 @@ export declare class TextMapper {
      */
     setSources(sources: Iterable<readonly [string, string]>): void;
     /** Extract text blocks from a PDF page */
-    indexPage(page: pdfjsLib.PDFPageProxy, pageNum: number): Promise<void>;
+    indexPage(page: TextMapperPage, pageNum: number): Promise<void>;
     /** Find the source line for a click at (x, y) on the given page */
     lookup(pageNum: number, x: number, y: number): SourceLocation | null;
     /** Forward search: find PDF position for a source line */

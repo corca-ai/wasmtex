@@ -58,16 +58,21 @@ function _allocate(content) {
 // with "No font selected!" and the 3rd crashes (#82). Snapshot the pristine post-init
 // heap and restore it before every compile. The font/map cache lives in MEMFS (JS
 // side, outside the wasm heap), so it survives the restore — no re-fetch. Mirrors the
-// xetex worker. `.set(initmem)` into a (possibly grown) buffer rewrites only the
-// pristine prefix; the grown tail is unused capacity, which is correct.
+// xetex worker. Retain the nonzero prefix and the original extent, so restoring
+// the omitted zero suffix preserves the full snapshot without retaining it.
 function dumpHeapMemory() {
   const src = HEAPU8.buffer
-  const dst = new Uint8Array(src.byteLength)
-  dst.set(new Uint8Array(src))
-  return dst
+  const words = new Uint32Array(src)
+  let end = words.length
+  while (end > 0 && words[end - 1] === 0) end--
+  return { bytes: new Uint8Array(src, 0, end * 4).slice(), byteLength: src.byteLength }
 }
 function restoreHeapMemory() {
-  if (self.initmem) new Uint8Array(HEAPU8.buffer).set(self.initmem)
+  if (!self.initmem) return
+  const dst = new Uint8Array(HEAPU8.buffer)
+  dst.set(self.initmem.bytes)
+  dst.fill(0, self.initmem.bytes.length, self.initmem.byteLength)
+  // Preserve the old reset boundary after growth; the later extent is untouched.
 }
 
 /** Run an engine entry point. The from-texlive-source dvipdfmx ends by calling
@@ -147,6 +152,40 @@ function jobNameForMain(mainFile) {
   return name.replace(/\.[^.]+$/, '')
 }
 
+// Observe successful read opens, including native/MEMFS hits that bypass the
+// HTTP resolver. This is bounded evidence, not a completeness guarantee: an
+// already-open stream or a new engine I/O path could bypass FS.open.
+function observeConversionInputs(fn) {
+  const inputs = new Set()
+  const open = FS.open
+  FS.open = function (...args) {
+    const stream = open.apply(this, args)
+    try {
+      const path = stream.path
+      if ((stream.flags & 3) !== 1 && FS.isFile(stream.node.mode) &&
+          typeof path === 'string' && path.length <= 4096 &&
+          (path.startsWith(`${WORKROOT}/`) || path.startsWith(`${TEXCACHEROOT}/`)) &&
+          inputs.size < 4096) inputs.add(path)
+    } catch {} // Observation must never change a successful engine open.
+    return stream
+  }
+  let status
+  try { status = runEngine(fn) } finally { FS.open = open }
+  // Only keys whose backing file was actually opened count as mirror evidence.
+  // The last writer owns each path: two format keys can share a basename.
+  for (const path of inputs) {
+    const key = texliveFileKeys[path]
+    if (!key) continue
+    const slash = key.indexOf('/')
+    if (slash < 0) continue
+    self.wasmtexResolverEvidence(key.slice(slash + 1), Number(key.slice(0, slash)), 'resolved', [{
+      source: texlive200Source[key] || 'session-cache', outcome: 'hit',
+      candidate: path.slice(TEXCACHEROOT.length + 1),
+    }])
+  }
+  return { status, inputFiles: [...inputs].sort(), inputFilesComplete: false }
+}
+
 function compilePDFRoutine() {
   self.memlog = ''
   restoreHeapMemory()
@@ -159,9 +198,10 @@ function compilePDFRoutine() {
   } catch {}
   writeTexmfCnf()
   cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
-  const status = runEngine(_compilePDF)
+  const observation = observeConversionInputs(_compilePDF)
+  const { status } = observation
   if (status !== 0) {
-    self.postMessage({ result: 'failed', status, log: self.memlog, cmd: 'compile' })
+    self.postMessage({ ...observation, result: 'failed', status, log: self.memlog, cmd: 'compile' })
     return
   }
   try {
@@ -171,11 +211,11 @@ function compilePDFRoutine() {
       encoding: 'binary',
     })
     self.postMessage(
-      { result: 'ok', status: 0, log: self.memlog, pdf: pdf.buffer, cmd: 'compile' },
+      { ...observation, result: 'ok', status: 0, log: self.memlog, pdf: pdf.buffer, cmd: 'compile' },
       [pdf.buffer],
     )
   } catch {
-    self.postMessage({ result: 'failed', status: -253, log: self.memlog, cmd: 'compile' })
+    self.postMessage({ ...observation, result: 'failed', status: -253, log: self.memlog, cmd: 'compile' })
   }
 }
 
@@ -213,6 +253,7 @@ self.onmessage = (ev) => {
       FS.writeFile(savepath, new Uint8Array(data.data))
       const cacheKey = `${data.format}/${data.filename}`
       texlive200[cacheKey] = savepath
+      texliveFileKeys[savepath] = cacheKey
       texlive200Source[cacheKey] = data.source === 'persistent-cache'
         ? 'persistent-cache'
         : 'warmup-cache'
@@ -260,6 +301,7 @@ const texlive404 = {}
 const texlive200 = {}
 const texlive404Source = {}
 const texlive200Source = {}
+const texliveFileKeys = {}
 
 /** Canonical extension for a kpse format (for extension-less requests). */
 const FORMAT_EXT = { 4: '.afm', 26: '.tex', 32: '.pfb', 36: '.ttf', 47: '.otf' }
@@ -343,9 +385,11 @@ function kpse_find_file_impl(nameptr, format) {
       const withExt = `${TEXCACHEROOT}/${filename}`
       const bare = `${TEXCACHEROOT}/${reqname}`
       FS.writeFile(withExt, bytes)
+      texliveFileKeys[withExt] = `${dir}/${filename}`
       if (bare !== withExt) {
         try {
           FS.writeFile(bare, bytes)
+          texliveFileKeys[bare] = `${dir}/${filename}`
         } catch {}
       }
       texlive200[cacheKey] = withExt

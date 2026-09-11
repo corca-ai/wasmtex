@@ -238,6 +238,8 @@ if [ -n "$NM" ]; then
     echo "ERROR: kpse_find_file not defined in '$KPLIB' — -Wl,--wrap=kpse_find_file would no-op (interposition drift)" >&2; exit 1
   fi
 fi
+# Keep the initial heap at 128 MiB to bound snapshot/reset work; larger documents
+# grow it on demand. Qualify changes against existing formats (optimization policy).
 # XEOBJS must expand to separate linker arguments.
 # shellcheck disable=SC2086
 em++ -O2 -g0 \
@@ -257,7 +259,7 @@ em++ -O2 -g0 \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
   -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_compileBibtex","_main","_setMainEntry","_set_icu_common_data","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
-  -sINITIAL_MEMORY=805306368 \
+  -sINITIAL_MEMORY=134217728 \
   --js-library "$GLUE/xetex-library.js" \
   -o "$OUT/wasmtex-xetex.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
 

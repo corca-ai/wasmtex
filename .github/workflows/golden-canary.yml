@@ -52,7 +52,9 @@ jobs:
         run: npx playwright test golden-output
 
       - name: Cross-host parity (Node host ≡ browser golden) — S4 #111
-        if: matrix.texlive_year == '2025'
+        env:
+          WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.texlive_year }}
+          WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.texlive_url }}
         run: CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 
       - name: Upload Playwright report on failure

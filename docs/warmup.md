@@ -41,6 +41,13 @@ The root `import { warmup } from 'wasmtex'` above remains for the all-in-one edi
 6. Known-404 entries are batch-injected into the worker's 404 cache, preventing wasted XHR
 7. The bloom filter is sent to the worker, which uses it to skip XHR for files not on the CDN (if warmup is not used, the engine fetches the bloom filter directly during `init()`)
 
+The supplied cache is consumed by pdfLaTeX, XeLaTeX (both TeX and PDF-conversion
+workers), and LuaLaTeX. Unicode workers copy transferred buffers so the caller
+can reuse its cache; supplied positives also avoid duplicate built-in prefetches.
+Unicode preloads sharing one basename with conflicting bytes are omitted to
+preserve the normal resolver behavior of their flat cache directories. A partial
+cache remains best-effort: missing files use the normal resolver.
+
 ## Options
 
 ```ts
@@ -141,3 +148,14 @@ Measured with Playwright (Chromium, localhost dev server):
 | Time to first PDF | ~4.9s | ~2.9s |
 
 The warmup fetch runs concurrently with other page initialization (Monaco loading, DOM setup), so the effective cost is near zero when called early enough.
+
+## Retaining learned prefetch sets
+
+A later warm run can report fewer resolver lookups because native cache hits
+bypass the HTTP resolver. Hosts can merge the previous learned set with a new
+one using `mergeTexliveDependencySets(previous, next)` from `wasmtex/warmup`.
+It unions resources and absences, preserves resolved candidate names, and lets
+a positive resource override a negative. Different profile IDs, years, or mirror
+revisions do not merge: the new set wins. Inputs are not mutated. Hosts still
+own bounded storage, project identity, and atomic updates. This is speculative
+prefetch evidence, not permission to mark project invalidation complete.

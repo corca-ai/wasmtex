@@ -1,3 +1,4 @@
+import { receiptSourceRevisions, validateBuildReceipt } from './engine-build-receipt.mjs'
 import { createHash } from 'node:crypto'
 import {
   closeSync,
@@ -97,7 +98,18 @@ export function checkCorrespondingSourceDirectory({ directory, config, assetMani
     failures.push('bundled license manifest SHA-256 mismatch')
   }
 
-  const expectedRevisions = new Set(assetManifest?.buildReceipts?.map((item) => item.sourceRevision) ?? [])
+  for (const file of manifest.assemblyTools ?? []) {
+    if (typeof file.path !== 'string' || !file.path.startsWith('assembly/') || !SHA256.test(file.sha256 ?? '')) {
+      failures.push('invalid assembly source record')
+      continue
+    }
+    const path = requireFile(directory, file.path, failures)
+    if (existsSync(path) && hashFile('sha256', path) !== file.sha256) {
+      failures.push(`${file.path}: assembly source SHA-256 mismatch`)
+    }
+  }
+
+  const expectedRevisions = new Set(assetManifest?.buildReceipts?.flatMap((item) => item.sourceRevisions ?? [item.sourceRevision]) ?? [])
   const recordedRevisions = new Set()
   for (const source of manifest.sources?.wasmtex ?? []) {
     if (!GIT_COMMIT.test(source.commit ?? '') || !GIT_COMMIT.test(source.tree ?? '')) {
@@ -170,6 +182,16 @@ export function checkCorrespondingSourceDirectory({ directory, config, assetMani
     if (existsSync(path)) {
       try {
         const value = JSON.parse(readFileSync(path, 'utf8'))
+        if (value.schemaVersion === 2) {
+          for (const required of ['assembly/LICENSE', 'assembly/scripts/reuse-engine-formats.mjs',
+            'assembly/scripts/lib/engine-build-receipt.mjs', `assembly/scripts/corresponding-source-${value.texliveYear}.json`]) {
+            if (!manifest.assemblyTools?.some((file) => file.path === required)) failures.push(`missing assembly source: ${required}`)
+          }
+          for (const error of validateBuildReceipt(value, { config })) failures.push(`${receipt.name}: ${error}`)
+        }
+        if (JSON.stringify(receiptSourceRevisions(value)) !== JSON.stringify(receipt.sourceRevisions ?? [receipt.sourceRevision])) {
+          failures.push(`${receipt.name}: bundled format/source revisions mismatch`)
+        }
         if (value.sourceRevision !== receipt.sourceRevision) {
           failures.push(`${receipt.name}: bundled source revision mismatch`)
         }

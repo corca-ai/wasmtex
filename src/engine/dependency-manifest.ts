@@ -146,11 +146,18 @@ function observeEngineDependencies(
   }
 
   return {
-    projectInputs: new Set([...recorderInputs, ...graphProjectInputs(result, candidates)]),
+    projectInputs: new Set([
+      ...recorderInputs,
+      ...graphProjectInputs(result, candidates),
+      ...observedProjectInputs(result.pdfConversionInputs ?? [], candidates),
+    ]),
     coverage: [
       { stage: 'latex', source: 'recorder', complete: recorderComplete },
       { stage: 'pdf-conversion', source: 'log', complete: false },
       { stage: 'pdf-conversion', source: 'xdv', complete: false },
+      ...(result.pdfConversionInputs
+        ? [{ stage: 'pdf-conversion' as const, source: 'filesystem' as const, complete: false }]
+        : []),
     ],
     incompleteReason: recorderComplete
       ? 'pdf-conversion-recorder-unavailable'

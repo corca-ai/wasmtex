@@ -901,6 +901,7 @@ The built-in viewer paints all returned regions.
 | `TextMapper` | Maps between `PdfLocation` and `SourceLocation` using the parsed data. |
 | `normalizeSynctexInputName` | Normalizes an input path as SyncTeX records it (for matching project files). |
 | `SynctexData` / `SynctexNode` / `PdfLocation` / `SourceLocation` | Result/coordinate types. |
+| `TextMapperPage` / `TextMapperItem` | Minimal text extraction and coordinate conversion contract for any PDF renderer; no PDF.js dependency. |
 
 ## Methods
 

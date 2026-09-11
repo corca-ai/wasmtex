@@ -66,6 +66,17 @@ export function validateEngineReleaseComponents(config, year) {
     throw new Error(`${year}: component artifacts do not cover the annual engine set exactly`)
   }
   if (runIds.size !== 5) throw new Error(`${year}: expected five independently pinned workflow runs`)
+  const formatFamilies = new Set()
+  for (const origin of release.reusedFormats ?? []) {
+    if (!['xetex', 'luahbtex'].includes(origin.family) || formatFamilies.has(origin.family)) {
+      throw new Error(`${year}: invalid or duplicate reused format family`)
+    }
+    formatFamilies.add(origin.family)
+    const artifact = origin.family === 'xetex' ? 'wasm-xetex' : 'wasm-luatex'
+    if (origin.artifact !== `${artifact}${suffix}` || !Number.isSafeInteger(origin.runId) || origin.runId <= 0) {
+      throw new Error(`${year}: invalid reused format workflow origin`)
+    }
+  }
   return release
 }
 

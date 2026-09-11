@@ -115,7 +115,14 @@ export function mergeTexliveDependencySets(
   previous: TexliveDependencySet | undefined,
   next: TexliveDependencySet,
 ): TexliveDependencySet {
-  if (!previous) return next
+  if (
+    !previous ||
+    previous.texliveVersion !== next.texliveVersion ||
+    previous.profile.id !== next.profile.id ||
+    previous.profile.texliveYear !== next.profile.texliveYear ||
+    previous.profile.mirrorRevision !== next.profile.mirrorRevision
+  )
+    return next
   const files = new Map<string, TexliveDependency>()
   for (const entry of previous.files) files.set(`${entry.format}/${entry.filename}`, entry)
   for (const entry of next.files) {

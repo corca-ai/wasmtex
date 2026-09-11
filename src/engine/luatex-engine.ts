@@ -36,6 +36,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
         texliveYear: version,
         mirrorRevision: null,
       },
+      options.warmupCache,
     )
   }
 

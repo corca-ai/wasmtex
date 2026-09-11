@@ -484,7 +484,9 @@ describe('LatexSyntaxService', () => {
       documentVersion: 1,
     })
     expect(syntax.scopes.filter((scope) => scope.kind === 'section')).toEqual([])
-  })
+    // This 20,000-definition functional stress fixture exceeds Vitest's generic
+    // 5s timeout under Linux CI coverage instrumentation; it is not a latency budget.
+  }, 15_000)
 
   it('nests display environments inside the actual surrounding section', () => {
     const content =

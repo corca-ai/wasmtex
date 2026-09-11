@@ -140,6 +140,7 @@ export function createBuildReceipt({
 }
 
 export function validateBuildReceipt(receipt, { config, actualDirectory = null } = {}) {
+  if (receipt.schemaVersion === 2) return validateFormatComposition(receipt, { config, actualDirectory })
   const failures = []
   const fail = (message) => failures.push(message)
   try {
@@ -224,4 +225,67 @@ export function validateBuildReceipt(receipt, { config, actualDirectory = null }
   )
   if (receipt.buildId !== expectedBuildId) fail('receipt buildId does not match its contents')
   return failures
+}
+
+/** Compose new engine bytes with unchanged published format bytes. Both complete
+ * generation receipts remain embedded: copied formats never acquire a fictitious
+ * generation revision. This is an assembly receipt, not another engine build. */
+export function composeFormatReceipt({ engine, formats, config }) {
+  for (const receipt of [engine, formats]) {
+    if (receipt?.schemaVersion !== 1) throw new Error('format composition requires original schema-1 generation receipts')
+    const failures = validateBuildReceipt(receipt, { config })
+    if (failures.length) throw new Error(failures.join('; '))
+  }
+  if (!['xetex', 'luahbtex'].includes(engine.family) || formats.family !== engine.family) {
+    throw new Error('format composition requires matching Unicode engine families')
+  }
+  for (const key of ['texliveYear', 'texliveSourceCommit', 'mirror', 'toolchain']) {
+    if (JSON.stringify(engine[key]) !== JSON.stringify(formats[key])) {
+      throw new Error(`format composition ${key} mismatch`)
+    }
+  }
+  const stem = engine.family === 'xetex' ? 'wasmtex-xetex' : 'wasmtex-luatex'
+  const isFormat = (file) => file.name === `${stem}.fmt` || file.name === `${stem}.fmt.gz`
+  const oldFormats = formats.files.filter(isFormat)
+  const newFormats = engine.files.filter(isFormat)
+  if (!oldFormats.length || JSON.stringify(oldFormats.map(f => f.name)) !== JSON.stringify(newFormats.map(f => f.name))) {
+    throw new Error('format composition must preserve the complete published format filename set')
+  }
+  const files = [...engine.files.filter(file => !isFormat(file)), ...oldFormats]
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const buildId = sha256(JSON.stringify({
+    schemaVersion: 2, engineBuildId: engine.buildId, formatBuildId: formats.buildId, files,
+  }))
+  return {
+    ...engine, schemaVersion: 2, buildId, files,
+    generationReceipts: { engine, formats },
+  }
+}
+
+export function receiptSourceRevisions(receipt) {
+  return [...new Set([receipt.sourceRevision,
+    ...(receipt.schemaVersion === 2 ? [receipt.generationReceipts?.formats?.sourceRevision] : []),
+  ])].sort()
+}
+
+function validateFormatComposition(receipt, options) {
+  try {
+    const expected = composeFormatReceipt({ ...receipt.generationReceipts, config: options.config })
+    for (const key of Object.keys(expected)) {
+      if (JSON.stringify(receipt[key]) !== JSON.stringify(expected[key])) {
+        throw new Error(`format composition ${key} does not match its generation receipts`)
+      }
+    }
+    // Reuse the artifact checks with a temporary legacy identity; this is only
+    // validation plumbing, never a published generation claim for composed bytes.
+    const buildId = sha256(JSON.stringify({
+      family: receipt.family, sourceRevision: receipt.sourceRevision,
+      texliveSourceCommit: receipt.texliveSourceCommit,
+      emscriptenCommit: receipt.toolchain.emscriptenCommit,
+      dockerImage: receipt.toolchain.dockerImage, mirror: receipt.mirror, files: receipt.files,
+    }))
+    return validateBuildReceipt({ ...receipt, schemaVersion: 1, buildId }, options)
+  } catch (error) {
+    return [error instanceof Error ? error.message : String(error)]
+  }
 }
