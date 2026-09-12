@@ -1,31 +1,31 @@
 # WasmTex Agent Guide
 
-Browser-based LaTeX editor with real-time PDF preview.
+## Mission
 
-> **IMPORTANT**: Before performing any task or modification, you MUST read the relevant documents listed below to ensure alignment with the project's architecture, conventions, and standards.
+Build a high-performance embeddable LaTeX SDK with a headless compile core,
+optional editor/PDF preview, and host-independent engine boundaries.
 
-## Core Mission
+Before any task, read the relevant current guides below. The complete
+[documentation index](docs/README.md) separates usage, architecture, operations
+and historical evidence.
 
-To provide a high-performance, **embeddable LaTeX component** for academic platforms and collaboration tools.
+| Work | Required reading |
+| --- | --- |
+| Architecture or client/server boundary | [Architecture](docs/architecture.md), [execution model](docs/execution-model.md). |
+| Integration or public API | [Integration](docs/howto.md), [API reference](docs/api.md); [bibliography](docs/bibliography.md) for backend changes. |
+| Syntax, LSP or completion | [Language service architecture](docs/language-service.md), [API reference](docs/api.md). |
+| Engine, memory, build flags or performance | [Engine runtime](docs/engine.md), [optimization policy](docs/engine-optimization-policy.md), [current performance decisions](docs/compile-performance.md). |
+| Warmup or caching | [Warmup](docs/warmup.md), [engine runtime](docs/engine.md), [optimization policy](docs/engine-optimization-policy.md). |
+| TeX Live source/year or mirror upgrade | [Upgrade procedure](docs/texlive-upgrade.md), [customization inventory](docs/engine-upgrade-customizations.md), [mirror operations](docs/texlive-mirror-operations.md). |
+| Release/distribution | [Licensing](docs/licensing.md), [corresponding source](docs/corresponding-source.md), [proprietary integration](docs/proprietary-integration.md). |
+| Contribution and verification | [Development](docs/develop.md), [CONTRIBUTING.md](CONTRIBUTING.md). |
+| Documentation | [Documentation maintenance](docs/metadoc.md) and the guide owning the topic. |
 
-## Documentation Index
+WasmTex must not depend on an integrating application's code or project schema.
+A host such as CorTeX owns adoption, profile resolution and deployment.
+Preserve published formats/mirrors and observable compile semantics for
+transparent engine optimizations. Review annual upgrades under their separate
+procedure instead of assuming cross-year format compatibility.
 
-- **[System Architecture](docs/architecture.md)**: Overview of the SDK structure, core components (VFS, LSP, Engines), and tech stack. Read this to understand how different modules interact.
-- **[Execution Model (Client/Server Hybrid)](docs/execution-model.md)**: The strategic architecture — one host-agnostic deterministic engine running identically on client and server, with an integrator-chosen boundary (client-first default). Read this before any work touching the client/server split, headless/UI separation, pluggable backends, or cross-host verification.
-- **[Integration Guide](docs/howto.md)**: Step-by-step instructions on embedding the editor, supporting BibTeX, using Headless mode, and the server-side paths — Node compilation (`installNodeWorkerHost` via `wasmtex/node`) and server backends (BibTeX/Biber/xindy offload via the `backends` option). Essential for usage-related tasks.
-- **[API Reference](docs/api.md)**: Comprehensive documentation of the `WasmTex` class methods, constructor options, and event system. Refer to this for any API changes or additions.
-- **[Bibliography Backends](docs/bibliography.md)**: BibTeX vs biblatex/Biber detection and the pluggable backend interface.
-- **[Warmup / Preload](docs/warmup.md)**: Eliminating first-compile cold start by pre-fetching TeX Live files.
-- **[Compile Performance](docs/compile-performance.md)**: Adopted and deferred engine/SDK experiments, measurement limits, and release qualification.
-- **[WASM & TeX Live](docs/engine.md)**: Overview of the compilation engine and CDN.
-- **[Engine Optimization Policy](docs/engine-optimization-policy.md)**: Required before engine-internal, memory, build-flag, or execution optimizations. Preserve existing TeX Live mirrors, format bytes, and output; deliver to existing CorTeX projects without migrations or additional TeX Live choices.
-- **[TeX Live Internals & Upgrade](docs/texlive-upgrade.md)**: Deep dive into the kpathsea fallback, immutable R2 structure, the [upstream-maintenance philosophy (interpose, don't patch)](docs/texlive-upgrade.md#upstream-maintenance-interpose-dont-patch), and the guide for upgrading to a new TeX Live year.
-- **[Engine Upgrade Customizations](docs/engine-upgrade-customizations.md)**: Maintained engine patches/build flags, rejected variants, and per-change checks for a new upstream year. Read before changing TeX Live source pins.
-- **[TeX Live mirror operations](docs/texlive-mirror-operations.md)**: Provider-neutral publication, R2 custom-domain configuration, immutable snapshots, verification, rollback, and origin retirement.
-- **[Development Guide](docs/develop.md)**: Essential guide for contributors, covering environment setup, CLI commands, and testing strategies (Vitest/Playwright).
-- **[Licensing](docs/licensing.md)**: License scope, engine/CDN release gates, and third-party compliance requirements.
-- **[Corresponding Source](docs/corresponding-source.md)**: Receipt-bound source archive creation, verification, and clean-builder release requirements.
-- **[Proprietary Integration](docs/proprietary-integration.md)**: Required SDK/engine boundary for closed-source host applications.
-
----
-*For documentation maintenance rules, see [docs/metadoc.md](docs/metadoc.md).*
+`CLAUDE.md` is a symlink to this file. Historical experiment notes are evidence,
+not instructions to resume work or descriptions of current support.

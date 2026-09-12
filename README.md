@@ -4,15 +4,16 @@ An embeddable, browser-based LaTeX editor with real-time PDF preview — Monaco
 editor, an in-browser pdfLaTeX engine (WASM), and PDF.js. Documents that need
 XeLaTeX or LuaLaTeX (`fontspec`, `unicode-math`, CJK, `\directlua`) are auto-detected;
 the full multi-engine pipeline runs through the [headless compiler](docs/howto.md#headless-compilation)
-on the client or a Node server. TeX Live packages stream from a public CDN, so
-there's nothing to host.
+on the client or a Node server. TeX Live packages stream from a public CDN. Engine JS/WASM and format assets
+are hosted separately from the installed SDK; see the integration guide.
 
 **[Live Demo](https://corca-ai.github.io/wasmtex/)**
 
 ## Quick Start
 
 WasmTex is **not on npm** — install from GitHub. The install ships a prebuilt `lib/`
-bundle, so it works with no build step. `monaco-editor` and `pdfjs-dist` are peer
+bundle. Package managers may also run its `prepare` build (Node 24+); the
+committed bundle supports installs that skip lifecycle scripts. `monaco-editor` and `pdfjs-dist` are peer
 dependencies.
 
 ```bash
@@ -51,10 +52,14 @@ setup and copy-pasteable recipes. A minimal example lives in
 | `wasmtex/lsp` | Monaco-free LaTeX language service core. |
 | `wasmtex/lsp/monaco` | Monaco provider adapter. |
 | `wasmtex/lsp/server` | Transport-agnostic JSON-RPC language server. |
+| `wasmtex/warmup` | Dependency-light TeX Live preload and learned-set helpers. |
+| `wasmtex/syntax` | Source-preserving syntax snapshots without Monaco. |
 | `wasmtex/synctex` | SyncTeX parser + PDF↔source mapping, for a custom viewer. |
 | `wasmtex/style.css` | Optional built-in UI/viewer styles. |
 
 ## Documentation
+
+Use the [documentation index](docs/README.md) to find current guides and historical evidence.
 
 - **[Integration Guide](docs/howto.md)** — install, worker setup, headless, collaboration, engine selection.
 - **[API Reference](docs/api.md)** — constructor options, methods, events, PdfViewer.

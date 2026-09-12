@@ -30,7 +30,7 @@ npm run dev               # Start dev server
 |---------|-------------|
 | `npm run dev` | Vite dev server (port 6001) |
 | `npm run build` | Production build: typecheck (`tsgo`) + standalone demo app (`vite build`) → `dist/` (GitHub Pages; gitignored) |
-| `npm run build:lib` | SDK-only build (`BUILD_MODE=lib`): the seven ES entry points (`wasmtex`, `headless`, `node`, `synctex`, `lsp`, `lsp-monaco`, `lsp-server`) + `wasmtex.css` → **`lib/` (committed)** |
+| `npm run build:lib` | SDK-only build (`BUILD_MODE=lib`): the nine ES entry points (`wasmtex`, `headless`, `node`, `synctex`, `warmup`, `syntax`, `lsp`, `lsp-monaco`, `lsp-server`) + `wasmtex.css` → **`lib/` (committed)** |
 | `npm run check` | Typecheck only (`tsgo --noEmit`) |
 | `npm run test` | Unit tests (Vitest, `vitest run`) |
 | `npm run test:watch` | Unit tests in watch mode |
@@ -50,7 +50,8 @@ npm run dev               # Start dev server
 | `npm run compat` | Compatibility harness — compile a corpus and bucket failures (`node scripts/compat/run.mjs`; writes `compat/report.{json,md}`) |
 | `node scripts/gen-bloom-filter.mjs` | Generate bloom data from the configured object store, or from `TEXLIVE_MIRROR_ROOT` for an unpublished release |
 
-Set `WASMTEX_SMOKE_TEXLIVE_URL` to an exact immutable snapshot URL when the
+Set both `WASMTEX_SMOKE_TEXLIVE_VERSION` and `WASMTEX_SMOKE_TEXLIVE_URL`
+to a matching year and exact immutable snapshot URL when the
 opt-in Node, cross-host, or incremental smoke suites qualify a new mirror.
 
 ## Engine CPU diagnostics
@@ -117,7 +118,7 @@ For paired dvipdfmx experiments, `profile-font-cpu.mjs --project <project.json>
 It records conversion routine spans, auxiliary hashes, diagnostics, geometry and
 file dependencies. `scripts/compare-fontmap-reports.mjs baseline/report.json
 candidate/report.json` rejects output, log, dependency or unaffected-asset changes.
-See the [font-map experiment decision](compile-performance.md#font-map-index-qualification).
+See the [font-map experiment decision](history/compile-performance-2026-09.md#font-map-index-qualification).
 
 ## The committed `lib/` bundle
 
@@ -172,7 +173,8 @@ npm run test:e2e
 
 ### Cross-Host (Node) Engine Tests
 The same from-source WASM engine runs under Node via `installNodeWorkerHost`
-(`src/engine/node-host.ts`, exported from `wasmtex/node`). The verification tests are
+(`src/engine/node-host.ts`, exported from `wasmtex/node`); install curl for its
+synchronous package resolver. The verification tests are
 **env-gated** so they stay out of the default `npm run test`; they read the engine assets
 from `public/`, so run `npm run sync-engine-assets -- --from <baseUrl>` first.
 To verify a local rebuild without replacing release artifacts, set

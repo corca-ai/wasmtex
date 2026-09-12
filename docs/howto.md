@@ -21,8 +21,9 @@ bun add github:corca-ai/wasmtex#main
 - `monaco-editor` and `pdfjs-dist` are peer dependencies and must be installed
   separately for the built-in editor and viewer (see [Worker Setup](#worker-setup-required)).
   `pdfjs-dist` is optional for headless and SyncTeX consumers using their own renderer.
-- A GitHub install builds the library locally via the `prepare` script, so the
-  install machine needs the toolchain (**Node.js ≥ 24**). Pin a tag/commit
+- The repository commits the prebuilt `lib/` bundle. A GitHub install may also
+  run `prepare`, which rebuilds it and requires **Node.js ≥ 24**; package managers
+  that skip lifecycle scripts use the committed bundle. Pin a tag/commit
   instead of `#main` for reproducible builds.
 - **Engine binaries are not part of the install** (the WASM engines + prebuilt
   formats ship via CI, not the package). If you self-host assets, pull a verified,
@@ -33,7 +34,11 @@ bun add github:corca-ai/wasmtex#main
 
 ## What's Included
 
-TeX Live packages are served from a **public CDN** — no setup or hosting required. The library fetches packages on demand during compilation and caches them via a Service Worker for offline use.
+TeX Live packages can be fetched on demand from the default public mirror.
+Engine JS/WASM and format assets are separate and must be available at your
+configured asset URL. The browser `WasmTex` component can register a service
+worker when the host serves `sw.js`; the headless compiler does not install one.
+Durable caching and offline prerequisites are described in [warmup](warmup.md).
 
 ## Worker Setup (Required)
 
@@ -211,9 +216,13 @@ See [Bibliography backends](bibliography.md).
 > out of the box, fully client-side, via the bundled makeindex WASM — no server needed. A
 > backend registered for `index` (`createMakeindexBackend`, or `createXindyBackend` for
 > multilingual / complex indexing) offloads that stage to your endpoint instead. The
-> [execution model](execution-model.md#how-a-consumer-chooses-the-boundary) explains how to choose the boundary.
+> [execution model](execution-model.md#pluggable-stages-available-today) explains how to choose the boundary.
 
 ### Server-side compilation (Node)
+
+Requires Node 24+ and curl for synchronous worker package lookups, plus the
+local engine asset tree. This adapter still uses the released Emscripten JS glue
+and MEMFS; see the [execution model](execution-model.md#supported-hosts).
 
 The `wasmtex/node` entry runs the same engines off-browser via a `worker_threads`
 host. Call `installNodeWorkerHost` once (pointing at your local engine assets), then use

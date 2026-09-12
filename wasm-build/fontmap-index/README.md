@@ -1,7 +1,7 @@
-# dvipdfmx font-map index experiment
+# dvipdfmx font-map index
 
 Tracked in [#131](https://github.com/corca-ai/wasmtex/issues/131), following the
-[all-engine measurements](../../docs/compile-performance.md#all-engine-font-investigation).
+[all-engine measurements](../../docs/history/compile-performance-2026-09.md#all-engine-font-investigation).
 The [optimization policy](../../docs/engine-optimization-policy.md) governs promotion.
 
 The build-applied patch selects the auxiliary index only for `fontmap.c`'s table.
@@ -36,9 +36,8 @@ source revisions and hashes but are not a release unit. Normal release builds st
 use the full XeTeX family workflow and receipt/source qualification; original formats
 and all unaffected engine artifacts must be reused during qualification/assembly.
 
-The initial missing-SFD diagnostic blocker is separately corrected by PR #134.
-The requalification against that fixed baseline passes both annual speed targets
-and strict output/log comparisons, including the retained missing-SFD case; see
-[the current decision](../../docs/compile-performance.md#requalification-after-the-sfd-fix).
-PR #134 must land before #132. Full engine release/source qualification and
-consumer adoption remain separate; these diagnostic assets are not releases.
+The missing-SFD correctness fix (#134) and index (#132) were merged and released.
+The [current performance guide](../../docs/compile-performance.md) records adoption;
+the [historical requalification](../../docs/history/compile-performance-2026-09.md#requalification-after-the-sfd-fix)
+retains the original blockers and comparisons. Diagnostic-only artifacts remain
+separate from receipt-bound release assemblies.

@@ -59,4 +59,4 @@ and 64 compatibility pairs match. This includes `missing-subfont.json`, whose
 warning was the initial blocker. Extract it and run the same strict comparator
 with `fixed/report.json` and `indexed/report.json`; the initial archive instead
 uses `baseline` and `candidate` names. See the current decision and limits in
-[compile performance](../../../docs/compile-performance.md#font-map-index-qualification).
+[compile performance](../../../docs/history/compile-performance-2026-09.md#font-map-index-qualification).

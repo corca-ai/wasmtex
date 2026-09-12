@@ -154,7 +154,7 @@ The implementation's independence is both enforced and evidenced:
   approver: Xpdf repairs damaged PDFs the baseline rejects, and the XeTeX
   final link permutes symbol order across identical-input runs of the pinned
   toolchain — functionally equivalent and golden-verified. The
-  [source archive evidence](license-evidence/corresponding-source-2025-baa63e6.md) verifies the current rebuild;
+  [source archive evidence](license-evidence/corresponding-source-2025-baa63e6.md) verifies that recorded rebuild;
 - parser resource limits (input size, object depth, decoded bytes, adapter
   allocation), malformed-input failure, post-open authentication, and
   valgrind-verified memory release are tested on success and failure paths.
@@ -182,8 +182,8 @@ at its pinned commit, hash-verified Emscripten port archives, Dockerfiles,
 build scripts, glue, manifests, and `REBUILD.md`/`RELINK.md`. A checker
 verifies the archive, the bundled TeX Live tree is diffed against an
 independent clone of the pinned commit, and a clean `--no-cache --pull`
-rebuild from the archive snapshot reproduces the current release engine bytes.
-The earlier approved XeTeX link-order permutation and the current
+rebuild from the archive snapshot reproduces that record's release engine bytes.
+The earlier approved XeTeX link-order permutation and the recorded
 byte-identical result are documented in
 the [corresponding-source evidence](license-evidence/corresponding-source-2025-baa63e6.md)
 and [corresponding-source guide](corresponding-source.md). Because that link is

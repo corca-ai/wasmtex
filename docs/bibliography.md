@@ -125,7 +125,7 @@ takes an optional `cacheKey(request)` for a custom key; the same registry seam
 also serves the index stage. The compiler auto-routes `index` too — `\printindex`
 runs client-side via the bundled makeindex WASM by default, and a registered
 `createMakeindexBackend` / `createXindyBackend` offloads it; the
-[execution model](execution-model.md#how-a-consumer-chooses-the-boundary) explains how consumers choose that boundary.
+[execution model](execution-model.md#pluggable-stages-available-today) explains how consumers choose that boundary.
 
 ## Related
 
