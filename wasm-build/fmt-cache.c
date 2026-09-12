@@ -11,7 +11,12 @@
  */
 EM_JS(void, fmt_begin, (int handle, int fd), {
   var state = Module.fmtDecodeCache || (Module.fmtDecodeCache = { saved: null, active: null, hits: 0 });
-  if (state.active) return;
+  if (state.active) {
+    // A failed TeX run can leave gzclose uncalled. Worker reset closes the FD
+    // and restores C memory, so a reused gzFile pointer is not the same stream.
+    if (FS.getStream(state.active.fd) === state.active.stream) return;
+    state.active = null;
+  }
   var stream = FS.getStream(fd);
   if (!stream || stream.position !== 0 || typeof stream.path !== 'string' || !stream.path.endsWith('.fmt')) return;
   var bytes;
@@ -23,7 +28,7 @@ EM_JS(void, fmt_begin, (int handle, int fd), {
   var same = saved && saved.source.length === bytes.length;
   if (same) for (var i=0;i<bytes.length;i++) if (saved.source[i] !== bytes[i]) { same=false; break; }
   if (!same) state.saved = null;
-  state.active = { handle:handle, source:same?saved.source:bytes, entries:[], total:0, index:0, saved:same?saved:null };
+  state.active = { handle:handle, fd:fd, stream:stream, source:same?saved.source:bytes, entries:[], total:0, index:0, saved:same?saved:null };
 });
 EM_JS(int, fmt_read, (int handle, int dest, int length), {
   var s=Module.fmtDecodeCache, a=s && s.active;

@@ -15,6 +15,15 @@ async function create(side) { return require(buildDir+'/fmt-probe-'+side+'.cjs')
  function close(handles){assert.equal(modules[0]._probe_close(handles[0]),modules[1]._probe_close(handles[1]));}
  function sequence(sizes){const f=open();for(const n of sizes)read(f,n);close(f);}
  files(gzip); sequence([8,16,40]);sequence([8,16,40]);assert(modules[1].fmtDecodeCache.hits>0);
+ // Mirror a failed TeX load: no gzclose, worker closes FDs and restores C memory.
+ // The new gzFile can reuse the same pointer, but must start at byte zero.
+ const snapshots=modules.map(m=>m.HEAPU8.slice());const abandoned=open();read(abandoned,8);
+ for(let i=0;i<modules.length;i++) {
+   const m=modules[i];
+   for(const stream of m.FS.streams.slice())if(stream&&stream.fd>2)m.FS.close(stream);
+   m.HEAPU8.set(snapshots[i]);
+ }
+ const restarted=open();read(restarted,8);close(restarted);
  // Fall back to the same native uncompressed position after a cached prefix.
  sequence([8,16,11,90,15000]);sequence([8,3,15000]);
  // A second descriptor must not discard the first cached descriptor's position.
