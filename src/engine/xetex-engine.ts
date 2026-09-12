@@ -85,9 +85,14 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     const start = performance.now()
     // 0. Ensure the XeLaTeX format is built and present in the work dir.
     const fmtLog = await this.ensureFormat()
+    const jobName = this.mainBase.slice(this.mainBase.lastIndexOf('/') + 1)
+    const xdvName = `${jobName}.xdv`
+    // Existing workers may return an old output after a no-output TeX failure.
+    // Truncate only this job's generated artifact before asking for fresh output.
+    await this.tex.writeFile(xdvName, new Uint8Array())
     // 1. XeTeX: main.tex -> main.xdv (returned in the "out" field).
     const xelatex = await this.tex.run('compilelatex')
-    if (!xelatex.success || !xelatex.out) {
+    if (!xelatex.success || !xelatex.out?.length) {
       return this.result(
         false,
         null,
@@ -99,14 +104,17 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       )
     }
     // 2. dvipdfmx: main.xdv -> main.pdf (fetches + embeds fonts from the CDN).
-    const xdvName = `${this.mainBase}.xdv`
+    // XeTeX emits the job's basename in /work even for nested source files.
+    // Preserve that name when transferring XDV: dvipdfmx's C entry retains the
+    // supplied directory in -o, while its worker reads the job basename (#135).
     await this.dvipdfm.writeFile(xdvName, xelatex.out)
+    await this.dvipdfm.writeFile(`${jobName}.pdf`, new Uint8Array())
     this.dvipdfm.setMainFile(xdvName)
     const dvi = await this.dvipdfm.run('compilepdf')
     const log = `${xelatex.log}\n${dvi.log}`
     const result = this.result(
-      dvi.success && !!dvi.out,
-      dvi.out,
+      dvi.success && !!dvi.out?.length,
+      dvi.out?.length ? dvi.out : null,
       log,
       start,
       xelatex.inputFiles,

@@ -222,11 +222,11 @@ recovery runs in the same worker. PDF bytes,
 available SyncTeX, geometry, diagnostics, recorder inputs, dependency graphs,
 glyph coverage, and bibliography/index outputs must match. This remains a
 focused corpus; source build and CorTeX rollout gates are separate requirements.
-The nested XeTeX case explicitly records an existing dvipdfmx output-path defect:
-after a previous successful root compile, it returns that previous PDF. Matching
-this known failure is evidence of unchanged behavior, not successful nested-path
-support. A separate correctness fix must update that expectation and qualify its
-intended output change. The fixtures are shared in
+The nested case now requires the same PDF as the article at the root, following
+the [SDK output handoff fix](nested-output.md). Historical qualification recorded
+the previous stale-PDF defect; current tests must not accept it. CI also runs
+`nested-output.smoke.test.ts` and `nested-output.spec.ts` on both annual lines
+to check directory switches and XeLaTeX failure recovery. The fixtures are shared in
 `e2e/unicode-compatibility-corpus.ts` for browser differential runs.
 
 Stage downloaded source builds for these tests without substituting their newly

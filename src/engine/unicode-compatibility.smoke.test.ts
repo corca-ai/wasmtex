@@ -61,13 +61,13 @@ function observable(result: CompileResult) {
   }
 }
 
-function assertKnownBaselineDefect(
+function assertSameDocumentOutput(
   fixture: Case,
   outputs: Array<{ name: string; pdf: string | null }>,
 ) {
-  if (fixture.stalePdfFrom) {
-    expect(outputs.at(-1)?.pdf, 'known baseline stale-PDF defect').toEqual(
-      outputs.find((output) => output.name === fixture.stalePdfFrom)?.pdf,
+  if (fixture.samePdfAs) {
+    expect(outputs.at(-1)?.pdf, 'source location must not change the document PDF').toEqual(
+      outputs.find((output) => output.name === fixture.samePdfAs)?.pdf,
     )
   }
 }
@@ -111,7 +111,7 @@ async function compileCorpus(publicDir: string, engine: Engine) {
           aux: await compiler.readOutput('main.aux'),
           auxiliary,
         })
-        assertKnownBaselineDefect(fixture, outputs)
+        assertSameDocumentOutput(fixture, outputs)
       }
       console.log(`COMPAT ${PROFILE.version} ${engine} ${fixture.name}`)
     }

@@ -11,6 +11,40 @@ permissions:
   actions: read
 
 jobs:
+  nested-output:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - year: '2025'
+            mirror: https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/
+          - year: '2026'
+            mirror: https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - uses: ./.github/actions/download-engine-release
+        with:
+          texlive-year: ${{ matrix.year }}
+          destination: public/wasmtex/${{ matrix.year }}
+          github-token: ${{ github.token }}
+      - run: npx playwright install --with-deps chromium
+      - name: Nested output on Node (all three engines)
+        run: npx vitest run src/engine/nested-output.smoke.test.ts
+        env:
+          NESTED_OUTPUT_SMOKE: '1'
+          WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.year }}
+          WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.mirror }}
+      - name: Nested output on Chromium (all three engines)
+        run: npx playwright test nested-output --workers=1
+        env:
+          TEXLIVE_VERSION: ${{ matrix.year }}
+          TEXLIVE_URL: ${{ matrix.mirror }}
+
   # The published library bundle (`lib/`) is committed so `github:` installs resolve
   # `exports` without a build step (#146). Rebuild it and fail if it drifts from `src/`,
   # with an actionable message. build:lib needs no engine assets, so this is a fast,
