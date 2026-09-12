@@ -12,6 +12,10 @@ name: WASM XeTeX (from source)
 on:
   workflow_dispatch:
     inputs:
+      dvipdfmx_only:
+        description: Build standalone diagnostic dvipdfmx assets (no release assembly)
+        type: boolean
+        default: false
       profile_names:
         description: Retain function names for non-release CPU diagnostics
         type: boolean
@@ -53,6 +57,7 @@ on:
       - 'wasm-build/resolver-evidence.js'
       - 'wasm-build/xetex-dvipdfm-library.js'
       - 'wasm-build/build-dvipdfm2.sh'
+      - 'wasm-build/dvipdfmx-fixes/**'
       - 'wasm-build/dvipdfm-entry.c'
       - 'wasm-build/dvipdfm-stubs.c'
       - 'scripts/build-xetex-fromsource.sh'
@@ -67,6 +72,7 @@ on:
 
 jobs:
   build-xetex:
+    if: ${{ !inputs.dvipdfmx_only }}
     runs-on: ubuntu-latest
     # A dispatch builds the year it was asked for. A push builds every
     # supported year, because a change to `wasm-build/` belongs to all of them
@@ -221,3 +227,39 @@ jobs:
             wasm-build/dist-xetex/wasmtex-xetex.map
             wasm-build/dist-xetex/wasmtex-dvipdfm.map
           retention-days: 90
+
+  build-dvipdfmx-diagnostic:
+    if: ${{ inputs.dvipdfmx_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TEXLIVE_YEAR: ${{ inputs.texlive_year }}
+      WASMTEX_PROFILE_NAMES: ${{ inputs.profile_names && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build standalone dvipdfmx image
+        run: |
+          docker build -f wasm-build/Dockerfile.dvipdfmx \
+            --build-arg TEXLIVE_REF="$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref")" \
+            --build-arg TEXLIVE_YEAR="$TEXLIVE_YEAR" -t dvipdfmx-diagnostic wasm-build/
+      - name: Missing-SFD regression under ASan and UBSan
+        run: |
+          docker run --rm --entrypoint python3 \
+            -v "$PWD:/repo:ro" dvipdfmx-diagnostic \
+            /repo/scripts/test-dvipdfmx-missing-sfd.py --source /src/texlive-source/texk/dvipdfm-x --sanitize --cc /usr/bin/clang
+      - name: Build dvipdfmx WASM
+        run: |
+          mkdir -p wasm-build/dist-dvipdfmx
+          docker run --rm -e WASMTEX_PROFILE_NAMES \
+            -v "$PWD/wasm-build/dist-dvipdfmx:/dist" dvipdfmx-diagnostic
+      - name: Record diagnostic inputs
+        run: |
+          git rev-parse HEAD > wasm-build/dist-dvipdfmx/WASMTEX-REVISION.txt
+          cp "wasm-build/texlive-source-$TEXLIVE_YEAR.ref" wasm-build/dist-dvipdfmx/TEXLIVE-REVISION.txt
+          cp wasm-build/Dockerfile.dvipdfmx wasm-build/dist-dvipdfmx/
+          sha256sum wasm-build/dist-dvipdfmx/wasmtex-* > wasm-build/dist-dvipdfmx/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dvipdfmx-diagnostic-${{ inputs.texlive_year }}
+          path: wasm-build/dist-dvipdfmx/
+          if-no-files-found: error

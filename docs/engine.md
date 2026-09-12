@@ -10,6 +10,18 @@ For performance changes, the [engine optimization policy](engine-optimization-po
 requires existing format bytes, output, and package snapshots to remain compatible,
 including transparent adoption by existing CorTeX projects.
 
+The [dvipdfmx correctness patches](../wasm-build/dvipdfmx-fixes/README.md)
+include the missing-SFD diagnostic lifetime fix ([#133](https://github.com/corca-ai/wasmtex/issues/133)).
+It intentionally corrects a broken filename warning and is qualified separately
+from font-map performance changes. Its native test executes upstream insertion
+and ownership code under ASan; the [browser recovery fixture](../test/fixtures/dvipdfmx-missing-sfd/README.md)
+checks real resolution and repeated conversions with the original formats.
+Diagnostic builds do not replace receipt-bound engine releases. Node root-document
+comparisons use an opt-in CommonJS fixed clock so compressed PDF creation dates
+are deterministic; the existing nested-output defect is tracked in
+[#135](https://github.com/corca-ai/wasmtex/issues/135). It is not qualified as
+successful nested support by the root-only results.
+
 ## Engine Setup
 
 The runtime needs each engine's authored controller (`*.worker.js`), generated
