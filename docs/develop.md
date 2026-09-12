@@ -112,6 +112,13 @@ separately from CPU samples and exclude profiler overhead from speedup claims.
 The [engine optimization policy](engine-optimization-policy.md) governs any
 subsequent cache or engine change.
 
+For paired dvipdfmx experiments, `profile-font-cpu.mjs --project <project.json>
+--trace false` accepts the [font-map fixtures](../test/fixtures/fontmap-index/README.md).
+It records conversion routine spans, auxiliary hashes, diagnostics, geometry and
+file dependencies. `scripts/compare-fontmap-reports.mjs baseline/report.json
+candidate/report.json` rejects output, log, dependency or unaffected-asset changes.
+See the [font-map experiment decision](compile-performance.md#font-map-index-qualification).
+
 ## The committed `lib/` bundle
 
 WasmTex isn't on npm, so consumers `npm install github:corca-ai/wasmtex#main`. A

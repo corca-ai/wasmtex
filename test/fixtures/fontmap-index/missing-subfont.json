@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.tex": "\\documentclass{article}\n\\begin{document}\n\\special{pdf:mapfile local.map}\n\\special{pdf:mapline +cmr10 CMR10 <cmr10.pfb}\n\\special{pdf:mapline -cmr10}\n\\special{pdf:mapline cmr10 CMR10 <cmr10.pfb}\n\\special{pdf:mapline dummy@Unicode@ unicode cmr10}\n\\special{pdf:mapline -dummy@Unicode@}\n\\font\\probe=cmr10 \\probe Map replacement, append, removal and subfont expansion.\n\\end{document}",
+    "local.map": "cmr10 CMR10 <cmr10.pfb\n"
+  },
+  "stages": {
+    "body-edit": "\\documentclass{article}\n\\begin{document}\n\\special{pdf:mapfile local.map}\n\\special{pdf:mapline +cmr10 CMSS10 <cmss10.pfb}\n\\special{pdf:mapline -cmr10}\n\\special{pdf:mapline cmr10 CMSS10 <cmss10.pfb}\n\\special{pdf:mapline dummy@Unicode@ unicode cmr10}\n\\special{pdf:mapline -dummy@Unicode@}\n\\font\\probe=cmr10 \\probe Map replacement, append, removal and subfont expansion.\n\\end{document}",
+    "preamble-edit": "\\documentclass{article}\n\\begin{document}\n\\special{pdf:mapfile local.map}\n\\special{pdf:mapline +cmr10 CMR10 <cmr10.pfb}\n\\special{pdf:mapline -cmr10}\n\\special{pdf:mapline cmr10 CMR10 <cmr10.pfb}\n\\special{pdf:mapline dummy@Unicode@ unicode cmr10}\n\\special{pdf:mapline -dummy@Unicode@}\n\\font\\probe=cmr10 \\probe Map replacement, append, removal and subfont expansion.\n\\end{document}"
+  }
+}

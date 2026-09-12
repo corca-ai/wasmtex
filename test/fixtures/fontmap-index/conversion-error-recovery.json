@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.tex": "\\documentclass{article}\n\\begin{document}\n\\special{pdf:mapline cmr10 CMR10 <wasmtex-deliberately-missing-font.pfb}\n\\font\\probe=cmr10 \\probe Recovered conversion.\n\\end{document}"
+  },
+  "stages": {
+    "body-edit": "\\documentclass{article}\n\\begin{document}\n\\special{pdf:mapline cmr10 CMR10 <cmr10.pfb}\n\\font\\probe=cmr10 \\probe Recovered conversion.\n\\end{document}",
+    "preamble-edit": "\\documentclass{article}\n\\begin{document}\n\\special{pdf:mapline cmr10 CMR10 <cmr10.pfb}\n\\font\\probe=cmr10 \\probe Recovered conversion.\n\\end{document}"
+  },
+  "expectedSuccess": {
+    "first": false,
+    "repeat": false
+  }
+}

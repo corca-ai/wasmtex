@@ -75,6 +75,7 @@ docker run --rm --platform linux/amd64 -e WASMTEX_PROFILE_NAMES --entrypoint bas
        /glue/build-dvipdfm2.sh /glue/dvipdfm-worker.js \
        /glue/xetex-dvipdfm-library.js /src/
     cp -R /glue/dvipdfmx-fixes /src/dvipdfmx-fixes
+    cp -R /glue/fontmap-index /src/fontmap-index
     bash /src/build-dvipdfm2.sh
   '
 [ -f "$OUT_DIR/wasmtex-dvipdfm.wasm" ] || { echo "dvipdfm build produced no wasm"; exit 1; }

@@ -15,6 +15,7 @@ RUN test -n "$TEXLIVE_REF" && mkdir -p /src/texlive-source && \
 COPY build-dvipdfm2.sh dvipdfm-entry.c dvipdfm-stubs.c kpse-hook.c \
     dvipdfm-worker.js xetex-dvipdfm-library.js /src/
 COPY dvipdfmx-fixes /src/dvipdfmx-fixes
+COPY fontmap-index /src/fontmap-index
 COPY resolver-evidence.js /src/resolver-evidence.js
 WORKDIR /src
 ENTRYPOINT ["bash", "/src/build-dvipdfm2.sh"]

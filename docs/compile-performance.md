@@ -132,7 +132,7 @@ chunk, and 1–3 ms to dump it. Those loops are not normal compile timings.
 A private bytecode cache is only a candidate: no new names `.luc` is installed,
 no pointers cross heap resets, and no filesystem-visible lookup is changed.
 
-The next preferred experiment is dvipdfmx's font-map index. The exact mirror map
+The follow-up experiment is dvipdfmx's font-map index ([#131](https://github.com/corca-ai/wasmtex/issues/131)). The exact mirror map
 has 46,659 lines (5,609,407 bytes); the pinned source's hash table has 503
 buckets and scans collision chains during insertion. Do not simply cache whole
 font objects or enlarge every hash table: map replacement/deletion, subfont
@@ -141,3 +141,104 @@ auxiliary index that preserves the existing record/iteration order is a narrower
 design to investigate. Only a measured candidate passing the optimization policy
 can be promoted. CorTeX adoption and its actual checkpoint/paint behavior remain
 separate integrator measurements.
+
+
+## Font-map index qualification
+
+### Initial hold
+
+[Draft PR #132](https://github.com/corca-ai/wasmtex/pull/132) retains the original
+503 bucket lists and traversal/destruction order, adding a font-map-only lookup
+index and tail pointers. It changes no other engine tables and retains no font
+objects across resets. The diagnostic build revision is `078fabb`; its
+[2025 build](https://github.com/corca-ai/wasmtex/actions/runs/34653616006) and
+[2026 build](https://github.com/corca-ai/wasmtex/actions/runs/34653614088) both
+passed native table differential tests under ASan/UBSan and produced WASM.
+
+The comparison uses the original `2025-d89c008b0cfdd8ca` and
+`2026-189e605bad83d618` releases, with mirrors `2025-0d3fc73b65e39905` and
+`2026-ba38749b8714505a`. Only dvipdfmx JS/WASM are replaced; every other asset,
+including the compressed base formats and original XeTeX binaries, is identical.
+Chromium 145 on macOS arm64 runs five alternating baseline/candidate pairs per
+year, with tracing disabled and mirror responses already available locally.
+
+| Median stage | 2025 baseline → candidate | 2026 baseline → candidate |
+| --- | --- | --- |
+| Initialization | 63.2 → 63.7 ms | 65.8 → 62.3 ms |
+| First compile | 424.9 → 411.9 ms | 425.0 → 415.8 ms |
+| Repeat compile | 248.7 → 231.3 ms (7.0%) | 247.1 → 232.9 ms (5.7%) |
+| Body edit | 241.3 → 227.1 ms (5.9%) | 235.5 → 221.0 ms (6.2%) |
+| Preamble edit | 257.1 → 245.1 ms | 253.5 → 237.1 ms |
+| Repeat conversion routine | 59.0 → 44.1 ms (25.3%) | 64.1 → 47.9 ms (25.3%) |
+
+The conversion routine includes heap restore and file I/O. These small-corpus
+measurements meet the predeclared 10% conversion / 5% warm end-to-end targets;
+they are not production latency percentiles. The mirror map's 46,267 keys need
+131,072 index slots: about 0.50 MiB with WASM's four-byte pointers, plus table
+metadata. This is the index allocation calculation, not a measured peak-RSS claim.
+
+All 40 paired timing compiles preserve normalized PDFs, logs, auxiliary files,
+conversion inputs and dependencies. Six additional annual/project comparisons
+cover local map files, mapline append/replace/remove, valid subfont expansion,
+missing embedded-font failures followed by recovery, multi-file references and
+font styles. All 48 paired compiles in those projects also match, including
+structured diagnostics and XDV geometry. XeTeX returns no SyncTeX in these
+runs; that absence is recorded and is not a claim of SyncTeX qualification.
+
+The initial candidate was held. A separate missing-SFD case reaches an
+upstream use-after-free: `pdf_insert_fontmap_record` frees `sfd_name` before
+printing it in a warning. Changed heap layout changes the garbage diagnostic,
+so strict comparison fails even though the PDF matches. The table-only ASan
+harness does not exercise this font-map parser failure path.
+[#133](https://github.com/corca-ai/wasmtex/issues/133) tracks the correctness
+fix and actual-path regression needed before requalifying this optimization.
+The failing fixture is retained; its warning is not normalized or removed.
+
+The [experiment fixtures and raw reports](../test/fixtures/fontmap-index/README.md)
+retain reproduction commands and the failed case. Normal engine release receipts,
+corresponding-source qualification, broader corpus/host checks, and application
+adoption remain outstanding. No new engine release or CorTeX profile is published.
+
+
+### Requalification after the SFD fix
+
+[PR #134](https://github.com/corca-ai/wasmtex/pull/134) separately corrects the
+filename lifetime and verifies the intended warning change. [PR #132](https://github.com/corca-ai/wasmtex/pull/132)
+is based on that fix; its optimization comparison requires exact logs again.
+The initial rejected evidence is retained, and no warning normalization is added.
+
+The fixed baseline is diagnostic source `67ee33d`; fixed-plus-index source is
+`ce7ba66`. Index builds are [2025](https://github.com/corca-ai/wasmtex/actions/runs/34655552676)
+and [2026](https://github.com/corca-ai/wasmtex/actions/runs/34655554829).
+The same original XeTeX/worker/format files and immutable mirrors listed above
+are retained. Five alternating untraced pairs per year produce these medians:
+
+| Stage | 2025 fixed → indexed | 2026 fixed → indexed |
+| --- | --- | --- |
+| Initialization | 63.0 → 63.1 ms | 63.1 → 65.8 ms |
+| First compile | 427.1 → 409.6 ms | 422.7 → 411.2 ms |
+| Repeat compile | 248.5 → 233.4 ms (6.1%) | 248.6 → 232.3 ms (6.6%) |
+| Body edit | 244.4 → 227.6 ms (6.9%) | 237.0 → 224.6 ms (5.2%) |
+| Preamble edit | 261.3 → 244.8 ms | 255.2 → 240.0 ms |
+| Repeat conversion routine | 59.4 → 44.0 ms (25.9%) | 64.8 → 48.2 ms (25.6%) |
+
+Both years meet the original 10% conversion and 5% warm end-to-end targets.
+The largest initialization median regression is 4.3% (2.7 ms); first compilation
+improves. These are controlled small-corpus measurements, not production percentiles.
+The index allocation remains about 0.50 MiB for the measured map.
+
+All 40 paired timing compiles and 64 additional paired compatibility compiles
+match, including the formerly failing missing-SFD log, real map/subfont changes,
+error recovery, multi-file references, auxiliaries, diagnostics, geometry,
+dependencies and conversion inputs. Additional Node comparisons preserve both
+standard root documents on each year. Node tests fix the clock through a CommonJS
+preload; raw compressed creation dates otherwise make even A/A checks differ.
+The default Node checker still exposes the pre-existing nested-output defect
+[#135](https://github.com/corca-ai/wasmtex/issues/135); identical failure outcomes
+and logs are recorded, not described as successful nested support.
+
+Decision: the index is a qualified adoption candidate after the separate correctness
+fix. The [raw requalification bundle](../test/fixtures/fontmap-index/README.md)
+records both sides and build inputs. The ordered PRs, full engine-family release
+receipts/corresponding-source qualification and integrator adoption are still
+separate steps; no production engine or CorTeX profile has been changed here.
