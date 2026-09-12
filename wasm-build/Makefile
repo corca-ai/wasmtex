@@ -203,9 +203,13 @@ ifeq ($(WASMTEX_PROFILE_NAMES),1)
 PDFTEX_PROFILE_FLAGS = --profiling-funcs
 endif
 
+# The pinned linker must select the byte-order helpers before its LTO pass.
+# Otherwise LLVM's late references to htons/ntohs try to add libc bitcode after LTO.
+PDFTEX_OPT_FLAGS = -O3 -flto
+
 EMCC_FLAGS = \
 	$(PDFTEX_PROFILE_FLAGS) \
-	-O2 \
+	$(PDFTEX_OPT_FLAGS) -Wl,-u,htons,-u,ntohs \
 	-sEMIT_EMSCRIPTEN_LICENSE=1 \
 	-Wno-implicit-function-declaration \
 	-sALLOW_MEMORY_GROWTH=1 \
@@ -302,7 +306,7 @@ wasm-configure:
 	@echo "This generates correct c-auto.h and config headers for WASM."
 	@echo ""
 	cd $(BUILD_WASM) && \
-		emconfigure $(TEXLIVE_SRC)/configure \
+		CFLAGS="$(PDFTEX_OPT_FLAGS)" CXXFLAGS="$(PDFTEX_OPT_FLAGS)" emconfigure $(TEXLIVE_SRC)/configure \
 			$(COMMON_CONFIGURE_FLAGS) \
 			--host=wasm32-unknown-emscripten \
 			--build=x86_64-pc-linux-gnu
@@ -320,7 +324,7 @@ wasm-libs:
 	@echo "========================================"
 	@echo ""
 	@echo "--- Step 2b.1: Recursive make (kpathsea + zlib) ---"
-	-cd $(BUILD_WASM) && emmake $(MAKE) MAKEINFO=true -j1 || true
+	-cd $(BUILD_WASM) && emmake $(MAKE) CFLAGS="$(PDFTEX_OPT_FLAGS)" CXXFLAGS="$(PDFTEX_OPT_FLAGS)" MAKEINFO=true -j1 || true
 	@echo ""
 	@echo "--- Step 2b.2: Build libpng ---"
 	@if [ ! -f "$(BUILD_WASM)/libs/libpng/libpng.a" ]; then \
@@ -336,7 +340,7 @@ wasm-libs:
 				--with-zlib-libdir=$(BUILD_WASM)/libs/zlib \
 				CPPFLAGS="-I$(TEXLIVE_SRC)/libs/zlib/zlib-src -I$(BUILD_WASM)/libs/zlib"; \
 		fi && \
-		cd $(BUILD_WASM)/libs/libpng && emmake $(MAKE) -j1; \
+		cd $(BUILD_WASM)/libs/libpng && emmake $(MAKE) CFLAGS="$(PDFTEX_OPT_FLAGS)" CXXFLAGS="$(PDFTEX_OPT_FLAGS)" -j1; \
 	else \
 		echo "libpng already built."; \
 	fi
@@ -352,7 +356,7 @@ wasm-libs:
 				--build=x86_64-pc-linux-gnu \
 				--disable-shared --enable-static; \
 		fi && \
-		cd $(BUILD_WASM)/libs/xpdf && emmake $(MAKE) -j1; \
+		cd $(BUILD_WASM)/libs/xpdf && emmake $(MAKE) CFLAGS="$(PDFTEX_OPT_FLAGS)" CXXFLAGS="$(PDFTEX_OPT_FLAGS)" -j1; \
 	else \
 		echo "xpdf already built."; \
 	fi
