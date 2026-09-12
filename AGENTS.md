@@ -20,6 +20,7 @@ To provide a high-performance, **embeddable LaTeX component** for academic platf
 - **[WASM & TeX Live](docs/engine.md)**: Overview of the compilation engine and CDN.
 - **[Engine Optimization Policy](docs/engine-optimization-policy.md)**: Required before engine-internal, memory, build-flag, or execution optimizations. Preserve existing TeX Live mirrors, format bytes, and output; deliver to existing CorTeX projects without migrations or additional TeX Live choices.
 - **[TeX Live Internals & Upgrade](docs/texlive-upgrade.md)**: Deep dive into the kpathsea fallback, immutable R2 structure, the [upstream-maintenance philosophy (interpose, don't patch)](docs/texlive-upgrade.md#upstream-maintenance-interpose-dont-patch), and the guide for upgrading to a new TeX Live year.
+- **[Engine Upgrade Customizations](docs/engine-upgrade-customizations.md)**: Maintained engine patches/build flags, rejected variants, and per-change checks for a new upstream year. Read before changing TeX Live source pins.
 - **[TeX Live mirror operations](docs/texlive-mirror-operations.md)**: Provider-neutral publication, R2 custom-domain configuration, immutable snapshots, verification, rollback, and origin retirement.
 - **[Development Guide](docs/develop.md)**: Essential guide for contributors, covering environment setup, CLI commands, and testing strategies (Vitest/Playwright).
 - **[Licensing](docs/licensing.md)**: License scope, engine/CDN release gates, and third-party compliance requirements.

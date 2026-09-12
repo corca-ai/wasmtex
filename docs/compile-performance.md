@@ -267,6 +267,9 @@ independent Linux rebuilds. This supersedes the release-pending status of the
 historical experiment above. Integrators separately qualify adoption; publishing
 these engines does not deploy an application.
 
+The [upgrade customization inventory](engine-upgrade-customizations.md) maps the
+adopted changes to source files, upstream assumptions and requalification steps.
+
 ## Pinned build, format decode, and transfer experiments
 
 [Experiment #140](https://github.com/corca-ai/wasmtex/issues/140) compares three
