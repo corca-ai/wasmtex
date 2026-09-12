@@ -57,6 +57,13 @@ The [HTTP compression qualification](http-compression.md) provides an independen
 public-asset diagnostic and records why additional format compression was
 deferred. Existing HTTP encoding and gzip payloads must be distinguished.
 
+## pdfTeX font-map follow-up
+
+The [single-probe experiment](pdftex-fontmap-experiment.md) preserves 60 measured
+compile pairs but improves whole compilation by only 0.6–4.0%, below its declared
+5% gate. It is not adopted. The candidate remains archived as evidence, with no
+engine or application release change.
+
 ## Deferred experiments
 
 | Experiment | Decision and retry condition |
