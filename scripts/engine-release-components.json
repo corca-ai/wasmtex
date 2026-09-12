@@ -10,7 +10,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33882993861,
+          "runId": 34692697072,
           "artifacts": [
             "wasm-pdftex",
             "wasm-bibtex"
@@ -32,20 +32,25 @@
         },
         {
           "id": "xetex",
-          "runId": 34663466012,
+          "runId": 34692699657,
           "artifacts": [
             "wasm-xetex"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 34485564499,
+          "runId": 34692035159,
           "artifacts": [
             "wasm-luatex"
           ]
         }
       ],
       "reusedFormats": [
+        {
+          "family": "pdftex",
+          "runId": 33882993861,
+          "artifact": "wasm-pdftex"
+        },
         {
           "family": "xetex",
           "runId": 33882993816,
@@ -103,6 +108,11 @@
         }
       ],
       "reusedFormats": [
+        {
+          "family": "pdftex",
+          "runId": 33885489901,
+          "artifact": "wasm-pdftex-2026"
+        },
         {
           "family": "xetex",
           "runId": 33885502236,

@@ -5,7 +5,7 @@
     "wasmtex-pdftex.js": 150000,
     "wasmtex-pdftex.wasm": 2100000,
     "wasmtex-pdftex-checkpoint.js": 160000,
-    "wasmtex-pdftex-checkpoint.wasm": 2900000,
+    "wasmtex-pdftex-checkpoint.wasm": 3100000,
     "wasmtex-pdftex.worker.js": 80000,
     "wasmtex-pdftex.fmt": 4200000,
     "wasmtex-xetex.js": 160000,
@@ -16,7 +16,7 @@
     "wasmtex-dvipdfm.wasm": 1200000,
     "wasmtex-dvipdfm.worker.js": 50000,
     "wasmtex-luatex.js": 180000,
-    "wasmtex-luatex.wasm": 7200000,
+    "wasmtex-luatex.wasm": 8300000,
     "wasmtex-luatex.worker.js": 60000,
     "wasmtex-luatex.fmt.gz": 4100000
   },

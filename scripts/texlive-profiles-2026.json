@@ -1,10 +1,10 @@
 {
   "schemaVersion": 3,
   "texliveYear": "2026",
-  "distributionProfileId": "2026-20260826-ef72b73",
+  "distributionProfileId": "2026-20260826-c36ef91",
   "discovery": {
     "name": "2026-latest",
-    "profileId": "2026-20260826-ef72b73",
+    "profileId": "2026-20260826-c36ef91",
     "frozenAtFinal": false
   },
   "profiles": [
@@ -178,6 +178,45 @@
           "7920dff0f2abd04d7760ba273bf51994c86ca0ff"
         ],
         "correspondingSourceSha256": "3bfe123f4fdddab984331fd451416432acebf8085680ad5bacd639b7930183db",
+        "buildRuns": {
+          "pdftex-bibtex": 33885489901,
+          "bibtex8": 33163172428,
+          "makeindex": 33163174571,
+          "xetex": 34663466012,
+          "luahbtex": 34485572514
+        }
+      },
+      "qualification": {
+        "browserGoldens": 7,
+        "nodeBrowserParity": 7,
+        "representativeEngines": [
+          "pdflatex",
+          "xelatex",
+          "lualatex"
+        ]
+      }
+    },
+    {
+      "id": "2026-20260826-c36ef91",
+      "label": "TeX Live 2026 latest (2026-08-26, compile engine c36ef91)",
+      "snapshot": "2026-08-26",
+      "snapshotDate": "2026-08-26",
+      "mirror": {
+        "revision": "2026-ba38749b8714505a",
+        "url": "https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/",
+        "provenanceSha256": "7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00",
+        "objects": 168942
+      },
+      "engine": {
+        "releaseId": "2026-c36ef911437b6833",
+        "tag": "engine-2026-c36ef911437b6833",
+        "sourceRevisions": [
+          "06f1937c502188fe04f0931fed702d06c2b78ab3",
+          "0dddc924cc6e69bd2a4b4630e02efe414f84515e",
+          "4f3062161edd452dfd96b4b75b807b0234f63689",
+          "74554154804d40c3282dccdc865e0b486f5ccbd3"
+        ],
+        "correspondingSourceSha256": "78811a50cfb1f216559c9ef8132f12394aad60dde33ac887173c326d9ebfb4b9",
         "buildRuns": {
           "pdftex-bibtex": 33885489901,
           "bibtex8": 33163172428,
