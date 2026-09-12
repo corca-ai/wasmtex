@@ -267,6 +267,9 @@ independent Linux rebuilds. This supersedes the release-pending status of the
 historical experiment above. Integrators separately qualify adoption; publishing
 these engines does not deploy an application.
 
+The [upgrade customization inventory](engine-upgrade-customizations.md) maps the
+adopted changes to source files, upstream assumptions and requalification steps.
+
 ## Pinned build, format decode, and transfer experiments
 
 [Experiment #140](https://github.com/corca-ai/wasmtex/issues/140) compares three
@@ -345,5 +348,23 @@ independent link-order differences are checked structurally and by the full
 annual Unicode corpus. Original format bytes and generation receipts remain
 unchanged. Receipt-bound source archives pass validation for both annual lines.
 
-Publication, final gates and application adoption remain in progress on the
-experiment branch. This record alone does not establish production deployment.
+[PR #141](https://github.com/corca-ai/wasmtex/pull/141) is merged and both
+[2025](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
+and [2026](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-52bd7d6287f2a826)
+engine releases are published. Each release includes the corresponding-source
+archive, raw experiment reports, selected/rejected decisions, and SHA-256
+sidecars. All 14 uploaded files match GitHub's stored digests. Final annual
+Golden Canary, Node/browser parity, state/checkpoint, persistent-preamble
+transition/rollback, and source-release gates pass.
+
+[CorTeX PR #1046](https://github.com/corca-ai/cortex/pull/1046) adopts the
+qualified successors while preserving stored project IDs, visible choices and
+mirrors. Its 104 annual template targets pass both compile passes; feature,
+browser, integration and CI gates pass. Production release `20260912-558b941`
+serves the new engine assets and renders the public Try document. This is
+application qualification, not a WasmTex build or source dependency.
+
+[Experiment #140](https://github.com/corca-ai/wasmtex/issues/140) records the
+integrated completion and deployment evidence. The 2026 fresh-browser RSS
+medians are 893.2 → 923.5 MiB for PDF and 1015.8 → 1044.8 MiB for checkpoint
+PDF, using the same three-pair method above.

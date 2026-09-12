@@ -8,6 +8,10 @@ An engine performance update is not an annual TeX Live upgrade. Follow the
 mirror and format bytes and deliver the new engine to existing CorTeX projects
 without new TeX Live choices.
 
+Before changing the upstream pin, review the [engine customization inventory](engine-upgrade-customizations.md):
+it identifies the adopted patches/build flags, state assumptions, rejected
+variants, and per-change upgrade checks.
+
 ## Supported annual lines
 
 TeX Live 2025 remains the compatibility default while TeX Live 2026 is supported
@@ -196,7 +200,9 @@ Before enabling exact resource completion for the new profile:
    revision-mismatch rejection.
 
 ### Step 2: Build New WASM Engine
-The WASM engine must be compiled with the latest pdfTeX source to ensure compatibility with 2025 format files.
+Build every engine family from the new year's reviewed immutable source pin.
+Review the [customization inventory](engine-upgrade-customizations.md) before
+porting build settings and patches; previous-year formats are not assumed compatible.
 
 1. Add or update `wasm-build/texlive-source-<year>.ref` (resolve the
    new TeX Live year's `branch<YEAR>` tip to a commit SHA — see *Upstream

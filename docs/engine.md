@@ -23,6 +23,9 @@ nested support. The SDK now fixes the output handoff described in
 [#135](https://github.com/corca-ai/wasmtex/issues/135), as documented in
 [nested output qualification](nested-output.md), without changing engine assets.
 
+For annual source upgrades, use the [engine customization inventory](engine-upgrade-customizations.md)
+to review maintained patches, format caching and compiler flags.
+
 ## Engine Setup
 
 The runtime needs each engine's authored controller (`*.worker.js`), generated
