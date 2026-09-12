@@ -18,9 +18,10 @@ and ownership code under ASan; the [browser recovery fixture](../test/fixtures/d
 checks real resolution and repeated conversions with the original formats.
 Diagnostic builds do not replace receipt-bound engine releases. Node root-document
 comparisons use an opt-in CommonJS fixed clock so compressed PDF creation dates
-are deterministic; the existing nested-output defect is tracked in
-[#135](https://github.com/corca-ai/wasmtex/issues/135). It is not qualified as
-successful nested support by the root-only results.
+are deterministic. Those historical root-only results did not establish
+nested support. The SDK now fixes the output handoff described in
+[#135](https://github.com/corca-ai/wasmtex/issues/135), as documented in
+[nested output qualification](nested-output.md), without changing engine assets.
 
 ## Engine Setup
 

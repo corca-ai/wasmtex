@@ -9,7 +9,7 @@ export type UnicodeCompatibilityCase = {
   error?: boolean
   auxiliary?: string
   mainFile?: string
-  stalePdfFrom?: string
+  samePdfAs?: string
 }
 
 export function unicodeCompatibilityCases(engine: UnicodeEngine, font: Uint8Array): UnicodeCompatibilityCase[] {
@@ -57,10 +57,8 @@ export function unicodeCompatibilityCases(engine: UnicodeEngine, font: Uint8Arra
       name: 'nested-main',
       mainFile: 'nested/main.tex',
       files: { 'nested/main.tex': docFor(engine) },
-      // Existing dvipdfmx controller reads root main.pdf although its C entry
-      // writes nested/main.pdf. In this reused worker it returns the index PDF.
-      // Expose this known defect rather than calling it a successful fixture.
-      ...(engine === 'xelatex' ? { stalePdfFrom: 'index' } : {}),
+      // #135: nesting the source must return this article, never the prior PDF.
+      samePdfAs: 'article',
     },
     { name: 'recovery', files: { 'main.tex': docFor(engine) } },
   ]
