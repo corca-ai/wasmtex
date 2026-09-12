@@ -10,7 +10,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 34692697072,
+          "runId": 34697091208,
           "artifacts": [
             "wasm-pdftex",
             "wasm-bibtex"
@@ -72,7 +72,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 33885489901,
+          "runId": 34697092410,
           "artifacts": [
             "wasm-pdftex-2026",
             "wasm-bibtex-2026"
@@ -94,14 +94,14 @@
         },
         {
           "id": "xetex",
-          "runId": 34663466012,
+          "runId": 34692700740,
           "artifacts": [
             "wasm-xetex-2026"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 34485572514,
+          "runId": 34691815493,
           "artifacts": [
             "wasm-luatex-2026"
           ]
