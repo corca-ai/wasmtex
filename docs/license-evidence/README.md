@@ -6,6 +6,15 @@ revision in its name; they are records, not living documents — supersede them
 with a new snapshot instead of editing history. `npm run check:licenses`
 requires the load-bearing set to stay tracked.
 
+## LTO input classification (`7455415`)
+
+[`engine-sbom-2025-lto-7455415.spdx.json`](engine-sbom-2025-lto-7455415.spdx.json)
+and [`engine-sbom-2026-lto-7455415.spdx.json`](engine-sbom-2026-lto-7455415.spdx.json)
+supersede the component SBOMs for the unchanged pinned libraries. They recognize
+Emscripten's `lto/` archive paths alongside ordinary paths; component versions,
+license selections and notices stay unchanged. These classification snapshots
+do not by themselves qualify a new engine release.
+
 ## Font-map successors (`7920dff`)
 
 [`fontmap-release-7920dff.md`](fontmap-release-7920dff.md) binds the two annual

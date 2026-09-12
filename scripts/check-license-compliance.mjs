@@ -269,9 +269,9 @@ try {
       resolve(root, 'scripts/gen-engine-sbom.mjs'),
       version,
       '--check',
-      version === '2025'
+      componentInventory.sbomFile ?? (version === '2025'
         ? 'docs/license-evidence/engine-sbom-2025-57ad3e9.spdx.json'
-        : `docs/license-evidence/engine-sbom-${version}-${componentInventory.linkInventorySourceRevision.slice(0, 7)}.spdx.json`,
+        : `docs/license-evidence/engine-sbom-${version}-${componentInventory.linkInventorySourceRevision.slice(0, 7)}.spdx.json`),
     ],
     { cwd: root, stdio: 'pipe' },
   )

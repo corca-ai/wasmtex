@@ -3,7 +3,7 @@
   "texliveSourceCommit": "fb6158926661cb7a7246b3a94a0cb170a9624d5a",
   "linkInventory": "docs/license-evidence/link-inventory-2026-9b43b39.json",
   "linkInventorySourceRevision": "9b43b3959aba8f3f8b39a4190deb8ac653e2f687",
-  "sbomCreated": "2026-08-27T07:30:00Z",
+  "sbomCreated": "2026-09-12T11:44:00Z",
   "families": [
     {
       "family": "pdftex",
@@ -411,5 +411,6 @@
       ],
       "procedure": "node scripts/extract-luatex-format.mjs followed by gzip -n -9"
     }
-  }
+  },
+  "sbomFile": "docs/license-evidence/engine-sbom-2026-lto-7455415.spdx.json"
 }
