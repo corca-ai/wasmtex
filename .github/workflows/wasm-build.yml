@@ -246,6 +246,9 @@ jobs:
             wasm-build/dist/wasmtex-pdftex.map
             wasm-build/dist/wasmtex-pdftex-checkpoint.map
             wasm-build/dist/wasmtex-bibtex.map
+            wasm-build/dist/wasmtex-pdftex.link-inputs
+            wasm-build/dist/wasmtex-pdftex-checkpoint.link-inputs
+            wasm-build/dist/wasmtex-bibtex.link-inputs
           retention-days: 90
 
       - name: List build outputs

@@ -47,7 +47,7 @@
       "version": "3.1.46",
       "licenseExpression": "MIT AND NCSA",
       "archivePatterns": [
-        "^emscripten-sysroot/lib(?:noexit|sockets|stubs)\\.a$"
+        "^emscripten-sysroot/(?:lto/)?lib(?:noexit|sockets|stubs)\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/Emscripten-3.1.46.txt"
@@ -61,7 +61,7 @@
       "version": "Emscripten 3.1.46 bundled revision",
       "licenseExpression": "MIT AND LicenseRef-musl-component-notices",
       "archivePatterns": [
-        "^emscripten-sysroot/libc\\.a$"
+        "^emscripten-sysroot/(?:lto/)?libc\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/musl.txt"
@@ -75,7 +75,7 @@
       "version": "Emscripten 3.1.46 bundled revision",
       "licenseExpression": "Apache-2.0 WITH LLVM-exception",
       "archivePatterns": [
-        "^emscripten-sysroot/lib(?:c\\+\\+(?:abi)?-noexcept|compiler_rt)\\.a$"
+        "^emscripten-sysroot/(?:lto/)?lib(?:c\\+\\+(?:abi)?-noexcept|compiler_rt)\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/Apache-2.0.txt",
@@ -92,7 +92,7 @@
       "version": "Emscripten 3.1.46 bundled revision",
       "licenseExpression": "LicenseRef-Public-Domain OR CC0-1.0",
       "archivePatterns": [
-        "^emscripten-sysroot/libdlmalloc\\.a$"
+        "^emscripten-sysroot/(?:lto/)?libdlmalloc\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/Emscripten-3.1.46.txt"
@@ -179,7 +179,7 @@
       "version": "1.6.39",
       "licenseExpression": "Libpng",
       "archivePatterns": [
-        "^emscripten-sysroot/libpng\\.a$"
+        "^emscripten-sysroot/(?:lto/)?libpng\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/libpng.txt"
@@ -207,7 +207,7 @@
       "version": "1.2.13",
       "licenseExpression": "Zlib",
       "archivePatterns": [
-        "^emscripten-sysroot/libz\\.a$"
+        "^emscripten-sysroot/(?:lto/)?libz\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/zlib.txt"
@@ -222,7 +222,7 @@
       "licenseExpression": "GPL-2.0-only",
       "licenseSelection": "GPL version 2; the alternative FreeType License is not selected for this GPLv2 combined work",
       "archivePatterns": [
-        "^emscripten-sysroot/libfreetype\\.a$"
+        "^emscripten-sysroot/(?:lto/)?libfreetype\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/GPL-2.0.txt",
@@ -237,7 +237,7 @@
       "version": "68.2",
       "licenseExpression": "ICU",
       "archivePatterns": [
-        "^emscripten-sysroot/libicu_(?:common|stubdata)\\.a$"
+        "^emscripten-sysroot/(?:lto/)?libicu_(?:common|stubdata)\\.a$"
       ],
       "noticeFiles": [
         "LICENSES/ICU-68.2.txt"

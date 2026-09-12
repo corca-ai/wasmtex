@@ -222,7 +222,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wasm-luatex-link-map
-          path: wasm-build/dist-luatex/wasmtex-luatex.map
+          path: |
+            wasm-build/dist-luatex/wasmtex-luatex.map
+            wasm-build/dist-luatex/wasmtex-luatex.link-inputs
           retention-days: 90
 
       - name: List build outputs

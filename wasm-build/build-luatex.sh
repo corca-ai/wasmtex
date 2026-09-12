@@ -38,13 +38,13 @@ rm -rf "$WB"; mkdir -p "$WB"; cd "$WB"
 # switches, so every consumer of its generated public headers needs the same
 # view of off64_t. The bundled build does not propagate them to LuaZip itself.
 CPPFLAGS="-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64" \
-emconfigure "$SRC/configure" \
+CFLAGS="-O3 -flto" CXXFLAGS="-O3 -flto" emconfigure "$SRC/configure" \
   --disable-all-pkgs --enable-web2c --enable-luahbtex $DISABLES \
   --without-x --disable-shared --disable-multiplatform --disable-native-texlive-build \
   >emconf.out 2>&1 || { echo "emconfigure failed"; tail -30 emconf.out; exit 1; }
 
 echo "=== Phase 2a.1: SHA-2 WebAssembly smoke test ==="
-emcc -O2 -std=c99 \
+emcc -O3 -flto -std=c99 \
   "$GLUE/sha2/wasmtex-sha2.c" \
   "$GLUE/sha2/wasmtex-sha2-smoke.c" \
   -sEXIT_RUNTIME=1 -o /tmp/wasmtex-sha2-smoke.js || {
@@ -98,7 +98,7 @@ XPDF_INCLUDES=(
   -I"$SRC/libs/xpdf/xpdf-src/xpdf"
   -I"$WB/libs/xpdf"
 )
-em++ -O2 -std=c++11 -DPDF_PARSER_ONLY \
+em++ -O3 -flto -std=c++11 -DPDF_PARSER_ONLY \
   -DWTPDF_EXPECTED_BACKEND_VERSION=\"$EXPECTED_XPDF_VERSION\" \
   "${XPDF_INCLUDES[@]}" \
   "$GLUE/pdf-backend/wtpdf-xpdf.cc" \
@@ -143,8 +143,8 @@ emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc \
 
 echo "=== Phase 2f: final emcc link with WasmTex's own glue ==="
 cd "$WW"
-emcc -O2 -c "$GLUE/luatex-entry.c" -o luatex-entry.o
-emcc -O2 -c "$GLUE/kpse-hook.c"    -o kpse-hook.o
+emcc -O3 -flto -c "$GLUE/luatex-entry.c" -o luatex-entry.o
+emcc -O3 -flto -c "$GLUE/kpse-hook.c"    -o kpse-hook.o
 # Interposition contract (#50): kpse_find_file must be defined in libkpathsea, else
 # -Wl,--wrap=kpse_find_file below silently no-ops and the CDN file-lookup hook never
 # fires. Fail loud on upstream drift. (docs/texlive-upgrade.md interpose-don't-patch)
@@ -188,7 +188,7 @@ elif [ -f libluaharfbuzzsubset.a ]; then
 fi
 # Keep the initial heap at 128 MiB to bound snapshot/reset work; larger documents
 # grow it on demand. Qualify changes against existing formats (optimization policy).
-em++ -O2 "${LUATEX_DEBUG_FLAGS[@]}" \
+em++ -O3 -flto -Wl,-u,htons,-u,ntohs "${LUATEX_DEBUG_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   luatex-entry.o kpse-hook.o \
   luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
@@ -200,20 +200,21 @@ em++ -O2 "${LUATEX_DEBUG_FLAGS[@]}" \
   "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a \
   "$XPDFLIB" "$WB"/libs/zlib/libz.a \
   lib/lib.a "$WB"/texk/kpathsea/.libs/libkpathsea.a libmputil.a libunilib.a libmd5.a \
-  -Wl,-Map="$OUT/wasmtex-luatex.map" \
+  -Wl,--trace -Wl,-Map="$OUT/wasmtex-luatex.map" \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
   -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
   -sINITIAL_MEMORY=134217728 \
   --js-library "$GLUE/luatex-library.js" \
-  -o "$OUT/wasmtex-luatex.js"
+  -o "$OUT/wasmtex-luatex.js" > "$OUT/wasmtex-luatex.link-inputs"
 [ -s "$OUT/wasmtex-luatex.map" ] || { echo "LuaHBTeX link map was not generated"; exit 1; }
-if grep -E 'libpplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-luatex.map"; then
+if grep -E 'libpplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-luatex.map" "$OUT/wasmtex-luatex.link-inputs"; then
   echo "ERROR: forbidden pplib archive or legacy pplib symbol remains in the LuaHBTeX link map" >&2
   exit 1
 fi
-grep -F 'libxpdf.a' "$OUT/wasmtex-luatex.map" >/dev/null || {
-  echo "ERROR: LuaHBTeX link map does not contain the required Xpdf backend" >&2
+# LTO folds the backend into lto.tmp; the pre-optimization trace retains extracted members.
+grep -E 'libxpdf\.a\([^)]+' "$OUT/wasmtex-luatex.link-inputs" >/dev/null || {
+  echo "ERROR: LuaHBTeX linker inputs do not contain the required Xpdf backend" >&2
   exit 1
 }
 grep -F 'wtpdf_' "$OUT/wasmtex-luatex.map" >/dev/null || {

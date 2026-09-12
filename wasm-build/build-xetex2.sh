@@ -246,7 +246,9 @@ PROFILE_FLAGS=(-g0)
 if [ "${WASMTEX_PROFILE_NAMES:-0}" = "1" ]; then
   PROFILE_FLAGS=(--profiling-funcs)
 fi
-em++ -O2 "${PROFILE_FLAGS[@]}" \
+emcc -O2 -sUSE_ZLIB=1 -c "$GLUE/fmt-cache.c" -o fmt-cache.o
+em++ -O2 "${PROFILE_FLAGS[@]}" fmt-cache.o \
+  -Wl,--wrap=gzdopen,--wrap=gzread,--wrap=gzclose \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   kpse-hook.o xetex-entry.o fontconfig-shim.o icu-data-loader.o \
   $XEOBJS \

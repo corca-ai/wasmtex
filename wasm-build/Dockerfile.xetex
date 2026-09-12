@@ -125,6 +125,7 @@ COPY xetex-worker.js /src/xetex-worker.js
 COPY resolver-evidence.js /src/resolver-evidence.js
 COPY xetex-library.js /src/xetex-library.js
 COPY kpse-hook.c /src/kpse-hook.c
+COPY fmt-cache.c /src/fmt-cache.c
 COPY fontconfig-shim.c /src/fontconfig-shim.c
 COPY fontconfig-shim.h /src/fontconfig-shim.h
 # ICU data loader (#52 M4b): registers runtime-fetched icudt68l.dat via

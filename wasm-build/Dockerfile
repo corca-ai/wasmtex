@@ -137,6 +137,8 @@ COPY wasm-entry.c /src/wasm-entry.c
 COPY kpse-hook.c /src/kpse-hook.c
 COPY library.js /src/library.js
 COPY trace-hook.c /src/trace-hook.c
+COPY fmt-cache.c /src/fmt-cache.c
+COPY tests/fmt-cache-probe.c tests/fmt-cache-probe.cjs tests/check-fmt-cache.sh /src/tests/
 COPY bibtex-entry.c /src/bibtex-entry.c
 COPY bibtex-worker.js /src/bibtex-worker.js
 

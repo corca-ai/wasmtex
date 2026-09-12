@@ -52,6 +52,7 @@ on:
       - 'wasm-build/fontconfig-shim.c'
       - 'wasm-build/fontconfig-shim.h'
       - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/fmt-cache.c'
       - 'wasm-build/texlive-source-*.ref'
       - 'wasm-build/dvipdfm-worker.js'
       - 'wasm-build/resolver-evidence.js'

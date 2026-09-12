@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import { createLinkInventory } from './lib/link-inventory.mjs'
 
@@ -17,7 +17,10 @@ try {
   const entries = []
   for (let index = 0; index < args.length; index += 3) {
     const [family, mapPath, receiptPath] = args.slice(index, index + 3)
+    const tracePath = mapPath.replace(/\.map$/, '.link-inputs')
+    const trace = existsSync(tracePath) && tracePath !== mapPath ? { inputTraceFile: basename(tracePath), inputTraceText: readFileSync(tracePath, 'utf8') } : {}
     entries.push({
+      ...trace,
       family,
       mapFile: basename(mapPath),
       mapText: readFileSync(mapPath, 'utf8'),
