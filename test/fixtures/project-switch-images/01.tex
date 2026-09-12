@@ -1,0 +1,20 @@
+\documentclass[10pt]{article}
+\usepackage{amsmath}
+\begin{document}
+The least-squares objective satisfies
+\begin{align}
+  J(\theta) &= \sum_{i=1}^{n}(y_i-\theta x_i)^2, \label{eq:objective}\\
+  \frac{dJ}{d\theta} &= -2\sum_{i=1}^{n}x_i(y_i-\theta x_i), \notag\\
+  \hat{\theta} &= \frac{\sum_i x_i y_i}{\sum_i x_i^2}. \label{eq:estimate}
+\end{align}
+Equation~\eqref{eq:estimate} is valid when \(\sum_i x_i^2>0\).
+
+A clipped response is defined by
+\begin{equation}
+  g(x)=\begin{cases}
+    0, & x<0,\\
+    x, & 0\leq x\leq 1,\\
+    1, & x>1.
+  \end{cases}
+\end{equation}
+\end{document}

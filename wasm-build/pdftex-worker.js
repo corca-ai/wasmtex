@@ -1501,6 +1501,7 @@ self["onmessage"] = function(ev) {
             dumpTransfer
         );
     } else if (cmd === "flushcache") {
+        Module.fmtDecodeCache = null;
         cleanDir(WORKROOT);
         hcReset();
         // A snapshot can embed project-local inputs. It must never survive a

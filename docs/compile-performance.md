@@ -266,3 +266,84 @@ records final browser/Node comparisons, annual goldens, complete source and
 independent Linux rebuilds. This supersedes the release-pending status of the
 historical experiment above. Integrators separately qualify adoption; publishing
 these engines does not deploy an application.
+
+## Pinned build, format decode, and transfer experiments
+
+[Experiment #140](https://github.com/corca-ai/wasmtex/issues/140) compares three
+candidates in order. The acceptance gate is at least 5% median improvement in
+a relevant whole compile or pipeline, with no unrelated stage regression above
+`max(5%, 5ms)`. Five alternating baseline/candidate pairs run without tracing.
+All engines retain their original annual source, toolchain, mirror and formats.
+
+The selected candidates retain LuaHBTeX link-time optimization (LTO) and
+bounded decoded-format reuse for pdfTeX and XeTeX, both keeping their original
+O2 build flags. Ordinary O3 alone, XeTeX LTO and LuaHBTeX decoded-format reuse
+do not clear the performance gate.
+
+| Candidate | Measured result | Decision |
+| --- | --- | --- |
+| pdfTeX LTO | Body edits improve 5.6–9.2% in 2025 and 5.3–8.5% in 2026, but an embedded-PDF document fails after varied project switches. | Reject; restore original O2 flags. |
+| LuaHBTeX LTO | Body edits improve 10.9% in 2025 and 10.3% in 2026; repeats improve 11.3% and 10.1%. | Retain for release qualification. |
+| pdfTeX O2 decoded-format reuse | Final 2025 math repeats/body edits improve 18.6%/19.5%; final 2026 article improves 18.7%/19.1%. | Retain for release qualification. |
+| XeTeX O2 decoded-format reuse | Final 2026 article repeats/body edits improve 12.6%/12.9%. | Retain for release qualification. |
+| SDK transfer plus worker MEMFS ownership | Initialization plus first compile improves 0.2% pdfLaTeX, 1.8% XeLaTeX, 1.0% LuaLaTeX; checkpoint pdfLaTeX regresses 0.7%. | Reject; retain existing SDK and file-transfer paths. |
+
+The rejected PDF LTO combination is not published. Its small repeated-image
+probe passed, but a 13-document sequence reproduced a memory-access failure
+in the standalone SDK. The [project-switch fixture](../test/fixtures/project-switch-images/README.md)
+and opt-in Node test retain that sequence. Both annual O2+cache builds pass it
+and preserve every normalized PDF. The integrating application's 21-document
+sequence also passes, with all 21 rendered image hashes unchanged.
+
+Final O2 checkpoint engines improve normal repeats/body edits by 13.5%/14.9%
+in 2025 and 13.5%/13.7% in 2026. Actual checkpoint restoration also preserves
+output; no stage exceeds the predeclared regression tolerance. Earlier PDF
+LTO+cache timing and memory numbers are superseded, not adoption evidence.
+
+The transfer experiment uses eight JPEG files totaling 38,240,832 input bytes.
+Fixture decoding is outside SDK timing. Both actual SDK bundle hashes and worker
+bytes are checked: an earlier run accidentally used identical SDK bundles and
+is retained only as a worker-only diagnostic. The corrected 80 paired compiles
+preserve output but fail the whole-pipeline threshold. Two pdfLaTeX pairs that
+overlapped a CPU diagnostic were discarded and rerun before the final comparison.
+
+Decoded-format reuse stores one exact compressed source and its successful read
+sequence. Limits are 8 MiB source, 32 MiB decoded payload and 65,536 chunks.
+Byte comparison protects replacement formats; changed read sizes fall back to
+the native stream at the consumed offset. Cache state holds no native pointers.
+FD stream identity rejects a stale cursor after an aborted run and heap reset.
+A real WASM/zlib differential covers fallback, corrupt input, nested streams,
+replacement, memory growth and aborted execution. Published format bytes stay
+unchanged, with their original generation receipts.
+
+### Costs and release qualification
+
+These candidates trade additional engine bytes and memory for faster compiles.
+A fresh-browser measurement samples aggregate process RSS every 100 ms; it is
+not per-engine private memory or a latency acceptance run. Three pairs on the
+2025 line give these medians:
+
+| Engine | Baseline median peak RSS | Candidate median peak RSS |
+| --- | --- | --- |
+| pdfLaTeX O2 | 899.1 MiB | 916.4 MiB |
+| Checkpoint pdfLaTeX O2 | 1021.4 MiB | 1047.7 MiB |
+| XeLaTeX | 1174.8 MiB | 1224.5 MiB |
+| LuaLaTeX | 704.2 MiB | 725.7 MiB |
+
+PDF keeps its existing binary budgets after rejecting LTO. The 2026 LuaHBTeX
+WASM is 8,076,867 bytes, requiring an explicit 8,300,000-byte ceiling instead
+of 7,200,000. Runtime latency and memory ceilings are unchanged. Diagnostic
+gzip-9 compression of generated JS plus WASM adds about 0.9 KB for ordinary
+pdfTeX, 0.9–1.1 KB for checkpoint pdfTeX, 0.8–1.3 KB for XeTeX, and 327–383 KB
+for LuaHBTeX. These are compressed artifact measurements, not measured
+Cloudflare transfer bytes or a claim of faster cold-network startup.
+
+The final assets bind to `2025-6d8b01c3a4570ad1` and `2026-52bd7d6287f2a826`.
+Both PDF/BibTeX clean rebuilds reproduce all ten non-format files byte for byte.
+The unchanged LuaHBTeX candidate also reproduces byte for byte; XeTeX's
+independent link-order differences are checked structurally and by the full
+annual Unicode corpus. Original format bytes and generation receipts remain
+unchanged. Receipt-bound source archives pass validation for both annual lines.
+
+Publication, final gates and application adoption remain in progress on the
+experiment branch. This record alone does not establish production deployment.

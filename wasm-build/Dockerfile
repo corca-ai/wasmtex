@@ -99,8 +99,10 @@ RUN echo "=== Phase 1a: Native configure ===" && \
         --without-mf-x-toolkit \
     2>&1 | tail -30
 
+# Continue through unrelated tool failures so web2c is configured even when an
+# ICU data target fails in a clean build. Required generators are checked below.
 RUN echo "=== Phase 1b: Native build ===" && \
-    cd /build/native && make MAKEINFO=true -j"$(nproc)" 2>&1 || true && \
+    cd /build/native && make MAKEINFO=true -k -j"$(nproc)" 2>&1 || true && \
     echo "" && \
     echo "--- Full native build finished (errors in luajittex expected) ---" && \
     echo "" && \
@@ -125,6 +127,12 @@ RUN echo "=== Phase 1b: Native build ===" && \
     echo "=== All web2c bibtex-related files ===" && \
     find /build/native/texk/web2c -name 'bibtex*' -ls 2>/dev/null || true
 
+RUN test -s /build/native/texk/web2c/pdftex0.c && \
+    test -s /build/native/texk/web2c/pdftexini.c && \
+    test -s /build/native/texk/web2c/pdftex-pool.c && \
+    test -s /build/native/texk/web2c/pdftexd.h && \
+    test -s /build/native/texk/web2c/bibtex.c
+
 # =============================================================================
 # COPY build scripts (AFTER native build — changes here won't invalidate above)
 # =============================================================================
@@ -137,6 +145,8 @@ COPY wasm-entry.c /src/wasm-entry.c
 COPY kpse-hook.c /src/kpse-hook.c
 COPY library.js /src/library.js
 COPY trace-hook.c /src/trace-hook.c
+COPY fmt-cache.c /src/fmt-cache.c
+COPY tests/fmt-cache-probe.c tests/fmt-cache-probe.cjs tests/check-fmt-cache.sh /src/tests/
 COPY bibtex-entry.c /src/bibtex-entry.c
 COPY bibtex-worker.js /src/bibtex-worker.js
 

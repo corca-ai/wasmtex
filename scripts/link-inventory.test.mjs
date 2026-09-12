@@ -70,3 +70,29 @@ test('rejects legacy pplib markers', () => {
     /forbidden legacy marker/,
   )
 })
+
+const LTO_MAP = ' - 100 20 lto.tmp:(wtpdf_document_open_file)\n'
+const INPUTS = 'glue.o\n/build/wasm/libs/xpdf/libxpdf.a(XRef.cc.o)\n/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/lto/libc.a(memcpy.o)\n'
+const ltoEntry = {
+  family: 'luahbtex', mapFile: 'wasmtex-luatex.map', mapText: LTO_MAP,
+  receiptFile: 'BUILD-RECEIPT.luahbtex.json', receipt: {...receipt, family: 'luahbtex'},
+}
+
+test('requires input evidence when LTO removes archive attribution', () => {
+  assert.throws(() => createLinkInventory([ltoEntry]), /LTO map requires/)
+  assert.throws(() => createLinkInventory([{...ltoEntry, inputTraceFile: 'inputs', inputTraceText: 'not linker output'}]), /LTO map requires/)
+  const result = createLinkInventory([{...ltoEntry, inputTraceFile: 'wasmtex-luatex.link-inputs', inputTraceText: INPUTS}])
+  assert.equal(result.maps[0].inputTraceSha256.length, 64)
+  assert.deepEqual(result.maps[0].archives.map(x => x.path), [
+    'emscripten-sysroot/lto/libc.a', 'texlive-build/libs/xpdf/libxpdf.a',
+  ])
+  assert.deepEqual(result.maps[0].directObjects, ['glue.o'])
+  assert.ok(result.maps[0].archives.every(x => x.symbolReferences === 0))
+})
+
+test('cannot hide a forbidden library behind LTO', () => {
+  assert.throws(() => createLinkInventory([{
+    ...ltoEntry, inputTraceFile: 'inputs',
+    inputTraceText: INPUTS + '/build/wasm/libs/pplib/libpplib.a(ppdoc.o)\n',
+  }]), /forbidden legacy marker/)
+})

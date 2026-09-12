@@ -9,7 +9,7 @@ for (const key of ['--year', '--assets', '--formats', '--family']) {
   if (!args[key]) throw new Error(`missing ${key}`)
 }
 if (!['2025', '2026'].includes(args['--year'])) throw new Error('unsupported annual line')
-if (!['xetex', 'luahbtex'].includes(args['--family'])) throw new Error('unsupported format family')
+if (!['pdftex', 'xetex', 'luahbtex'].includes(args['--family'])) throw new Error('unsupported format family')
 const config = JSON.parse(readFileSync(new URL(`./corresponding-source-${args['--year']}.json`, import.meta.url)))
 const filename = `BUILD-RECEIPT.${args['--family']}.json`
 const assets = resolve(args['--assets'])

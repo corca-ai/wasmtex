@@ -351,6 +351,7 @@ self.onmessage = (ev) => {
     })
     self.postMessage({ result: 'ok', cmd: 'dumpcache', files, notFound }, transfer)
   } else if (cmd === 'flushcache') {
+    Module.fmtDecodeCache = null
     cleanDir(WORKROOT)
   } else if (cmd === 'grace') {
     self.close()

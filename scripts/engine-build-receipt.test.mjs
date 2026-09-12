@@ -234,23 +234,24 @@ test('rejects a missing or mutable mirror identity', () => {
 })
 
 
-test('reuses exact formats with both generation histories and rejects a relabelled composition', () => {
+for (const [family, formatName] of [['pdftex', 'wasmtex-pdftex.fmt'], ['xetex', 'wasmtex-xetex.fmt.gz'], ['luahbtex', 'wasmtex-luatex.fmt.gz']]) {
+test(`${family} reuses exact formats with both generation histories and rejects a relabelled composition`, () => {
   const { artifacts, config } = fixture()
   const make = (revision) => createBuildReceipt({
-    family: 'xetex', directory: artifacts,
-    filenames: ['engine.js', 'engine.wasm', 'wasmtex-xetex.fmt.gz'],
+    family, directory: artifacts,
+    filenames: ['engine.js', 'engine.wasm', formatName],
     sourceRevision: revision, texliveSourceCommit: COMMIT, mirror: MIRROR, config,
   })
-  writeFileSync(join(artifacts, 'wasmtex-xetex.fmt.gz'), 'published compressed format')
+  writeFileSync(join(artifacts, formatName), 'published compressed format')
   const formats = make(COMMIT)
   writeFileSync(join(artifacts, 'engine.js'), 'optimized engine')
-  writeFileSync(join(artifacts, 'wasmtex-xetex.fmt.gz'), 'regenerated format: do not publish')
+  writeFileSync(join(artifacts, formatName), 'regenerated format: do not publish')
   const engine = make('f'.repeat(40))
   const receipt = composeFormatReceipt({ engine, formats, config })
   assert.deepEqual(receiptSourceRevisions(receipt), [COMMIT, 'f'.repeat(40)])
   assert.deepEqual(receipt.generationReceipts, { engine, formats })
   assert.ok(validateBuildReceipt(receipt, { config, actualDirectory: artifacts }).some(x => x.includes('SHA-256 mismatch')))
-  writeFileSync(join(artifacts, 'wasmtex-xetex.fmt.gz'), 'published compressed format')
+  writeFileSync(join(artifacts, formatName), 'published compressed format')
   assert.deepEqual(validateBuildReceipt(receipt, { config, actualDirectory: artifacts }), [])
   const tampered = structuredClone(receipt)
   tampered.sourceRevision = COMMIT
@@ -263,3 +264,5 @@ test('reuses exact formats with both generation histories and rejects a relabell
   assert.throws(() => composeFormatReceipt({ engine, formats: badOrigin, config }), /buildId/)
   assert.throws(() => composeFormatReceipt({ engine: receipt, formats, config }), /original schema-1/)
 })
+
+}

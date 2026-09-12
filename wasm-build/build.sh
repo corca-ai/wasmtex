@@ -68,6 +68,7 @@ make -f /src/Makefile wasm-compile
 echo ""
 
 echo "--- Packaging pdfTeX output ---"
+bash /src/tests/check-fmt-cache.sh
 make -f /src/Makefile dist
 echo ""
 

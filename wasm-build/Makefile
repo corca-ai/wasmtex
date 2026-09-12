@@ -430,7 +430,9 @@ wasm-prep:
 # Used twice: the plain engine and the checkpoint (Asyncify) engine (#81).
 define PDFTEX_LINK
 	cd $(WEB2C_BUILD) && \
-		emcc $(EMCC_FLAGS) $(1) -Wl,-Map=$(DIST)/$(2).map \
+		emcc $(EMCC_FLAGS) $(1) /src/fmt-cache.c \
+		-Wl,--wrap=gzdopen,--wrap=gzread,--wrap=gzclose \
+		-Wl,--trace -Wl,-Map=$(DIST)/$(2).map \
 		$(SYNCTEX_REDEFINE) \
 		-DHAVE_CONFIG_H \
 		-DSYNCTEX_ENGINE_H='"synctex-pdftex.h"' \
@@ -471,7 +473,7 @@ define PDFTEX_LINK
 		$$(find $(BUILD_WASM) -name 'libz.a' | head -1) \
 		$$(find $(BUILD_WASM) -name 'libpng.a' | head -1) \
 		$$(find $(BUILD_WASM) -name 'libxpdf.a' | head -1) \
-		-o $(DIST)/$(2).js
+		-o $(DIST)/$(2).js > $(DIST)/$(2).link-inputs
 endef
 
 # wasm-compile: Final emcc step — compile pdfTeX + SyncTeX to WASM.
@@ -557,7 +559,7 @@ BIBTEX_EMCC_FLAGS = \
 	-sWASM=1 \
 	--js-library $(JSLIB) \
 	-Wl,--wrap=kpse_find_file \
-	-Wl,-Map=$(DIST)/wasmtex-bibtex.map
+	-Wl,--trace -Wl,-Map=$(DIST)/wasmtex-bibtex.map
 
 bibtex-wasm-prep:
 	@echo "========================================"
@@ -595,7 +597,7 @@ bibtex-wasm-compile: bibtex-wasm-prep
 		$(BIBTEX_ENTRY) \
 		$(KPSE_HOOK) \
 		$$(find $(BUILD_WASM) -name 'libkpathsea.a' | head -1) \
-		-o $(DIST)/wasmtex-bibtex.js
+		-o $(DIST)/wasmtex-bibtex.js > $(DIST)/wasmtex-bibtex.link-inputs
 	@test -s $(DIST)/wasmtex-bibtex.map || { echo "BibTeX link map was not generated" >&2; exit 1; }
 	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-bibtex.map; then \
 		echo "ERROR: forbidden pplib archive or symbol remains in the BibTeX link map" >&2; exit 1; \

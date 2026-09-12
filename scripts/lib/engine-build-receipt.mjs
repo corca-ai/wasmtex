@@ -236,15 +236,15 @@ export function composeFormatReceipt({ engine, formats, config }) {
     const failures = validateBuildReceipt(receipt, { config })
     if (failures.length) throw new Error(failures.join('; '))
   }
-  if (!['xetex', 'luahbtex'].includes(engine.family) || formats.family !== engine.family) {
-    throw new Error('format composition requires matching Unicode engine families')
+  if (!['pdftex', 'xetex', 'luahbtex'].includes(engine.family) || formats.family !== engine.family) {
+    throw new Error('format composition requires matching format-bearing engine families')
   }
   for (const key of ['texliveYear', 'texliveSourceCommit', 'mirror', 'toolchain']) {
     if (JSON.stringify(engine[key]) !== JSON.stringify(formats[key])) {
       throw new Error(`format composition ${key} mismatch`)
     }
   }
-  const stem = engine.family === 'xetex' ? 'wasmtex-xetex' : 'wasmtex-luatex'
+  const stem = { pdftex: 'wasmtex-pdftex', xetex: 'wasmtex-xetex', luahbtex: 'wasmtex-luatex' }[engine.family]
   const isFormat = (file) => file.name === `${stem}.fmt` || file.name === `${stem}.fmt.gz`
   const oldFormats = formats.files.filter(isFormat)
   const newFormats = engine.files.filter(isFormat)

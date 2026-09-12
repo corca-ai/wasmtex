@@ -26,23 +26,26 @@ function normalizeInputPath(path) {
     )
 }
 
-export function inspectLinkMap(text) {
-  const forbiddenMarkers = FORBIDDEN_MARKERS.filter((marker) => text.includes(marker))
+export function inspectLinkMap(text, inputTrace = '') {
+  const forbiddenMarkers = FORBIDDEN_MARKERS.filter((marker) => text.includes(marker) || inputTrace.includes(marker))
   const archives = new Map()
   const directObjects = new Set()
 
-  for (const line of text.split(/\r?\n/)) {
-    const archivePattern = /(\S+\.a)\(([^()\s]+)\)/g
-    for (const match of line.matchAll(archivePattern)) {
-      const path = normalizeInputPath(match[1])
-      const entry = archives.get(path) ?? { path, members: new Set(), symbolReferences: 0 }
-      entry.members.add(match[2])
-      entry.symbolReferences++
-      archives.set(path, entry)
-    }
+  for (const [chunk, traced] of [[text, false], [inputTrace, true]]) {
+    for (const line of chunk.split(/\r?\n/)) {
+      const archivePattern = /(\S+\.a)\(([^()\s]+)\)/g
+      for (const match of line.matchAll(archivePattern)) {
+        const path = normalizeInputPath(match[1])
+        const entry = archives.get(path) ?? { path, members: new Set(), symbolReferences: 0 }
+        entry.members.add(match[2])
+        if (!traced) entry.symbolReferences++
+        archives.set(path, entry)
+      }
 
-    const directObject = line.match(/\s([^\s()]+\.o):\(/)?.[1]
-    if (directObject) directObjects.add(normalizeInputPath(directObject))
+      const directObject = line.match(/\s([^\s()]+\.o):\(/)?.[1]
+      if (directObject) directObjects.add(normalizeInputPath(directObject))
+      if (traced && /^\S+\.o$/.test(line.trim())) directObjects.add(normalizeInputPath(line.trim()))
+    }
   }
 
   return {
@@ -78,7 +81,10 @@ export function createLinkInventory(entries) {
       if (!entry.receipt.buildId || !entry.receipt.family) {
         throw new Error(`${entry.family}: invalid build receipt`)
       }
-      const inspected = inspectLinkMap(entry.mapText)
+      if (/\blto\.tmp:/.test(entry.mapText) && (!entry.inputTraceFile || !entry.inputTraceText || inspectLinkMap('', entry.inputTraceText).archives.length === 0)) {
+        throw new Error(`${entry.family}: LTO map requires a linker input trace`)
+      }
+      const inspected = inspectLinkMap(entry.mapText, entry.inputTraceText)
       if (inspected.forbiddenMarkers.length > 0) {
         throw new Error(
           `${entry.family}: forbidden legacy marker(s): ${inspected.forbiddenMarkers.join(', ')}`,
@@ -91,6 +97,7 @@ export function createLinkInventory(entries) {
         family: entry.family,
         mapFile: entry.mapFile,
         mapSha256: inspected.sha256,
+        ...(entry.inputTraceText ? { inputTraceFile: entry.inputTraceFile, inputTraceSha256: sha256(entry.inputTraceText) } : {}),
         receiptFile: entry.receiptFile,
         receiptFamily: entry.receipt.family,
         buildId: entry.receipt.buildId,

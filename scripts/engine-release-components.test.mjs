@@ -61,3 +61,14 @@ test('pins reused formats separately and rejects cross-year or duplicate origins
   candidate.years['2026'].reusedFormats.push({ ...candidate.years['2026'].reusedFormats[0] })
   assert.throws(() => validateEngineReleaseComponents(candidate, '2026'), /duplicate reused format/)
 })
+
+for (const year of ['2025', '2026']) {
+  test(`pdfTeX ${year} format origin uses its own annual artifact`, () => {
+    const candidate = structuredClone(config)
+    const origin = {family: 'pdftex', runId: 1, artifact: `wasm-pdftex${year === '2025' ? '' : '-2026'}`}
+    candidate.years[year].reusedFormats = [origin]
+    assert.doesNotThrow(() => validateEngineReleaseComponents(candidate, year))
+    origin.artifact = `wasm-bibtex${year === '2025' ? '' : '-2026'}`
+    assert.throws(() => validateEngineReleaseComponents(candidate, year), /format workflow/)
+  })
+}
