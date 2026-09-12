@@ -1,197 +1,105 @@
 # Execution Model — Client / Server Hybrid
 
-> **TL;DR** — There is **one from-source, deterministic engine**, and it runs
-> **byte-identically on any host**: a browser, a JS server runtime, or a standalone
-> WASM runtime. The default is **100% client** (privacy, $0 backend, zero-latency).
-> A server is an **opt-in escape hatch** the *integrator* wires up for the client's
-> weak spots — never a requirement, never the default. The client/server boundary is
-> **chosen by the consumer**, not baked into the library.
+WasmTex's architecture uses one from-source engine family on different hosts,
+with a client-first default and an integrator-chosen server boundary. Browser
+and Node adapters ship today. This guide distinguishes those implementations
+from future host adapters and stage-routing possibilities.
 
-## Why the boundary can move
+## Supported hosts
 
-The property that makes this work is **from-source + determinism**. Because the
-engine is built from pinned source and outputs are content-addressed, the **same
-WASM engine produces identical output wherever it runs**. So:
+| Host | Shipped implementation |
+| --- | --- |
+| Browser | Web Workers, Emscripten JS glue, MEMFS, fetch and synchronous XHR for unresolved TeX Live files. |
+| Node 24+ | `installNodeWorkerHost` from `wasmtex/node`, using `worker_threads`, local engine assets and browser-global shims. Worker synchronous network lookup uses curl, which must be installed. |
 
-- "Where *can* a module run?" is the wrong question — it can run anywhere.
-- The real axes are **latency · privacy · cost · device capability**, decided *per task*.
-- Because output is identical, the boundary is **fluid**: work done on one side is
-  reusable by the other (a shared content-addressed cache).
+Both run the same released JS/WASM/controller files. Node does not replace the
+engine filesystem with a native TeX installation. Its adapter maps asset URLs
+to a local directory and leaves package resolution on the configured mirror.
+Dispose compilers before disposing the global host installation.
+See the [Node integration recipe](howto.md#server-side-compilation-node).
 
-The rule that keeps the model honest: **the client-only default must stay fully
-intact.** Server routing exists for the client's weak spots, not as an easier
-default — the privacy / $0-backend / zero-latency properties are the whole point
-of the client path.
+Deno/Bun, standalone WASI runtimes and Python/Go/Rust embeddings have no shipped
+host adapter here. The current artifact imports Emscripten/JavaScript facilities;
+it is not a drop-in WASI binary. Supporting another runtime requires an adapter
+and equivalent compatibility tests. Host independence is the architectural
+boundary to preserve, not a claim that every runtime is already supported.
 
-## "Server" is a deployment side, not a runtime
+## Headless and UI boundaries
 
-The engine is **host-agnostic WASM**. It asks its host for exactly three things — the
-**host port**:
+`WasmTexCompiler` (`wasmtex/headless`) owns compilation without a DOM, Monaco or
+PDF.js dependency. `WasmTex` adds the browser editor and viewer. The syntax and
+language services can also run without Monaco through their own entry points.
+`src/headless-boundary.test.ts` guards these import boundaries.
 
-1. **File I/O** — a filesystem (MEMFS in the browser; real or in-memory FS on a server).
-2. **File resolution / fetch** — the `kpse_find_file` hook (sync XHR → CDN in the browser;
-   `fetch` or a local TeX Live mirror on a server).
-3. **Scheduling / threading** — a Web Worker in the browser; `worker_threads` or a
-   synchronous call on a server.
+Keep host-specific scheduling, networking and storage behind adapters. WasmTex
+must not depend on an integrator's project schema, repository or deployment.
+CorTeX may consume WasmTex; the reverse dependency is forbidden. The
+[architecture guide](architecture.md) describes the modules and
+[API reference](api.md#entry-points) lists package entry points.
 
-Given that abstraction, "server" is just *another host adapter*:
+## Pluggable stages available today
 
-| Host | Adapter |
-|---|---|
-| Browser | Web Worker + XHR/fetch→CDN + MEMFS |
-| Node | `installNodeWorkerHost` (`wasmtex/node`): reuses the JS glue over `worker_threads` + `fs`/`fetch` shims |
-| Other JS runtimes (Deno / Bun) | same approach — reuse the JS glue with that runtime's shims |
-| Standalone WASM runtime (Wasmtime / Wasmer / WasmEdge) or a WASI host | a runtime-neutral host port — an additional adapter, not a rewrite |
-| Embedded in another language (Python / Go / Rust) | a host port via that runtime's WASM API |
+`WasmTexCompilerOptions.backends` accepts `BackendRegistry`. The compiler
+consults three typed slots:
 
-The browser and Node adapters ship today. The engine is **not** JavaScript-bound:
-keeping the host port runtime-neutral is what lets the same artifact run under a
-standalone WASM runtime with no rewrite.
+| Slot | Request / result | Default |
+| --- | --- | --- |
+| `BIBTEX_STAGE` (`bibliography:bibtex`) | `{ aux, bibFiles }` → `.bbl` text | Bundled BibTeX path. |
+| `BIBER_STAGE` (`bibliography:biber`) | `{ bcf, bibFiles }` → `.bbl` text | Local biblatex-lite subset when no remote Biber result is selected. |
+| `INDEX_STAGE` (`index`) | Index request → `.ind` text | Bundled makeindex path. |
 
-## The five principles
-
-1. **Same-execution first.** Maximize the modules that run byte-identically on any host
-   (the host-agnostic WASM engine). This is the default and the goal.
-2. **Dedicated only when unavoidable.** Judge by the **host capabilities** a module
-   needs — DOM, in-process JS, filesystem, network — not by "client vs server". A
-   client-only or server-only module must justify itself. (Example: a LuaTeX
-   JS⇄TeX bridge needs an *in-process JS host* → works in a browser **and** Node,
-   but not a pure-WASI host.)
-3. **The integrator chooses the boundary.** Every offloadable stage is exposed through a
-   **pluggable backend**; the default registry is all-client. The consumer routes
-   individual stages (a bibliography pass, an index pass, a full compile) to a server
-   **if and only if they choose to**.
-4. **Core is headless; UI is demo.** The core (`wasmtex/headless`, engine, LSP) is
-   fully headless and has no DOM dependency. The editor UI and the demo app live
-   **outside** the core and consume only the public API. UI-component types
-   (`WasmTexOptions`/`WasmTexEventMap`, which reference `monaco-editor`) live in
-   `src/component-types.ts`, not the core `src/types.ts`. **Enforced** by
-   `src/headless-boundary.test.ts` — the `wasmtex/headless`, `wasmtex/lsp`, and
-   `wasmtex/lsp/server` import graphs must not reach `monaco-editor` or any
-   `editor`/`ui`/`viewer` module.
-5. **⭐ The verification environment is the most important thing.** Cross-host output
-   parity + perf-degradation guards are the contract that makes the fluid boundary
-   trustworthy. If client and server can silently diverge, the whole model breaks —
-   which is why the fail-loud build interposition guards and the golden-output suite
-   are foundational, not optional.
-
-## What runs where (maximize strengths)
-
-| Work | Where | Why |
-|---|---|---|
-| Interactive / incremental recompile (keystroke → PDF) | **always client** | the interactive loop is the product; it never leaves the device |
-| Editor, LSP, preview render | client | UI-host work |
-| Standard pdf/xe/lua compile | **either** (default client) | host-agnostic engine; integrator may offload cold/huge compiles |
-| makeindex, bibtex / bibtex8 | **either** (default client) | small C tools; tractable both sides |
-| **Biber, xindy** | **server (recommended), client optional later** | Perl / Lisp runtimes — the client's weakest spot; not in the hot loop; deterministic ⇒ ideal offload |
-| Cold first compile of a big document | server → client handoff | "cold on server, warm on client" |
-| Content-addressed cache warming, format/package precompute | server / build service | deterministic, non-sensitive artifacts only ⇒ privacy-safe |
-| Export backends (tagged PDF/UA, HTML, ePub) | server (optional) | heavy / batch |
-| Bulk headless: CI, autograding, SSR | server = the library on a host | the client isn't in the picture |
-
-## The determinism contract (the precondition)
-
-The fluid boundary only works if client and server output is reproducible:
-
-- **From-source + pinned upstream ref** — same engine bytes everywhere; the
-  [upstream maintenance guide](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch) describes this pinning.
-- **Fail-loud interposition** — drift in the build is a located error, not a
-  silent divergence; the
-  [upstream maintenance guide](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch) documents the build guards.
-- **Golden-output + cross-host parity tests** — assert client ≡ server output, per
-  engine and tool. The parity smoke test
-  (`src/engine/cross-host-parity.smoke.test.ts`, opt-in via `CROSS_HOST_PARITY=1`)
-  compiles the golden corpus under the Node host (`installNodeWorkerHost`,
-  `wasmtex/node`) and asserts the structural signature matches the browser golden
-  for **pdfLaTeX, LuaLaTeX, XeLaTeX, and BibTeX** — all three engines run under
-  Node verbatim.
-- **Content-addressing** — `(sources + deps)` hash keys artifacts so either side can
-  populate a shared cache.
-
-Runtime completion evidence follows the same host-independent contract. A full compile
-may return a bounded `CompletionSnapshot` keyed by project revision, root, engine, TeX
-Live year, and mirror/profile. Completion queries only consume the latest matching
-snapshot and never schedule engine work. Browser and Node run the same authored worker
-scan; unavailable engine capabilities are explicit `unsupported` fields. The scan is
-output-neutral, so parity verification continues to compare PDF/log/aux results while
-also checking the snapshot contract when rebuilt assets provide it.
-
-Break this contract and a server result will not match a client result — so the
-verification environment (principle 5) gates everything else.
-
-## How a consumer chooses the boundary
-
-The mechanism is **pluggable per-stage backends**, generalizing the existing
-`BibliographyBackend` ([bibliography.md](bibliography.md)):
-
-- A stage (engine pass, bibtex/biber, makeindex/xindy, export) resolves through a
-  `ToolBackend` held in a `BackendRegistry` (`src/engine/backend-registry.ts`).
-- The **default backend is client/WASM** — nothing leaves the device. `registry.resolve`
-  returns the integrator's override or the client default, and `registry.isRemote(stage)`
-  reports whether a stage is currently routed off-device.
-- The integrator may register a **server backend** (`createRemoteBackend`, `location:
-  'server'`) for a stage: it POSTs the stage request to *their* endpoint (which runs the
-  same headless engine), tagging it with an `x-wasmtex-stage` header and an optional
-  `x-wasmtex-cache-key` header so the endpoint / a shared cache can dedupe. The ready-made
-  text-artifact helpers `createBiberBackend` and `createXindyBackend` are thin wrappers over
-  `createJsonTextBackend`.
-- Privacy is preserved by construction: a remote backend only sees what the integrator
-  routes to it, and only when they wire one up.
-
-**Wired today.** `WasmTexCompiler` takes an optional `backends?: BackendRegistry`. Classic
-BibTeX resolves `BIBTEX_STAGE` (`'bibliography:bibtex'`, request `{ aux, bibFiles }`), while
-Biber resolves `BIBER_STAGE` (`'bibliography:biber'`, request `{ bcf, bibFiles }`). These are
-separate typed slots, so registering a Biber backend for the BibTeX flow is both a TypeScript
-error and a runtime registration error. Leave them unregistered and the bundled client
-BibTeX/biblatex-lite paths run exactly as before. The backend toolkit (`BackendRegistry`,
-`createRemoteBackend`, `createJsonTextBackend`, `BIBTEX_STAGE`, `BIBER_STAGE`, `withCache`,
-`MemoryCacheStore`, `contentKey`)
-is re-exported from `wasmtex/headless`:
+Biber routing is implemented. Engine-pass and export stages are not automatic
+registry routes in the current compiler. A host can run the headless compiler
+on its server, but a full-compile offload or server-to-client checkpoint handoff
+is not provided by registering another built-in slot.
 
 ```ts
 import {
-  WasmTexCompiler, BackendRegistry, createJsonTextBackend, BIBTEX_STAGE,
-  withCache, MemoryCacheStore, type BibliographyStageRequest,
+  WasmTexCompiler, BackendRegistry, BIBER_STAGE, createBiberBackend,
 } from 'wasmtex/headless'
 
-const cache = new MemoryCacheStore()
-const registry = new BackendRegistry()
-// Offload the classic-BibTeX bibliography pass ({ aux, bibFiles } → .bbl) to an endpoint
-// running the same engine, and cache the result. The endpoint receives the request as
-// JSON tagged with the `x-wasmtex-stage` header and returns the `.bbl` as text.
-registry.register(BIBTEX_STAGE, withCache(
-  createJsonTextBackend<BibliographyStageRequest, typeof BIBTEX_STAGE>({
-    id: 'bibtex-remote', stage: BIBTEX_STAGE,
-    endpoint: 'https://my-host/latex/bibliography',
-  }),
-  cache,
-))
-const compiler = new WasmTexCompiler({ files, backends: registry })
+const backends = new BackendRegistry()
+backends.register(BIBER_STAGE, createBiberBackend({ endpoint: '/api/biber' }))
+const compiler = new WasmTexCompiler({ files, backends })
 ```
 
-`withCache` wraps any string-producing backend for the shared content-addressed cache.
-Store keys are produced by `backendCacheKey`: the stage, backend id/version, backend options,
-and request content are all namespaced, so two tools cannot reuse each other's artifact.
-Supplying a backend `version` is recommended whenever a deployment upgrade can change output.
-The compiler auto-routes the `bibliography` **and
-`index`** stages: `\printindex` runs client-side via the bundled makeindex WASM by default,
-and a registered `index` backend (`createMakeindexBackend` / `createXindyBackend`) offloads
-it. The biber (`.bcf`-based `BiberRequest`, `createBiberBackend`) biblatex flow and the
-engine-pass stages expose the same backend seam but are not yet auto-routed by the
-compiler.
+The registry checks that a backend's declared stage matches its slot. The
+ready-made remote helpers POST to an integrator-owned endpoint; WasmTex does
+not deploy that service. `withCache` can wrap string-producing backends with
+keys that include stage, backend identity/version/options and request content.
+The integrator must update backend identity when changed server inputs can
+change output. See [bibliography backends](bibliography.md) and the
+[backend API](api.md#server-backends) for payloads and fallback behavior.
 
-## Guardrails
+## Determinism and verification
 
-Transparent engine performance releases also follow the
-[engine optimization policy](engine-optimization-policy.md): existing format and
-mirror bytes, output preservation, and verified adoption by pinned CorTeX projects.
+The same engine and inputs should preserve compilation semantics across hosts.
+Pinned source, toolchain, assets, formats and mirrors are necessary, but do not
+by themselves prove byte-identical PDF output: clock-dependent metadata, runtime
+behavior and external backend versions also matter.
 
-- **Client-first default is non-negotiable.** No server dependency in the default path.
-- **The determinism contract is load-bearing.** No shipping a boundary feature without
-  the cross-host parity gate.
-- **Privacy boundary.** Never route the document body to a server implicitly; offload only
-  deterministic / non-sensitive sub-tasks, or within the integrator's own trust boundary,
-  and only on explicit opt-in.
-- **One engine, two hosts — not two engines.** The from-source advantage is that the
-  server path is the *same* engine under a different host adapter, not a parallel
-  implementation.
+The cross-host smoke compares Node output to browser structural goldens for
+pdfLaTeX, XeLaTeX, LuaLaTeX and BibTeX. Optimization qualification additionally
+compares baseline/candidate outputs with the existing narrow metadata
+normalization and fixed clocks where required. Structural golden equality is
+not a claim that arbitrary raw PDFs are byte-identical on every host.
+Use the [development tests](develop.md#cross-host-node-engine-tests) and
+[optimization policy](engine-optimization-policy.md) for the exact gates.
+
+Completion snapshots follow the same revision/root/engine/profile identity.
+Unsupported observations stay explicit, and completion queries do not trigger
+compilation. Raw heap checkpoints remain tied to one engine build and worker;
+they are not portable server/client cache artifacts. Format and durable-cache
+contracts are described in the [engine guide](engine.md#preamble-snapshots).
+
+## Integrator choices
+
+Interactive compilation defaults to the local engine. A host can choose Node
+for batch work or remote bibliography/index services where that suits device
+capability, latency, privacy and cost. Remote routing is opt-in; document and
+bibliography contents sent to an endpoint are subject to that host's trust boundary.
+
+Client-side compilation still downloads engine/package/font assets and incurs
+network latency on cache misses. It does not imply zero network traffic or
+complete offline support. Server execution, shared caches and precomputation
+need their own measured benefit and compatibility evidence before adoption.

@@ -126,7 +126,7 @@ canonical names can suppress aliases that the baseline creates on demand.
 Both can change valid `\IfFileExists` branches. Preserve those state transitions,
 including existing baseline cache behavior, rather than assuming canonical
 filenames or ordinary PDF equality establish safety.
-The [withdrawn Unicode experiment](compile-performance.md#withdrawn-unicode-startup-experiment) records the counterexample.
+The [withdrawn Unicode experiment](history/compile-performance-2026-09.md#withdrawn-unicode-startup-experiment) records the counterexample.
 
 ## Integrator adoption and rollback
 

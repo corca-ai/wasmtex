@@ -10,21 +10,10 @@ For performance changes, the [engine optimization policy](engine-optimization-po
 requires existing format bytes, output, and package snapshots to remain compatible,
 including transparent adoption by existing CorTeX projects.
 
-The [dvipdfmx correctness patches](../wasm-build/dvipdfmx-fixes/README.md)
-include the missing-SFD diagnostic lifetime fix ([#133](https://github.com/corca-ai/wasmtex/issues/133)).
-It intentionally corrects a broken filename warning and is qualified separately
-from font-map performance changes. Its native test executes upstream insertion
-and ownership code under ASan; the [browser recovery fixture](../test/fixtures/dvipdfmx-missing-sfd/README.md)
-checks real resolution and repeated conversions with the original formats.
-Diagnostic builds do not replace receipt-bound engine releases. Node root-document
-comparisons use an opt-in CommonJS fixed clock so compressed PDF creation dates
-are deterministic. Those historical root-only results did not establish
-nested support. The SDK now fixes the output handoff described in
-[#135](https://github.com/corca-ai/wasmtex/issues/135), as documented in
-[nested output qualification](nested-output.md), without changing engine assets.
-
-For annual source upgrades, use the [engine customization inventory](engine-upgrade-customizations.md)
-to review maintained patches, format caching and compiler flags.
+The [upgrade customization inventory](engine-upgrade-customizations.md) maps
+maintained patches and build flags to their assumptions and tests. The
+[performance guide](compile-performance.md) summarizes adopted optimizations;
+[nested output](nested-output.md) documents the SDK's XDV/PDF handoff contract.
 
 ## Engine Setup
 
@@ -129,22 +118,18 @@ base). The LuaLaTeX WASM is built from source (see below) and verified end-to-en
 (builds the `lualatex` format and compiles a real document, with CDN font fetch, to
 a PDF); when the artifact is absent, routing to it degrades gracefully.
 
-**Prebuilt format (cold-start fast path).** Building a format from scratch
-dominates a cold first compile (~10–13 s plus hundreds of sync CDN fetches), so
-CI extracts each format once (`scripts/extract-luatex-format.mjs` /
-`extract-xetex-format.mjs` run the freshly built engine's `-ini` and capture the
-bytes) and ships it next to the engine. At init the engine fetches it **in
-parallel with the worker boot** into `fmtBytes`, so the first compile re-injects
-the format and typesets directly — no `compileformat`. With the prebuilt format
-a cold XeLaTeX first PDF lands in ~2 s.
+**Prebuilt format (cold-start fast path).** Initialization fetches the selected
+format in parallel with worker boot. A valid prebuilt format avoids generating
+one on the first compile. Missing or invalid data falls back to format generation;
+optimization qualification must verify that the original format was actually used.
 
-The `.fmt` is engine-binary-specific, so each engine's workflow regenerates it with
-every build; if it is missing the engine falls back to building the format (a junk
-200 response, e.g. a dev-server SPA fallback, is rejected so the fallback still
-triggers). Unicode formats ship **gzipped** (`wasmtex-xetex.fmt.gz` ~3.6 MB from ~5.6 MB;
-`wasmtex-luatex.fmt.gz` ~3.3 MB from ~5.8 MB) and the engine decompresses them
-in-browser (`DecompressionStream`), tolerating either a raw `.gz` or one the server
-already decoded via `Content-Encoding`.
+Build workflows can generate formats for a new annual source. Transparent engine
+updates instead assemble the original format bytes with their generation receipts,
+and test those bytes under the new binary. Compatibility depends on verified
+layout and behavior, not simply an equal year or a different WASM hash.
+Unicode assets use `.fmt.gz`; the loader decompresses them with
+`DecompressionStream` and accepts responses already decoded by HTTP encoding.
+See [source assembly](corresponding-source.md) for the promotion procedure.
 
 **Project input recording.** pdfTeX, XeTeX, and LuaHBTeX run their LaTeX pass with
 `-recorder` and return every `.fls` `INPUT`, without filtering by extension. The
@@ -186,8 +171,7 @@ not written to the negative cache; only evidence from an immutable-mirror respon
 known negative preload can suppress a later request. Browser and Node use the same worker
 controllers and collector, so the evidence contract is identical in both hosts.
 
-**Recompile (edit) latency.** Within a session, body edits recompile in
-~0.4–0.5 s: the prebuilt format is injected into the work dir only once (it
+**Repeated compilation.** The prebuilt format is injected into the work dir once (it
 persists in MEMFS across recompiles), and the remaining cost is genuine preamble
 re-execution (notably luaotfload's reload for fontspec docs) plus typesetting.
 LuaLaTeX does not use pdfTeX-style **preamble snapshots**: luaotfload's Lua
@@ -206,8 +190,8 @@ compiles the document for real, no code change.
 > emscripten toolchain runs under slow qemu emulation there).
 
 > **Keeping this maintainable across upstream releases** — we interpose around
-> `texlive-source` (own glue + a linker `--wrap`) rather than fork/patch it, so a
-> version bump is a rebuild, not a re-patch. The
+> `texlive-source` (own glue + a linker `--wrap`) and keep necessary source patches as tracked build inputs.
+> Each upstream bump requires patch/interface review and requalification. The
 > [upstream maintenance guide](texlive-upgrade.md#upstream-maintenance-interpose-dont-patch) explains this convention.
 
 `scripts/build-xetex-fromsource.sh` compiles `wasmtex-xetex.{js,wasm}` from
@@ -237,15 +221,16 @@ XeLaTeX is built and deployed in CI as a version-matched artifact:
    the Actions tab if it has never run.
 2. **`ci.yml`** downloads that artifact into `public/wasmtex/<version>/` (next to
    the pdfTeX/BibTeX engines) before the app build, so the GitHub Pages deploy ships
-   XeLaTeX by default. If the artifact is missing, the build still succeeds and
-   XeLaTeX falls back to the actionable "engine unavailable" result.
+   XeLaTeX by default. The download action uses the exact run IDs in
+   `scripts/engine-release-components.json`; a required download failure stops
+   assembly. Runtime handling of absent self-hosted assets is a separate concern.
 
 Self-hosting your own assets? Publish a manifest next to the versioned assets, then use
 `npm run sync-engine-assets` to fetch and verify the complete set.
 Release manifests contain a content-derived release ID and per-engine build receipts;
 release mode rejects an engine byte that is not covered by exactly one receipt and
 one license artifact family. The deployed set is composable by family: a workflow
-rebuild replaces only the artifact and receipt it owns, while CI reuses the latest
+rebuild replaces only the artifact and receipt it owns, while CI reuses the explicitly pinned
 cleared pair for every unaffected family. Receipt source revisions may therefore
 differ; the corresponding-source archive includes every distinct revision. Mirror,
 TeX Live source, and toolchain identities remain release-wide coherence constraints.
@@ -296,9 +281,9 @@ The mirror includes OpenType/TrueType/AFM fonts, the
 `tex/{xetex,xelatex,luatex,lualatex}` trees (so engine-specific packages like
 `xetexko`, `xeCJK`, and `luatexja` are included), glyph lists, and Lua runtime files.
 `scripts/audit-mirror.mjs` reports coverage; `--check` gates a curated common-package
-set so per-tree gaps fail loudly. After the CDN changes, regenerate the bloom
-filter (`gen-bloom-filter.mjs --upload`) and invalidate the CDN, or the engine will
-skip the new files.
+set so per-tree gaps fail loudly. Publish changed package inventories, bloom data and catalogs under a new
+immutable snapshot identity; do not overwrite a published prefix or use cache
+invalidation as a snapshot upgrade. Follow [mirror operations](texlive-mirror-operations.md).
 
 ### Building LuaLaTeX (LuaHBTeX) from source
 
@@ -348,8 +333,8 @@ split into the same two phases:
    LuaHBTeX's PDF inclusion, `pdfe`, and `pdfscanner` callers to Xpdf; the build
    rejects `pplib` and its legacy SHA helper symbols in the link map and release
    bytes. The source build uses a 32 MiB stack and 128 MiB initial memory with
-   automatic growth. Published engines can still use the earlier 768 MiB initial
-   allocation until a newly built release passes the optimization gates.
+   automatic growth. The qualified release uses these memory settings and
+   `-O3 -flto`; see [adopted performance changes](compile-performance.md).
 
 The build is **validated end-to-end**: it produces the `lualatex` format and compiles
 a real document (with math and CDN font fetch) to a valid PDF.
@@ -515,13 +500,12 @@ as required by the [format compatibility policy](engine-optimization-policy.md#f
 The licensing status is not a substitute for reading the notices; it prevents a
 known-incomplete development set from being mistaken for a redistributable release.
 
-> Any committed `public/wasmtex/<version>/` files are a **dev-time default set**;
-> at deploy `ci.yml` overwrites/supplements them with the latest CI
-> artifacts. The deployed **manifest is authoritative** — sync/verify against it
-> rather than shipping a copied (possibly older) tree. The current 2025 development
-> set is intentionally not release-cleared while its recorded source, provenance,
-> and compatibility blockers remain unresolved. New audited XeTeX/LuaHBTeX builds
-> reject `pplib`; copied legacy binaries are not cleared substitutes.
+Local ignored engine binaries can become stale independently of Git. CI assembles
+assets from the exact annual runs in `scripts/engine-release-components.json`,
+including separately pinned original formats and their generation receipts.
+Use verified manifests when syncing assets; a source checkout or an old local
+copy is not itself evidence that those bytes belong to the selected release.
+See [corresponding-source releases](corresponding-source.md).
 
 ## Unicode engine initialization snapshots
 
@@ -635,8 +619,8 @@ public runtime toggle on the editor/compiler.
 By default the engine caches TeX Live assets only in memory (plus the optional
 service worker for HTTP responses), so a cold start re-fetches packages every
 session. Setting `persistentCache: true` turns on a **durable IndexedDB cache**
-of the assets the engine actually fetched, so return visits perform ~zero
-network fetches for already-seen assets and work offline.
+of previously fetched assets. Offline use additionally requires engine assets,
+project inputs and every needed package; unseen resources still need a network.
 
 **How it works:**
 - On init, the engine rehydrates the durable cache (versioned by TeX Live year)
@@ -648,19 +632,16 @@ network fetches for already-seen assets and work offline.
   used eviction, and is keyed by TeX Live year so bumping the year invalidates
   cleanly.
 
-Measured on a `xcolor + hyperref` document: a cold first load fetches ~98 files
-on demand; a second load (after reload) fetches **0** — everything is served
-from IndexedDB.
-
 ```ts
 new WasmTex('#editor', '#preview', { persistentCache: true })
 // or headless: new WasmTexCompiler({ persistentCache: true })
 ```
 
-When the persistent cache is enabled, you typically do **not** also call
-`warmup()`: the durable cache seeds the engine after the first session, and
-running a network warmup every load would defeat the purpose. `warmup()` remains
-the right choice for first-load speed in apps that don't persist.
+Warmup and persistent caching can be combined. Measure duplicate preparation
+and unused downloads before enabling both for every visit. The durable asset
+cache is year-keyed, not mirror-revision-keyed: switching mirrors within one year
+requires host-owned isolation or clearing. It is distinct from the build/profile
+identity used by durable preamble snapshots. See [warmup](warmup.md).
 
 **Clearing.** Call `clearCache()` on the editor/compiler, or the standalone
 `clearTexliveCache({ version })`, to drop the durable cache for a TeX Live year:
@@ -706,7 +687,9 @@ measured experiment ever justifies a SIMD artifact, it can be served only where
 supported, with the scalar build as fallback.
 
 ## Service Worker
-The editor uses a service worker to cache TeX packages fetched from the CDN. 
+The browser `WasmTex` component attempts to register `sw.js` unless disabled.
+The headless compiler does not register a service worker. The integrating host
+must serve the script from an allowed origin/scope; registration is best-effort.
 - If `assetBaseUrl` is automatically resolved, it will look for `sw.js` at that same base path.
 - Ensure your hosting environment allows service workers (served over HTTPS or localhost).
 - To disable: set `serviceWorker: false` in options.
@@ -724,8 +707,8 @@ controller is shared; loading it with `?engine=checkpoint` selects the Asyncify 
 On it the worker can suspend TeX inside a read of the main file, keep the unwound state
 as a **heap checkpoint** (a sparse copy of wasm memory plus MEMFS files and streams) and
 resume it any number of times with an edited tail — see the [API notes on heap checkpoints](api.md#heap-checkpoints-arbitrary-line-incremental-compilation).
-The instrumentation costs about 20–30% per compile and ~1 MB of `.wasm`, so the headless
-compiler loads this build only with `incremental: true` in a browser; Node hosts and the
+Asyncify adds code and execution overhead; measure the selected release rather
+than assuming a fixed percentage. The headless compiler loads this build only with `incremental: true` in a browser; Node hosts and the
 format extraction use the plain build. Both builds share `wasmtex-pdftex.fmt`.
 
 ## PDF conversion input evidence

@@ -306,7 +306,7 @@ const editor2025 = new WasmTex(editorContainer, previewContainer, {
   texliveUrl: 'https://cdn.example.com/2025/'
 })
 
-// After adding '2026' to TexliveVersion and staging matching engine assets:
+// Both years are supported; stage the matching engine assets for each instance:
 const editor2026 = new WasmTex(editorContainer, previewContainer, {
   texliveVersion: '2026',
   texliveUrl: 'https://cdn.example.com/2026/'

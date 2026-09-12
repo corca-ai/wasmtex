@@ -12,6 +12,7 @@ Full reference for the `WasmTex` SDK.
 | `wasmtex/lsp` | Monaco-free LaTeX language service core. |
 | `wasmtex/lsp/monaco` | Monaco provider adapter for the language service. |
 | `wasmtex/lsp/server` | Transport-agnostic JSON-RPC language server. |
+| `wasmtex/warmup` | Dependency-light preload and learned dependency-set helpers. |
 | `wasmtex/syntax` | Stable, versioned syntax snapshots shared by language and semantic services. |
 | `wasmtex/synctex` | SyncTeX parser + PDF↔source mapping (`SynctexParser`, `TextMapper`). |
 | `wasmtex/style.css` | Optional built-in UI/viewer styles. |
@@ -308,7 +309,7 @@ const result = await compiler.compile()
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
-| `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. Today the headless compiler routes the `bibliography` stage through the registry — a registered server backend turns `{aux, bibFiles} → .bbl` and the client BibTeX (WASM) engine is skipped. See [Server backends](#server-backends). |
+| `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
 
 #### Server backends
 
@@ -339,7 +340,7 @@ content-addressed cache.
 > **Wired today:** the compiler auto-routes the `bibliography` and `index` stages.
 > `\printindex` runs client-side via the bundled makeindex WASM by default; a backend
 > registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
-> See the [execution model](execution-model.md#how-a-consumer-chooses-the-boundary).
+> See the [execution model](execution-model.md#pluggable-stages-available-today).
 
 #### Incremental compilation
 
@@ -391,13 +392,10 @@ memory copy, so it serves any number of edits after it.
   because a resumed run reads cross-references from the `.aux` the original run loaded).
 - **Result**: a resumed compile is an ordinary `CompileResult` with `phaseTimings.checkpointResume`
   set; `result.heapCheckpoints` lists the checkpoints a compile took.
-- **Cost**: the checkpoint engine is ~20–30% slower per full compile than the plain build and its
-  `.wasm` is ~1 MB larger, which is why it loads only with `incremental: true` and only in
-  browser workers (Node hosts keep the plain build and the page-break checkpoints).
-
-Measured on a 24-page article without a single `\clearpage` (release engine 2025, warm):
-full compile 151 ms, an edit resumed from a checkpoint 30 ms (71 ms when the resume also takes
-a new checkpoint), byte-identical to the full compile modulo per-run PDF stamps.
+- **Cost**: the Asyncify build adds code and full-compile overhead. The headless
+  compiler selects it only with `incremental: true` in browser workers; Node keeps
+  the plain build and page-break path. Measure checkpoint preparation, resumed
+  edits and total latency separately with the [development probes](develop.md#engine-cpu-diagnostics).
 
 #### Accessible export (tagged PDF / PDF-UA)
 

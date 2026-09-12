@@ -18,8 +18,9 @@ and `7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00`.
 
 CorTeX may expose a logical `2026-latest` discovery profile, but that profile is
 only an application-level pointer to one qualified immutable profile. Moving it
-does not change either package prefix. Existing projects retain their exact
-profile until a user changes it.
+does not change either package prefix. Stored selections continue to identify their package snapshot. A consumer may
+resolve an engine-only successor within that snapshot after qualification,
+without rewriting the stored selection; see the [optimization policy](engine-optimization-policy.md).
 
 The machine profile records `engine.sourceRevisions` as a sorted set. Most
 annual releases have one entry, while a release that replaces only an affected
