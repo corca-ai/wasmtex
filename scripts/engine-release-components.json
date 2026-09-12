@@ -32,7 +32,7 @@
         },
         {
           "id": "xetex",
-          "runId": 34543872132,
+          "runId": 34663466012,
           "artifacts": [
             "wasm-xetex"
           ]
@@ -89,7 +89,7 @@
         },
         {
           "id": "xetex",
-          "runId": 34543873867,
+          "runId": 34663466012,
           "artifacts": [
             "wasm-xetex-2026"
           ]

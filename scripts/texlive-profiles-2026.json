@@ -1,10 +1,10 @@
 {
   "schemaVersion": 3,
   "texliveYear": "2026",
-  "distributionProfileId": "2026-20260826-189e605",
+  "distributionProfileId": "2026-20260826-ef72b73",
   "discovery": {
     "name": "2026-latest",
-    "profileId": "2026-20260826-189e605",
+    "profileId": "2026-20260826-ef72b73",
     "frozenAtFinal": false
   },
   "profiles": [
@@ -144,6 +144,45 @@
           "bibtex8": 33163172428,
           "makeindex": 33163174571,
           "xetex": 34543873867,
+          "luahbtex": 34485572514
+        }
+      },
+      "qualification": {
+        "browserGoldens": 7,
+        "nodeBrowserParity": 7,
+        "representativeEngines": [
+          "pdflatex",
+          "xelatex",
+          "lualatex"
+        ]
+      }
+    },
+    {
+      "id": "2026-20260826-ef72b73",
+      "label": "TeX Live 2026 latest (2026-08-26, font-map engine ef72b73)",
+      "snapshot": "2026-08-26",
+      "snapshotDate": "2026-08-26",
+      "mirror": {
+        "revision": "2026-ba38749b8714505a",
+        "url": "https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/",
+        "provenanceSha256": "7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00",
+        "objects": 168942
+      },
+      "engine": {
+        "releaseId": "2026-ef72b734a6c387d0",
+        "tag": "engine-2026-ef72b734a6c387d0",
+        "sourceRevisions": [
+          "06f1937c502188fe04f0931fed702d06c2b78ab3",
+          "0dddc924cc6e69bd2a4b4630e02efe414f84515e",
+          "5308ebadf5326ae685efb9223d401c5b02f021cd",
+          "7920dff0f2abd04d7760ba273bf51994c86ca0ff"
+        ],
+        "correspondingSourceSha256": "3bfe123f4fdddab984331fd451416432acebf8085680ad5bacd639b7930183db",
+        "buildRuns": {
+          "pdftex-bibtex": 33885489901,
+          "bibtex8": 33163172428,
+          "makeindex": 33163174571,
+          "xetex": 34663466012,
           "luahbtex": 34485572514
         }
       },

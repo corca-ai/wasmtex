@@ -6,6 +6,11 @@ revision in its name; they are records, not living documents — supersede them
 with a new snapshot instead of editing history. `npm run check:licenses`
 requires the load-bearing set to stay tracked.
 
+## Font-map successors (`7920dff`)
+
+[`fontmap-release-7920dff.md`](fontmap-release-7920dff.md) binds the two annual
+font-map releases to original formats, complete source and independent rebuilds.
+
 ## Compile performance successors (`de011da`)
 
 [`compile-performance-de011da.md`](compile-performance-de011da.md) records

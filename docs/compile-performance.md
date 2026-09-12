@@ -242,3 +242,14 @@ fix. The [raw requalification bundle](../test/fixtures/fontmap-index/README.md)
 records both sides and build inputs. The ordered PRs, full engine-family release
 receipts/corresponding-source qualification and integrator adoption are still
 separate steps; no production engine or CorTeX profile has been changed here.
+
+
+### Release follow-up — 2026-09-12
+
+PR #134 and then #132 merged into `7920dff`. The receipt-bound engine releases
+are `2025-df051f6f6b50575f` and `2026-ef72b734a6c387d0`, with the original formats
+and unchanged mirrors. The [release evidence](license-evidence/fontmap-release-7920dff.md)
+records final browser/Node comparisons, annual goldens, complete source and
+independent Linux rebuilds. This supersedes the release-pending status of the
+historical experiment above. Integrators separately qualify adoption; publishing
+these engines does not deploy an application.
