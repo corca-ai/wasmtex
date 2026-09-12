@@ -68,11 +68,11 @@ export function validateEngineReleaseComponents(config, year) {
   if (runIds.size !== 5) throw new Error(`${year}: expected five independently pinned workflow runs`)
   const formatFamilies = new Set()
   for (const origin of release.reusedFormats ?? []) {
-    if (!['xetex', 'luahbtex'].includes(origin.family) || formatFamilies.has(origin.family)) {
+    if (!['pdftex', 'xetex', 'luahbtex'].includes(origin.family) || formatFamilies.has(origin.family)) {
       throw new Error(`${year}: invalid or duplicate reused format family`)
     }
     formatFamilies.add(origin.family)
-    const artifact = origin.family === 'xetex' ? 'wasm-xetex' : 'wasm-luatex'
+    const artifact = { pdftex: 'wasm-pdftex', xetex: 'wasm-xetex', luahbtex: 'wasm-luatex' }[origin.family]
     if (origin.artifact !== `${artifact}${suffix}` || !Number.isSafeInteger(origin.runId) || origin.runId <= 0) {
       throw new Error(`${year}: invalid reused format workflow origin`)
     }
