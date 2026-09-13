@@ -161,7 +161,8 @@ than as a JavaScript heap profiler.
 Reference candidates search label keys, directly associated source titles/captions,
 file locations, and supported aux number/page values with case-insensitive substring
 matching. `insertText` remains the label key and `replacementRange` replaces only the
-active argument. `filterText` lets native Monaco and JSON-RPC clients retain candidates
+active argument. An unfinished argument stops its replacement before the next
+command or line, preserving the literal suffix on the current line. `filterText` lets native Monaco and JSON-RPC clients retain candidates
 matched by their context. Duplicate definitions in the active include component are
 omitted instead of choosing a destination.
 
