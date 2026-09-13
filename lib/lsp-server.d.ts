@@ -16,14 +16,11 @@ export declare function uriFromPath(path: string): string;
 export declare class LatexLspServer {
     private send;
     private service;
-    private readonly cancelledRequests;
+    private readonly activeRequests;
     constructor(send: SendMessage, options?: LatexLanguageServiceOptions | LatexLanguageService);
     /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
     handle(message: JsonRpcMessage): void | Promise<void>;
     private dispatch;
-    private respondDispatchError;
-    private respond;
-    private respondError;
     private didOpen;
     private didChange;
     private didClose;

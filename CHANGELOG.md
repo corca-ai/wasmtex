@@ -25,6 +25,11 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
+- LSP cancellation tracks only active requests, returns a cancellation error on
+  settlement, and no longer suppresses a later request that reuses an ID. Invalid
+  request parameters report `InvalidParams`; malformed document notifications no
+  longer overwrite stored content.
+
 - Forward search (`forwardLookupAll`) returns one region per typeset line. Matches are
   lifted to their line box (crossing formula-sized vboxes such as a fraction), so a formula
   no longer paints as dozens of nested fragments and an inline `\textit{…}` no longer leaves

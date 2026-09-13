@@ -10,6 +10,7 @@
  * `postMessage`/`onmessage`, or any framing you like.
  */
 
+import { CompletionSnapshotValidationError } from './engine/completion-snapshot'
 import type { Diagnostic } from './lsp/diagnostic-provider'
 import type {
   CompletionKind,
@@ -18,8 +19,15 @@ import type {
   NeutralLocation,
   NeutralRange,
 } from './lsp/protocol'
+import {
+  changeParams,
+  documentParams,
+  openParams,
+  positionParams,
+  RpcError,
+  text,
+} from './lsp/server-params'
 import { LatexLanguageService, type LatexLanguageServiceOptions } from './lsp-service'
-import type { CompletionSnapshot } from './types'
 
 export interface JsonRpcMessage {
   jsonrpc?: '2.0'
@@ -76,7 +84,7 @@ interface DocPositionParams {
 
 export class LatexLspServer {
   private service: LatexLanguageService
-  private readonly cancelledRequests = new Set<number | string>()
+  private readonly activeRequests = new Map<number | string, { cancelled: boolean }>()
 
   constructor(
     private send: SendMessage,
@@ -89,137 +97,127 @@ export class LatexLspServer {
   /** Feed one incoming JSON-RPC message. Responses/notifications go to `send`. */
   handle(message: JsonRpcMessage): void | Promise<void> {
     if (!message.method) return
+    const id = message.id
+    if (id != null && this.activeRequests.has(id)) {
+      this.send({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32600, message: 'Request ID is already active' },
+      })
+      return
+    }
+    const request = { cancelled: false }
+    if (id != null) this.activeRequests.set(id, request)
+    const finish = (response: Pick<JsonRpcMessage, 'result' | 'error'>) => {
+      if (id == null || this.activeRequests.get(id) !== request) return
+      this.activeRequests.delete(id)
+      this.send({
+        jsonrpc: '2.0',
+        id,
+        ...(request.cancelled
+          ? { error: { code: -32800, message: 'Request cancelled' } }
+          : response),
+      })
+    }
+    const fail = (err: unknown) =>
+      finish({
+        error: {
+          code:
+            err instanceof RpcError
+              ? err.code
+              : err instanceof CompletionSnapshotValidationError
+                ? -32602
+                : -32603,
+          message: err instanceof Error ? err.message : String(err),
+        },
+      })
     try {
-      const pending = this.dispatch(message)
-      if (pending) {
-        return pending.catch((err) => this.respondDispatchError(message, err))
+      const result = this.dispatch(message)
+      if (result instanceof Promise) {
+        return result.then((value) => finish({ result: value ?? null }), fail)
       }
+      finish({ result: result ?? null })
     } catch (err) {
-      this.respondDispatchError(message, err)
+      fail(err)
     }
   }
 
-  private dispatch(message: JsonRpcMessage): void | Promise<void> {
-    const { id, method, params } = message
-    const pos = params as unknown as DocPositionParams
+  private dispatch(message: JsonRpcMessage): unknown {
+    const { method, params } = message
+    if (message.id != null && method?.startsWith('$/')) {
+      throw new RpcError(-32601, `Unknown request method: ${method}`)
+    }
     switch (method) {
       case 'initialize':
-        this.respond(id, { capabilities: serverCapabilities() })
-        break
+        return { capabilities: serverCapabilities() }
       case 'initialized':
       case 'exit':
-        break
       case 'shutdown':
-        this.respond(id, null)
-        break
+        return null
       case '$/cancelRequest': {
         const requestId = params?.id
-        if (typeof requestId === 'number' || typeof requestId === 'string')
-          this.cancelledRequests.add(requestId)
-        break
+        if (typeof requestId === 'number' || typeof requestId === 'string') {
+          const request = this.activeRequests.get(requestId)
+          if (request) request.cancelled = true
+        }
+        return null
       }
       case 'textDocument/didOpen':
-        this.didOpen(params)
-        break
+        return this.didOpen(params)
       case 'textDocument/didChange':
-        this.didChange(params)
-        break
+        return this.didChange(params)
       case 'textDocument/didClose':
-        this.didClose(params)
-        break
+        return this.didClose(params)
       case 'textDocument/completion':
-        {
-          const completion = this.completion(pos)
-          if (completion instanceof Promise) {
-            return completion.then((result) => this.respond(id, result))
-          }
-          this.respond(id, completion)
-        }
-        break
+        return this.completion(positionParams(params))
       case 'textDocument/hover':
-        this.respond(id, this.hover(pos))
-        break
+        return this.hover(positionParams(params))
       case 'textDocument/definition':
-        this.respond(id, this.definition(pos))
-        break
+        return this.definition(positionParams(params))
       case 'textDocument/references':
-        this.respond(id, this.references(pos))
-        break
+        return this.references(positionParams(params))
       case 'textDocument/rename':
-        this.respond(id, this.rename(params))
-        break
+        return this.rename(params)
       case 'wasmtex/updateCompletionSnapshot':
-        return this.service
-          .updateCompletionSnapshot(params?.snapshot as unknown as CompletionSnapshot)
-          .then((state) => this.respond(id, state))
+        return this.service.updateCompletionSnapshot(params?.snapshot)
       case 'wasmtex/setMainFile':
-        this.service.setMainFile(String(params?.path ?? ''))
-        this.respond(id, null)
-        break
+        this.service.setMainFile(text(params?.path, 'path'))
+        return null
       case 'wasmtex/completionSnapshotState':
-        this.respond(id, this.service.getCompletionSnapshotState())
-        break
+        return this.service.getCompletionSnapshotState()
       default:
-        if (id != null) this.respondError(id, -32601, `Unknown method: ${method}`)
+        throw new RpcError(-32601, `Unknown method: ${method}`)
     }
-  }
-
-  private respondDispatchError(message: JsonRpcMessage, err: unknown): void {
-    // A malformed request must not crash the dispatch loop — and neither may
-    // building the error reply, so read the failure defensively.
-    if (message.id == null) return
-    const detail = err instanceof Error ? err.message : String(err)
-    this.respondError(message.id, -32603, `Internal error: ${detail}`)
-  }
-
-  private respond(id: JsonRpcMessage['id'], result: unknown): void {
-    if (id == null) return
-    if (this.cancelledRequests.delete(id)) return
-    this.send({ jsonrpc: '2.0', id, result })
-  }
-  private respondError(id: number | string, code: number, msg: string): void {
-    this.send({ jsonrpc: '2.0', id, error: { code, message: msg } })
   }
 
   private didOpen(params: Record<string, unknown> | undefined): void {
-    const doc = (params?.textDocument ?? {}) as {
-      uri: string
-      text: string
-      version?: number
-      languageId?: string
-    }
+    const doc = openParams(params)
     this.service.updateDocument({
       fileId: doc.uri,
       path: pathFromUri(doc.uri),
-      content: doc.text ?? '',
-      documentVersion: doc.version ?? 0,
+      content: doc.text,
+      documentVersion: doc.version,
       language: doc.languageId === 'markdown' ? 'markdown' : 'latex',
     })
     this.publishAllDiagnostics()
   }
 
   private didChange(params: Record<string, unknown> | undefined): void {
-    const td = (params?.textDocument ?? {}) as { uri: string; version?: number }
-    const changes = (params?.contentChanges ?? []) as Array<{ text: string }>
-    // No changes → no-op. Falling back to '' would full-sync-replace the document with empty
-    // content, wiping its symbols/diagnostics. A conformant full-sync client always sends the
-    // whole text, so an empty array is malformed and must be ignored, not destructive.
-    if (!changes.length) return
-    const path = pathFromUri(td.uri)
+    const doc = changeParams(params)
+    if (doc.content === undefined) return
+    const path = pathFromUri(doc.uri)
     this.service.updateDocument({
-      fileId: td.uri,
+      fileId: doc.uri,
       path,
-      content: changes[changes.length - 1]!.text,
-      documentVersion: td.version ?? 0,
+      content: doc.content,
+      documentVersion: doc.version,
       language: /\.md$/i.test(path) ? 'markdown' : 'latex',
     })
     this.publishAllDiagnostics()
   }
 
   private didClose(params: Record<string, unknown> | undefined): void {
-    const td = (params?.textDocument ?? {}) as { uri?: string }
-    if (!td.uri) return
-    this.service.removeDocument(td.uri)
+    this.service.removeDocument(documentParams(params).uri)
     this.publishAllDiagnostics()
   }
 
@@ -256,15 +254,9 @@ export class LatexLspServer {
   }
 
   private rename(params: Record<string, unknown> | undefined): object | null {
-    const td = (params?.textDocument ?? {}) as { uri: string }
-    const pos = (params?.position ?? { line: 0, character: 0 }) as LspPosition
-    const newName = String(params?.newName ?? '')
-    const edit = this.service.getRenameEdits(
-      pathFromUri(td.uri),
-      pos.line + 1,
-      pos.character + 1,
-      newName,
-    )
+    const { path, line, column } = locate(positionParams(params))
+    const newName = text(params?.newName, 'newName')
+    const edit = this.service.getRenameEdits(path, line, column, newName)
     if (!edit) return null
     const changes: Record<string, object[]> = {}
     for (const e of edit.edits) {

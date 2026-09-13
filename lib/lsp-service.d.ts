@@ -11,7 +11,7 @@ import { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/seman
 import { SemanticTrace } from './lsp/trace-parser';
 import { FileSymbols, SectionDef } from './lsp/types';
 import { LatexDocumentInput, LatexFileSyntax, LatexSyntaxService } from './syntax';
-import { CompletionSnapshot, CompletionSnapshotProfile, CompletionSnapshotState } from './types';
+import { CompletionSnapshotProfile, CompletionSnapshotState } from './types';
 export { lintSource, type LintConfig };
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
 export type { BibCompletionContext, BibCompletionDomain } from './lsp/bib-completion-context';
@@ -102,7 +102,7 @@ export declare class LatexLanguageService {
     updateAux(content: string): void;
     updateEngineCommands(commands: string[]): void;
     updateSemanticTrace(trace: string | SemanticTrace): void;
-    updateCompletionSnapshot(snapshot: CompletionSnapshot): Promise<CompletionSnapshotState>;
+    updateCompletionSnapshot(snapshot: unknown): Promise<CompletionSnapshotState>;
     getCompletionSnapshotState(): CompletionSnapshotState;
     clearCompletionSnapshot(): void;
     private assertCompletionProfile;
