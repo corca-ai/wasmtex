@@ -13,6 +13,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Changed
 
+- Reference completion searches directly associated source titles/captions, file
+  locations and supported aux fields while inserting only the label key. Neutral
+  filter text reaches Monaco and JSON-RPC; duplicate destinations, incomplete aux
+  and unexpanded values cannot appear as a resolved reference.
+
 - Separate SDK integration/API guides from contributor build and profiling procedures;
   correct engine asset setup, LuaLaTeX font support, SyncTeX usage and Yjs model binding.
 

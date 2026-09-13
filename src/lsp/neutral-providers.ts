@@ -41,6 +41,7 @@ import type {
   NeutralLocation,
   NeutralPosition,
 } from './protocol'
+import { referenceDisplayValue } from './reference-value'
 import type {
   TexResourceCatalogProvider,
   TexResourceKind,
@@ -220,7 +221,13 @@ export function createDefaultCompletionRegistry(
     }
   })
   registry.registerResolver('label', (context, env) =>
-    completeRefs(context.prefix, context.prefix.length, env.index, env.document.path),
+    completeRefs(
+      context.prefix,
+      context.prefix.length,
+      env.index,
+      env.document.path,
+      context.type === 'argument' ? context.command : undefined,
+    ),
   )
   registry.registerResolver('citation', (context, env) =>
     completeCites(context.prefix, context.prefix.length, env.index, env.document.path),
@@ -497,22 +504,48 @@ function completeRefs(
   prefix: string,
   len: number,
   index: ProjectIndex,
-  documentPath?: string,
+  documentPath: string | undefined,
+  command: string | undefined,
 ): NeutralCompletionItem[] {
   const items: NeutralCompletionItem[] = []
-  for (const label of index.getAllLabels(documentPath)) {
-    if (!label.name.startsWith(prefix)) continue
-    const resolved = index.resolveLabel(label.name)
+  const labels = index.getAllLabels(documentPath)
+  const counts = new Map<string, number>()
+  for (const label of labels) counts.set(label.name, (counts.get(label.name) ?? 0) + 1)
+  for (const label of labels) {
+    if (counts.get(label.name) !== 1) continue
+    const resolved = referenceDisplayValue(index, label.name, command)
     const where = `${label.location.file}:${label.location.line}`
+    const context = label.context
+    const filterText = [label.name, context?.title, resolved, where].filter(Boolean).join(' ')
+    if (!filterText.toLowerCase().includes(prefix.toLowerCase())) continue
+    const detail = [resolved ? `[${resolved}]` : '', context?.kind, context?.title, where]
+      .filter(Boolean)
+      .join(' — ')
     items.push({
       label: label.name,
       kind: 'reference',
       insertText: label.name,
-      detail: resolved ? `[${resolved}] ${where}` : where,
+      detail,
+      filterText,
+      ...(context ? { documentation: referenceSourceDocumentation(context.source) } : {}),
+      data: {
+        wasmtex: {
+          reference: {
+            definition: { ...label.location },
+            ...(context ? { context: { ...context } } : {}),
+          },
+        },
+      },
       replaceLength: len,
     })
   }
   return items
+}
+
+function referenceSourceDocumentation(source: string): string {
+  const longest = Math.max(2, ...Array.from(source.matchAll(/`+/g), (match) => match[0].length))
+  const fence = '`'.repeat(longest + 1)
+  return `${fence}latex\n${source}\n${fence}`
 }
 
 function completeCites(

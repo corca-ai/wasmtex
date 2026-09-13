@@ -115,6 +115,7 @@ function toMonacoItem(
   if (it.detail) item.detail = it.detail
   if (it.documentation) item.documentation = { value: it.documentation }
   if (it.sortText) item.sortText = it.sortText
+  if (it.filterText) item.filterText = it.filterText
   if (it.data)
     (item as monaco.languages.CompletionItem & { data?: Record<string, unknown> }).data = it.data
   return item

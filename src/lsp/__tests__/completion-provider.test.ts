@@ -65,6 +65,25 @@ describe('createCompletionProvider', () => {
   fs.writeFile('amssymb.sty', '')
   const provider = createCompletionProvider(index, fs)
 
+  it('preserves caption search text and key-only insertion in Monaco', () => {
+    const localIndex = new ProjectIndex()
+    const source = String.raw`\caption{Architecture}\label{fig:overview}`
+    localIndex.updateFile('main.tex', source)
+    const localProvider = createCompletionProvider(localIndex, fs)
+    const result = complete(
+      localProvider,
+      mockModel([source, String.raw`\ref{Architecture`]),
+      2,
+      18,
+    )
+    expect(result.suggestions[0]).toMatchObject({
+      label: 'fig:overview',
+      insertText: 'fig:overview',
+      filterText: 'fig:overview Architecture main.tex:1',
+      range: { startLineNumber: 2, startColumn: 6, endLineNumber: 2, endColumn: 18 },
+    })
+  })
+
   it('provides command completions after backslash', () => {
     const result = complete(provider, mockModel(['\\fra']), 1, 5)
     expect(result.suggestions.length).toBeGreaterThan(0)

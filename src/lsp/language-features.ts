@@ -15,6 +15,7 @@ import { CITE_CMDS, INPUT_CMDS, REF_CMDS } from './latex-patterns'
 import { tokenize } from './latex-tokenizer'
 import { type CommandArg, getCommandPackage, getCommandSignature } from './package-db'
 import type { ProjectIndex } from './project-index'
+import { referenceDisplayValue } from './reference-value'
 import { buildLineStarts, offsetToLineCol } from './source-position'
 
 /** Predicate: is the given offset inside a non-code span (comment, inline verb,
@@ -296,10 +297,8 @@ export function getInlayHints(content: string, index: ProjectIndex): InlayHint[]
   for (const m of content.matchAll(REF_RESOLVE_RE)) {
     if (isMasked(m.index) || !commands.has(m.index)) continue
     const name = m[2]!.trim()
-    const resolved = m[1] === 'pageref' ? index.resolveLabelPage(name) : aux.get(name)
-    // An aux field may still contain executable TeX. Never present its source as
-    // though it were the expanded reference text.
-    if (!resolved || /[\\{}%$~_^#&]/.test(resolved)) continue
+    const resolved = referenceDisplayValue(index, name, m[1])
+    if (!resolved) continue
     const { line, column } = offsetToLineCol(lineStarts, m.index + m[0].length)
     hints.push({ line, column, label: ` (${resolved})` })
   }

@@ -156,6 +156,30 @@ entity identity.
 an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
 than as a JavaScript heap profiler.
 
+### Reference completion context
+
+Reference candidates search label keys, directly associated source titles/captions,
+file locations, and supported aux number/page values with case-insensitive substring
+matching. `insertText` remains the label key and `replacementRange` replaces only the
+active argument. `filterText` lets native Monaco and JSON-RPC clients retain candidates
+matched by their context. Duplicate definitions in the active include component are
+omitted instead of choosing a destination.
+
+`LabelDef.context` and `NeutralCompletionItem.data.wasmtex.reference.context` hold
+`kind`, `title` (at most 256 UTF-16 code units), and `source` (at most 1,024).
+The completion metadata also includes `definition` with its source file, line and
+column. Context requires a complete literal heading/caption immediately followed by
+its label, allowing whitespace/comments. Intervening prose or commands, incomplete
+arguments, and macro/environment definition templates provide no title association.
+The kind identifies the source command, not inferred counter or float ownership.
+Documentation renders the bounded source in an escaped Markdown code fence.
+
+`ref`/`eqref` use the number and `pageref` uses the page. Incomplete aux sets and
+unexpanded TeX fields provide no display/search value; source candidates remain.
+The integrating host must clear aux evidence when its compile inputs become stale
+and reject requests crossing a compile-context change, including source-identical
+recompiles. Source context itself updates through the ordinary file index lifecycle.
+
 ### Exact TeX Live resource completion
 
 The host chooses the catalog identity as part of the compile profile; the LSP does

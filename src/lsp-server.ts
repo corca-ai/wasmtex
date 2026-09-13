@@ -337,6 +337,7 @@ function toLspCompletionItem(it: NeutralCompletionItem, pos: LspPosition): objec
   if (it.detail) item.detail = it.detail
   if (it.documentation) item.documentation = it.documentation
   if (it.sortText) item.sortText = it.sortText
+  if (it.filterText) item.filterText = it.filterText
   if (it.data) item.data = it.data
   return item
 }
