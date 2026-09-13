@@ -530,6 +530,38 @@ the same as the inline compile with three workers.
 - `clearCache(): Promise<void>` — clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live year.
 - `dispose(): void`
 
+### Headless operation lifetime
+
+One main-engine operation runs at a time. Overlapping `compile()` calls reject
+with an `Error` containing `in progress`; they are not queued or merged. The
+first compile reserves its place while waiting for an existing incremental
+preparation. Preparations share an in-flight task and return `false` while a
+compile owns or is waiting for the worker. Concurrent `init()` calls share
+initialization. An input edit during `init()` also rejects initialization with
+`AbortError`; retry `init()` with the current inputs.
+
+`setFile()` remains synchronous and allowed during compilation or preparation.
+A file write, a changed `setMainFile()`, `loadProject()`, or `dispose()` invalidates
+that run: its promise rejects with `AbortError`, and late engine/backend results
+cannot publish output, auxiliary files, dependency manifests, completion evidence,
+or checkpoints for the new inputs. Reasserting the same main file is a no-op.
+The last completed index can retain historical evidence; runtime completion
+state becomes stale until a matching full compile. Handle `AbortError` as an
+obsolete run and compile again after its promise settles.
+
+`loadProject()` cancels and waits for the previous operation before replacing
+files. Await it before another project load, file/root write, or compile; those
+calls reject while replacement is pending. `readOutput()`, `flushCache()`, and
+`clearCache()` also reject if another main-engine operation owns the worker.
+`flushCache()` marks project files for resynchronization and clears checkpoints.
+
+Cancellation retires the affected workers and their checkpoints. The next
+compile initializes fresh workers and resends the current files, so it can cost
+more than an uninterrupted warm compile. Remote backend work may continue on its
+server, but its late response is ignored. `dispose()` additionally requires a new
+`init()` before compiling again. These rules describe `WasmTexCompiler`; the UI
+component has its own compile scheduler.
+
 ### Compile phase timings
 
 pdfLaTeX engine results may expose `CompileResult.phaseTimings`. These worker-side

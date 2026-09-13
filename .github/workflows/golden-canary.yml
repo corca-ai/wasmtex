@@ -102,6 +102,14 @@ jobs:
           WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.texlive_url }}
         run: CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts --reporter=default --reporter=junit --outputFile.junit=test-results/cross-host.xml
 
+      - name: Headless cancellation and project replacement on WASM
+        if: ${{ !cancelled() }}
+        env:
+          NODE_COMPILE_SMOKE: '1'
+          WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.texlive_year }}
+          WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.texlive_url }}
+        run: npx vitest run src/engine/headless-lifecycle.smoke.test.ts --reporter=default --reporter=junit --outputFile.junit=test-results/headless-lifecycle.xml
+
       - name: Upload browser and Node regression evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
