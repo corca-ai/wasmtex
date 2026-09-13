@@ -63,7 +63,7 @@
     "build": "tsgo && vite build",
     "preview": "vite preview",
     "check": "tsgo --noEmit",
-    "lint": "biome check src/",
+    "lint": "biome check src/ && npm run lint:workers",
     "lint:fix": "biome check --write src/",
     "format": "biome format --write src/",
     "test": "vitest run",
@@ -102,7 +102,8 @@
     "probe:tex-semantics": "node scripts/run-tex-semantic-probes.mjs",
     "build:lib": "BUILD_MODE=lib vite build && node scripts/fix-dts-specifiers.mjs && node scripts/check-dts-exports.mjs",
     "prepare": "npm run build:lib",
-    "test:package-consumer": "node scripts/package-consumer/check.mjs"
+    "test:package-consumer": "node scripts/package-consumer/check.mjs",
+    "lint:workers": "node scripts/check-worker-scope.mjs && biome lint --config-path=biome.workers.json wasm-build --error-on-warnings"
   },
   "peerDependencies": {
     "monaco-editor": "^0.55.1",

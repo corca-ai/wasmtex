@@ -110,6 +110,14 @@ jobs:
           WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.texlive_url }}
         run: npx vitest run src/engine/headless-lifecycle.smoke.test.ts --reporter=default --reporter=junit --outputFile.junit=test-results/headless-lifecycle.xml
 
+      - name: Authored pdfTeX cold format and repeat compile
+        if: ${{ !cancelled() }}
+        env:
+          NODE_COMPILE_SMOKE: '1'
+          WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.texlive_year }}
+          WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.texlive_url }}
+        run: npx vitest run src/engine/worker-format-fallback.smoke.test.ts --reporter=default --reporter=junit --outputFile.junit=test-results/cold-format.xml
+
       - name: Persistent cache identity and rehydrated output
         if: ${{ !cancelled() }}
         env:

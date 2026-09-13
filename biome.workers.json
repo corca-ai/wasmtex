@@ -1,0 +1,243 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.3/schema.json",
+  "files": {
+    "includes": [
+      "wasm-build/bibtex-worker.js",
+      "wasm-build/bibtex8-worker.js",
+      "wasm-build/dvipdfm-worker.js",
+      "wasm-build/kpse-resolve.cjs",
+      "wasm-build/library.js",
+      "wasm-build/luatex-library.js",
+      "wasm-build/luatex-worker.js",
+      "wasm-build/makeindex-worker.js",
+      "wasm-build/pdftex-worker.js",
+      "wasm-build/resolver-evidence.js",
+      "wasm-build/xetex-dvipdfm-library.js",
+      "wasm-build/xetex-library.js",
+      "wasm-build/xetex-worker.js"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "correctness": {
+        "noUndeclaredVariables": "error",
+        "noUnreachable": "error",
+        "noInvalidBuiltinInstantiation": "error",
+        "noInvalidConstructorSuper": "error",
+        "noUnsafeFinally": "error",
+        "useValidTypeof": "error",
+        "noSelfAssign": "error",
+        "noConstAssign": "error",
+        "noGlobalObjectCalls": "error",
+        "noUnsafeOptionalChaining": "error",
+        "noPrecisionLoss": "error",
+        "useIsNan": "error"
+      },
+      "suspicious": {
+        "noDuplicateCase": "error",
+        "noDuplicateClassMembers": "error",
+        "noDuplicateObjectKeys": "error",
+        "noRedeclare": "error",
+        "noDuplicateParameters": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noCatchAssign": "error",
+        "noClassAssign": "error",
+        "noFunctionAssign": "error",
+        "noImportAssign": "error",
+        "noUnsafeNegation": "error",
+        "noSparseArray": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "wasm-build/bibtex-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "ExitStatus",
+          "FS",
+          "UTF8ToString",
+          "_compileBibtex",
+          "_malloc",
+          "_setMainEntry",
+          "wasmMemory"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/bibtex8-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "ExitStatus",
+          "FS",
+          "UTF8ToString",
+          "_compileBibtex8",
+          "_malloc",
+          "_setMainEntry",
+          "wasmMemory"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/dvipdfm-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "FS",
+          "HEAPU8",
+          "UTF8ToString",
+          "_compilePDF",
+          "_malloc",
+          "cwrap",
+          "intArrayFromString"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/library.js"
+      ],
+      "javascript": {
+        "globals": [
+          "LibraryManager",
+          "kpse_find_file_impl",
+          "kpse_find_pk_impl",
+          "mergeInto"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/luatex-library.js"
+      ],
+      "javascript": {
+        "globals": [
+          "LibraryManager",
+          "fontconfig_search_font_impl",
+          "kpse_find_file_impl",
+          "mergeInto"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/luatex-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "FS",
+          "HEAPU8",
+          "UTF8ToString",
+          "_compileFormat",
+          "_compileLaTeX",
+          "_malloc",
+          "cwrap",
+          "intArrayFromString",
+          "wasmMemory"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/makeindex-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "ExitStatus",
+          "FS",
+          "UTF8ToString",
+          "_compileMakeindex",
+          "_malloc",
+          "_setMainEntry",
+          "wasmMemory"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/pdftex-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "Asyncify",
+          "ExitStatus",
+          "FS",
+          "UTF8ToString",
+          "_asyncify_start_rewind",
+          "_compileBibtex",
+          "_compileFormat",
+          "_free",
+          "_main",
+          "_malloc",
+          "_scanHashTable",
+          "bloomCandidates",
+          "fetchCandidates",
+          "lengthBytesUTF8",
+          "stackRestore",
+          "stackSave",
+          "stringToUTF8",
+          "thisProgram",
+          "updateMemoryViews",
+          "wasmMemory"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/xetex-dvipdfm-library.js"
+      ],
+      "javascript": {
+        "globals": [
+          "LibraryManager",
+          "kpse_find_file_impl",
+          "mergeInto"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/xetex-library.js"
+      ],
+      "javascript": {
+        "globals": [
+          "LibraryManager",
+          "fontconfig_search_font_impl",
+          "kpse_find_file_impl",
+          "mergeInto"
+        ]
+      }
+    },
+    {
+      "includes": [
+        "wasm-build/xetex-worker.js"
+      ],
+      "javascript": {
+        "globals": [
+          "FS",
+          "HEAPU8",
+          "UTF8ToString",
+          "_compileFormat",
+          "_compileLaTeX",
+          "_malloc",
+          "_set_icu_common_data",
+          "cwrap",
+          "intArrayFromString",
+          "wasmMemory"
+        ]
+      }
+    }
+  ]
+}

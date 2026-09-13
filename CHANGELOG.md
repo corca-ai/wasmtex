@@ -11,6 +11,13 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ## [Unreleased]
 
+### Fixed
+
+- The authored pdfTeX controller now retains a locally generated base format and
+  preserves project files when format preloading is skipped or fails, including
+  INITEX failure. This controller fix requires a newly built engine asset release;
+  existing immutable downloads are unchanged.
+
 <!--
 Add entries here as you land changes. Group them under these headings:
   Added / Changed / Deprecated / Removed / Fixed / Security

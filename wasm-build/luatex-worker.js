@@ -25,7 +25,6 @@ importScripts('wasmtex-luatex-resolver-evidence.js')
 
 const TEXCACHEROOT = '/tex'
 const WORKROOT = '/work'
-// biome-ignore lint: emscripten populates Module
 var Module = self.Module = {}
 if (self.__wasmtexWasmBinary) Module.wasmBinary = self.__wasmtexWasmBinary
 self.memlog = ''
