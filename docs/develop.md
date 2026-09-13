@@ -270,7 +270,7 @@ both preload and initialization cost when evaluating a warmup candidate.
 
 `Golden Canary / output-regression` always reports a result on PRs to `main`.
 Changes under `src/`, `lib/`, `e2e/`, `test/`, `wasm-build/`, `public/`,
-`scripts/`, `.github/`, package manifests, root `*config.*` files or `.nvmrc`
+`scripts/`, `.github/`, package manifests, `*config.*` files, `.nvmrc` or `index.html`
 run the annual matrix. Other changes receive an explicit not-required summary;
 a failed scope check, cancelled run or failed annual job cannot pass the gate.
 

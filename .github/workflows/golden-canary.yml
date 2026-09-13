@@ -38,10 +38,14 @@ jobs:
         run: |
           required=true
           if [ "$EVENT" = pull_request ]; then
-            git diff --name-only "$BASE...$HEAD" > changed-paths.txt
-            if ! rg -q '^(src/|lib/|e2e/|test/|wasm-build/|public/|scripts/|\.github/|package(-lock)?\.json$|.*config\.[^/]+$|\.nvmrc$)' changed-paths.txt; then
-              required=false
-            fi
+            git diff --no-renames --name-only -z "$BASE...$HEAD" > changed-paths
+            required=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                src/*|lib/*|e2e/*|test/*|wasm-build/*|public/*|scripts/*|.github/*|package.json|package-lock.json|*config.*|.nvmrc|index.html)
+                  required=true ;;
+              esac
+            done < changed-paths
           fi
           echo "required=$required" >> "$GITHUB_OUTPUT"
           echo "Representative output regression required: $required" >> "$GITHUB_STEP_SUMMARY"
