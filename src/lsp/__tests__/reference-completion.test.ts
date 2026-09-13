@@ -162,4 +162,20 @@ describe('content-aware reference completion', () => {
     expect(complete()[0]?.detail).toContain('Actual')
     expect(service.getOutline('main.tex').map((section) => section.title)).toEqual(['Actual'])
   })
+
+  it.each([
+    '\n',
+    ' ',
+  ])('an unfinished reference never replaces the following command after %j', (separator) => {
+    const source = `${String.raw`\section{Architecture}\label{key}`}\n${String.raw`\ref{Architecture`}${separator}${String.raw`\end{document}`}`
+    const service = createLatexLanguageService({ files: { 'main.tex': source } })
+    const item = service.getCompletions('main.tex', 2, 11)[0]
+    expect(item?.insertText).toBe('key')
+    expect(item?.replacementRange).toEqual({
+      startLine: 2,
+      startColumn: 6,
+      endLine: 2,
+      endColumn: 18,
+    })
+  })
 })

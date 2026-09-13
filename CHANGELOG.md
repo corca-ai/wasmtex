@@ -23,6 +23,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Completing an unfinished argument keeps its literal suffix but cannot replace
+  the next command or source line. This keeps an open reference usable in Monaco
+  when the document continues after the cursor.
+
 - Reference inlays distinguish aux numbers from pages and omit unsupported, ambiguous
   or unexpanded values. Hosts can collect bounded included aux outputs through
   `readAuxFiles` and pass them to `updateAuxFiles`; cancelled headless metadata reads

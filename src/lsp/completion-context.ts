@@ -303,6 +303,14 @@ function listSegmentAtCursor(text: string, group: ParsedGroup, cursor: number): 
       break
     }
   }
+  if (!group.closed) {
+    // An unfinished argument is not evidence that subsequent TeX belongs to
+    // this value. Keep its literal suffix, but never consume a line or command.
+    const boundary = /[\\\r\n]/g
+    boundary.lastIndex = cursor
+    const next = boundary.exec(text)
+    if (next) end = Math.min(end, next.index)
+  }
   return { start, end, listIndex }
 }
 
