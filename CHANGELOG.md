@@ -13,11 +13,17 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Exact-token reference repair queries and reviewed expected-source edits for
+  undefined references and explicitly selected duplicate-label occurrences.
+
 - Neutral, reviewable command/environment wrapping with explicit argument slots,
   source-preserving edits, project shadowing and conservative syntax/context refusal.
   Queries reuse indexed group boundaries on deeply nested source.
 
 ### Changed
+
+- With a loaded compile root, reference diagnostics follow its outgoing include/load
+  graph and duplicate markers expose bounded related declaration locations.
 
 - Expose source-backed argument, invocation and environment selection ranges through
   the neutral language service, Monaco and JSON-RPC, reusing confirmed argument grammar.

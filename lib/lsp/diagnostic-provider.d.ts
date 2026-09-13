@@ -7,6 +7,13 @@ export interface Diagnostic {
     message: string;
     severity: 'error' | 'warning' | 'info';
     code: string;
+    relatedInformation?: Array<{
+        file: string;
+        line: number;
+        column: number;
+        endColumn: number;
+        message: string;
+    }>;
 }
 /** Compute static analysis diagnostics from project index */
 export declare function computeDiagnostics(index: ProjectIndex): Diagnostic[];

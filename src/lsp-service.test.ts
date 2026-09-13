@@ -43,7 +43,7 @@ describe('LatexLanguageService', () => {
   it('indexes project files and exposes diagnostics and outline', () => {
     const service = createLatexLanguageService({
       files: {
-        'main.tex': '\\section{Intro}\nSee \\ref{sec:intro}\n',
+        'main.tex': '\\section{Intro}\nSee \\ref{sec:intro}\n\\input{chapter}',
       },
     })
 

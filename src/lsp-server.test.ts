@@ -188,7 +188,9 @@ describe('LatexLspServer', () => {
     const { server, sent } = makeServer()
     server.handle({
       method: 'textDocument/didOpen',
-      params: { textDocument: { uri: 'file:///main.tex', text: 'See \\ref{sec:intro}' } },
+      params: {
+        textDocument: { uri: 'file:///main.tex', text: 'See \\ref{sec:intro}\\input{chapter}' },
+      },
     })
     // main.tex has an undefined-ref before its label is defined elsewhere.
     expect(codesOf(diagsFor(sent, 'file:///main.tex').at(-1)!)).toContain('undefined-ref')
