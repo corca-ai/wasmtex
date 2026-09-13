@@ -11,6 +11,12 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ## [Unreleased]
 
+### Added
+
+- Neutral, reviewable command/environment wrapping with explicit argument slots,
+  source-preserving edits, project shadowing and conservative syntax/context refusal.
+  Queries reuse indexed group boundaries on deeply nested source.
+
 ### Changed
 
 - Expose source-backed argument, invocation and environment selection ranges through

@@ -65,6 +65,22 @@ import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/
 import { getStructuralSelectionIndex, structuralSelectionRanges } from './lsp/structural-selection'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
+import {
+  getWrapOptions,
+  type LatexWrapRequest,
+  planWrapSelection,
+  type WrapSource,
+} from './lsp/wrap-selection'
+
+export type {
+  LatexWrapEdit,
+  LatexWrapOption,
+  LatexWrapOptionsResult,
+  LatexWrapPlanResult,
+  LatexWrapRequest,
+  WrapRefusal,
+} from './lsp/wrap-selection'
+
 import { type LatexDocumentInput, type LatexFileSyntax, LatexSyntaxService } from './syntax'
 import type {
   CompletionSnapshot,
@@ -531,6 +547,33 @@ export class LatexLanguageService {
 
   getFoldingRanges(path: string): FoldingRange[] {
     return getFoldingRanges(this.textOf(path))
+  }
+
+  private wrapSource(path: string): WrapSource {
+    const fileId = this.documentIds.get(path)
+    return {
+      source: this.textOf(path),
+      syntax: fileId ? this.syntaxService.getFile(fileId) : null,
+      index: this.index,
+      path,
+      metadata: projectCommandMetadata(this.index, path, this.completionRegistry),
+    }
+  }
+
+  getWrapOptions(
+    path: string,
+    range: import('./syntax').LatexSyntaxRange,
+    cancellation?: CompletionCancellationToken,
+  ) {
+    return getWrapOptions(this.wrapSource(path), range, cancellation)
+  }
+
+  planWrapSelection(
+    path: string,
+    request: LatexWrapRequest,
+    cancellation?: CompletionCancellationToken,
+  ) {
+    return planWrapSelection(this.wrapSource(path), request, cancellation)
   }
 
   getSelectionRanges(
