@@ -22,6 +22,7 @@ audits are in [license evidence](license-evidence/README.md).
 | [Execution model](execution-model.md) | Shipped hosts, backend routing and determinism limits. |
 | [Language service](language-service.md) | Syntax/indexing, completion evidence and editor-neutral boundaries. |
 | [Development](develop.md) | Setup, commands, committed bundles and testing/profiling procedures. |
+| [Runtime verification map](testing-map.md) | Execution behavior, failure/race tests, CI placement, coverage boundaries and remaining gaps. |
 | [Documentation maintenance](metadoc.md) | Source-of-truth rules, history lifecycle and link checks. |
 
 ## Maintain engines and releases

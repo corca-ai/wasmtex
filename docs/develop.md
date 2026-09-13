@@ -176,6 +176,11 @@ the official install source; pin its commit and follow the [installation contrac
 
 ## Testing
 
+The [runtime verification map](testing-map.md) connects behaviors, failure/race
+scenarios, existing tests, CI gates and remaining gaps. Coverage exclusions do
+not mean those modules have no unit tests. Update the map when changing this
+verification boundary.
+
 ### Unit Tests
 We use **Vitest**. Tests are located in `*.test.ts` files alongside the source code.
 ```bash

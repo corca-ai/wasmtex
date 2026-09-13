@@ -81,7 +81,7 @@ jobs:
             exit 1
           fi
 
-  # Unit-test coverage (Vitest + v8), reporting-only — no threshold gate yet.
+  # Unit-test coverage (Vitest + v8); all four aggregate thresholds are 85%.
   # The unit suite needs no engine assets, so this is a fast, standalone job; the
   # HTML/lcov report is uploaded as an artifact and the text summary lands in the log.
   coverage:

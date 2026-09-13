@@ -108,16 +108,24 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
   ): Promise<TMsg> {
     return new Promise<TMsg>((resolve, reject) => {
       const entry = { resolve, reject }
-      const queue = this.pendingResponses.get(responseKey)
-      if (queue) {
-        queue.push(entry)
-      } else {
-        this.pendingResponses.set(responseKey, [entry])
-      }
-      if (transferables?.length) {
-        this.worker!.postMessage(msg, transferables)
-      } else {
-        this.worker!.postMessage(msg)
+      const queue = this.pendingResponses.get(responseKey) ?? []
+      queue.push(entry)
+      this.pendingResponses.set(responseKey, queue)
+      try {
+        if (transferables?.length) {
+          this.worker!.postMessage(msg, transferables)
+        } else {
+          this.worker!.postMessage(msg)
+        }
+      } catch (error) {
+        // A rejected send has no future response. Remove only its waiter so it
+        // cannot consume the next successful request's reply under the same key.
+        const index = queue.indexOf(entry)
+        if (index !== -1) queue.splice(index, 1)
+        if (queue.length === 0 && this.pendingResponses.get(responseKey) === queue) {
+          this.pendingResponses.delete(responseKey)
+        }
+        reject(error)
       }
     })
   }

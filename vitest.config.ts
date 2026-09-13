@@ -21,11 +21,11 @@ export default defineConfig({
         'src/**/__tests__/**',
         'src/**/__mocks__/**',
         'src/**/*.d.ts',
-        // The runtime/integration layer — Web-Worker glue, the WASM engine drivers,
-        // the Node worker host, Monaco/PDF.js/DOM wiring, and barrel entry points.
-        // These need a real browser/worker/WASM/Node runtime and are covered by the
-        // Playwright e2e suite and the env-gated cross-host smoke tests, not by unit
-        // tests. Coverage thresholds below therefore gate the unit-testable surface.
+        // These integration drivers also have focused unit/protocol tests, but
+        // their partial instrumentation is not an end-to-end coverage measure.
+        // Keep runtime qualifications and remaining gaps in docs/testing-map.md.
+        // The pure worker-host seam and BaseWorkerEngine request queue are now
+        // included: both are directly exercised without generated WASM or a DOM.
         'src/main.ts',
         'src/wasmtex.ts',
         'src/headless.ts',
@@ -42,12 +42,10 @@ export default defineConfig({
         'src/engine/wasmtex-worker.ts',
         'src/engine/wasmtex-engine.ts',
         'src/engine/tex-fmt-engine.ts',
-        'src/engine/base-worker-engine.ts',
         'src/engine/bibtex-engine.ts',
         'src/engine/makeindex-engine.ts',
         'src/engine/xetex-engine.ts',
         'src/engine/node-host.ts',
-        'src/engine/worker-host.ts',
         'src/engine/warmup.ts',
         'src/lsp/language-feature-providers.ts',
         'src/lsp/register-providers.ts',
