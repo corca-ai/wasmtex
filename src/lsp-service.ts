@@ -1,4 +1,8 @@
-import { boundCompletionSnapshot, completionProjectRevision } from './engine/completion-snapshot'
+import {
+  boundCompletionSnapshot,
+  CompletionSnapshotValidationError,
+  completionProjectRevision,
+} from './engine/completion-snapshot'
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFile } from './lsp/aux-parser'
 import { parseBibFileData } from './lsp/bib-parser'
@@ -425,7 +429,7 @@ export class LatexLanguageService {
     this.index.updateSemanticTrace(typeof trace === 'string' ? parseTraceFile(trace) : trace)
   }
 
-  async updateCompletionSnapshot(snapshot: CompletionSnapshot): Promise<CompletionSnapshotState> {
+  async updateCompletionSnapshot(snapshot: unknown): Promise<CompletionSnapshotState> {
     const bounded = boundCompletionSnapshot(snapshot)
     this.assertCompletionProfile(bounded)
     const update = ++this.completionSnapshotUpdate
@@ -466,7 +470,9 @@ export class LatexLanguageService {
         selected.texliveYear !== actual.texliveYear ||
         selected.mirrorRevision !== actual.mirrorRevision)
     ) {
-      throw new Error('completion snapshot does not match the selected completion profile')
+      throw new CompletionSnapshotValidationError(
+        'completion snapshot does not match the selected completion profile',
+      )
     }
     for (const expected of [this.resourceCatalog?.identity, this.semanticCatalog?.identity]) {
       if (!expected) continue
@@ -474,7 +480,9 @@ export class LatexLanguageService {
         expected.texliveYear !== actual.texliveYear ||
         expected.mirrorRevision !== actual.mirrorRevision
       ) {
-        throw new Error('completion snapshot does not match the selected catalog profile')
+        throw new CompletionSnapshotValidationError(
+          'completion snapshot does not match the selected catalog profile',
+        )
       }
     }
   }

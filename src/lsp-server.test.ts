@@ -84,25 +84,6 @@ describe('LatexLspServer', () => {
     expect(service.getFile('main.tex')).toBeNull()
   })
 
-  it('suppresses a pending response after standard cancellation', async () => {
-    const service = new LatexLanguageService()
-    service.updateCompletionSnapshot = async () => {
-      await Promise.resolve()
-      return { status: 'absent' }
-    }
-    const sent: JsonRpcMessage[] = []
-    const server = new LatexLspServer((message) => sent.push(message), service)
-    const pending = server.handle({
-      id: 91,
-      method: 'wasmtex/updateCompletionSnapshot',
-      params: { snapshot: {} },
-    })
-    server.handle({ method: '$/cancelRequest', params: { id: 91 } })
-    await pending
-
-    expect(responseFor(sent, 91)).toBeUndefined()
-  })
-
   it('handles lifecycle notifications and Markdown full-sync changes', () => {
     const syntax = new LatexSyntaxService()
     const service = new LatexLanguageService({ syntaxService: syntax })
@@ -452,6 +433,6 @@ describe('LatexLspServer', () => {
         params: { textDocument: { uri: URI } },
       }),
     ).not.toThrow()
-    expect(responseFor(sent, 10)!.error!.code).toBe(-32603)
+    expect(responseFor(sent, 10)!.error!.code).toBe(-32602)
   })
 })

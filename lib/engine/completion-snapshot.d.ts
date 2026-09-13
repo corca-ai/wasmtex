@@ -53,8 +53,11 @@ export declare class CompletionFileDigestCache<TEntry extends object = object> {
 }
 /** Hash paths, content kinds, and bytes without concatenating the whole project in memory. */
 export declare function completionProjectRevision(files: Iterable<CompletionSnapshotProjectFile>): Promise<string>;
+/** Expected rejection of caller-supplied snapshot structure or profile identity. */
+export declare class CompletionSnapshotValidationError extends Error {
+}
 /** Validate and bound snapshots before retaining data received across a host/RPC boundary. */
-export declare function boundCompletionSnapshot(snapshot: CompletionSnapshot): CompletionSnapshot;
+export declare function boundCompletionSnapshot(snapshot: unknown): CompletionSnapshot;
 export declare function createCompletionSnapshot(options: CreateCompletionSnapshotOptions): Promise<CompletionSnapshot>;
 /** Parse the authored pdfTeX controller's bounded tab-delimited observation file. */
 export declare function parseEngineCompletionObservation(lines: readonly unknown[]): EngineCompletionObservation;

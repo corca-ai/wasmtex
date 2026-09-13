@@ -374,14 +374,15 @@ type UnknownRecord = Record<string, unknown>
 
 function asRecord(value: unknown, label: string): UnknownRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`completion snapshot has an invalid ${label}`)
+    throw new CompletionSnapshotValidationError(`completion snapshot has an invalid ${label}`)
   }
   return value as UnknownRecord
 }
 
 function requiredText(value: unknown, maxLength: number, label: string): string {
   const text = safeText(value, maxLength)
-  if (!text) throw new Error(`completion snapshot has an invalid ${label}`)
+  if (!text)
+    throw new CompletionSnapshotValidationError(`completion snapshot has an invalid ${label}`)
   return text
 }
 
@@ -398,10 +399,14 @@ function collectionHeader(
 } {
   const record = asRecord(value, `${field} field`)
   if (record.status !== 'observed' && record.status !== 'unsupported') {
-    throw new Error(`completion snapshot has an invalid ${field} status`)
+    throw new CompletionSnapshotValidationError(
+      `completion snapshot has an invalid ${field} status`,
+    )
   }
   if (!Array.isArray(record.values) || typeof record.complete !== 'boolean') {
-    throw new Error(`completion snapshot has an invalid ${field} collection`)
+    throw new CompletionSnapshotValidationError(
+      `completion snapshot has an invalid ${field} collection`,
+    )
   }
   const reason = record.reason === undefined ? undefined : safeText(record.reason, 256)
   const dropped =
@@ -427,7 +432,9 @@ function normalizeCollection<T>(
   const header = collectionHeader(value, field)
   if (header.status === 'unsupported') {
     if (header.values.length > 0) {
-      throw new Error(`unsupported completion snapshot field ${field} contains values`)
+      throw new CompletionSnapshotValidationError(
+        `unsupported completion snapshot field ${field} contains values`,
+      )
     }
     return unsupported(header.reason ?? `${field} observation is unavailable`)
   }
@@ -526,7 +533,9 @@ function normalizeKeyFamilies(
   const header = collectionHeader(value, 'keyFamilies')
   if (header.status === 'unsupported') {
     if (header.values.length > 0) {
-      throw new Error('unsupported completion snapshot field keyFamilies contains values')
+      throw new CompletionSnapshotValidationError(
+        'unsupported completion snapshot field keyFamilies contains values',
+      )
     }
     return unsupported(header.reason ?? 'key-family observation is unavailable')
   }
@@ -582,23 +591,30 @@ function normalizeResourceCollection(
   })
 }
 
+/** Expected rejection of caller-supplied snapshot structure or profile identity. */
+export class CompletionSnapshotValidationError extends Error {}
+
 /** Validate and bound snapshots before retaining data received across a host/RPC boundary. */
-export function boundCompletionSnapshot(snapshot: CompletionSnapshot): CompletionSnapshot {
+export function boundCompletionSnapshot(snapshot: unknown): CompletionSnapshot {
   const source = asRecord(snapshot, 'root')
   if (source.version !== COMPLETION_SNAPSHOT_SCHEMA_VERSION) {
-    throw new Error(`unsupported completion snapshot version: ${String(source.version)}`)
+    throw new CompletionSnapshotValidationError(
+      `unsupported completion snapshot version: ${String(source.version)}`,
+    )
   }
   const rawIdentity = asRecord(source.identity, 'identity')
   const projectRevision = requiredText(rawIdentity.projectRevision, 80, 'project revision')
   if (!/^sha256:[a-f0-9]{64}$/.test(projectRevision)) {
-    throw new Error('completion snapshot has an invalid project revision')
+    throw new CompletionSnapshotValidationError(
+      'completion snapshot has an invalid project revision',
+    )
   }
   if (!['pdflatex', 'xelatex', 'lualatex'].includes(String(rawIdentity.engine))) {
-    throw new Error('completion snapshot has an invalid engine')
+    throw new CompletionSnapshotValidationError('completion snapshot has an invalid engine')
   }
   const rawProfile = asRecord(rawIdentity.profile, 'profile')
   if (rawProfile.texliveYear !== '2025' && rawProfile.texliveYear !== '2026') {
-    throw new Error('completion snapshot has an invalid TeX Live year')
+    throw new CompletionSnapshotValidationError('completion snapshot has an invalid TeX Live year')
   }
   const mirrorRevision =
     rawProfile.mirrorRevision === null

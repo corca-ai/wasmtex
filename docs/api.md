@@ -848,6 +848,22 @@ transport-agnostic: give it a `send` callback and feed it incoming messages with
 `completion`, `hover`, `definition`, `references`, `rename`, and pushes
 `publishDiagnostics`.
 
+
+Requests are tracked until their result or error settles. `$/cancelRequest` affects
+only a currently active ID; unknown or completed IDs are ignored. A cancelled
+request receives one `RequestCancelled` (`-32800`) error when its operation settles,
+including when that operation rejects. Cancellation does not roll back document or
+snapshot updates or abort shared catalog loading. IDs can be reused after settlement;
+reusing an active ID is rejected without replacing its original operation.
+
+Malformed supported-method parameters return `InvalidParams` (`-32602`), while
+unexpected service failures return `InternalError` (`-32603`). Invalid document
+notifications are ignored before mutation and receive no response. Positions must
+be nonnegative protocol integers; text and URIs must have the expected string types.
+Document changes use full text synchronization; ranged changes are rejected instead
+of being mistaken for replacement documents. Missing document versions retain the
+existing default of zero and an empty change list remains a no-op.
+
 Three WasmTex extension methods carry runtime evidence: send
 `wasmtex/updateCompletionSnapshot` with `{ snapshot }` and await its response before
 requesting completion; query `wasmtex/completionSnapshotState` with no parameters. Set
