@@ -7,6 +7,12 @@ export interface SourceLocation {
 export interface LabelDef {
     name: string;
     location: SourceLocation;
+    /** A directly preceding literal heading/caption, never inferred counter ownership. */
+    context?: {
+        kind: SectionLevel | 'caption';
+        title: string;
+        source: string;
+    };
 }
 export interface LabelRef {
     name: string;

@@ -43,6 +43,33 @@ describe('uriFromPath / pathFromUri', () => {
 })
 
 describe('LatexLspServer', () => {
+  it('preserves context search and the exact reference edit over JSON-RPC', async () => {
+    const { server, sent } = makeServer({
+      files: {
+        'main.tex': `${String.raw`\caption{Architecture}\label{fig:overview}`}\n${String.raw`\ref{Architecture`}`,
+      },
+    })
+    await server.handle({
+      id: 90,
+      method: 'textDocument/completion',
+      params: {
+        textDocument: { uri: URI },
+        position: { line: 1, character: 17 },
+      },
+    })
+    expect(result(sent, 90).items[0]).toMatchObject({
+      label: 'fig:overview',
+      filterText: 'fig:overview Architecture main.tex:1',
+      textEdit: {
+        newText: 'fig:overview',
+        range: {
+          start: { line: 1, character: 5 },
+          end: { line: 1, character: 17 },
+        },
+      },
+    })
+  })
+
   it('reports capabilities on initialize', () => {
     const { server, sent } = makeServer()
     server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })

@@ -518,6 +518,33 @@ function extractLabels(ctx: Ctx, symbols: FileSymbols): void {
   )
 }
 
+/** Only whitespace/comments may separate a confirmed title and its label.
+ * An intervening invocation could change the counter; do not guess through it. */
+function attachLabelContexts(ctx: Ctx, symbols: FileSymbols): void {
+  const definitions = macroDefinitionSpans(ctx.masked)
+  const labels = new Map(
+    symbols.labels.map((label) => [`${label.location.line}:${label.location.column}`, label]),
+  )
+  const names = new Set([...SECTION_CMDS.split('|'), 'caption'])
+  for (const command of commandsNamed(ctx, names)) {
+    if (definitions.some(([start, end]) => start <= command.start && command.start < end)) continue
+    const group = firstRequired(groupsAfterCommand(ctx, command))
+    if (!group || !group.value.trim() || group.value.includes('#')) continue
+    const next = skipSpace(ctx.masked, group.end)
+    if (!ctx.masked.startsWith('\\label{', next)) continue
+    const value = extractBraceContent(ctx.masked, next + 6, ctx.groupEnds)
+    if (!value) continue
+    const location = locAt(ctx, nameStartOffset(next + 6, value))
+    const label = labels.get(`${location.line}:${location.column}`)
+    if (!label) continue
+    label.context = {
+      kind: command.name as SectionLevel | 'caption',
+      title: group.value.trim().replace(/\s+/g, ' ').slice(0, 256),
+      source: ctx.masked.slice(command.start, group.end).slice(0, 1024),
+    }
+  }
+}
+
 function extractRefs(ctx: Ctx, symbols: FileSymbols): void {
   extractBracedName(ctx, REF_RE, true, (name, location) =>
     symbols.labelRefs.push({ name, location }),
@@ -1382,6 +1409,20 @@ const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@]+/g
 function macroDefinitionSpans(masked: string): Array<[number, number]> {
   const ends = indexGroupEnds(masked)
   const spans = primitiveDefinitionSpans(masked, ends)
+  for (const match of masked.matchAll(NEWCOMMAND_RE)) {
+    if (!match[1]!.endsWith('DocumentCommand')) continue
+    const groups = invocationGroups(masked, match.index + match[0].length, ends)
+    const body = groups[1]
+    spans.push([match.index, body?.end ?? masked.length])
+  }
+  const environments =
+    /\\(?:(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:new|renew|provide)environment)(?![A-Za-z@:_])\*?\s*/g
+  for (const match of masked.matchAll(environments)) {
+    const groups = invocationGroups(masked, match.index + match[0].length, ends)
+    const required = groups.filter((group) => group.delimiter === 'required')
+    const body = required[match[0].includes('DocumentEnvironment') ? 3 : 2]
+    spans.push([match.index, body?.end ?? masked.length])
+  }
   for (const match of masked.matchAll(MACRO_SCOPE_RE)) {
     const open = match.index + match[0].length - 1
     const body = extractBraceContent(masked, open, ends)
@@ -1817,6 +1858,7 @@ export function parseLatexFile(
   }
 
   extractLabels(literalCtx, symbols)
+  attachLabelContexts(literalCtx, symbols)
   extractRefs(literalCtx, symbols)
   extractCitations(literalCtx, symbols)
   extractSections(ctx, symbols)
