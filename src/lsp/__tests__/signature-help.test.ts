@@ -7,7 +7,7 @@ function query(marked: string, registry?: CompletionResolverRegistry) {
   const offset = marked.indexOf('|')
   const before = marked.slice(0, offset).split('\n')
   return getSignatureHelp(
-    marked.replace('|', ''),
+    marked.slice(0, offset) + marked.slice(offset + 1),
     before.length,
     before.at(-1)!.length + 1,
     registry,
