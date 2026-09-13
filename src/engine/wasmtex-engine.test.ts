@@ -522,6 +522,29 @@ describe('WasmTexPdftexEngine compile() result mapping', () => {
 
     expect(result.pdf).toBeNull()
   })
+
+  it('rejects retained artifacts when a warm worker reports an early fatal stop with status 1', async () => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    engine.markReady()
+    const pdf = Uint8Array.of(1, 2, 3).buffer
+    const synctex = Uint8Array.of(4, 5).buffer
+    // A document can print the diagnostic as text before genuine output.
+    let log =
+      '! ==> Fatal error occurred, no output PDF file produced!\r\nOutput written on main.pdf (1 page, 3 bytes).'
+    engine.installWorker(() => ({ cmd: 'compile', result: 'ok', status: 1, pdf, synctex, log }))
+    expect((await engine.compile()).success).toBe(true)
+    log =
+      '! Emergency stop.\n!  ==> Fatal error occurred, no output PDF file produced!\nTranscript written on main.log.'
+    const failed = await engine.compile()
+    expect(failed.success).toBe(false)
+    expect(failed.pdf).toBeNull()
+    expect(failed.synctex).toBeNull()
+    expect(failed.log).toBe(log)
+    log = 'LaTeX Warning: References changed.\nOutput written on main.pdf (1 page, 3 bytes).'
+    const recovered = await engine.compile()
+    expect(recovered.success).toBe(true)
+    expect(recovered.pdf).toEqual(new Uint8Array(pdf))
+  })
 })
 
 /** Exposes injectWarmupCache + a pendingResponses size probe, with a fake worker

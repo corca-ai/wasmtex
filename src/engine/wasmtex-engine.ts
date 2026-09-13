@@ -10,6 +10,7 @@ import type {
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
 import { fetchBloomFilter } from './bloom-filter'
 import type { CompileEngine } from './compile-engine'
+import { compileArtifact, hasFatalNoOutput } from './compile-output'
 import {
   type EngineCompletionObservation,
   parseEngineCompletionObservation,
@@ -767,14 +768,15 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     const log = data.log || ''
     // pdfTeX status 0 is success, 1 is warnings/non-fatal errors.
     // Both can produce valid PDF output.
-    const success = data.result === 'ok' && (data.status === 0 || data.status === 1)
+    const noOutput = hasFatalNoOutput(log)
+    const success = !noOutput && data.result === 'ok' && (data.status === 0 || data.status === 1)
     // Only wrap real PDF bytes: `data.result === 'ok'` without a `pdf` field (a compile that
     // produced no pages) must map to null, not `new Uint8Array(undefined)` (a 0-byte buffer
     // that downstream `if (result.pdf)` checks would treat as a renderable PDF).
-    const pdf = data.pdf ? new Uint8Array(data.pdf) : null
+    const pdf = compileArtifact(data.pdf, noOutput)
     // A successful compile may produce no .synctex file (synctex off / no output);
     // the worker then omits the field, so map it to null rather than an empty array.
-    const synctex = data.synctex ? new Uint8Array(data.synctex) : null
+    const synctex = compileArtifact(data.synctex, noOutput)
     const format = success && data.format ? new Uint8Array(data.format) : undefined
     const errors = parseTexErrors(log)
     const preambleSnapshot = !!data.preambleSnapshot

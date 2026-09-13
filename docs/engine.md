@@ -434,6 +434,16 @@ durable caching.
 
 ## Compile robustness
 
+The SDK rejects a controller's success status and attached output when the TeX
+log explicitly reports a fatal error with no PDF/DVI output. Published controllers
+can retain a previous run's file after an early stop, including exit status 1.
+Such a result exposes neither PDF nor SyncTeX, retains its diagnostic log, and
+cannot establish fresh compile metadata. Ordinary status-1 warning output remains
+available. This admission rule works with existing engine and format bytes.
+After any unsuccessful headless compile, the project index clears compile-derived
+aux, engine-command and trace values while preserving source symbols. Raw
+`readOutput()` still reads the engine filesystem and is not a freshness guarantee.
+
 ### Rerun cycle detection
 
 LaTeX often asks to be run again to settle cross-references and citations
