@@ -21,7 +21,7 @@ export interface FoldingRange {
 }
 /** Foldable ranges: environments, `% region`/`% endregion`, and section blocks. */
 export declare function getFoldingRanges(content: string): FoldingRange[];
-/** Ranges of every occurrence (in `file`) of the symbol under the cursor. */
+/** Structural occurrences in `file`; conflicting active declarations are ambiguous. */
 export declare function getDocumentHighlights(file: string, line: number, column: number, index: ProjectIndex): LFRange[];
 export interface WorkspaceSymbol {
     name: string;

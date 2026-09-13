@@ -197,7 +197,7 @@ function sectionFoldingRanges(
 
 // --- Document highlight ------------------------------------------------------
 
-/** Ranges of every occurrence (in `file`) of the symbol under the cursor. */
+/** Structural occurrences in `file`; conflicting active declarations are ambiguous. */
 export function getDocumentHighlights(
   file: string,
   line: number,
@@ -206,6 +206,7 @@ export function getDocumentHighlights(
 ): LFRange[] {
   const symbol = index.findSymbolAt(file, line, column)
   if (!symbol) return []
+  if (!hasUnambiguousHighlightTarget(file, symbol, index)) return []
   return index
     .findAllOccurrences(symbol.name, symbol.type)
     .filter((o) => o.filePath === file)
@@ -215,6 +216,29 @@ export function getDocumentHighlights(
       endLine: o.line,
       endColumn: o.column + o.length,
     }))
+}
+
+function hasUnambiguousHighlightTarget(
+  file: string,
+  symbol: { name: string; type: 'label' | 'citation' | 'command' },
+  index: ProjectIndex,
+): boolean {
+  if (symbol.type === 'label') {
+    return index.getAllLabels(file).filter((entry) => entry.name === symbol.name).length <= 1
+  }
+  if (symbol.type === 'command') {
+    // The index does not resolve expansion order or local TeX scopes. In particular,
+    // a redefinition must not make distinct command meanings look like one binding.
+    const definitions = index.getCommandDefs(file).filter((entry) => entry.name === symbol.name)
+    return definitions.length === 1 && !definitions[0]!.mayRedefine
+  }
+  const bibItems = index
+    .getActiveFiles(file)
+    .flatMap((path) =>
+      (index.getFileSymbols(path)?.bibItems ?? []).filter((entry) => entry.key === symbol.name),
+    )
+  const bibEntries = index.getBibEntries(file).filter((entry) => entry.key === symbol.name)
+  return bibItems.length + bibEntries.length <= 1
 }
 
 // --- Workspace symbols -------------------------------------------------------

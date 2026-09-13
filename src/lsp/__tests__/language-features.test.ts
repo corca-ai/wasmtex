@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseBibFileData } from '../bib-parser'
 import {
   getCodeActions,
   getDocumentHighlights,
@@ -13,7 +14,10 @@ import { ProjectIndex } from '../project-index'
 
 function indexWith(files: Record<string, string>): ProjectIndex {
   const index = new ProjectIndex()
-  for (const [path, content] of Object.entries(files)) index.updateFile(path, content)
+  for (const [path, content] of Object.entries(files)) {
+    if (path.endsWith('.bib')) index.updateBibFile(path, parseBibFileData(content, path))
+    else index.updateFile(path, content)
+  }
   return index
 }
 
@@ -115,6 +119,96 @@ describe('getFoldingRanges', () => {
 })
 
 describe('getDocumentHighlights', () => {
+  it('does not merge duplicate labels across included files or shared roots', () => {
+    const index = indexWith({
+      'a.tex': '\\input{shared}\n\\label{target}',
+      'b.tex': '\\input{shared}\n\\label{target}',
+      'shared.tex': '\\ref{target}\n\\ref{target}',
+    })
+    expect(getDocumentHighlights('shared.tex', 1, 7, index)).toEqual([])
+    index.removeFile('b.tex')
+    expect(getDocumentHighlights('shared.tex', 1, 7, index)).toHaveLength(2)
+  })
+
+  it('ignores same-name declarations in unrelated roots', () => {
+    const index = indexWith({
+      'a.tex': '\\label{target}\n\\ref{target}',
+      'b.tex': '\\label{target}',
+    })
+    expect(getDocumentHighlights('a.tex', 2, 7, index)).toHaveLength(2)
+  })
+
+  it('suppresses redefined commands and restores highlights after removing the redefinition', () => {
+    const index = indexWith({
+      'main.tex': '\\newcommand{\\foo}{a}\n\\foo\n\\renewcommand{\\foo}{b}\n\\foo',
+    })
+    expect(getDocumentHighlights('main.tex', 2, 3, index)).toEqual([])
+    index.updateFile('main.tex', '\\newcommand{\\foo}{a}\n\\foo\n\\foo')
+    expect(getDocumentHighlights('main.tex', 2, 3, index)).toHaveLength(3)
+  })
+
+  it('does not infer command bindings from another root', () => {
+    const index = indexWith({
+      'main.tex': '\\foo\n\\foo',
+      'other.tex': '\\newcommand{\\foo}{a}',
+    })
+    expect(getDocumentHighlights('main.tex', 1, 3, index)).toEqual([])
+  })
+
+  it.each([
+    '\\RenewExpandableDocumentCommand{\\foo}{}{b}',
+    '\\DeclareExpandableDocumentCommand{\\foo}{}{b}',
+    '\\renewcommand\\foo2',
+    '\\renewcommand{\\foo}{b}',
+    '\\renewcommand\\foo{b}',
+    '\\RenewDocumentCommand{\\foo}{}{b}',
+    '\\DeclareDocumentCommand\\foo{}{b}',
+    '\\let\\foo\\relax',
+    '\\futurelet\\foo\\relax',
+    '\\gdef\\foo{b}',
+    '\\edef\\foo{b}',
+    '\\xdef\\foo{b}',
+  ])('suppresses replacement bindings: %s', (replacement) => {
+    const index = indexWith({ 'main.tex': `\\newcommand{\\foo}{a}\n\\foo\n${replacement}\n\\foo` })
+    expect(getDocumentHighlights('main.tex', 2, 3, index)).toEqual([])
+  })
+
+  it('suppresses a single project replacement of a builtin', () => {
+    const index = indexWith({
+      'main.tex': '\\emph{before}\n\\renewcommand{\\emph}[1]{#1}\n\\emph{after}',
+    })
+    expect(getDocumentHighlights('main.tex', 1, 3, index)).toEqual([])
+  })
+
+  it('excludes prefix collisions, comments, verbatim and mathematical letters', () => {
+    const index = indexWith({
+      'main.tex': [
+        '\\label{sec:a}',
+        '\\ref{sec:a}',
+        '\\ref{sec:ab}',
+        '% \\ref{sec:a}',
+        '\\verb|\\ref{sec:a}|',
+        '$x+x$',
+      ].join('\n'),
+    })
+    expect(getDocumentHighlights('main.tex', 2, 7, index).map((range) => range.startLine)).toEqual([
+      1, 2,
+    ])
+    expect(getDocumentHighlights('main.tex', 4, 9, index)).toEqual([])
+    expect(getDocumentHighlights('main.tex', 5, 13, index)).toEqual([])
+    expect(getDocumentHighlights('main.tex', 6, 2, index)).toEqual([])
+  })
+
+  it('does not merge duplicate bibliography keys', () => {
+    const index = indexWith({
+      'main.tex': '\\bibliography{refs}\n\\cite{key}\n\\cite{key}',
+      'refs.bib': '@article{key, title={A}}\n@book{key, title={B}}',
+    })
+    expect(getDocumentHighlights('main.tex', 2, 8, index)).toEqual([])
+    index.updateBibFile('refs.bib', parseBibFileData('@article{key, title={A}}', 'refs.bib'))
+    expect(getDocumentHighlights('main.tex', 2, 8, index)).toHaveLength(2)
+  })
+
   it('highlights every occurrence of the symbol under the cursor', () => {
     const index = indexWith({ 'main.tex': '\\label{foo}\n\\ref{foo}' })
     const hl = getDocumentHighlights('main.tex', 1, 8, index) // on the label name

@@ -312,8 +312,14 @@ const REF_RE = new RegExp(`\\\\(?:${REF_CMDS})\\{`, 'g')
 const CITE_RE = new RegExp(`\\\\(?:${CITE_CMDS})(?:\\[[^\\]]*\\])*\\{`, 'g')
 // Sectioning commands accept an optional short-title arg: `\section[TOC]{Full}`.
 const SECTION_RE = new RegExp(`\\\\(${SECTION_CMDS})\\*?(?:\\[[^\\]]*\\])?\\{`, 'g')
-const NEWCOMMAND_RE = new RegExp(`\\\\(?:${NEWCMD_CMDS})\\*?\\{\\\\(\\w+)\\}(?:\\[(\\d+)\\])?`, 'g')
-const DEF_RE = /\\def\\(\w+)/g
+const NEWCOMMAND_RE = new RegExp(
+  String.raw`\\(${NEWCMD_CMDS}|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand)\*?\s*(?:\{\s*${COMMAND_TOKEN}\s*\}|${COMMAND_TOKEN})\s*(?:\[(\d+)\])?`,
+  'g',
+)
+const DEF_RE = new RegExp(
+  String.raw`\\(?:def|gdef|edef|xdef|let|futurelet)\s*${COMMAND_TOKEN}`,
+  'g',
+)
 const DECLARE_MATH_RE = /\\DeclareMathOperator\*?\{\\(\w+)\}/g
 const BEGIN_RE = /\\begin\{/g
 const INPUT_RE = new RegExp(`\\\\(${INPUT_CMDS})\\{`, 'g')
@@ -543,26 +549,44 @@ function pushCommandDef(
   backslashOffset: number,
   symbols: FileSymbols,
   argCount?: string,
+  mayRedefine = false,
 ): void {
   const def: CommandDef = { name, location: locAt(ctx, backslashOffset + 1) }
   if (argCount) def.argCount = Number.parseInt(argCount, 10)
+  if (mayRedefine) def.mayRedefine = true
   symbols.commands.push(def)
 }
 
 function extractNewCommands(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(NEWCOMMAND_RE)) {
-    const name = m[1]!
+    const name = (m[2] ?? m[3])!
     // Search past the defining keyword's own backslash (m.index) so a defined name that is
     // a prefix of that keyword (`\r` ⊂ `\renewcommand`) resolves to the macro, not the keyword.
     const nameIdx = ctx.masked.indexOf(`\\${name}`, m.index + 1)
-    pushCommandDef(ctx, name, nameIdx, symbols, m[2])
+    pushCommandDef(
+      ctx,
+      name,
+      nameIdx,
+      symbols,
+      m[4],
+      m[1] !== 'newcommand' &&
+        m[1] !== 'NewDocumentCommand' &&
+        m[1] !== 'NewExpandableDocumentCommand',
+    )
   }
 }
 
 function extractDefs(ctx: Ctx, symbols: FileSymbols): void {
   for (const m of ctx.masked.matchAll(DEF_RE)) {
     const name = m[1]!
-    pushCommandDef(ctx, name, ctx.masked.indexOf(`\\${name}`, m.index + 1), symbols)
+    pushCommandDef(
+      ctx,
+      name,
+      ctx.masked.indexOf(`\\${name}`, m.index + 1),
+      symbols,
+      undefined,
+      true,
+    )
   }
 }
 
