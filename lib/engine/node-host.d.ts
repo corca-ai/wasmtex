@@ -13,13 +13,13 @@ export interface NodeWorkerHostOptions {
 /** Resources installed globally by {@link installNodeWorkerHost}. Dispose this only after
  *  all compilers using the host have been disposed. */
 export interface NodeWorkerHostInstallation {
-    /** Restore the previous global `fetch` and worker factory. Idempotent. */
+    /** Release this host's factory and restore fetch if still owned. Idempotent. */
     dispose(): void;
 }
 /**
  * Install the Node worker host: a `worker_threads` engine-worker factory + an asset
- * `fetch` shim that serves `assetBaseUrl` files from `publicDir`. Call once before
- * constructing any `WasmTexCompiler`. The returned handle restores both globals when
- * disposed, so tests and multi-tenant Node processes do not retain the adapter forever.
+ * `fetch` shim that serves `assetBaseUrl` files from `publicDir`. One active installation
+ * is allowed per module instance; a second call throws without changing globals.
+ * Dispose all compilers, then the returned handle, before installing another host.
  */
 export declare function installNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHostInstallation;

@@ -34,13 +34,14 @@ async function withEngine(
   const { IncrementalCompiler: Inc } = await import('./incremental')
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const ASSET = 'http://assets.local/'
-  installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
+  const host = installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
   const engine = new Engine({ assetBaseUrl: ASSET, texliveUrl: TEXLIVE })
   try {
     await engine.init()
     await fn(engine, new Inc(engine), new SynctexParser())
   } finally {
     engine.terminate?.()
+    host.dispose()
   }
 }
 

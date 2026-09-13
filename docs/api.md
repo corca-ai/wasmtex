@@ -17,6 +17,21 @@ Full reference for the `WasmTex` SDK.
 | `wasmtex/synctex` | SyncTeX parser + PDF↔source mapping (`SynctexParser`, `TextMapper`). |
 | `wasmtex/style.css` | Optional built-in UI/viewer styles. |
 
+## Node host installation
+
+`installNodeWorkerHost(options)` from `wasmtex/node` installs an engine worker factory
+and a local-asset `fetch` shim. Only one Node host may be active in an SDK module
+instance. A second installation throws before modifying either global, including when
+its options match the active host. Failed setup releases the installation reservation.
+
+Dispose every compiler using the host before calling its handle's `dispose()`.
+Disposal is idempotent and permits a fresh installation; reusing an older disposed
+handle cannot tear down the new host. The handle restores the preceding fetch only
+if its own shim still owns `globalThis.fetch`, and removes only its worker registration.
+An independently installed replacement is preserved. Separate copies of the SDK in
+one Node realm do not coordinate these globals; use one SDK/host installation per realm.
+See the [Node recipe](howto.md#server-side-compilation-node).
+
 ## Constructor
 
 ```typescript

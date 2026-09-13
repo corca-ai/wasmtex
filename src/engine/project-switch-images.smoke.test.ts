@@ -18,7 +18,7 @@ async function compileSequence(publicDir: string) {
     .map((name) => ({ name, source: readFileSync(join(fixtures, name), 'utf8') }))
   const first = documents[0]
   if (!first) throw new Error('Project-switch corpus is empty')
-  installNodeWorkerHost({ publicDir, assetBaseUrl: 'http://assets.local/' })
+  const host = installNodeWorkerHost({ publicDir, assetBaseUrl: 'http://assets.local/' })
   const compiler = new WasmTexCompiler({
     assetBaseUrl: 'http://assets.local/',
     engine: 'pdflatex',
@@ -45,6 +45,7 @@ async function compileSequence(publicDir: string) {
     }
   } finally {
     compiler.dispose()
+    host.dispose()
   }
   return digests
 }

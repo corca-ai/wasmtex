@@ -1,8 +1,9 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SynctexParser } from '../synctex/synctex-parser'
 import { buildSectionedDoc as buildDoc, SMOKE_TEXLIVE as TEXLIVE } from './__tests__/smoke-compile'
+import { installNodeWorkerHost, type NodeWorkerHostInstallation } from './node-host'
 
 /**
  * #99 P2 (host-integration path): the headless `WasmTexCompiler({ incremental: true })` — which a host app
@@ -15,10 +16,7 @@ const RUN = process.env.P2GT === '1'
 const ASSET = 'http://assets.local/'
 
 async function makeCompiler(mainTex: string, incremental: boolean) {
-  const { installNodeWorkerHost } = await import('./node-host')
   const { WasmTexCompiler } = await import('../headless')
-  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-  installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
   return new WasmTexCompiler({
     engine: 'pdflatex',
     assetBaseUrl: ASSET,
@@ -29,6 +27,13 @@ async function makeCompiler(mainTex: string, incremental: boolean) {
 }
 
 describe.runIf(RUN)('#99 P2: headless WasmTexCompiler returns spliced synctexData', () => {
+  let host: NodeWorkerHostInstallation
+  beforeEach(() => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+    host = installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
+  })
+  afterEach(() => host?.dispose())
+
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: linear end-to-end smoke
   it('an incremental fast paint carries exact synctexData while synctex stays null', async () => {
     const parser = new SynctexParser()

@@ -239,6 +239,11 @@ host. Call `installNodeWorkerHost` once (pointing at your local engine assets), 
 `WasmTexCompiler` exactly as in the browser. pdfLaTeX, LuaLaTeX, **and XeLaTeX** all run
 under Node.
 
+Keep the installation handle and release it after all its compilers. A second active
+Node installation throws; dispose the first before changing asset roots. Repeated
+disposal is safe. The [API contract](api.md#node-host-installation) defines restoration
+when another owner has replaced a global.
+
 ```typescript
 import { installNodeWorkerHost, WasmTexCompiler } from 'wasmtex/node'
 
@@ -252,10 +257,14 @@ const compiler = new WasmTexCompiler({
   texliveUrl: 'https://texlive.example/immutable/2025/', // packages (pass-through fetch)
   files: { 'main.tex': '\\documentclass{article}\\begin{document}Hello\\end{document}' },
 })
-await compiler.init()
-const { pdf } = await compiler.compile()
-compiler.dispose()
-nodeHost.dispose() // restores the previous global fetch and worker factory
+try {
+  await compiler.init()
+  const { pdf } = await compiler.compile()
+  // Use pdf here.
+} finally {
+  compiler.dispose()
+  nodeHost.dispose()
+}
 ```
 
 > Node ≥ 24 is required, and the engine `.js`/`.wasm` assets must be present under

@@ -35,9 +35,11 @@ export interface NodeWorkerHostOptions {
 /** Resources installed globally by {@link installNodeWorkerHost}. Dispose this only after
  *  all compilers using the host have been disposed. */
 export interface NodeWorkerHostInstallation {
-  /** Restore the previous global `fetch` and worker factory. Idempotent. */
+  /** Release this host's factory and restore fetch if still owned. Idempotent. */
   dispose(): void
 }
+
+let nodeHostInstalled = false
 
 // The worker thread program. Reuses the browser controller with host shims + a wasmBinary
 // injection. `workerData` carries the resolved local controller and WASM paths.
@@ -230,11 +232,22 @@ function readableAssetPath(localPath: string | null, publicRoot: string): string
 
 /**
  * Install the Node worker host: a `worker_threads` engine-worker factory + an asset
- * `fetch` shim that serves `assetBaseUrl` files from `publicDir`. Call once before
- * constructing any `WasmTexCompiler`. The returned handle restores both globals when
- * disposed, so tests and multi-tenant Node processes do not retain the adapter forever.
+ * `fetch` shim that serves `assetBaseUrl` files from `publicDir`. One active installation
+ * is allowed per module instance; a second call throws without changing globals.
+ * Dispose all compilers, then the returned handle, before installing another host.
  */
 export function installNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHostInstallation {
+  if (nodeHostInstalled) throw new Error('Node worker host is already installed; dispose it first')
+  nodeHostInstalled = true
+  try {
+    return createNodeWorkerHost(opts)
+  } catch (error) {
+    nodeHostInstalled = false
+    throw error
+  }
+}
+
+function createNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHostInstallation {
   const previousFetch = globalThis.fetch
   const baseFetch = opts.baseFetch ?? previousFetch
   const baseUrl = new URL(
@@ -261,8 +274,6 @@ export function installNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHo
     dbg('fetch cdn', url)
     return baseFetch(input, init)
   }) as typeof fetch
-  globalThis.fetch = assetFetch
-
   const restoreWorkerFactory = setWorkerFactory((enginePath: string) => {
     // enginePath is `${assetBaseUrl}wasmtex/<ver>/wasmtex-<engine>.worker.js`.
     const route = routeAssetUrl(enginePath, baseUrl, publicRoot)
@@ -272,14 +283,24 @@ export function installNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHo
     if (!wasmPath) throw new Error(`WASM asset is outside publicDir or missing: ${enginePath}`)
     return makeNodeEngineWorker(workerPath, wasmPath)
   })
+  try {
+    globalThis.fetch = assetFetch
+  } catch (error) {
+    restoreWorkerFactory()
+    throw error
+  }
 
   let disposed = false
   return {
     dispose() {
       if (disposed) return
       disposed = true
-      if (globalThis.fetch === assetFetch) globalThis.fetch = previousFetch
-      restoreWorkerFactory()
+      try {
+        if (globalThis.fetch === assetFetch) globalThis.fetch = previousFetch
+      } finally {
+        restoreWorkerFactory()
+        nodeHostInstalled = false
+      }
     },
   }
 }

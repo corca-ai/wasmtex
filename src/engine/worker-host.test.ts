@@ -1,17 +1,30 @@
-import { describe, expect, it } from 'vitest'
-import { createEngineWorker, type EngineWorker, setWorkerFactory } from './worker-host'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  createEngineWorker,
+  type EngineWorker,
+  setWorkerFactory,
+  type WorkerFactory,
+} from './worker-host'
 
 function fakeWorker(): EngineWorker {
   return { postMessage() {}, onmessage: null, onerror: null, terminate() {} }
 }
 
-// vitest isolates modules per test file, so mutating the module-level factory here does
-// not leak into the engine tests.
+const registrations: Array<() => void> = []
+function installFactory(factory: WorkerFactory): () => void {
+  const dispose = setWorkerFactory(factory)
+  registrations.push(dispose)
+  return dispose
+}
+afterEach(() => {
+  for (const dispose of registrations.splice(0).reverse()) dispose()
+})
+
 describe('worker-host seam (#109)', () => {
   it('createEngineWorker delegates to the installed factory with the engine path', () => {
     const paths: string[] = []
     const worker = fakeWorker()
-    setWorkerFactory((path) => {
+    installFactory((path) => {
       paths.push(path)
       return worker
     })
@@ -23,9 +36,9 @@ describe('worker-host seam (#109)', () => {
   it('setWorkerFactory swaps the host adapter', () => {
     const a = fakeWorker()
     const b = fakeWorker()
-    setWorkerFactory(() => a)
+    installFactory(() => a)
     expect(createEngineWorker('x')).toBe(a)
-    setWorkerFactory(() => b)
+    installFactory(() => b)
     expect(createEngineWorker('x')).toBe(b)
   })
 
@@ -33,16 +46,59 @@ describe('worker-host seam (#109)', () => {
     const a = fakeWorker()
     const b = fakeWorker()
     const c = fakeWorker()
-    setWorkerFactory(() => a)
-    const restoreA = setWorkerFactory(() => b)
+    installFactory(() => a)
+    const restoreA = installFactory(() => b)
     expect(createEngineWorker('x')).toBe(b)
 
     restoreA()
     expect(createEngineWorker('x')).toBe(a)
 
-    const restoreB = setWorkerFactory(() => b)
-    setWorkerFactory(() => c)
+    const restoreB = installFactory(() => b)
+    installFactory(() => c)
     restoreB()
     expect(createEngineWorker('x')).toBe(c)
+  })
+})
+
+describe('worker factory registration lifetimes', () => {
+  function install(worker: EngineWorker) {
+    const dispose = installFactory(() => worker)
+    return dispose
+  }
+
+  it.each(['oldest-first', 'newest-first'])('restores only live factories: %s', (order) => {
+    const baseline = fakeWorker()
+    const a = fakeWorker()
+    const b = fakeWorker()
+    install(baseline)
+    const disposeA = install(a)
+    const disposeB = install(b)
+    expect(createEngineWorker('unused')).toBe(b)
+    if (order === 'oldest-first') {
+      disposeA()
+      expect(createEngineWorker('unused')).toBe(b)
+      disposeB()
+    } else {
+      disposeB()
+      expect(createEngineWorker('unused')).toBe(a)
+      disposeA()
+    }
+    expect(createEngineWorker('unused')).toBe(baseline)
+    disposeA()
+    disposeB()
+    expect(createEngineWorker('unused')).toBe(baseline)
+  })
+
+  it('identifies registrations separately when they use the same function', () => {
+    const baseline = fakeWorker()
+    const shared = fakeWorker()
+    install(baseline)
+    const factory = () => shared
+    const disposeA = installFactory(factory)
+    const disposeB = installFactory(factory)
+    disposeA()
+    expect(createEngineWorker('unused')).toBe(shared)
+    disposeB()
+    expect(createEngineWorker('unused')).toBe(baseline)
   })
 })
