@@ -17,6 +17,7 @@ import { FileSymbols, SectionDef } from './lsp/types.js';
 import { LatexWrapRequest } from './lsp/wrap-selection.js';
 import { LatexDocumentInput, LatexFileSyntax, LatexSyntaxService } from './syntax.js';
 import { CompletionSnapshotEngine, CompletionSnapshotProfile, CompletionSnapshotState } from './types.js';
+export { diagnosticCompileBinaryInputs } from './lsp/diagnostic-repair-context.js';
 export type * from './lsp/diagnostic-repair-types.js';
 export type * from './lsp/reference-repair-types.js';
 export type { LatexWrapEdit, LatexWrapOption, LatexWrapOptionsResult, LatexWrapPlanResult, LatexWrapRequest, WrapRefusal, } from './lsp/wrap-selection.js';

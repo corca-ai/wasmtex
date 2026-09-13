@@ -48,6 +48,14 @@ export type LatexDiagnosticRepairPlanResult =
 export interface LatexDiagnosticCompileContext {
   snapshot: CompletionSnapshot
   log: string
+  /** Binary inputs retained by the compiler host, not copied into a text-only service.
+   * The host must invalidate this context whenever any such input changes. */
+  binaryInputs?: readonly LatexDiagnosticBinaryInput[]
+}
+
+export interface LatexDiagnosticBinaryInput {
+  path: string
+  digest: string
 }
 
 export type LatexDiagnosticCompileContextResult =

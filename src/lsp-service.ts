@@ -82,6 +82,7 @@ import type {
 } from './lsp/resource-catalog'
 import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
 
+export { diagnosticCompileBinaryInputs } from './lsp/diagnostic-repair-context'
 export type * from './lsp/diagnostic-repair-types'
 export type * from './lsp/reference-repair-types'
 

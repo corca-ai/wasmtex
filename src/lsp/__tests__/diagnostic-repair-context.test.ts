@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCompletionSnapshot } from '../../engine/completion-snapshot'
-import { createLatexLanguageService } from '../../lsp-service'
+import { createLatexLanguageService, diagnosticCompileBinaryInputs } from '../../lsp-service'
 
 const profile = { id: 'test', texliveYear: '2025' as const, mirrorRevision: 'rev-1' }
 const files = {
@@ -35,6 +35,50 @@ function service() {
 }
 
 describe('revision-bound diagnostic compile context', () => {
+  it('binds compiler-owned binary assets without copying them into the text service', async () => {
+    const compiledFiles = { ...files, 'plot.png': Uint8Array.of(1, 2, 3) }
+    const input = {
+      log,
+      binaryInputs: await diagnosticCompileBinaryInputs(compiledFiles),
+      snapshot: await createCompletionSnapshot({
+        engine: 'pdflatex',
+        root: 'main.tex',
+        profile,
+        projectFiles: Object.entries(compiledFiles).map(([path, content]) => ({ path, content })),
+      }),
+    }
+    const language = service()
+    expect(await language.updateDiagnosticCompileContext(input)).toEqual({
+      ok: true,
+      undefinedCommands: 1,
+    })
+    expect(language.getFile('plot.png')).toBeNull()
+    expect(await language.updateDiagnosticCompileContext({ ...input, binaryInputs: [] })).toEqual({
+      ok: false,
+      reason: 'stale',
+    })
+    const changed = await diagnosticCompileBinaryInputs({ 'plot.png': Uint8Array.of(1, 2, 4) })
+    expect(
+      await language.updateDiagnosticCompileContext({ ...input, binaryInputs: changed }),
+    ).toEqual({ ok: false, reason: 'stale' })
+  })
+
+  it('does not let external digests override indexed text or hide TeX source', async () => {
+    const input = await context()
+    for (const binaryInputs of [
+      [{ path: 'main.tex', digest: 'a'.repeat(64) }],
+      [{ path: 'custom.sty', digest: 'a'.repeat(64) }],
+      [{ path: 'a.png', digest: 'bad' }],
+      [
+        { path: 'a.png', digest: 'a'.repeat(64) },
+        { path: 'a.png', digest: 'a'.repeat(64) },
+      ],
+    ])
+      expect(await service().updateDiagnosticCompileContext({ ...input, binaryInputs })).toEqual({
+        ok: false,
+        reason: 'unsupported',
+      })
+  })
   it('accepts direct runtime evidence without claiming complete command inventory', async () => {
     const input = await context()
     expect(input.snapshot.fields.commands.complete).toBe(false)

@@ -2,7 +2,11 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { installNodeWorkerHost } from '../engine/node-host'
 import { WasmTexCompiler } from '../headless'
-import { createLatexLanguageService, HttpTexResourceCatalogProvider } from '../lsp-service'
+import {
+  createLatexLanguageService,
+  diagnosticCompileBinaryInputs,
+  HttpTexResourceCatalogProvider,
+} from '../lsp-service'
 
 const mirrorRevision = '2025-92e10d3241a312f0'
 const baseUrl = `https://texlive.corca.ai/snapshots/${mirrorRevision}/2025/`
@@ -24,7 +28,7 @@ describe.runIf(process.env.DIAGNOSTIC_REPAIR_SMOKE === '1')('real-engine package
       assetBaseUrl: 'http://assets.local/',
       texliveUrl: baseUrl,
       completionProfile: profile,
-      files,
+      files: { ...files, 'data.bin': Uint8Array.of(1, 2, 3) },
     })
     try {
       await compiler.init()
@@ -42,7 +46,14 @@ describe.runIf(process.env.DIAGNOSTIC_REPAIR_SMOKE === '1')('real-engine package
         }),
       })
       expect(
-        await service.updateDiagnosticCompileContext({ snapshot, log: before.log }),
+        await service.updateDiagnosticCompileContext({
+          snapshot,
+          log: before.log,
+          binaryInputs: await diagnosticCompileBinaryInputs({
+            ...files,
+            'data.bin': Uint8Array.of(1, 2, 3),
+          }),
+        }),
         before.log,
       ).toEqual({
         ok: true,

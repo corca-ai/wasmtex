@@ -173,7 +173,7 @@ describe('reviewed package dependency repair', () => {
     expect(values[0]?.edits[0]?.range.startOffset).toBe(root.indexOf('\\begin{document}'))
     expect(
       await packages(
-        await setup({ files: { 'main.tex': main.replace('\n', '\n\n'), 'child.tex': child } }),
+        await setup({ files: { 'main.tex': main.replaceAll('\n', '\n\n'), 'child.tex': child } }),
       ),
     ).toHaveLength(1)
   })

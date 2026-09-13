@@ -2,7 +2,7 @@ import { VirtualFS } from '../fs/virtual-fs.js';
 import { CompletionSnapshot, CompletionSnapshotEngine, CompletionSnapshotProfile } from '../types.js';
 import { CompletionCancellationToken } from './completion-registry.js';
 import { UndefinedCommandEvidence } from './diagnostic-repair-compile.js';
-import { LatexDiagnosticCompileContext, LatexDiagnosticRepairRefusal } from './diagnostic-repair-types.js';
+import { LatexDiagnosticBinaryInput, LatexDiagnosticCompileContext, LatexDiagnosticRepairRefusal } from './diagnostic-repair-types.js';
 import { ProjectIndex } from './project-index.js';
 export interface DiagnosticCompileSource {
     fs: VirtualFS;
@@ -22,3 +22,5 @@ export declare function bindDiagnosticCompileContext(source: DiagnosticCompileSo
     ok: false;
     reason: LatexDiagnosticRepairRefusal;
 }>;
+/** Produce the binary part of a compile identity without transferring resource bytes. */
+export declare function diagnosticCompileBinaryInputs(files: Readonly<Record<string, string | Uint8Array>>): Promise<LatexDiagnosticBinaryInput[]>;
