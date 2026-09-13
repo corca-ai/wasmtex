@@ -1,4 +1,5 @@
 import { VirtualFS } from './fs/virtual-fs.js';
+import { AuxFileSet } from './lsp/aux-files.js';
 import { CompletionContext } from './lsp/completion-context.js';
 import { CompletionCancellationToken, CompletionResolverRegistry } from './lsp/completion-registry.js';
 import { Diagnostic } from './lsp/diagnostic-provider.js';
@@ -100,6 +101,7 @@ export declare class LatexLanguageService {
     setMainFile(path: string): void;
     configureCompletion(configuration: LatexCompletionConfiguration): void;
     updateAux(content: string): void;
+    updateAuxFiles(files: AuxFileSet): void;
     updateEngineCommands(commands: string[]): void;
     updateSemanticTrace(trace: string | SemanticTrace): void;
     updateCompletionSnapshot(snapshot: unknown): Promise<CompletionSnapshotState>;
@@ -137,7 +139,8 @@ export declare class LatexLanguageService {
     loadSemanticCatalog(scopeId: string, cancellationToken?: CompletionCancellationToken): Promise<TexSemanticCatalogState> | null;
 }
 export declare function createLatexLanguageService(options?: LatexLanguageServiceOptions): LatexLanguageService;
+export { type AuxFileSet, parseAuxFiles, readAuxFiles } from './lsp/aux-files.js';
 export type { ProjectIndexStats } from './lsp/project-index.js';
-export type { BibEntry, BibStringDef, ParsedBibFile, ProjectKeyDefinition, ProjectKeyValueType, ProjectValue, ProjectValueRole, } from './lsp/types.js';
+export type { AuxData, AuxLabel, BibEntry, BibStringDef, ParsedBibFile, ProjectKeyDefinition, ProjectKeyValueType, ProjectValue, ProjectValueRole, } from './lsp/types.js';
 export type { CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, } from './types.js';
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace };

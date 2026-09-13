@@ -19,7 +19,7 @@ import { WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { saveOutgoingFile } from './fs/save-outgoing'
 import { VirtualFS } from './fs/virtual-fs'
-import { parseAuxFile } from './lsp/aux-parser'
+import { parseAuxFiles, readAuxFiles } from './lsp/aux-files'
 import { rebuildBibIndex } from './lsp/bib-parser'
 import type { CompletionResolverRegistry } from './lsp/completion-registry'
 import { computeDiagnostics } from './lsp/diagnostic-provider'
@@ -2001,36 +2001,20 @@ export class WasmTex {
   }
 
   private updateAuxIndex(): void {
-    const mainBase = this.mainFile.replace(/\.tex$/, '')
-
-    this.engine
-
-      .readFile(`${mainBase}.aux`)
-
-      .then((auxContent) => {
-        if (!auxContent) return
-
-        const auxData = parseAuxFile(auxContent)
-
-        const pending = auxData.includes.map((inc) =>
-          this.engine.readFile(inc).then((sub) => (sub ? parseAuxFile(sub) : null)),
+    const mainFile = this.mainFile
+    const inputs = this.fs.listFiles().map((path) => this.fs.getFile(path))
+    void readAuxFiles(`${mainFile.replace(/\.tex$/, '')}.aux`, (path) => this.engine.readFile(path))
+      .then((files) => {
+        if (
+          this.disposed ||
+          this.mainFile !== mainFile ||
+          inputs.length !== this.fs.listFiles().length ||
+          !inputs.every((file) => file && this.fs.getFile(file.path) === file)
         )
-
-        Promise.all(pending).then((subResults) => {
-          for (const sub of subResults) {
-            if (!sub) continue
-
-            for (const [k, v] of sub.labels) auxData.labels.set(k, v)
-
-            for (const c of sub.citations) auxData.citations.add(c)
-          }
-
-          this.projectIndex.updateAuxData(auxData)
-
-          this.runDiagnostics()
-        })
+          return
+        this.projectIndex.updateAuxData(parseAuxFiles(files))
+        this.runDiagnostics()
       })
-
       .catch(() => {})
   }
 

@@ -55,7 +55,8 @@ your own UI.
 - `removeFile(path): boolean`
 - `getFile(path): string | Uint8Array | null`
 - `listFiles(): string[]`
-- `updateAux(content): void` — feed back `.aux` numbers (resolves `\ref`/`\cite` inlay hints).
+- `updateAux(content): void` — feed back one `.aux` fragment for labels and citations.
+- `updateAuxFiles(files): void` — replace aux data with a compiler-output `AuxFileSet`, resolving its recursive `@input` graph.
 - `updateEngineCommands(commands): void` — feed back the engine's command hash (improves completion).
 - `updateSemanticTrace(trace): void` — feed back semantic-trace data for richer tokens.
 - `setMainFile(path): void` — selects the compile root used to validate runtime snapshot identity.
@@ -92,6 +93,23 @@ your own UI.
 - `loadResourceCatalog(kind, cancellationToken?): Promise<TexResourceCatalogState> | null`
 - `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
 - `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
+
+`readAuxFiles(root, readOutput)` collects an `AuxFileSet` from a host-authorized
+compiler-output reader. `parseAuxFiles(files)` resolves only those supplied bytes.
+Both use paths relative to the TeX working directory, including when the root is
+`docs/main.aux`; included paths are not made relative to that aux file's directory.
+Reads stay within relative `.aux` paths, reject TeX-dependent path expressions,
+and are bounded to 1,024 files and 2 Mi UTF-16 code units. Missing, invalid, or
+over-budget inputs mark the result incomplete; incomplete sets provide no inlays.
+Repeated labels within or across outputs are omitted rather than choosing an input order.
+
+`AuxData.labels` retains its number-only map for existing callers. Its optional
+`labelDetails` map holds `AuxLabel` records with separate `number` and optional
+`page` fields. A missing page never falls back to the number. Inlays currently
+resolve literal `ref`, `eqref`, and `pageref` keys; unsupported reference commands,
+multiple keys, and unexpanded TeX fields provide no inferred display value.
+The host owns matching these outputs to its current compile root, profile and
+source revision; supplying a fragment is not proof of freshness.
 
 Signature help shares the completion invocation analyzer and scoped command metadata.
 `activeParameter` indexes the declared signature, including omitted optional arguments;

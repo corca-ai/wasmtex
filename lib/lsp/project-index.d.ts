@@ -88,8 +88,10 @@ export declare class ProjectIndex {
     private loadEvents;
     getStats(): ProjectIndexStats;
     getAuxLabels(): Map<string, string>;
+    hasCompleteAuxData(): boolean;
     getAuxCitations(): Set<string>;
     resolveLabel(name: string): string | undefined;
+    resolveLabelPage(name: string): string | undefined;
     /** Find the LabelDef for a given label name */
     findLabelDef(name: string): LabelDef | undefined;
     updateEngineCommands(commands: string[]): void;

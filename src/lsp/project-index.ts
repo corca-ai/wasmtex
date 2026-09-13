@@ -674,12 +674,20 @@ export class ProjectIndex {
     return this.auxData.labels
   }
 
+  hasCompleteAuxData(): boolean {
+    return this.auxData.complete !== false
+  }
+
   getAuxCitations(): Set<string> {
     return this.auxData.citations
   }
 
   resolveLabel(name: string): string | undefined {
     return this.auxData.labels.get(name)
+  }
+
+  resolveLabelPage(name: string): string | undefined {
+    return this.auxData.labelDetails?.get(name)?.page
   }
 
   /** Find the LabelDef for a given label name */

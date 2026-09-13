@@ -2,6 +2,39 @@ import { describe, expect, it } from 'vitest'
 import { parseAuxFile } from '../aux-parser'
 
 describe('parseAuxFile', () => {
+  it('ignores commented and escaped commands in compiler output', () => {
+    const data = parseAuxFile(
+      [
+        '% \\newlabel{hidden}{{1}{2}} \\@input{private.aux} \\bibcite{hidden}{1}',
+        '\\\\newlabel{escaped}{{3}{4}}',
+        '\\@writefile{toc}{\\newlabel{nested}{{1}{2}} \\@input{nested.aux}}',
+        '\\newlabel{visible}{{5}{6}}',
+      ].join('\n'),
+    )
+    expect([...data.labels.keys()]).toEqual(['visible'])
+    expect(data.includes).toEqual([])
+    expect(data.citations.size).toBe(0)
+  })
+  it('retains number and page separately, including absent and empty fields', () => {
+    const result = parseAuxFile(
+      [
+        '\\newlabel{normal}{{2}{7}{Title}{section.2}{}}',
+        '\\newlabel{wrapped}{{{2a}}{{iv}}}',
+        '\\newlabel{missing}{{3}}',
+        '\\newlabel{empty}{{}{9}}',
+      ].join('\n'),
+    )
+    expect(result.labelDetails).toEqual(
+      new Map([
+        ['normal', { number: '2', page: '7' }],
+        ['wrapped', { number: '2a', page: 'iv' }],
+        ['missing', { number: '3' }],
+        ['empty', { number: '', page: '9' }],
+      ]),
+    )
+    expect(result.labels.get('normal')).toBe('2')
+  })
+
   it('parses \\newlabel entries', () => {
     const aux = `\\relax
 \\newlabel{sec:intro}{{1}{1}}

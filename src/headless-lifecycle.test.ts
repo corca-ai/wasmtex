@@ -3,6 +3,7 @@ import { BackendRegistry, BIBTEX_STAGE } from './engine/backend-registry'
 import { BibtexEngine } from './engine/bibtex-engine'
 import type { CompileEngine } from './engine/compile-engine'
 import * as factory from './engine/compile-engine'
+import { CompilerOperations } from './engine/compiler-operation'
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
 import type { CompileResult } from './types'
@@ -100,6 +101,32 @@ describe('headless operation ownership', () => {
     await rejected
     await compiler.compile()
     expect(writes.get('main.tex')).toBe('replacement')
+    compiler.dispose()
+  })
+
+  it('does not publish aux data when cancelled as the aux collection finishes', async () => {
+    const { compiler, engine, output } = setup()
+    const aux = String.raw`\newlabel{old}{{1}{2}}`
+    engine.readFile = async () => aux
+    await compiler.init()
+    const observe = CompilerOperations.prototype.observe
+    vi.spyOn(CompilerOperations.prototype, 'observe').mockImplementation(async function <T>(
+      this: CompilerOperations,
+      promise: PromiseLike<T> | T,
+    ) {
+      const observed = await observe.call(this, promise)
+      return {
+        resume() {
+          const value = observed.resume() as T
+          if (value === aux) queueMicrotask(() => compiler.setFile('main.tex', 'edited'))
+          return value
+        },
+      }
+    })
+    output.resolve({ ...result })
+    await expect(compiler.compile()).rejects.toMatchObject({ name: 'AbortError' })
+    expect(compiler.getFile('main.tex')).toBe('edited')
+    expect(compiler.getProjectIndex().resolveLabel('old')).toBeUndefined()
     compiler.dispose()
   })
 

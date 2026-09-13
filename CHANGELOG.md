@@ -18,6 +18,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Reference inlays distinguish aux numbers from pages and omit unsupported, ambiguous
+  or unexpanded values. Hosts can collect bounded included aux outputs through
+  `readAuxFiles` and pass them to `updateAuxFiles`; cancelled headless metadata reads
+  cannot publish obsolete reference data.
+
 - Signature help shares completion context analysis for nested, optional, masked and
   starred invocations. Confirmed project macros and active package metadata now reach
   both the neutral service and Monaco; removed or ambiguous declarations cannot leak

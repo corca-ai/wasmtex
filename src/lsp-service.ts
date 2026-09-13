@@ -4,6 +4,7 @@ import {
   completionProjectRevision,
 } from './engine/completion-snapshot'
 import { VirtualFS } from './fs/virtual-fs'
+import { type AuxFileSet, parseAuxFiles } from './lsp/aux-files'
 import { parseAuxFile } from './lsp/aux-parser'
 import { parseBibFileData } from './lsp/bib-parser'
 import { analyzeCompletionContext, type CompletionContext } from './lsp/completion-context'
@@ -422,6 +423,10 @@ export class LatexLanguageService {
     this.index.updateAuxData(parseAuxFile(content))
   }
 
+  updateAuxFiles(files: AuxFileSet): void {
+    this.index.updateAuxData(parseAuxFiles(files))
+  }
+
   updateEngineCommands(commands: string[]): void {
     this.index.updateEngineCommands(commands)
   }
@@ -668,8 +673,11 @@ export function createLatexLanguageService(
   return new LatexLanguageService(options)
 }
 
+export { type AuxFileSet, parseAuxFiles, readAuxFiles } from './lsp/aux-files'
 export type { ProjectIndexStats } from './lsp/project-index'
 export type {
+  AuxData,
+  AuxLabel,
   BibEntry,
   BibStringDef,
   ParsedBibFile,
