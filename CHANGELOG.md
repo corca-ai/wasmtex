@@ -18,6 +18,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Document highlights omit ambiguous duplicate labels, bibliography keys and redefined
+  project commands, and do not use command declarations from unrelated roots.
+
 - A synchronous Worker message-send failure no longer leaves a response waiter
   that consumes a subsequent request's reply. Other queued requests retain FIFO
   order, and the original transport error still reaches the caller.

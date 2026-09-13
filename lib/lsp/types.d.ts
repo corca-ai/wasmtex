@@ -25,6 +25,8 @@ export interface CommandDef {
     name: string;
     location: SourceLocation;
     argCount?: number;
+    /** This declaration can replace or retain an existing binding. */
+    mayRedefine?: boolean;
 }
 /** A `\command` token occurrence in the source (a call site, or the name in its own
  *  definition). Drives find-references / rename for user-defined commands. */

@@ -93,6 +93,17 @@ your own UI.
 - `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
 - `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
 
+Document highlights identify structural label, citation and project command occurrences
+in the requested file. They omit targets with conflicting declarations in the active
+include/load component, including shared files reached from multiple roots. Command
+highlights require exactly one project declaration in that component that does not
+replace or retain an existing binding. Parsed `CommandDef.mayRedefine` records that
+uncertainty for renew/provide/declare forms and primitive definitions or assignments
+(`def`, `gdef`, `edef`, `xdef`, `let`, `futurelet`). Expansion order and local TeX
+binding scopes are not resolved. Duplicate bibliography keys likewise
+suppress citation highlights. The ranges do not classify reads/writes or mathematical
+entity identity.
+
 `ProjectIndex.getStats()` returns `ProjectIndexStats`, including deterministic counts and
 an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
 than as a JavaScript heap profiler.
