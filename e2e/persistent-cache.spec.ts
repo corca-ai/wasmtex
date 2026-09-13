@@ -10,6 +10,7 @@ const DOC = [
   '\\usepackage{xcolor}',
   '\\usepackage{hyperref}',
   '\\begin{document}',
+  '\\typeout{WASMTEX-CACHE-PACKAGES}',
   '\\textcolor{red}{Hello} \\href{https://example.com}{link}.',
   '\\end{document}',
   '',
@@ -21,11 +22,20 @@ async function waitReady(page: import('@playwright/test').Page) {
 }
 
 async function setDocAndCompile(page: import('@playwright/test').Page, content: string) {
+  const marker = content.match(/\\typeout\{([^}]+)\}/)?.[1]
+  if (!marker) throw new Error('Cache fixture must declare a compile log marker')
   const before = await page.evaluate(() => (window as any).__compileCount ?? 0)
   await page.evaluate((c) => (window as any).__editor.setValue(c), content)
-  await page.waitForFunction((n) => ((window as any).__compileCount ?? 0) > n, before, {
-    timeout: 90_000,
-  })
+  // The initial demo can still finish a queued pass after this edit. Its counter
+  // increment is not completion of this fixture: match the TeX job's own marker.
+  await page.waitForFunction(
+    ({ before, marker }) => {
+      const state = window as any
+      return (state.__compileCount ?? 0) > before && state.__lastCompile?.log?.includes(marker)
+    },
+    { before, marker },
+    { timeout: 90_000 },
+  )
   await expect(page.locator('#status')).toHaveText(/Ready/, { timeout: 90_000 })
 }
 
@@ -46,22 +56,12 @@ test.describe('Iteration 5: persistent TeX Live cache', () => {
     await waitReady(page)
 
     // --- Session 1 (cold): fetches xcolor/hyperref and persists the cache. ---
-    const coldDownloads = await page.evaluate(async (doc) => {
+    await setDocAndCompile(page, DOC)
+    const coldDownloads = await page.evaluate(async () => {
       const w = window as any
-      w.__editor.setValue(doc)
-      // Wait for the compile triggered by the edit.
-      const start = w.__compileCount ?? 0
-      await new Promise<void>((resolve) => {
-        const id = setInterval(() => {
-          if ((w.__compileCount ?? 0) > start && w.__lastCompile) {
-            clearInterval(id)
-            resolve()
-          }
-        }, 100)
-      })
       await w.__engine.persistTexliveCache()
       return w.__engine.getDownloadCount() as number
-    }, DOC)
+    })
     expect(coldDownloads).toBeGreaterThan(0)
 
     // --- Session 2 (warm): reload; the durable cache seeds the worker. ---
@@ -88,6 +88,7 @@ test.describe('Iteration 5: persistent TeX Live cache', () => {
     '\\documentclass{article}',
     '\\usepackage{times}',
     '\\begin{document}',
+    '\\typeout{WASMTEX-CACHE-TIMES}',
     'Times roman \\textbf{bold} \\textit{italic} text.',
     '\\end{document}',
     '',
