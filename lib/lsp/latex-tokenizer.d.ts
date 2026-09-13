@@ -26,5 +26,7 @@ export interface Token {
 }
 /** Environments whose body is verbatim (commands inside are not interpreted). */
 export declare const VERBATIM_ENVIRONMENTS: Set<string>;
+/** Inline verbatim commands that take a delimited raw argument. */
+export declare const INLINE_VERB_COMMANDS: Set<string>;
 /** Tokenize a LaTeX source string into a flat token stream. Never throws. */
 export declare function tokenize(source: string): Token[];

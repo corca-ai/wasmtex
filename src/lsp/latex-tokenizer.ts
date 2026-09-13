@@ -48,7 +48,7 @@ export const VERBATIM_ENVIRONMENTS = new Set([
 ])
 
 /** Inline verbatim commands that take a delimited raw argument. */
-const INLINE_VERB_COMMANDS = new Set(['verb', 'verb*', 'lstinline', 'mintinline'])
+export const INLINE_VERB_COMMANDS = new Set(['verb', 'verb*', 'lstinline', 'mintinline'])
 
 const isLetter = (ch: string): boolean => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 const isDigit = (ch: string): boolean => ch >= '0' && ch <= '9'

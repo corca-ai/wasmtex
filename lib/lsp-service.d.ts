@@ -3,6 +3,7 @@ import { AuxFileSet } from './lsp/aux-files.js';
 import { CompletionContext } from './lsp/completion-context.js';
 import { CompletionCancellationToken, CompletionResolverRegistry } from './lsp/completion-registry.js';
 import { Diagnostic } from './lsp/diagnostic-provider.js';
+import { LatexDiagnosticCompileContext, LatexDiagnosticCompileContextResult, LatexDiagnosticRepairProposal } from './lsp/diagnostic-repair-types.js';
 import { LinkedEditingRanges } from './lsp/environment-pairs.js';
 import { CodeAction, DocumentLink, FoldingRange, InlayHint, LFRange, SemanticToken, SignatureHelp, WorkspaceSymbol } from './lsp/language-features.js';
 import { LintConfig, lintSource } from './lsp/linter.js';
@@ -15,7 +16,9 @@ import { SemanticTrace } from './lsp/trace-parser.js';
 import { FileSymbols, SectionDef } from './lsp/types.js';
 import { LatexWrapRequest } from './lsp/wrap-selection.js';
 import { LatexDocumentInput, LatexFileSyntax, LatexSyntaxService } from './syntax.js';
-import { CompletionSnapshotProfile, CompletionSnapshotState } from './types.js';
+import { CompletionSnapshotEngine, CompletionSnapshotProfile, CompletionSnapshotState } from './types.js';
+export { diagnosticCompileBinaryInputs } from './lsp/diagnostic-repair-context.js';
+export type * from './lsp/diagnostic-repair-types.js';
 export type * from './lsp/reference-repair-types.js';
 export type { LatexWrapEdit, LatexWrapOption, LatexWrapOptionsResult, LatexWrapPlanResult, LatexWrapRequest, WrapRefusal, } from './lsp/wrap-selection.js';
 export { lintSource, type LintConfig };
@@ -38,6 +41,8 @@ export interface LatexLanguageServiceOptions {
     mainFile?: string;
     /** Exact runtime completion profile expected from a separate compiler host. */
     completionProfile?: CompletionSnapshotProfile;
+    /** Selected engine, required for diagnostic repairs based on compile evidence. */
+    completionEngine?: CompletionSnapshotEngine;
     aux?: string;
     engineCommands?: string[];
     semanticTrace?: string | SemanticTrace;
@@ -57,6 +62,7 @@ export interface LatexLanguageServiceOptions {
 /** Atomically replace the profile-bound completion sources without rebuilding the project index. */
 export interface LatexCompletionConfiguration {
     completionProfile?: CompletionSnapshotProfile;
+    completionEngine?: CompletionSnapshotEngine;
     completionRegistry?: CompletionResolverRegistry;
     resourceCatalog?: TexResourceCatalogProvider;
     semanticCatalog?: TexSemanticCatalogProvider;
@@ -88,8 +94,11 @@ export declare class LatexLanguageService {
     private semanticCatalog;
     private mainFile;
     private completionProfile;
+    private completionEngine;
     private projectRevisionEpoch;
     private completionSnapshotUpdate;
+    private diagnosticContextUpdate;
+    private diagnosticCompileContext;
     constructor(options?: LatexLanguageServiceOptions);
     loadProject(files: Record<string, string | Uint8Array>): void;
     updateFile(path: string, content: string | Uint8Array): void;
@@ -122,6 +131,12 @@ export declare class LatexLanguageService {
     private wrapSource;
     getReferenceProblem(path: string, offset: number, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexReferenceProblemResult;
     planReferenceRepair(request: LatexReferenceRepairRequest, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexReferenceRepairResult;
+    private diagnosticRepairSource;
+    updateDiagnosticCompileContext(context: LatexDiagnosticCompileContext, cancellation?: CompletionCancellationToken): Promise<LatexDiagnosticCompileContextResult>;
+    clearDiagnosticCompileContext(): void;
+    getDiagnosticRepairs(path: string, offset: number, cancellation?: CompletionCancellationToken): Promise<import('./lsp-service.js').LatexDiagnosticRepairsResult>;
+    planDiagnosticRepair(request: LatexDiagnosticRepairProposal, cancellation?: CompletionCancellationToken): Promise<import('./lsp-service.js').LatexDiagnosticRepairPlanResult>;
+    private isDiagnosticRepairSourceCurrent;
     getWrapOptions(path: string, range: import('./syntax.js').LatexSyntaxRange, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexWrapOptionsResult;
     planWrapSelection(path: string, request: LatexWrapRequest, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexWrapPlanResult;
     getSelectionRanges(path: string, line: number, column: number, cancellation?: CompletionCancellationToken): import('./lsp/protocol.js').NeutralRange[];
