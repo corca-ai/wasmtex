@@ -2,6 +2,7 @@ import { boundCompletionSnapshot } from '../engine/completion-snapshot'
 import type { CompletionSnapshot, CompletionSnapshotState } from '../types'
 import { parseAuxFile } from './aux-parser'
 import { parseLatexFile } from './latex-parser'
+import { structuralSelectionEstimatedBytes } from './structural-selection'
 import type { SemanticTrace } from './trace-parser'
 import type {
   AuxData,
@@ -651,7 +652,10 @@ export class ProjectIndex {
     let latexSymbols = 0
     let estimatedCodeUnits = 0
     for (const [path, symbols] of this.files) {
-      estimatedCodeUnits += path.length + JSON.stringify(symbols).length
+      estimatedCodeUnits +=
+        path.length +
+        JSON.stringify(symbols).length +
+        structuralSelectionEstimatedBytes(symbols) / 2
       for (const values of Object.values(symbols)) latexSymbols += values.length
     }
     for (const [path, data] of this.bibFiles) {

@@ -62,6 +62,7 @@ import type {
   TexResourceKind,
 } from './lsp/resource-catalog'
 import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
+import { getStructuralSelectionIndex, structuralSelectionRanges } from './lsp/structural-selection'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
 import { type LatexDocumentInput, type LatexFileSyntax, LatexSyntaxService } from './syntax'
@@ -530,6 +531,21 @@ export class LatexLanguageService {
 
   getFoldingRanges(path: string): FoldingRange[] {
     return getFoldingRanges(this.textOf(path))
+  }
+
+  getSelectionRanges(
+    path: string,
+    line: number,
+    column: number,
+    cancellation?: CompletionCancellationToken,
+  ): import('./lsp/protocol').NeutralRange[] {
+    return structuralSelectionRanges(
+      getStructuralSelectionIndex(this.index.getFileSymbols(path)),
+      line,
+      column,
+      projectCommandMetadata(this.index, path, this.completionRegistry),
+      cancellation,
+    )
   }
 
   getLinkedEditingRanges(path: string, line: number, column: number): LinkedEditingRanges | null {

@@ -1,5 +1,6 @@
 import { readBalancedGroup } from './balanced-group'
 import { environmentNamePairs } from './environment-pairs'
+import { type GroupEndIndex, indexGroupEnds } from './group-index'
 import {
   CITE_CMDS,
   COMMAND_TOKEN,
@@ -12,6 +13,7 @@ import {
 import { type Token, tokenize, VERBATIM_ENVIRONMENTS } from './latex-tokenizer'
 import type { CommandArg } from './package-db'
 import { buildLineStarts, offsetToLineCol } from './source-position'
+import { cacheStructuralSelectionIndex } from './structural-selection'
 import type { CommandDef, FileSymbols, SectionLevel, SourceLocation } from './types'
 
 // --- Masking -----------------------------------------------------------------
@@ -249,48 +251,6 @@ function blankSpans(content: string, spans: Array<[number, number]>): string {
 }
 
 // --- Brace helpers -----------------------------------------------------------
-
-type GroupEndIndex = ReadonlyMap<number, number>
-
-/** Index required groups and legacy optional delimiters once. A brace-protected
- * closing bracket cannot end an optional group at an outer brace depth. */
-function indexGroupEnds(text: string): GroupEndIndex {
-  const ends = new Map<number, number>()
-  const braces: number[] = []
-  const brackets = new Map<number, number[]>()
-  for (let i = 0; i < text.length; i++) {
-    const ch = text.charAt(i)
-    if (ch === '\\') {
-      i++
-      continue
-    }
-    if (ch === '{') braces.push(i)
-    else if (ch === '}') {
-      brackets.delete(braces.length)
-      recordGroupEnd(ends, braces.pop(), i)
-    } else if (ch === '[') {
-      const starts = brackets.get(braces.length) ?? []
-      starts.push(i)
-      brackets.set(braces.length, starts)
-    } else if (ch === ']') {
-      recordGroupEnds(ends, brackets.get(braces.length), i)
-      brackets.delete(braces.length)
-    }
-  }
-  return ends
-}
-
-function recordGroupEnds(
-  ends: Map<number, number>,
-  starts: number[] | undefined,
-  end: number,
-): void {
-  for (const start of starts ?? []) ends.set(start, end)
-}
-
-function recordGroupEnd(ends: Map<number, number>, start: number | undefined, end: number): void {
-  if (start !== undefined) ends.set(start, end)
-}
 
 function extractBraceContent(
   text: string,
@@ -1872,11 +1832,23 @@ export function parseLatexFile(
     commandOccurrences: scanCommandOccurrences(literalMasked),
   }
 
+  const definitionSpans = macroDefinitionSpans(masked, ctx.commandOccurrences)
+  const structuralMasked = blankSpans(masked, definitionSpans)
+  const environmentRanges: Array<[number, number]> = []
   symbols.environmentNamePairs = environmentNamePairs(
     content,
-    blankSpans(masked, macroDefinitionSpans(masked, ctx.commandOccurrences)),
+    structuralMasked,
     tokens,
     ctx.lineStarts,
+    environmentRanges,
+  )
+  cacheStructuralSelectionIndex(
+    symbols,
+    structuralMasked,
+    tokens,
+    ctx.lineStarts,
+    [...collectMaskSpans([...tokens]), ...definitionSpans],
+    environmentRanges,
   )
 
   extractLabels(literalCtx, symbols)

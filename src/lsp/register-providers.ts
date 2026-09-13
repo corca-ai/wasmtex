@@ -11,6 +11,7 @@ import {
   createInlayHintsProvider,
   createLinkedEditingRangeProvider,
   createLinkProvider,
+  createSelectionRangeProvider,
   createSemanticTokensProvider,
   createSignatureHelpProvider,
 } from './language-feature-providers'
@@ -45,6 +46,10 @@ export function registerLatexProviders(
     monaco.languages.registerLinkedEditingRangeProvider(
       languageId,
       createLinkedEditingRangeProvider(index, fs),
+    ),
+    monaco.languages.registerSelectionRangeProvider(
+      languageId,
+      createSelectionRangeProvider(index, fs, completionRegistry),
     ),
     // Iteration 11 — rounded-out language features.
     monaco.languages.registerSignatureHelpProvider(

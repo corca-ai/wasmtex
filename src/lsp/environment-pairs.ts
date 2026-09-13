@@ -22,9 +22,10 @@ export function environmentNamePairs(
   masked: string,
   tokens: readonly Token[],
   lineStarts: number[],
+  sourceRanges?: Array<[number, number]>,
 ): EnvironmentNamePair[] {
   const pairs: EnvironmentNamePair[] = []
-  const stack: Array<{ name: string; range: NeutralRange }> = []
+  const stack: Array<{ name: string; range: NeutralRange; start: number }> = []
   for (const token of tokens) {
     if (!isEnvironmentDelimiter(token)) continue
     if (masked[token.start] !== '\\') continue
@@ -38,7 +39,7 @@ export function environmentNamePairs(
     const end = token.end + match[0].length - 1
     const range = rangeFromOffsets(lineStarts, end - name.length, end)
     if (token.value === 'begin') {
-      stack.push({ name, range })
+      stack.push({ name, range, start: token.start })
       continue
     }
     const begin = stack.pop()
@@ -46,7 +47,10 @@ export function environmentNamePairs(
       stack.length = 0
       continue
     }
-    if (!VERBATIM_ENVIRONMENTS.has(name)) pairs.push({ begin: begin.range, end: range })
+    if (!VERBATIM_ENVIRONMENTS.has(name)) {
+      pairs.push({ begin: begin.range, end: range })
+      sourceRanges?.push([begin.start, end + 1])
+    }
   }
   return pairs
 }
