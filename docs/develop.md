@@ -296,6 +296,10 @@ artifacts and Node JUnit results are uploaded per year, with raw assertion/log
 output in the Actions job. Runtime/controller changes still require the applicable
 rebuilt-engine checks in the optimization policy: pinned released assets alone
 cannot test a newly authored controller or C change.
+The same annual jobs run `persistent-cache` browser tests for real IndexedDB
+mirror isolation, year-wide deletion, and rehydrated package/font output.
+Those reports use separate output directories so the golden and Node evidence
+remain available.
 
 After syncing the pinned annual assets, reproduce one matrix row locally:
 

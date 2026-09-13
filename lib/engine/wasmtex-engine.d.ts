@@ -99,6 +99,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private activePreambleDependencies;
     private preamblePersistInFlight;
     private durableCache;
+    private readonly persistentAssetOptions;
     private bloomFilter;
     /** Main file name, tracked for source-based dependency extraction. */
     private mainFileName;
@@ -158,7 +159,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     persistTexliveCache(): Promise<void>;
     /** Number of files the worker has reported downloading on demand this session. */
     getDownloadCount(): number;
-    /** Clear the durable TeX Live cache for this version. */
+    /** Clear this mirror namespace and the separate durable preamble cache. */
     clearCache(): Promise<void>;
     private maybePersistCache;
     /** Build and return the base pdflatex format with this exact engine binary.

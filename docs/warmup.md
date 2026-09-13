@@ -110,7 +110,7 @@ the matching set before replaying it.
 
 `warmup()` solves the *first* compile. The persistent cache solves *return visits*:
 it durably stores every TeX Live asset the engine fetches (plus the bloom filter and
-the 404 set) in IndexedDB, namespaced by TeX Live year, so already-cached resources can be reused. Engine assets, project files and any
+the 404 set) in IndexedDB, namespaced by TeX Live year and immutable mirror identity, so already-cached resources can be reused. Engine assets, project files and any
 unseen packages still need to be available for an offline compile.
 
 Enable it with the `persistentCache` constructor flag:
@@ -124,8 +124,8 @@ await editor.init()
 
 It is safe to combine both: on init the engine rehydrates the durable cache and merges
 it with any caller-provided `warmupCache`. It silently no-ops where IndexedDB is
-unavailable (`isIndexedDbSupported()`). To wipe the cache for the active year, call
-`editor.clearCache()`, or clear it without an engine instance:
+unavailable (`isIndexedDbSupported()`). To wipe the active mirror namespace, call
+`editor.clearCache()`, or clear every mirror and legacy entry for a year without an engine instance:
 
 ```ts
 import { clearTexliveCache } from 'wasmtex'
@@ -134,8 +134,27 @@ await clearTexliveCache({ version: '2025' }) // version defaults to '2025'
 ```
 
 For direct control, the `PersistentCache` class (and `PersistentCacheOptions`:
-`version`, `store`, `maxBytes`, `now`) is exported from `wasmtex`. The default byte
-budget is 150 MB per version, with LRU eviction.
+`version`, `texliveUrl`, `mirrorRevision`, `store`, `maxBytes`, `now`) is exported
+from `wasmtex`. Provide the exact immutable endpoint when using a custom mirror:
+
+```ts
+import { PersistentCache } from 'wasmtex'
+
+const cache = new PersistentCache({
+  version: '2026',
+  texliveUrl: 'https://mirror.example/snapshots/revision/2026/',
+  mirrorRevision: 'revision', // optional extra identity, also used at a fixed URL
+})
+```
+
+Omitting `texliveUrl` selects the SDK's shipped immutable mirror for 2025/2026.
+Unknown years need an explicit URL. URLs must be absolute HTTP(S) endpoints
+without credentials, query strings, or fragments. Invalid URL/revision identities
+are safe misses and saves are no-ops; trailing slashes, hostname case, and default
+ports normalize consistently. Whitespace-only revisions are invalid. The default
+soft file-byte budget is 150 MB per mirror namespace, with LRU eviction; a
+just-saved payload can exceed it. Other mirrors and Bloom/negative metadata are
+outside that budget. See [cache migration and clearing](engine.md#persistent-cache).
 
 ## Measuring benefit
 
@@ -145,10 +164,10 @@ unused downloads and failures, and keep network/CPU conditions fixed.
 The [performance guide](compile-performance.md) summarizes adopted changes;
 [early measurements](history/warmup-legacy.md) are historical examples only.
 
-The built-in durable asset cache is keyed by year, not by exact mirror revision.
-Hosts switching between different mirrors within a year must own cache isolation
-or clearing; the separate persistent-preamble cache has a stronger build/profile
-identity. See [engine cache behavior](engine.md#persistent-cache).
+The built-in durable asset cache isolates mirrors automatically. Year-only
+entries from older SDK versions are never rehydrated; the selected namespace
+repopulates on demand. The separate persistent-preamble cache retains its
+engine build/profile identity. See [engine cache behavior](engine.md#persistent-cache).
 
 ## Retaining learned prefetch sets
 

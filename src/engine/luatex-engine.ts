@@ -30,7 +30,9 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
         preload: LUATEX_PRELOAD,
         notFound: LUATEX_KNOWN_404,
       },
-      options.persistentCache ? { version } : undefined,
+      options.persistentCache
+        ? { version, texliveUrl: resolveTexliveUrl(options.texliveUrl ?? null, version) }
+        : undefined,
       options.resolverProfile ?? {
         id: `texlive-${version}`,
         texliveYear: version,

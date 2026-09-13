@@ -71,6 +71,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     onFileDownload?: (filename: string) => void;
     protected constructor(tex: CompileWorkerDriver, fmtFile: string, formatUrl?: string, warmup?: TexFmtWarmupPlan, persistentCache?: {
         version: TexliveVersion;
+        texliveUrl: string;
     }, resolverProfile?: CompletionSnapshotProfile, suppliedWarmup?: WarmupCache);
     abstract init(): Promise<void>;
     abstract compile(): Promise<CompileResult>;

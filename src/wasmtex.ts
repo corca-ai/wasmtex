@@ -1106,7 +1106,7 @@ export class WasmTex {
 
   /**
    * Clear the built-in persistent TeX Live asset cache (IndexedDB) for the
-   * active TeX Live version. No-op when the persistent cache is unavailable.
+   * active TeX Live mirror namespace. No-op when the persistent cache is unavailable.
    */
   async clearCache(): Promise<void> {
     await this.engine.clearCache()
