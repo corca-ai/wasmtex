@@ -62,6 +62,8 @@ export declare class ProjectIndex {
     getFileSymbols(filePath: string): FileSymbols | undefined;
     /** Files in the deterministic include component that compiles the requested document. */
     getActiveFiles(filePath: string): string[];
+    /** Outgoing include/load graph of an explicitly selected compile root. */
+    getRootFiles(root: string): string[];
     private includeGraph;
     getActiveColors(filePath: string): ColorDefinition[];
     getActiveColorNames(filePath: string): Set<string>;

@@ -8,6 +8,7 @@ import { CodeAction, DocumentLink, FoldingRange, InlayHint, LFRange, SemanticTok
 import { LintConfig, lintSource } from './lsp/linter.js';
 import { ProjectIndex } from './lsp/project-index.js';
 import { NeutralCompletionItem, NeutralCompletionList, NeutralHover, NeutralLocation } from './lsp/protocol.js';
+import { LatexReferenceRepairRequest } from './lsp/reference-repair-types.js';
 import { TexResourceCatalogProvider, TexResourceCatalogState, TexResourceKind } from './lsp/resource-catalog.js';
 import { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog.js';
 import { SemanticTrace } from './lsp/trace-parser.js';
@@ -15,6 +16,7 @@ import { FileSymbols, SectionDef } from './lsp/types.js';
 import { LatexWrapRequest } from './lsp/wrap-selection.js';
 import { LatexDocumentInput, LatexFileSyntax, LatexSyntaxService } from './syntax.js';
 import { CompletionSnapshotProfile, CompletionSnapshotState } from './types.js';
+export type * from './lsp/reference-repair-types.js';
 export type { LatexWrapEdit, LatexWrapOption, LatexWrapOptionsResult, LatexWrapPlanResult, LatexWrapRequest, WrapRefusal, } from './lsp/wrap-selection.js';
 export { lintSource, type LintConfig };
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot.js';
@@ -118,6 +120,8 @@ export declare class LatexLanguageService {
     getSignatureHelp(path: string, line: number, column: number): SignatureHelp | null;
     getFoldingRanges(path: string): FoldingRange[];
     private wrapSource;
+    getReferenceProblem(path: string, offset: number, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexReferenceProblemResult;
+    planReferenceRepair(request: LatexReferenceRepairRequest, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexReferenceRepairResult;
     getWrapOptions(path: string, range: import('./syntax.js').LatexSyntaxRange, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexWrapOptionsResult;
     planWrapSelection(path: string, request: LatexWrapRequest, cancellation?: CompletionCancellationToken): import('./lsp-service.js').LatexWrapPlanResult;
     getSelectionRanges(path: string, line: number, column: number, cancellation?: CompletionCancellationToken): import('./lsp/protocol.js').NeutralRange[];

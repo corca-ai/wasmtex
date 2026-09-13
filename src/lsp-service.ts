@@ -56,12 +56,18 @@ import type {
   NeutralHover,
   NeutralLocation,
 } from './lsp/protocol'
+import { getReferenceProblem, planReferenceRepair } from './lsp/reference-repair'
+import { referenceRepairDiagnostics } from './lsp/reference-repair-diagnostics'
+import type { LatexReferenceRepairRequest } from './lsp/reference-repair-types'
 import type {
   TexResourceCatalogProvider,
   TexResourceCatalogState,
   TexResourceKind,
 } from './lsp/resource-catalog'
 import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
+
+export type * from './lsp/reference-repair-types'
+
 import { getStructuralSelectionIndex, structuralSelectionRanges } from './lsp/structural-selection'
 import { parseTraceFile, type SemanticTrace } from './lsp/trace-parser'
 import type { FileSymbols, SectionDef } from './lsp/types'
@@ -516,7 +522,15 @@ export class LatexLanguageService {
   }
 
   getDiagnostics(): Diagnostic[] {
-    const diagnostics = computeDiagnostics(this.index)
+    const project = computeDiagnostics(this.index)
+    const diagnostics = this.index.hasFile(this.mainFile)
+      ? [
+          ...project.filter(
+            (value) => value.code !== 'undefined-ref' && value.code !== 'duplicate-label',
+          ),
+          ...referenceRepairDiagnostics({ index: this.index, fs: this.fs, root: this.mainFile }),
+        ]
+      : project
     diagnostics.push(...this.linter.diagnostics(this.fs.listFiles()))
     return diagnostics
   }
@@ -558,6 +572,26 @@ export class LatexLanguageService {
       path,
       metadata: projectCommandMetadata(this.index, path, this.completionRegistry),
     }
+  }
+
+  getReferenceProblem(path: string, offset: number, cancellation?: CompletionCancellationToken) {
+    return getReferenceProblem(
+      { index: this.index, fs: this.fs, root: this.mainFile },
+      path,
+      offset,
+      cancellation,
+    )
+  }
+
+  planReferenceRepair(
+    request: LatexReferenceRepairRequest,
+    cancellation?: CompletionCancellationToken,
+  ) {
+    return planReferenceRepair(
+      { index: this.index, fs: this.fs, root: this.mainFile },
+      request,
+      cancellation,
+    )
   }
 
   getWrapOptions(

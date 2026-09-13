@@ -297,6 +297,21 @@ export class ProjectIndex {
     return [...ordered]
   }
 
+  /** Outgoing include/load graph of an explicitly selected compile root. */
+  getRootFiles(root: string): string[] {
+    if (!this.files.has(root)) return []
+    const { edges } = this.includeGraph()
+    const seen = new Set<string>()
+    const pending = [root]
+    while (pending.length > 0) {
+      const path = pending.pop()!
+      if (seen.has(path)) continue
+      seen.add(path)
+      pending.push(...[...(edges.get(path) ?? [])].reverse())
+    }
+    return [...seen]
+  }
+
   private includeGraph(): {
     edges: Map<string, string[]>
     reverse: Map<string, Set<string>>

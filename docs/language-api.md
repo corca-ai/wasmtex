@@ -156,6 +156,48 @@ entity identity.
 an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
 than as a JavaScript heap profiler.
 
+### Reviewed reference repair
+
+`getReferenceProblem(path, offset, cancellationToken?)` returns
+`{ ok: true, problem }`, where `problem` is an undefined reference or duplicate
+label at that exact key token, or `null`. Offsets are zero-based, end-exclusive
+UTF-16 source positions. The selected `mainFile` owns the outgoing include/load
+graph; labels from other roots are not candidates, even when they include this
+root. `ProjectIndex.getRootFiles(root)` exposes that same outgoing graph.
+
+Undefined references offer unambiguous literal definitions with their source
+locations and existing heading/caption context. Duplicate labels return every
+literal conflicting declaration and supported literal reference. Comments,
+verbatim, inactive branches, definition templates, dynamic or list-valued keys,
+and project-redefined reference commands cannot authorize an edit. Generated
+labels still prevent false undefined/collision decisions, but never acquire
+invented editable locations. Keys support Unicode letters, marks and numbers
+plus `:._/-`, with a maximum of 256 UTF-16 units.
+
+`planReferenceRepair(request, cancellationToken?)` recomputes the problem and
+returns expected-source edits (`file`, `range`, `expectedText`, `newText`). An
+undefined-reference request carries its exact `anchor` and selected `target`.
+A duplicate-label request carries its exact declaration `anchor`, a fresh
+`newKey`, and explicitly chosen `references`; an empty reference selection
+renames only the declaration. The service never guesses which ambiguous
+references follow it and never creates a label to hide an undefined reference.
+Neither query mutates source. Returned records are detached from the index.
+
+Queries refuse cancellation, stale anchors/selections, invalid or colliding keys,
+and graphs exceeding 1,024 files, 4,000,000 source units or 10,000 editable
+occurrences. Hosts must bind the query and review to the same project, source,
+root, profile and access lifetime, then validate expected source at application.
+They own collaborative application and Undo, as with selection wrapping.
+
+When the selected root exists, `getDiagnostics()` uses this same literal inventory
+for reference diagnostics. Each duplicate declaration has a marker with its total
+declaration count and up to 32 other source locations in `relatedInformation`;
+the explicit repair query retains the full bounded conflict list. Unsupported or
+over-limit inventories do not produce repairable markers. Without a loaded root,
+legacy project-wide diagnostics remain available. Other diagnostic families and
+the legacy line-based `getCodeActions()` API are unchanged; hosts implementing
+reviewed reference repair should use these exact-token APIs.
+
 ### Reviewed selection wrapping
 
 `getWrapOptions(path, { startOffset, endOffset }, cancellationToken?)` returns

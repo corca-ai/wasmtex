@@ -103,9 +103,14 @@ Cross-file rename edits are reported to the host via the `workspaceEdit` event.
 Go-to-definition and references can target locations in other project files. When this happens, WasmTex switches the active file internally and emits a `fileOpen` event so the host can update its UI (file tabs, collaboration bindings, etc.).
 
 ### Diagnostics
-Project diagnostics are computed by `computeDiagnostics()` (in
-`src/lsp/diagnostic-provider.ts`) by cross-referencing the `ProjectIndex`. For
-example, it flags `\ref{key}` if `key` does not exist in any loaded file. The
+Project diagnostics cross-reference the `ProjectIndex`. With a loaded selected
+root, the language service replaces the legacy reference checks with the same
+literal source inventory used by reviewed reference repair. It follows outgoing
+include/load edges from that root and reports exact key ranges, including related
+duplicate declaration locations. The inventory reuses the parser's private token,
+mask and group-boundary cache without retokenizing source. Other families retain
+`computeDiagnostics()` in `src/lsp/diagnostic-provider.ts`; without a loaded root,
+the legacy project-wide reference checks also remain available. The
 ChkTeX-style source linter is cached per `.tex` file: `updateFile()` re-lints
 only changed source bytes, while `getDiagnostics()` combines those cached
 results with the current project-index diagnostics.
