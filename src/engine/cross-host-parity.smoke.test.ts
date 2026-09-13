@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PDFDocument } from 'pdf-lib'
@@ -44,7 +44,7 @@ async function assertParity(
 ): Promise<void> {
   const { installNodeWorkerHost } = await import('./node-host')
   const { WasmTexCompiler } = await import('../headless')
-  installNodeWorkerHost({
+  const host = installNodeWorkerHost({
     publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(ROOT, 'public'),
     assetBaseUrl: ASSET,
   })
@@ -59,6 +59,14 @@ async function assertParity(
   try {
     await compiler.init()
     const r = await compiler.compile()
+    const evidenceDir = join(ROOT, 'test-results', `cross-host-${TEXLIVE_VERSION}`)
+    mkdirSync(evidenceDir, { recursive: true })
+    writeFileSync(join(evidenceDir, `${goldenName}.log`), r.log)
+    if (goldenName === 'bibtex.json') {
+      const bbl = await compiler.readOutput('main.bbl')
+      expect(bbl).toContain('\\bibitem{knuth1984}')
+      expect(bbl).toContain('Addison-Wesley')
+    }
     const pages = r.pdf?.length
       ? (await PDFDocument.load(Uint8Array.from(r.pdf))).getPageCount()
       : 0
@@ -78,10 +86,15 @@ async function assertParity(
         : null,
     }
     const golden = JSON.parse(readFileSync(join(GOLDEN_DIR, goldenName), 'utf8'))
+    writeFileSync(
+      join(evidenceDir, goldenName),
+      JSON.stringify({ actual: signature, expected: golden }, null, 2),
+    )
     // The crux of the hybrid: the Node host reproduces the browser's output exactly.
     expect(signature).toEqual(golden)
   } finally {
     compiler.dispose()
+    host.dispose()
   }
 }
 

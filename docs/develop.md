@@ -265,3 +265,49 @@ being reported as zero. Integrators measure their own debounce, queue and viewer
 paint separately; this helper imports no application code and is not shipped
 in the SDK bundle. Use a fixed test clock for PDF hash comparisons and record
 both preload and initialization cost when evaluating a warmup candidate.
+
+### Pull-request output regression gate
+
+`Golden Canary / output-regression` always reports a result on PRs to `main`.
+Changes under `src/`, `lib/`, `e2e/`, `test/`, `wasm-build/`, `public/`,
+`scripts/`, `.github/`, package manifests, root `*config.*` files or `.nvmrc`
+run the annual matrix. Other changes receive an explicit not-required summary;
+a failed scope check, cancelled run or failed annual job cannot pass the gate.
+
+Both 2025 and 2026 use the exact component runs/formats in
+`scripts/engine-release-components.json` and the matching immutable mirrors
+in `.github/workflows/golden-canary.yml`. The seven existing browser structural
+goldens and seven Node comparisons cover text/math on three engines, BibTeX,
+makeindex, and Unicode PDF import. Missing golden files fail the job. BibTeX
+additionally checks generated `.bbl` content on both hosts. Browser pdfLaTeX
+checks forward/inverse SyncTeX lookup at three known source lines on first and
+repeat compiles. Structural signatures are not pixel or raw-PDF equality.
+
+The existing CI `nested-output` jobs remain independent and run on every PR:
+both hosts and all three engines exercise first/repeat compilation, project
+and directory switches, plus XeLaTeX error recovery. These are representative
+state-reset checks, not the full optimization qualification corpus. A new worker
+process establishes a cold engine; it does not prove an empty OS/CDN cache.
+
+Weekly/manual Golden Canary runs the same complete small golden corpus regardless
+of changed paths. Broader UI, incremental and optimization differential suites
+remain separate; this PR gate does not replace them. Playwright HTML/failure
+artifacts and Node JUnit results are uploaded per year, with raw assertion/log
+output in the Actions job. Runtime/controller changes still require the applicable
+rebuilt-engine checks in the optimization policy: pinned released assets alone
+cannot test a newly authored controller or C change.
+
+After syncing the pinned annual assets, reproduce one matrix row locally:
+
+```bash
+TEXLIVE_VERSION=2026 \
+TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+npx playwright test golden-output --workers=1 --reporter=line,html
+
+CROSS_HOST_PARITY=1 WASMTEX_SMOKE_TEXLIVE_VERSION=2026 \
+WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+npx vitest run src/engine/cross-host-parity.smoke.test.ts
+```
+
+For 2025 use the corresponding year and immutable mirror from the workflow.
+Do not update goldens or broaden normalization to accept a cleanup regression.
