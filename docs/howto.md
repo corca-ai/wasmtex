@@ -21,10 +21,20 @@ bun add github:corca-ai/wasmtex#main
 - `monaco-editor` and `pdfjs-dist` are peer dependencies and must be installed
   separately for the built-in editor and viewer (see [Worker Setup](#worker-setup-required)).
   `pdfjs-dist` is optional for headless and SyncTeX consumers using their own renderer.
+  `monaco-editor` remains a required package-level peer, so npm can install it even
+  for a headless-only application. The neutral/headless/Node runtime entries do not
+  import Monaco, PDF.js or pdf-lib eagerly. `pdf-lib` is an optional peer used for
+  incremental PDF splicing; peer metadata and runtime import boundaries are separate.
 - The repository commits the prebuilt `lib/` bundle. A GitHub install may also
   run `prepare`, which rebuilds it and requires **Node.js ≥ 24**; package managers
   that skip lifecycle scripts use the committed bundle. Pin a tag/commit
   instead of `#main` for reproducible builds.
+- TypeScript ESM consumers can use `moduleResolution: "NodeNext"` (with
+  `module: "NodeNext"`) or their bundler's `"Bundler"` resolution. Include DOM libs
+  for browser API types in the SDK declarations and Node types when using
+  `wasmtex/node`; DOM type availability does not require a DOM at runtime.
+  The [installed-package gate](develop.md#installed-package-verification) checks
+  the committed bundle without lifecycle scripts and documents its transport limits.
 - **Engine binaries are not part of the install** (the WASM engines + prebuilt
   formats ship via CI, not the package). If you self-host assets, pull a verified,
   matching set with `npm run sync-engine-assets -- --from <baseUrl>`; the

@@ -1,8 +1,8 @@
-import { ProjectIndex } from './lsp/project-index';
-import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexNotationArgument, LatexNotationNode, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract';
-export * from './math-command-spec';
-export { findLatexNotationPath } from './notation-cst';
-export * from './syntax-contract';
+import { ProjectIndex } from './lsp/project-index.js';
+import { LATEX_SYNTAX_SCHEMA_VERSION, LatexDocumentSyntaxSnapshot, LatexNotationArgument, LatexNotationNode, LatexSyntaxRange, LatexSyntaxSourceRef } from './syntax-contract.js';
+export * from './math-command-spec.js';
+export { findLatexNotationPath } from './notation-cst.js';
+export * from './syntax-contract.js';
 export interface LatexMathRegion {
     delimiter: string;
     fullRange: LatexSyntaxRange;

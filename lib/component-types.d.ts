@@ -1,4 +1,4 @@
-import { AppStatus, CompileResult, TexError, TexliveVersion, WarmupCache } from './types';
+import { AppStatus, CompileResult, TexError, TexliveVersion, WarmupCache } from './types.js';
 export interface WasmTexOptions {
     /** External Monaco editor instance. WasmTex will use it instead of creating one.
      *  WasmTex will NOT dispose this editor on cleanup. */
@@ -9,9 +9,9 @@ export interface WasmTexOptions {
     texliveUrl?: string;
     /** Exact completion catalog for the selected TeX Live compile profile.
      *  Custom `texliveUrl` hosts should inject their matching provider. */
-    resourceCatalog?: import('./lsp/resource-catalog').TexResourceCatalogProvider;
+    resourceCatalog?: import('./lsp/resource-catalog.js').TexResourceCatalogProvider;
     /** Versioned class/package option and key metadata for the selected compile profile. */
-    semanticCatalog?: import('./lsp/semantic-catalog').TexSemanticCatalogProvider;
+    semanticCatalog?: import('./lsp/semantic-catalog.js').TexSemanticCatalogProvider;
     /** Stable compile-profile identity for runtime completion snapshots. Catalog-backed
      *  hosts may omit this; WasmTex derives it from the matching catalog identity. */
     completionProfile?: {
@@ -69,13 +69,13 @@ export interface WasmTexOptions {
     toolbar?: boolean;
     /** Static linter (ChkTeX-style style/correctness warnings). `false` disables
      *  it; an object overrides per-rule enabled/severity. Defaults to on. */
-    lint?: boolean | import('./lsp/linter').LintConfig | Partial<import('./lsp/linter').LintConfig>;
+    lint?: boolean | import('./lsp/linter.js').LintConfig | Partial<import('./lsp/linter.js').LintConfig>;
     /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
      *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),
      *  falling back to pdfLaTeX. A document that needs XeLaTeX/LuaLaTeX is reported
      *  with an actionable error until those engine artifacts ship. Set an explicit
      *  engine to override detection. */
-    engine?: import('./engine/engine-select').EngineOption;
+    engine?: import('./engine/engine-select.js').EngineOption;
 }
 export interface WasmTexStatusEvent {
     /** Normalized editor lifecycle status. */
@@ -107,7 +107,7 @@ export interface WasmTexEventMap {
     };
     /** Triggered when the document outline (sections) is updated */
     outlineUpdate: {
-        sections: import('./lsp/types').SectionDef[];
+        sections: import('./lsp/types.js').SectionDef[];
     };
     /** Triggered when cursor position changes */
     cursorChange: {

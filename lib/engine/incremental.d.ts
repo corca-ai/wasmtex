@@ -1,5 +1,5 @@
-import { SynctexData } from '../synctex/synctex-parser';
-import { WasmTexPdftexEngine } from './wasmtex-engine';
+import { SynctexData } from '../synctex/synctex-parser.js';
+import { WasmTexPdftexEngine } from './wasmtex-engine.js';
 export interface IncrementalResult {
     pdf: Uint8Array | null;
     log: string;

@@ -1,7 +1,7 @@
-import { CompileResult, CompletionSnapshotProfile, EngineStatus, ResolverEvidenceReport, TexliveVersion, WarmupCache } from '../types';
-import { CompileEngine } from './compile-engine';
-import { WasmTexEngineOptions } from './wasmtex-engine';
-import { CompileWorkerDriver } from './wasmtex-worker';
+import { CompileResult, CompletionSnapshotProfile, EngineStatus, ResolverEvidenceReport, TexliveVersion, WarmupCache } from '../types.js';
+import { CompileEngine } from './compile-engine.js';
+import { WasmTexEngineOptions } from './wasmtex-engine.js';
+import { CompileWorkerDriver } from './wasmtex-worker.js';
 /**
  * Build a {@link CompileWorkerDriver} for a WasmTex engine binary (`xetex`,
  * `dvipdfm`, `luatex`) from the shared engine options, resolving the asset URL,

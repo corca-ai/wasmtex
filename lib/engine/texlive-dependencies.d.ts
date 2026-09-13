@@ -1,4 +1,4 @@
-import { CompletionSnapshotProfile, ResolverEvidenceReport, TexliveDependencySet, TexliveVersion } from '../types';
+import { CompletionSnapshotProfile, ResolverEvidenceReport, TexliveDependencySet, TexliveVersion } from '../types.js';
 export interface TexliveDependencyOptions {
     /** Request names to leave out of `notFound` — project inputs and generated
      *  auxiliary files that kpathsea probes on the mirror before finding them in

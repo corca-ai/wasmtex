@@ -1,4 +1,4 @@
-import { VirtualFile } from '../types';
+import { VirtualFile } from '../types.js';
 /** Minimal file store the full sync needs (a subset of {@link VirtualFS}). */
 export interface SyncFileStore {
     listFiles(): string[];

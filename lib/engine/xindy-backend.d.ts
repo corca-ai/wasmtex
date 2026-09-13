@@ -1,4 +1,4 @@
-import { INDEX_STAGE, ToolBackend } from './backend-registry';
+import { INDEX_STAGE, ToolBackend } from './backend-registry.js';
 /**
  * xindy as a server-first pluggable backend (M5 / #117, execution-model principle 3).
  *

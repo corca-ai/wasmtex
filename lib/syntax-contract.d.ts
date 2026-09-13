@@ -1,4 +1,4 @@
-import { MathCommandArgumentRole, TexMathClass } from './math-command-spec';
+import { MathCommandArgumentRole, TexMathClass } from './math-command-spec.js';
 /**
  * Transport-neutral document syntax contract shared by WasmTex consumers.
  *

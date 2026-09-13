@@ -1,4 +1,4 @@
-import { CompileResult } from '../types';
+import { CompileResult } from '../types.js';
 export declare class CompileScheduler {
     private engine;
     private onResult;
@@ -20,7 +20,7 @@ export declare class CompileScheduler {
     constructor(engine: {
         compile(): Promise<CompileResult>;
         isReady(): boolean;
-    }, onResult: (result: CompileResult) => void, onStatusChange: (status: import('../types').AppStatus, detail?: string) => void, { minDebounceMs, maxDebounceMs }?: {
+    }, onResult: (result: CompileResult) => void, onStatusChange: (status: import('../types.js').AppStatus, detail?: string) => void, { minDebounceMs, maxDebounceMs }?: {
         minDebounceMs?: number | undefined;
         maxDebounceMs?: number | undefined;
     });

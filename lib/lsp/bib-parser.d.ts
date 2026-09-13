@@ -1,5 +1,5 @@
-import { ProjectIndex } from './project-index';
-import { BibEntry, ParsedBibFile } from './types';
+import { ProjectIndex } from './project-index.js';
+import { BibEntry, ParsedBibFile } from './types.js';
 /** Minimal file source: enough of a VirtualFS to find and read `.bib` files. */
 export interface BibFileReader {
     listFiles(): string[];

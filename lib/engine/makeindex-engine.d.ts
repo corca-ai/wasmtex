@@ -1,5 +1,5 @@
-import { TexliveVersion } from '../types';
-import { WasmTexWorker } from './wasmtex-worker';
+import { TexliveVersion } from '../types.js';
+import { WasmTexWorker } from './wasmtex-worker.js';
 /**
  * The bundled from-source makeindex (#115), driving the WasmTex worker protocol. Turns a
  * `<base>.idx` (emitted by a LaTeX

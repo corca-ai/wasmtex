@@ -1,6 +1,6 @@
-import { ensureLanguagesRegistered } from './editor/setup';
-import { WorkspaceEditInfo } from './lsp/rename-provider';
-import { LatexLanguageService } from './lsp-service';
+import { ensureLanguagesRegistered } from './editor/setup.js';
+import { WorkspaceEditInfo } from './lsp/rename-provider.js';
+import { LatexLanguageService } from './lsp-service.js';
 import type * as Monaco from 'monaco-editor';
 export interface LatexMonacoProviderOptions {
     /** Monaco language id to register providers for. Defaults to `latex`. */

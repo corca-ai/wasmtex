@@ -1,6 +1,6 @@
-import { CachedTexliveFile, CompletionSnapshotProfile, ResolverEvidenceReport, ResolverStage, TexliveFileEntry, TexliveVersion } from '../types';
-import { BaseWorkerEngine } from './base-worker-engine';
-import { RawResolverEvidence } from './resolver-evidence';
+import { CachedTexliveFile, CompletionSnapshotProfile, ResolverEvidenceReport, ResolverStage, TexliveFileEntry, TexliveVersion } from '../types.js';
+import { BaseWorkerEngine } from './base-worker-engine.js';
+import { RawResolverEvidence } from './resolver-evidence.js';
 /** Messages exchanged with a WasmTex engine worker. */
 export interface WasmTexWorkerMsg {
     result?: string;

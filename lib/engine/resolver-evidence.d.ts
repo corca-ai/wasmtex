@@ -1,4 +1,4 @@
-import { CompletionSnapshotProfile, ResolverEvidenceReport, ResolverStage } from '../types';
+import { CompletionSnapshotProfile, ResolverEvidenceReport, ResolverStage } from '../types.js';
 export interface RawResolverEvidence {
     requestedName?: unknown;
     format?: unknown;

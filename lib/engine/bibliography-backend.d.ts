@@ -1,5 +1,5 @@
-import { BibEntry } from '../lsp/types';
-import { BackendRegistry, BIBTEX_STAGE } from './backend-registry';
+import { BibEntry } from '../lsp/types.js';
+import { BackendRegistry, BIBTEX_STAGE } from './backend-registry.js';
 export type BibliographyMode = 'biblatex' | 'bibtex' | 'none';
 /** Detect which bibliography toolchain a LaTeX source needs. */
 export declare function detectBibliographyMode(source: string): BibliographyMode;

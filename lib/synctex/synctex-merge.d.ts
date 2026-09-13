@@ -1,4 +1,4 @@
-import { SynctexData } from './synctex-parser';
+import { SynctexData } from './synctex-parser.js';
 /**
  * Merge a tail's SyncTeX (from `compileFromCheckpoint`) onto the head pages of the last full
  * compile's SyncTeX, producing a complete SyncTeX for the spliced head+tail PDF (#99 Phase 2).

@@ -1,5 +1,5 @@
-import { Token } from './lsp/latex-tokenizer';
-import { LatexDocumentSyntaxSnapshot, LatexMathRoot, LatexNotationNode, LatexSyntaxNodeId, LatexSyntaxRange } from './syntax-contract';
+import { Token } from './lsp/latex-tokenizer.js';
+import { LatexDocumentSyntaxSnapshot, LatexMathRoot, LatexNotationNode, LatexSyntaxNodeId, LatexSyntaxRange } from './syntax-contract.js';
 interface NotationDocument {
     fileId: string;
     path: string;

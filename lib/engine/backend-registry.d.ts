@@ -1,6 +1,6 @@
-import { BiberRequest } from './biber-backend';
-import { BibliographyStageRequest } from './bibliography-backend';
-import { IndexStageRequest } from './index-backend';
+import { BiberRequest } from './biber-backend.js';
+import { BibliographyStageRequest } from './bibliography-backend.js';
+import { IndexStageRequest } from './index-backend.js';
 export declare const BIBTEX_STAGE = "bibliography:bibtex";
 export declare const BIBER_STAGE = "bibliography:biber";
 export declare const INDEX_STAGE = "index";

@@ -1,6 +1,6 @@
-import { BibCompletionContext } from './bib-completion-context';
-import { CommandArg, CompletionValueKind } from './package-db';
-import { NeutralDocument, NeutralPosition, NeutralRange } from './protocol';
+import { BibCompletionContext } from './bib-completion-context.js';
+import { CommandArg, CompletionValueKind } from './package-db.js';
+import { NeutralDocument, NeutralPosition, NeutralRange } from './protocol.js';
 export type CompletionDomain = 'command' | CompletionValueKind;
 export interface CompletionCommandMetadataProvider {
     getCommandArguments(command: string): readonly CommandArg[] | undefined;

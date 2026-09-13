@@ -11,6 +11,17 @@ permissions:
   actions: read
 
 jobs:
+  package-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm }
+      # Deliberately no npm ci/prepare in this checkout. The probe packs the
+      # committed lib and installs its own tooling into an isolated consumer.
+      - run: npm run test:package-consumer
+
   nested-output:
     runs-on: ubuntu-latest
     timeout-minutes: 20

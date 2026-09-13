@@ -1,4 +1,4 @@
-import { LatexLanguageService, LatexLanguageServiceOptions } from './lsp-service';
+import { LatexLanguageService, LatexLanguageServiceOptions } from './lsp-service.js';
 export interface JsonRpcMessage {
     jsonrpc?: '2.0';
     id?: number | string | null;

@@ -1,4 +1,4 @@
-import { TexliveDependency, TexliveDependencySet, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types';
+import { TexliveDependency, TexliveDependencySet, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types.js';
 export interface WarmupOptions {
     /** TeX Live version. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;

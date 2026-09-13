@@ -1,4 +1,4 @@
-import { VirtualFS } from './virtual-fs';
+import { VirtualFS } from './virtual-fs.js';
 /**
  * Persist the outgoing editor buffer back to the VFS when switching away from a file —
  * but ONLY if that file still exists. Saving a path that was deleted out from under the

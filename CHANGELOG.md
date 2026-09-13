@@ -105,6 +105,10 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
+- Published declarations use ESM-compatible relative import paths so TypeScript
+  NodeNext consumers can resolve the complete API. An isolated package installation
+  gate now checks public imports/types, UI bundling, and missing-file/export failures.
+
 - LSP cancellation tracks only active requests, returns a cancellation error on
   settlement, and no longer suppresses a later request that reuses an ID. Invalid
   request parameters report `InvalidParams`; malformed document notifications no

@@ -1,6 +1,6 @@
-import { CompletionSnapshot, CompletionSnapshotState } from '../types';
-import { SemanticTrace } from './trace-parser';
-import { AuxData, BibEntry, BibitemDef, BibStringDef, ColorDefinition, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef, ParsedBibFile, ProjectKeyDefinition, ProjectValue } from './types';
+import { CompletionSnapshot, CompletionSnapshotState } from '../types.js';
+import { SemanticTrace } from './trace-parser.js';
+import { AuxData, BibEntry, BibitemDef, BibStringDef, ColorDefinition, CommandDef, EnvironmentUse, FileSymbols, LabelDef, LabelRef, ParsedBibFile, ProjectKeyDefinition, ProjectValue } from './types.js';
 export interface EngineCommandInfo {
     name: string;
     eqType: number;

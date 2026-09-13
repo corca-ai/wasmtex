@@ -1,4 +1,4 @@
-import { CommandArg } from './package-db';
+import { CommandArg } from './package-db.js';
 export interface ShardCommand {
     name: string;
     args?: CommandArg[];
