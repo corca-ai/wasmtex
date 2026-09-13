@@ -25,11 +25,6 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
-- LSP cancellation tracks only active requests, returns a cancellation error on
-  settlement, and no longer suppresses a later request that reuses an ID. Invalid
-  request parameters report `InvalidParams`; malformed document notifications no
-  longer overwrite stored content.
-
 - Forward search (`forwardLookupAll`) returns one region per typeset line. Matches are
   lifted to their line box (crossing formula-sized vboxes such as a fraction), so a formula
   no longer paints as dozens of nested fragments and an inline `\textit{…}` no longer leaves
@@ -81,6 +76,14 @@ Keep them user-facing and concise. Example:
   - Server-side xindy backend for index generation.
 -->
 
+### Changed
+
+- ⚠️ Headless overlapping compiles now reject with an `in progress` error.
+  Edits, root changes, project replacement, and disposal abort obsolete compile
+  and preparation promises with `AbortError`. Project replacement waits for
+  cancellation; output/cache operations require an idle main engine. Aborted
+  workers and checkpoints are retired before the next compile.
+
 ### Added
 
 - `telemetry.texliveDependencies`: the exact TeX Live dependency set of a compile,
@@ -95,6 +98,11 @@ Keep them user-facing and concise. Example:
   downstream semantic engines can reason about adjacency without rescanning TeX.
 
 ### Fixed
+
+- LSP cancellation tracks only active requests, returns a cancellation error on
+  settlement, and no longer suppresses a later request that reuses an ID. Invalid
+  request parameters report `InvalidParams`; malformed document notifications no
+  longer overwrite stored content.
 
 - The pdfTeX worker stored host-preloaded TeX Live files (warmup and persistent
   cache) under their bare request name, so a TFM and a same-named virtual font

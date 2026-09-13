@@ -99,6 +99,11 @@ export declare class WasmTexCompiler {
     /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
     private prebuildInFlight;
     private compileInFlight;
+    private readonly operations;
+    private initInFlight;
+    private replacingProject;
+    private disposalRevision;
+    private inputRevision;
     private fs;
     private projectIndex;
     private completionDigests;
@@ -177,6 +182,7 @@ export declare class WasmTexCompiler {
     private toCompileResult;
     setFile(path: string, content: FileContent): void;
     loadProject(files: Record<string, FileContent>): Promise<void>;
+    private replaceProject;
     getFile(path: string): FileContent | null;
     listFiles(): string[];
     getMainFile(): string;
@@ -191,6 +197,10 @@ export declare class WasmTexCompiler {
      */
     clearCache(): Promise<void>;
     dispose(): void;
+    private assertNoProjectReplacement;
+    private assertRevision;
+    private invalidateOperation;
+    private retireEngines;
     private dropGeneratedFile;
     private auxiliaryDependencyObservations;
     /** Attach the manifest only here, above every engine and auxiliary backend. The
@@ -300,10 +310,9 @@ export declare class WasmTexCompiler {
     /** Shared constructor options for the bundled aux-stage engines (BibTeX, makeindex):
      *  same asset base / TeX Live version / endpoint as the main engine. */
     private auxEngineOpts;
-    private ensureBibtexEngine;
     /** Run the bundled client makeindex (WASM) engine for the index stage → `.ind`, or null
      *  if it produced none. The default when no server backend is registered for `index`. */
     private runClientMakeindex;
-    private ensureMakeindexEngine;
+    private ensureAuxEngine;
     private ensureInitialized;
 }

@@ -17,6 +17,7 @@ import {
   createCompileEngine,
   unavailableEngineResult,
 } from './engine/compile-engine'
+import { CompilerOperations } from './engine/compiler-operation'
 import { CompletionFileDigestCache, createCompletionSnapshot } from './engine/completion-snapshot'
 import {
   type AuxiliaryDependencyObservation,
@@ -407,6 +408,11 @@ export class WasmTexCompiler {
   /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
   private prebuildInFlight: Promise<boolean> | null = null
   private compileInFlight = false
+  private readonly operations = new CompilerOperations()
+  private initInFlight: Promise<void> | null = null
+  private replacingProject = false
+  private disposalRevision = 0
+  private inputRevision = 0
   private fs: VirtualFS
   private projectIndex = new ProjectIndex()
   private completionDigests = new CompletionFileDigestCache()
@@ -533,6 +539,7 @@ export class WasmTexCompiler {
         report(error)
       }
     }
+    this.operations.assertCurrent()
     // Incremental checkpoints are a pdfLaTeX-only feature (the worker commands live in
     // the pdfTeX worker); other engines always take the full path.
     this.incremental =
@@ -543,15 +550,18 @@ export class WasmTexCompiler {
     // engine so hosts that never enable incremental compiles never ship it (#81).
     this.heap =
       this.opts.incremental && this.engine instanceof WasmTexPdftexEngine
-        ? new (await import('./engine/heap-checkpoints')).HeapCheckpointCompiler(this.engine, {
+        ? new ((
+            await this.operations.observe(import('./engine/heap-checkpoints'))
+          ).resume().HeapCheckpointCompiler)(this.engine, {
             mainFile: this.mainFile,
           })
         : null
     try {
-      await this.engine.init()
+      ;(await this.operations.observe(this.engine.init())).resume()
       this.unavailable = null
-      await this.syncAllFilesToEngine()
+      ;(await this.operations.observe(this.syncAllFilesToEngine())).resume()
     } catch (err) {
+      this.operations.assertCurrent()
       if (this.detection.engine === 'pdflatex') throw err
       // Unicode engine artifact missing/broken — surface an actionable result.
       this.unavailable = this.detection
@@ -559,18 +569,41 @@ export class WasmTexCompiler {
   }
 
   async init(): Promise<void> {
-    this.sessionDependencies = undefined
+    if (this.initInFlight) return this.initInFlight
     if (this.initialized) return
-    await this.ensureEngine()
-    this.initialized = true
+    this.assertNoProjectReplacement()
+    const task = this.operations.run(async () => {
+      this.sessionDependencies = undefined
+      try {
+        await this.ensureEngine()
+        this.operations.assertCurrent()
+        this.initialized = true
+      } catch (error) {
+        this.retireEngines()
+        throw error
+      }
+    })
+    this.initInFlight = task
+    try {
+      await task
+    } finally {
+      if (this.initInFlight === task) this.initInFlight = null
+    }
   }
 
   async compile(): Promise<CompileResult> {
     this.ensureInitialized()
-    if (this.prebuildInFlight) await this.prebuildInFlight
+    this.assertNoProjectReplacement()
+    if (this.compileInFlight) throw new Error('Compile already in progress')
     this.compileInFlight = true
+    const revision = this.inputRevision
     try {
-      return await this.compileIdle()
+      // Reserve this call before waiting: another compile must not queue behind it.
+      if (this.prebuildInFlight) await this.prebuildInFlight
+      this.assertRevision(revision)
+      const result = await this.operations.run(() => this.compileIdle())
+      this.assertRevision(revision)
+      return result
     } finally {
       this.compileInFlight = false
     }
@@ -578,14 +611,14 @@ export class WasmTexCompiler {
 
   private async compileIdle(): Promise<CompileResult> {
     this.currentAuxiliaryDependencies.clear()
-    await this.ensureEngine()
+    ;(await this.operations.observe(this.ensureEngine())).resume()
     if (this.unavailable || !this.engine) {
       const unavailable = unavailableEngineResult(this.unavailable ?? this.detection)
       this.attachDependencyManifest(unavailable)
       return unavailable
     }
     const engine = this.engine
-    await this.syncModifiedFilesToEngine()
+    ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
 
     // `\makeindex` opens the `.idx` write stream in the preamble; a precompiled-preamble
     // snapshot dumps the preamble into a format that can't carry an open stream, so the
@@ -597,21 +630,28 @@ export class WasmTexCompiler {
     }
 
     const externalization = this.tikzExternalizationKind()
-    const fast = await this.tryIncrementalFastPath(externalization)
+    const fast = (
+      await this.operations.observe(this.tryIncrementalFastPath(externalization))
+    ).resume()
     if (fast) return fast
 
     // Heap checkpoints (#81): resume the last run from before the edit when the engine holds
     // a valid checkpoint (a complete compile comes out of it), else a full compile that arms
     // checkpoints for the edited region.
     let result =
-      (await this.tryHeapResume(externalization)) ?? (await engine.compile(this.heapArms()))
+      (await this.operations.observe(this.tryHeapResume(externalization))).resume() ??
+      (await this.operations.observe(engine.compile(this.heapArms()))).resume()
     // Resolver evidence is per pass; the prefetch manifest is their union (#80).
     const conversionInputs = new Set(result.pdfConversionInputs ?? [])
     const resolverReports = [result.telemetry?.resolver]
-    result = await this.applyTikzExternalization(result, externalization, resolverReports)
+    result = (
+      await this.operations.observe(
+        this.applyTikzExternalization(result, externalization, resolverReports),
+      )
+    ).resume()
     collectConversionInputs(conversionInputs, result)
     const tikzTelemetry = result.telemetry?.tikzExternalization
-    let auxInjected = await this.runAuxStages(result)
+    let auxInjected = (await this.operations.observe(this.runAuxStages(result))).resume()
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
     // caps reruns and stops once the cross-reference state stops changing. An aux
@@ -625,11 +665,11 @@ export class WasmTexCompiler {
         signatureOf(result.semanticTrace ?? result.log),
       )
       if (!decision.rerun && !auxInjected) break
-      await this.syncModifiedFilesToEngine()
-      result = await engine.compile(this.heapArms())
+      ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
+      result = (await this.operations.observe(engine.compile(this.heapArms()))).resume()
       resolverReports.push(result.telemetry?.resolver)
       collectConversionInputs(conversionInputs, result)
-      auxInjected = await this.runAuxStages(result)
+      auxInjected = (await this.operations.observe(this.runAuxStages(result))).resume()
     }
     this.heap?.noteFull(this.mainSource(), this.projectTexFiles(), result)
     // Cross-reference reruns replace `result`; the figure telemetry describes this compile.
@@ -643,12 +683,12 @@ export class WasmTexCompiler {
     // Parse metadata (aux/trace) once on the final, stabilized result — intermediate
     // rerun passes only feed the rerun decision (log signature), not the project index,
     // so reading/parsing the .aux each pass was redundant worker round-trips.
-    await this.updateMetadata(result)
+    ;(await this.operations.observe(this.updateMetadata(result))).resume()
     // Record the fully stabilized state (after any cross-reference reruns) as the baseline the
     // next incremental compile diffs against + seeds checkpoints from. The SyncTeX is the head
     // merge-base so the next fast paint can return exact `synctexData` (#99 P2).
     this.attachDependencyManifest(result)
-    await this.attachCompletionSnapshot(result)
+    ;(await this.operations.observe(this.attachCompletionSnapshot(result))).resume()
     this.incremental?.noteFull(this.mainSource(), this.projectTexFiles(), result.synctex)
     return result
   }
@@ -671,6 +711,7 @@ export class WasmTexCompiler {
       this.unavailable ||
       !this.engine ||
       this.compileInFlight ||
+      this.replacingProject ||
       this.fs.getModifiedFiles().length > 0
     ) {
       return false
@@ -680,9 +721,16 @@ export class WasmTexCompiler {
     if (typeof content !== 'string' || !path.toLowerCase().endsWith('.tex')) return false
     const source = this.mainSource()
     const files = this.projectTexFiles()
-    const task = this.heap?.enabled
-      ? this.prepareHeapCheckpoint(source, files, path, offset ?? content.length)
-      : incremental.prebuildForEdit(source, files, path, offset ?? content.length)
+    if (this.operations.busy && !this.prebuildInFlight) return false
+    const task = this.operations.run(async () => {
+      return (
+        await this.operations.observe(
+          this.heap?.enabled
+            ? this.prepareHeapCheckpoint(source, files, path, offset ?? content.length)
+            : incremental.prebuildForEdit(source, files, path, offset ?? content.length),
+        )
+      ).resume()
+    })
     this.prebuildInFlight = task
     try {
       return await task
@@ -710,7 +758,7 @@ export class WasmTexCompiler {
     }
     const arms = heap.armsForFullCompile(source, files, mainOffset)
     if (arms.length === 0) return false
-    const result = await engine.compile({ checkpoints: arms })
+    const result = (await this.operations.observe(engine.compile({ checkpoints: arms }))).resume()
     heap.noteFull(source, files, result)
     return (result.heapCheckpoints?.length ?? 0) > 0
   }
@@ -727,7 +775,9 @@ export class WasmTexCompiler {
     externalization: TikzExternalizationKind | null,
   ): Promise<CompileResult | null> {
     if (!this.heap?.enabled || externalization) return null
-    const resume = await this.heap.tryResume(this.mainSource(), this.projectTexFiles())
+    const resume = (
+      await this.operations.observe(this.heap.tryResume(this.mainSource(), this.projectTexFiles()))
+    ).resume()
     if (!resume || !resume.final || !resume.result.pdf) return null
     return resume.result
   }
@@ -756,6 +806,8 @@ export class WasmTexCompiler {
   }
 
   setFile(path: string, content: FileContent): void {
+    this.assertNoProjectReplacement()
+    this.invalidateOperation()
     this.projectIndex.invalidateCompletionSnapshot()
     this.fs.writeFile(path, content)
     // A host write replaces any same-named generated artifact with a real project file.
@@ -786,6 +838,20 @@ export class WasmTexCompiler {
   }
 
   async loadProject(files: Record<string, FileContent>): Promise<void> {
+    this.assertNoProjectReplacement()
+    this.replacingProject = true
+    const revision = this.disposalRevision
+    try {
+      await this.invalidateOperation()
+      if (revision !== this.disposalRevision)
+        throw new DOMException('Compiler disposed', 'AbortError')
+      await this.operations.run(() => this.replaceProject(files))
+    } finally {
+      this.replacingProject = false
+    }
+  }
+
+  private async replaceProject(files: Record<string, FileContent>): Promise<void> {
     this.fs = new VirtualFS({ empty: true })
     this.projectIndex = new ProjectIndex()
     this.generatedFiles.clear()
@@ -794,6 +860,7 @@ export class WasmTexCompiler {
     this.lastFullDependencyManifest = undefined
     // New document → the checkpoint manager's diff baseline + cached checkpoints are stale.
     this.incremental?.reset()
+    this.heap?.reset()
     for (const [path, content] of Object.entries(files)) {
       this.fs.writeFile(path, content)
       this.updateIndexForFile(path, content)
@@ -807,8 +874,8 @@ export class WasmTexCompiler {
         // Reuse the warm engine when its kind still fits (keeps the TeX Live
         // package cache hot); compile()'s ensureEngine() will swap kinds if the
         // new main source needs a different engine.
-        await this.engine.flushCache()
-        await this.syncAllFilesToEngine()
+        ;(await this.operations.observe(this.engine.flushCache())).resume()
+        ;(await this.operations.observe(this.syncAllFilesToEngine())).resume()
       } else {
         // No usable engine yet — force ensureEngine() to rebuild on next compile.
         this.engine?.terminate()
@@ -830,8 +897,11 @@ export class WasmTexCompiler {
   }
 
   setMainFile(path: string): void {
-    this.projectIndex.invalidateCompletionSnapshot()
+    this.assertNoProjectReplacement()
     const changed = path !== this.mainFile
+    if (!changed) return
+    this.projectIndex.invalidateCompletionSnapshot()
+    if (changed) this.invalidateOperation()
     this.mainFile = path
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
@@ -856,12 +926,21 @@ export class WasmTexCompiler {
 
   async readOutput(path: string): Promise<string | null> {
     this.ensureInitialized()
-    return (await this.engine?.readFile(path)) ?? null
+    this.assertNoProjectReplacement()
+    return this.operations.run(
+      async () => (await this.operations.observe(this.engine?.readFile(path))).resume() ?? null,
+    )
   }
 
   async flushCache(): Promise<void> {
     this.ensureInitialized()
-    await this.engine?.flushCache()
+    this.assertNoProjectReplacement()
+    await this.operations.run(async () => {
+      ;(await this.operations.observe(this.engine?.flushCache())).resume()
+      this.fs.markAllModified()
+      this.incremental?.reset()
+      this.heap?.reset()
+    })
   }
 
   /**
@@ -869,10 +948,41 @@ export class WasmTexCompiler {
    * active TeX Live version. No-op when the persistent cache is unavailable.
    */
   async clearCache(): Promise<void> {
-    await this.engine?.clearCache()
+    this.assertNoProjectReplacement()
+    await this.operations.run(async () => {
+      ;(await this.operations.observe(this.engine?.clearCache())).resume()
+    })
   }
 
   dispose(): void {
+    this.disposalRevision += 1
+    this.inputRevision += 1
+    void this.operations.cancel()
+    this.retireEngines()
+    this.projectIndex.invalidateCompletionSnapshot()
+    this.initialized = false
+  }
+
+  private assertNoProjectReplacement(): void {
+    if (this.replacingProject) throw new Error('Project replacement in progress')
+  }
+
+  private assertRevision(revision: number): void {
+    if (revision !== this.inputRevision)
+      throw new DOMException('Compiler input changed', 'AbortError')
+  }
+
+  private invalidateOperation(): Promise<void> {
+    this.inputRevision += 1
+    const busy = this.operations.busy
+    const settled = this.operations.cancel()
+    if (busy) this.retireEngines()
+    return settled
+  }
+
+  private retireEngines(): void {
+    this.incremental = null
+    this.heap = null
     this.engine?.terminate()
     this.engine = null
     this.tikzPool?.dispose()
@@ -885,7 +995,10 @@ export class WasmTexCompiler {
     this.makeindexEngine?.terminate()
     this.makeindexEngine = null
     this.lastFullDependencyManifest = undefined
-    this.initialized = false
+    this.unavailable = null
+    for (const path of [...this.generatedFiles]) this.dropGeneratedFile(path)
+    this.currentAuxiliaryDependencies.clear()
+    this.fs.markAllModified()
   }
 
   private dropGeneratedFile(path: string): void {
@@ -961,35 +1074,45 @@ export class WasmTexCompiler {
     if (this.fs.getModifiedFiles().length > 0) return
     const engine = this.engine
     const root = this.mainFile
-    const projectFiles = await Promise.all(
-      this.fs
-        .listFiles()
-        .filter((path) => !this.generatedFiles.has(path))
-        .flatMap((path) => {
-          const file = this.fs.getFile(path)
-          return file ? [file] : []
-        })
-        .map(async (file) => ({
-          path: file.path,
-          content: file.content,
-          digest: await this.completionDigests.digest(file, file.content),
-        })),
-    )
+    const projectFiles = (
+      await this.operations.observe(
+        Promise.all(
+          this.fs
+            .listFiles()
+            .filter((path) => !this.generatedFiles.has(path))
+            .flatMap((path) => {
+              const file = this.fs.getFile(path)
+              return file ? [file] : []
+            })
+            .map(async (file) => ({
+              path: file.path,
+              content: file.content,
+              digest: (
+                await this.operations.observe(this.completionDigests.digest(file, file.content))
+              ).resume(),
+            })),
+        ),
+      )
+    ).resume()
     const engineObservation = engine.getCompletionObservation?.()
-    const snapshot = await createCompletionSnapshot({
-      engine: this.engineKind,
-      root,
-      profile: this.completionProfile(),
-      projectFiles,
-      ...(result.engineCommands ? { engineCommands: result.engineCommands } : {}),
-      engineCommandsComplete: result.engineCommandsComplete === true,
-      ...(result.engineCommandsDropped !== undefined
-        ? { engineCommandsDropped: result.engineCommandsDropped }
-        : {}),
-      ...(engineObservation ? { engineObservation } : {}),
-      ...(result.inputFiles ? { inputFiles: result.inputFiles } : {}),
-      inputFilesComplete: result.inputFilesComplete === true,
-    })
+    const snapshot = (
+      await this.operations.observe(
+        createCompletionSnapshot({
+          engine: this.engineKind,
+          root,
+          profile: this.completionProfile(),
+          projectFiles,
+          ...(result.engineCommands ? { engineCommands: result.engineCommands } : {}),
+          engineCommandsComplete: result.engineCommandsComplete === true,
+          ...(result.engineCommandsDropped !== undefined
+            ? { engineCommandsDropped: result.engineCommandsDropped }
+            : {}),
+          ...(engineObservation ? { engineObservation } : {}),
+          ...(result.inputFiles ? { inputFiles: result.inputFiles } : {}),
+          inputFilesComplete: result.inputFilesComplete === true,
+        }),
+      )
+    ).resume()
     // A concurrent host write remains modified and belongs to a later project revision.
     if (root !== this.mainFile || engine !== this.engine || this.fs.getModifiedFiles().length > 0) {
       return
@@ -1001,19 +1124,23 @@ export class WasmTexCompiler {
 
   private async syncAllFilesToEngine(): Promise<void> {
     const engine = this.engine
-    if (!engine || this.unavailable) return
-    // Shared with the UI host so the two full-sync paths can't drift; it marks only
-    // the files actually written as synced (by identity), protecting a host edit that
-    // replaces a map entry mid-sync. (Same protection as syncModifiedFilesToEngine.)
-    await syncAllFilesToEngine(
-      this.fs,
-      {
-        writeFile: (path, content) => engine.writeFile(path, this.engineContent(path, content)),
-        setMainFile: (mainFile) => engine.setMainFile(mainFile),
-      },
-      (paths) => this.ensureEngineDirectories(paths),
-      this.mainFile,
-    )
+    if (!engine || this.unavailable)
+      return // Shared with the UI host so the two full-sync paths can't drift; it marks only
+      // the files actually written as synced (by identity), protecting a host edit that
+      // replaces a map entry mid-sync. (Same protection as syncModifiedFilesToEngine.)
+    ;(
+      await this.operations.observe(
+        syncAllFilesToEngine(
+          this.fs,
+          {
+            writeFile: (path, content) => engine.writeFile(path, this.engineContent(path, content)),
+            setMainFile: (mainFile) => engine.setMainFile(mainFile),
+          },
+          (paths) => this.ensureEngineDirectories(paths),
+          this.mainFile,
+        ),
+      )
+    ).resume()
   }
 
   /** Content the engine sees for `path`: the main file may carry the TikZ externalization
@@ -1050,7 +1177,11 @@ export class WasmTexCompiler {
   ): Promise<CompileResult | null> {
     if (!this.incremental || externalization) return null
     const t0 = performance.now()
-    const fast = await this.incremental.tryIncremental(this.mainSource(), this.projectTexFiles())
+    const fast = (
+      await this.operations.observe(
+        this.incremental.tryIncremental(this.mainSource(), this.projectTexFiles()),
+      )
+    ).resume()
     if (fast?.final && fast.pdf) return this.toCompileResult(fast, performance.now() - t0)
     return null
   }
@@ -1085,7 +1216,9 @@ export class WasmTexCompiler {
     const engine = this.engine
     if (!engine) return result
     const snapshot = !!engine.setPreambleSnapshot && !this.opts.disablePreambleSnapshot
-    const jobs = await this.runTikzFigureJobs(result, kind, snapshot)
+    const jobs = (
+      await this.operations.observe(this.runTikzFigureJobs(result, kind, snapshot))
+    ).resume()
     if (!jobs) return result
     const { telemetry, errors, failureLog } = jobs
     // Auto mode promised "no worse than inline": a failed figure job means this document is
@@ -1094,12 +1227,13 @@ export class WasmTexCompiler {
     if (kind === 'inject' && (jobs.inline || telemetry.failed.length > 0)) {
       this.tikzAutoDisabled = true
       if (!jobs.inline) telemetry.fallback = true
-      await engine.writeFile(this.mainFile, this.mainSource())
-      const inline = await engine.compile()
+      ;(await this.operations.observe(engine.writeFile(this.mainFile, this.mainSource()))).resume()
+      const inline = (await this.operations.observe(engine.compile())).resume()
       resolverReports.push(inline.telemetry?.resolver)
       return withTikzTelemetry(inline, telemetry)
     }
-    const next = telemetry.compiled > 0 ? await engine.compile() : result
+    const next =
+      telemetry.compiled > 0 ? (await this.operations.observe(engine.compile())).resume() : result
     if (next !== result) resolverReports.push(next.telemetry?.resolver)
     telemetry.pictureErrors = mergePictureErrors(next, errors)
     if (failureLog) next.log += failureLog
@@ -1126,7 +1260,9 @@ export class WasmTexCompiler {
     const engine = this.engine
     if (!engine) return null
     const mainBase = this.mainFile.replace(/\.tex$/i, '')
-    const listed = await this.readTikzFigureList(mainBase, snapshot)
+    const listed = (
+      await this.operations.observe(this.readTikzFigureList(mainBase, snapshot))
+    ).resume()
     if (!listed) return null
     const { realJob, names } = listed
     // Auto mode with too few pictures to pay for a figure worker: the static check could not
@@ -1142,9 +1278,13 @@ export class WasmTexCompiler {
     const workers =
       this.opts.tikzExternalization?.workers ??
       defaultFigureWorkers(nav?.hardwareConcurrency, nav?.deviceMemory)
-    const pool = await this.ensureTikzPool(workers)
+    const pool = (await this.operations.observe(this.ensureTikzPool(workers))).resume()
     pool.retain(names)
-    const md5s = await Promise.all(names.map((name) => engine.readFile(`${name}.md5`)))
+    const md5s = (
+      await this.operations.observe(
+        Promise.all(names.map((name) => engine.readFile(`${name}.md5`))),
+      )
+    ).resume()
     const jobs = names
       .map((name, i) => ({ name, md5: parseFigureMd5(md5s[i]) }))
       .filter((job) => !pool.isCurrent(job.name, job.md5))
@@ -1164,23 +1304,23 @@ export class WasmTexCompiler {
     // the figure workers under that name.
     // `\include`d chapters keep their own `.aux`, which the main aux `\@input`s.
     const auxEntries: Array<[string, string]> = []
-    const aux = await engine.readFile(`${mainBase}.aux`)
+    const aux = (await this.operations.observe(engine.readFile(`${mainBase}.aux`))).resume()
     if (aux !== null) auxEntries.push([`${realJob}.aux`, aux])
     for (const path of this.projectTexFiles().keys()) {
       if (path === this.mainFile) continue
       const chapterAux = `${path.replace(/\.tex$/i, '')}.aux`
-      const content = await engine.readFile(chapterAux)
+      const content = (await this.operations.observe(engine.readFile(chapterAux))).resume()
       if (content !== null) auxEntries.push([chapterAux, content])
     }
     const files = (): Iterable<[string, string | Uint8Array]> => [
       ...this.projectFileEntries(),
       ...auxEntries,
     ]
-    const run = await pool.render(
-      jobs,
-      (figure) => figureJobSource(source, kind, realJob, figure),
-      files,
-    )
+    const run = (
+      await this.operations.observe(
+        pool.render(jobs, (figure) => figureJobSource(source, kind, realJob, figure), files),
+      )
+    ).resume()
     telemetry.compiled = run.rendered.size
     telemetry.failed = run.failures.map((f) => f.name)
     telemetry.figureTimeMs = Math.round(run.elapsedMs)
@@ -1192,20 +1332,26 @@ export class WasmTexCompiler {
     }
     const paths: string[] = []
     for (const name of run.rendered.keys()) paths.push(`${name}.pdf`)
-    await this.ensureEngineDirectories(paths)
-    await Promise.all(
-      [...run.rendered].flatMap(([name, figure]) => [
-        engine.writeFile(`${name}.pdf`, figure.pdf),
-        ...(figure.dpth !== null ? [engine.writeFile(`${name}.dpth`, figure.dpth)] : []),
-      ]),
-    )
+    ;(await this.operations.observe(this.ensureEngineDirectories(paths))).resume()
+    ;(
+      await this.operations.observe(
+        Promise.all(
+          [...run.rendered].flatMap(([name, figure]) => [
+            engine.writeFile(`${name}.pdf`, figure.pdf),
+            ...(figure.dpth !== null ? [engine.writeFile(`${name}.dpth`, figure.dpth)] : []),
+          ]),
+        ),
+      )
+    ).resume()
     return { telemetry, errors, failureLog }
   }
 
   /** The figure pool, loaded on first use (most documents never externalize). */
   private async ensureTikzPool(workers: number): Promise<TikzFigurePool> {
     if (!this.tikzPool) {
-      const { TikzFigurePool } = await import('./engine/tikz-figure-pool')
+      const { TikzFigurePool } = (
+        await this.operations.observe(import('./engine/tikz-figure-pool'))
+      ).resume()
       this.tikzPool = new TikzFigurePool(() => this.spawnFigureCompiler(), workers, this.mainFile)
     }
     return this.tikzPool
@@ -1223,7 +1369,9 @@ export class WasmTexCompiler {
       ? [PREAMBLE_SNAPSHOT_JOBNAME, mainBase]
       : [mainBase, PREAMBLE_SNAPSHOT_JOBNAME]
     for (const realJob of candidates) {
-      const names = parseFigureList(await engine.readFile(`${realJob}.figlist`))
+      const names = parseFigureList(
+        (await this.operations.observe(engine.readFile(`${realJob}.figlist`))).resume(),
+      )
       if (names.length > 0) return { realJob, names }
     }
     return null
@@ -1303,12 +1451,18 @@ export class WasmTexCompiler {
     const engine = this.engine
     if (!engine || this.unavailable) return
     const modified = this.fs.getModifiedFiles()
-    await this.ensureEngineDirectories(modified.map((file) => file.path))
-    await Promise.all(
-      modified.map((file) =>
-        engine.writeFile(file.path, this.engineContent(file.path, file.content)),
-      ),
-    )
+    ;(
+      await this.operations.observe(this.ensureEngineDirectories(modified.map((file) => file.path)))
+    ).resume()
+    ;(
+      await this.operations.observe(
+        Promise.all(
+          modified.map((file) =>
+            engine.writeFile(file.path, this.engineContent(file.path, file.content)),
+          ),
+        ),
+      )
+    ).resume()
     // Only clear the files we synced; edits that landed during the awaits above
     // replaced their map entries and must remain modified for the next cycle.
     this.fs.markSynced(modified)
@@ -1328,7 +1482,7 @@ export class WasmTexCompiler {
       }
     }
     for (const dir of Array.from(dirs).sort()) {
-      await engine.mkdir(dir)
+      ;(await this.operations.observe(engine.mkdir(dir))).resume()
     }
   }
 
@@ -1345,7 +1499,7 @@ export class WasmTexCompiler {
   private async updateMetadata(result: CompileResult): Promise<void> {
     if (!this.engine) return
     const base = this.mainFile.replace(/\.tex$/, '')
-    const aux = await this.engine.readFile(`${base}.aux`)
+    const aux = (await this.operations.observe(this.engine.readFile(`${base}.aux`))).resume()
     if (aux) this.projectIndex.updateAuxData(parseAuxFile(aux))
     if (result.engineCommands?.length) {
       this.projectIndex.updateEngineCommands(result.engineCommands)
@@ -1371,8 +1525,10 @@ export class WasmTexCompiler {
    *  is classic-BibTeX *or* biblatex (never both), so the two bibliography paths gate on
    *  mutually exclusive triggers and at most one fires. */
   private async runAuxStages(result: CompileResult): Promise<boolean> {
-    const bib = (await this.maybeRunBibtex(result)) || (await this.maybeRunBiblatex(result))
-    const idx = await this.maybeRunMakeindex(result)
+    const bib =
+      (await this.operations.observe(this.maybeRunBibtex(result))).resume() ||
+      (await this.operations.observe(this.maybeRunBiblatex(result))).resume()
+    const idx = (await this.operations.observe(this.maybeRunMakeindex(result))).resume()
     return bib || idx
   }
 
@@ -1384,7 +1540,9 @@ export class WasmTexCompiler {
     if (!this.fs.listFiles().some((path) => path.endsWith('.bib'))) return false
 
     const mainBase = this.mainFile.replace(/\.tex$/, '')
-    const auxContent = await mainEngine.readFile(`${mainBase}.aux`)
+    const auxContent = (
+      await this.operations.observe(mainEngine.readFile(`${mainBase}.aux`))
+    ).resume()
     if (!auxContent?.includes('\\citation{') || !auxContent.includes('\\bibdata{')) return false
     if (this.fs.readFile(`${mainBase}.bbl`)) return false
 
@@ -1397,8 +1555,10 @@ export class WasmTexCompiler {
     const bst = this.resolveProjectBst(auxContent)
     if (bst) request.bstFiles = { [bst.path]: bst.content }
     const bbl =
-      (await runRemoteBibliography(this.opts.backends, request)) ??
-      (await this.runClientBibtex(mainBase, auxContent, bibFiles))
+      (
+        await this.operations.observe(runRemoteBibliography(this.opts.backends, request))
+      ).resume() ??
+      (await this.operations.observe(this.runClientBibtex(mainBase, auxContent, bibFiles))).resume()
     const observation: AuxiliaryDependencyObservation = {
       stage: 'bibliography',
       projectInputs: [...Object.keys(bibFiles), ...Object.keys(request.bstFiles ?? {})],
@@ -1412,7 +1572,7 @@ export class WasmTexCompiler {
     this.fs.writeFile(outputPath, bbl)
     this.generatedFiles.add(dependencyPath)
     this.generatedDependencyObservations.set(dependencyPath, observation)
-    await mainEngine.writeFile(outputPath, bbl)
+    ;(await this.operations.observe(mainEngine.writeFile(outputPath, bbl))).resume()
     return true
   }
 
@@ -1437,14 +1597,16 @@ export class WasmTexCompiler {
     if (this.fs.readFile(`${mainBase}.bbl`)) return false
     // biblatex emits the `.bcf` only once `\usepackage{biblatex}` ran; bail until it exists so
     // a stale/absent control file can't drive an empty bibliography.
-    const bcf = await mainEngine.readFile(`${mainBase}.bcf`)
+    const bcf = (await this.operations.observe(mainEngine.readFile(`${mainBase}.bcf`))).resume()
     if (!bcf?.trim()) return false
 
     const bibFiles = this.collectBibFiles()
     // Server Biber (full fidelity) when wired for `backend=biber`; else bundled biblatex-lite.
     const bbl =
       (detectBiblatexBackend(source) === 'biber'
-        ? await runRemoteBiber(this.opts.backends, { bcf, bibFiles })
+        ? (
+            await this.operations.observe(runRemoteBiber(this.opts.backends, { bcf, bibFiles }))
+          ).resume()
         : null) ?? this.runClientBiblatexLite(source, bcf, bibFiles)
     const observation: AuxiliaryDependencyObservation = {
       stage: 'bibliography',
@@ -1459,7 +1621,7 @@ export class WasmTexCompiler {
     this.fs.writeFile(outputPath, bbl)
     this.generatedFiles.add(dependencyPath)
     this.generatedDependencyObservations.set(dependencyPath, observation)
-    await mainEngine.writeFile(outputPath, bbl)
+    ;(await this.operations.observe(mainEngine.writeFile(outputPath, bbl))).resume()
     return true
   }
 
@@ -1498,13 +1660,13 @@ export class WasmTexCompiler {
 
     const mainBase = this.mainFile.replace(/\.tex$/, '')
     if (this.fs.readFile(`${mainBase}.ind`)) return false
-    const idx = await mainEngine.readFile(`${mainBase}.idx`)
+    const idx = (await this.operations.observe(mainEngine.readFile(`${mainBase}.idx`))).resume()
     if (!idx?.trim()) return false
 
     const request: IndexStageRequest = { idx }
     const ind =
-      (await runRemoteIndex(this.opts.backends, request)) ??
-      (await this.runClientMakeindex(mainBase, idx))
+      (await this.operations.observe(runRemoteIndex(this.opts.backends, request))).resume() ??
+      (await this.operations.observe(this.runClientMakeindex(mainBase, idx))).resume()
     const observation: AuxiliaryDependencyObservation = {
       stage: 'index',
       projectInputs: [],
@@ -1518,7 +1680,7 @@ export class WasmTexCompiler {
     this.fs.writeFile(outputPath, ind)
     this.generatedFiles.add(dependencyPath)
     this.generatedDependencyObservations.set(dependencyPath, observation)
-    await mainEngine.writeFile(outputPath, ind)
+    ;(await this.operations.observe(mainEngine.writeFile(outputPath, ind))).resume()
     return true
   }
 
@@ -1549,18 +1711,18 @@ export class WasmTexCompiler {
     auxContent: string,
     bibFiles: Record<string, string>,
   ): Promise<string | null> {
-    const engine = await this.ensureBibtexEngine()
-    await engine.writeFile(`${mainBase}.aux`, auxContent)
+    const engine = (await this.operations.observe(this.ensureAuxEngine('bibtexEngine'))).resume()
+    ;(await this.operations.observe(engine.writeFile(`${mainBase}.aux`, auxContent))).resume()
     for (const [path, content] of Object.entries(bibFiles)) {
-      await engine.writeFile(path, content)
+      ;(await this.operations.observe(engine.writeFile(path, content))).resume()
     }
     // A `\bibliographystyle{mycustom}` referencing a project-local `mycustom.bst` must be
     // written into the BibTeX engine FS — kpathsea only finds bundled styles otherwise, so a
     // custom style silently yields no `.bbl` (mirrors the UI path's sendFilesToBibtex).
     const bst = this.resolveProjectBst(auxContent)
-    if (bst) await engine.writeFile(bst.path, bst.content)
-    await engine.compile(mainBase)
-    return (await engine.readFile(`${mainBase}.bbl`)) ?? null
+    if (bst) (await this.operations.observe(engine.writeFile(bst.path, bst.content))).resume()
+    ;(await this.operations.observe(engine.compile(mainBase))).resume()
+    return (await this.operations.observe(engine.readFile(`${mainBase}.bbl`))).resume() ?? null
   }
 
   /** Shared constructor options for the bundled aux-stage engines (BibTeX, makeindex):
@@ -1578,29 +1740,37 @@ export class WasmTexCompiler {
     return opts
   }
 
-  private async ensureBibtexEngine(): Promise<BibtexEngine> {
-    if (this.bibtexEngine) return this.bibtexEngine
-    const engine = new BibtexEngine(this.auxEngineOpts())
-    await engine.init()
-    this.bibtexEngine = engine
-    return engine
-  }
-
   /** Run the bundled client makeindex (WASM) engine for the index stage → `.ind`, or null
    *  if it produced none. The default when no server backend is registered for `index`. */
   private async runClientMakeindex(mainBase: string, idx: string): Promise<string | null> {
-    const engine = await this.ensureMakeindexEngine()
-    await engine.writeFile(`${mainBase}.idx`, idx)
-    await engine.compile(mainBase)
-    return (await engine.readFile(`${mainBase}.ind`)) ?? null
+    const engine = (await this.operations.observe(this.ensureAuxEngine('makeindexEngine'))).resume()
+    ;(await this.operations.observe(engine.writeFile(`${mainBase}.idx`, idx))).resume()
+    ;(await this.operations.observe(engine.compile(mainBase))).resume()
+    return (await this.operations.observe(engine.readFile(`${mainBase}.ind`))).resume() ?? null
   }
 
-  private async ensureMakeindexEngine(): Promise<MakeindexEngine> {
-    if (this.makeindexEngine) return this.makeindexEngine
-    const engine = new MakeindexEngine(this.auxEngineOpts())
-    await engine.init()
-    this.makeindexEngine = engine
-    return engine
+  private async ensureAuxEngine(
+    key: 'bibtexEngine' | 'makeindexEngine',
+  ): Promise<BibtexEngine | MakeindexEngine> {
+    const existing = this[key]
+    if (existing) return existing
+    const engine =
+      key === 'bibtexEngine'
+        ? new BibtexEngine(this.auxEngineOpts())
+        : new MakeindexEngine(this.auxEngineOpts())
+    // Own it during initialization so cancellation can terminate its worker.
+    this[key] = engine
+    try {
+      ;(await this.operations.observe(engine.init())).resume()
+      return engine
+    } catch (error) {
+      // Cancellation may already have retired it; never clear a newer instance.
+      if (this[key] === engine) {
+        this[key] = null
+        engine.terminate()
+      }
+      throw error
+    }
   }
 
   private ensureInitialized(): void {
