@@ -156,6 +156,56 @@ entity identity.
 an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
 than as a JavaScript heap profiler.
 
+### Reviewed selection wrapping
+
+`getWrapOptions(path, { startOffset, endOffset }, cancellationToken?)` returns
+`{ ok: true, options }` or `{ ok: false, reason }`. Offsets are zero-based,
+end-exclusive UTF-16 positions in the current source. Each option specifies the
+command/environment name, confirmed argument signature, and `selectionArgument`;
+`null` means an environment body. Returned metadata is a detached copy.
+
+`planWrapSelection(path, { range, kind, name, arguments }, cancellationToken?)`
+rechecks the current project and returns one `{ range, expectedText, newText }`
+edit, or a refusal. The argument array is signature-indexed: supply `null` for
+the selection slot and omitted optional slots, and explicit source strings for
+other required slots. The selected source is retained exactly, including its
+Unicode and line endings. Environment wrappers add LF separators around that
+unchanged body. Neither method writes source or changes the project index.
+
+The supported text commands are `emph`, `textbf`, `textit`, `texttt`, and
+`underline`; math commands are `mathrm`, `mathbf`, `sqrt`, and `frac`. Text
+positions offer `quote`, `quotation`, `center`, `flushleft`, `flushright`, and
+`equation` environments. Math positions offer `aligned` when `amsmath` is active.
+This explicit SDK catalog establishes wrapper roles; arbitrary completion
+snippets and user macros do not establish them. Project declarations, including
+robust, primitive and possible redefinitions, retract affected built-in wrappers.
+
+Wrapping refuses comments, verbatim, inactive branches, definition templates,
+uncertain command arguments, crossed or unclosed groups/environments, math
+delimiter crossings and incomplete notation. Only the listed environment bodies
+and `document` establish container context; unknown environment arguments (for
+example `tabular` column specifications or `minipage` widths) are never treated as
+prose. An existing `aligned` optional position argument remains unsupported.
+Document delimiters cannot be wrapped. Text environments are omitted inside brace
+groups, and command wrappers are omitted for paragraph breaks, environment
+boundaries and math alignment separators. Unbraced script arguments require a
+larger complete selection. Additional argument source is checked in an isolated
+syntax snapshot using the current project metadata; it is not executed or expanded
+into editor source. `equation` bodies must also pass the math syntax boundary.
+
+Queries are explicit authoring actions. They reuse indexed group boundaries while
+scanning the active source; they do not run per keystroke. The limits are 1,000,000
+UTF-16 source units, 65,536 selected units and 16,384 units per extra argument.
+Cancellation returns a refusal. Refusal reasons are stable codes, leaving display
+text and localization to the host.
+
+Hosts must capture model/project/root/profile/access lifetimes, review the source
+change, and apply the expected-source edit only if those lifetimes remain current.
+The edit is not an authorization to mutate another source revision. Hosts own
+cancellation, collaborative application and Undo. These APIs establish a bounded
+source transformation, not successful compilation, mathematical equivalence or
+preserved equation numbering.
+
 ### Structural selection
 
 `getSelectionRanges(path, line, column, cancellationToken?)` returns a flat array

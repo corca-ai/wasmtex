@@ -285,7 +285,7 @@ const CITE_RE = new RegExp(`\\\\(?:${CITE_CMDS})(?:\\[[^\\]]*\\])*\\{`, 'g')
 // Sectioning commands accept an optional short-title arg: `\section[TOC]{Full}`.
 const SECTION_RE = new RegExp(`\\\\(${SECTION_CMDS})\\*?(?:\\[[^\\]]*\\])?\\{`, 'g')
 const NEWCOMMAND_RE = new RegExp(
-  String.raw`\\(${NEWCMD_CMDS}|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand)\*?\s*(?:\{\s*${COMMAND_TOKEN}\s*\}|${COMMAND_TOKEN})\s*(?:\[(\d+)\])?`,
+  String.raw`\\(${NEWCMD_CMDS}|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand)\*?\s*(?:\{\s*${COMMAND_TOKEN}\s*\}|${COMMAND_TOKEN})\s*(?:\[(\d+)\])?`,
   'g',
 )
 const DEF_RE = new RegExp(

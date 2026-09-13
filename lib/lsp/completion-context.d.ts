@@ -52,7 +52,24 @@ export interface CommandArgumentCompletionContext extends CompletionContextBase 
     keyFamilySelector?: RelatedCompletionArgument;
 }
 export type CompletionContext = CommandNameCompletionContext | CommandArgumentCompletionContext | BibCompletionContext;
+interface ParsedGroup {
+    delimiter: 'required' | 'optional';
+    open: number;
+    contentStart: number;
+    contentEnd: number;
+    end: number;
+    closed: boolean;
+    argumentIndex: number;
+    signatureIndex?: number;
+    spec: CommandArg;
+}
+interface ParsedInvocation {
+    command: string;
+    starred: boolean;
+    groups: ParsedGroup[];
+}
 type GroupReader = typeof readBalancedGroup;
+export declare function parseInvocation(text: string, token: Token, metadata: CompletionCommandMetadataProvider | undefined, readGroup?: GroupReader): ParsedInvocation | null;
 /** Analyze a completion position using the full active document. Never throws. */
 export declare function analyzeCompletionContext(document: NeutralDocument, position: NeutralPosition, metadata?: CompletionCommandMetadataProvider): CompletionContext | null;
 /** Source ranges from the same confirmed invocation grammar as parameter hints.

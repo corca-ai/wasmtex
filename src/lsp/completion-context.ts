@@ -161,7 +161,7 @@ function nextSignatureIndex(
 
 type GroupReader = typeof readBalancedGroup
 
-function parseInvocation(
+export function parseInvocation(
   text: string,
   token: Token,
   metadata: CompletionCommandMetadataProvider | undefined,
