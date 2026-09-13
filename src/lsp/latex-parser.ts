@@ -1,4 +1,5 @@
 import { readBalancedGroup } from './balanced-group'
+import { environmentNamePairs } from './environment-pairs'
 import {
   CITE_CMDS,
   COMMAND_TOKEN,
@@ -521,7 +522,7 @@ function extractLabels(ctx: Ctx, symbols: FileSymbols): void {
 /** Only whitespace/comments may separate a confirmed title and its label.
  * An intervening invocation could change the counter; do not guess through it. */
 function attachLabelContexts(ctx: Ctx, symbols: FileSymbols): void {
-  const definitions = macroDefinitionSpans(ctx.masked)
+  const definitions = macroDefinitionSpans(ctx.masked, ctx.commandOccurrences)
   const labels = new Map(
     symbols.labels.map((label) => [`${label.location.line}:${label.location.column}`, label]),
   )
@@ -571,7 +572,7 @@ function extractCitations(ctx: Ctx, symbols: FileSymbols): void {
 }
 
 function extractSections(ctx: Ctx, symbols: FileSymbols): void {
-  const definitions = macroDefinitionSpans(ctx.masked)
+  const definitions = macroDefinitionSpans(ctx.masked, ctx.commandOccurrences)
   for (const m of ctx.masked.matchAll(SECTION_RE)) {
     if (definitions.some(([start, end]) => start <= m.index && m.index < end)) continue
     const title = extractBraceContent(ctx.masked, m.index + m[0].length - 1, ctx.groupEnds)
@@ -1400,55 +1401,66 @@ const MACRO_OPERATOR_RE = /\\DeclareMathOperator(\*)?\{\\(\w+)\}\s*\{/g
 // A definition's name and replacement text are templates, not executed structure.
 // Keep this separate from calledMacroBodySpans: section/environment scopes must
 // exclude uncalled templates too, while label navigation has its own call policy.
-const MACRO_SCOPE_RE = new RegExp(
-  String.raw`\\(?:${NEWCMD_CMDS})\*?\s*(?:\{\s*\\[\w@]+\s*\}|\\[\w@]+)\s*(?:\[\d+\]\s*)?(?:\[[^\]]*\]\s*)?\{`,
+const DEFINITION_SCOPE_RE = new RegExp(
+  String.raw`\\(${NEWCMD_CMDS}|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:new|renew|provide)environment|def|gdef|edef|xdef)(?![A-Za-z@:_])\*?\s*`,
   'g',
 )
-const DEF_SCOPE_RE = /\\(?:def|gdef|edef|xdef)\s*\\[\w@]+/g
 
-function macroDefinitionSpans(masked: string): Array<[number, number]> {
+function declarationNameEnd(masked: string, start: number, ends: GroupEndIndex): number | null {
+  const group = indexedInvocationGroup(masked, start, ends)
+  if (group?.delimiter === 'required') return group.end
+  const token = /^\\(?:[A-Za-z@]+|[^A-Za-z@\r\n])/.exec(masked.slice(start))
+  return token ? start + token[0].length : null
+}
+
+function macroDefinitionSpans(
+  masked: string,
+  commands: readonly { start: number }[] = scanCommandOccurrences(masked),
+): Array<[number, number]> {
+  const commandStarts = new Set(commands.map((command) => command.start))
   const ends = indexGroupEnds(masked)
-  const spans = primitiveDefinitionSpans(masked, ends)
-  for (const match of masked.matchAll(NEWCOMMAND_RE)) {
-    if (!match[1]!.endsWith('DocumentCommand')) continue
-    const groups = invocationGroups(masked, match.index + match[0].length, ends)
-    const body = groups[1]
-    spans.push([match.index, body?.end ?? masked.length])
-  }
-  const environments =
-    /\\(?:(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:new|renew|provide)environment)(?![A-Za-z@:_])\*?\s*/g
-  for (const match of masked.matchAll(environments)) {
-    const groups = invocationGroups(masked, match.index + match[0].length, ends)
-    const required = groups.filter((group) => group.delimiter === 'required')
-    const body = required[match[0].includes('DocumentEnvironment') ? 3 : 2]
-    spans.push([match.index, body?.end ?? masked.length])
-  }
-  for (const match of masked.matchAll(MACRO_SCOPE_RE)) {
-    const open = match.index + match[0].length - 1
-    const body = extractBraceContent(masked, open, ends)
-    spans.push([match.index, body === null ? masked.length : open + body.length + 2])
+  const spans: Array<[number, number]> = []
+  const scanner = new RegExp(DEFINITION_SCOPE_RE)
+  for (let match = scanner.exec(masked); match; match = scanner.exec(masked)) {
+    if (!commandStarts.has(match.index)) continue
+    const nameEnd = declarationNameEnd(masked, scanner.lastIndex, ends)
+    const end = nameEnd === null ? masked.length : definitionEnd(masked, nameEnd, match[1]!, ends)
+    spans.push([match.index, end])
+    // A replacement is not executed here. In particular a bare declaration token
+    // in its body cannot become an incomplete declaration extending to EOF.
+    scanner.lastIndex = end
   }
   return spans
 }
 
-function primitiveDefinitionSpans(masked: string, ends: GroupEndIndex): Array<[number, number]> {
-  const spans: Array<[number, number]> = []
-  const scanner = new RegExp(DEF_SCOPE_RE)
-  const group = /[{}]/g
-  for (let match = scanner.exec(masked); match; match = scanner.exec(masked)) {
-    // Consume each parameter/replacement span once, including malformed input.
-    group.lastIndex = scanner.lastIndex
-    const boundary = group.exec(masked)
-    if (!boundary) break
-    scanner.lastIndex = boundary.index + 1
-    if (boundary[0] !== '{') continue
-    const open = boundary.index
-    const body = extractBraceContent(masked, open, ends)
-    const end = body === null ? masked.length : open + body.length + 2
-    spans.push([match.index, end])
-    scanner.lastIndex = end
+function definitionEnd(
+  masked: string,
+  start: number,
+  command: string,
+  ends: GroupEndIndex,
+): number {
+  if (/^(?:def|gdef|edef|xdef)$/.test(command)) return primitiveDefinitionEnd(masked, start, ends)
+  const required = invocationGroups(masked, start, ends).filter(
+    (group) => group.delimiter === 'required',
+  )
+  const bodyIndex = command.endsWith('DocumentEnvironment')
+    ? 2
+    : command.endsWith('environment')
+      ? 1
+      : command.endsWith('DocumentCommand')
+        ? 1
+        : 0
+  return required[bodyIndex]?.end ?? masked.length
+}
+
+function primitiveDefinitionEnd(masked: string, start: number, ends: GroupEndIndex): number {
+  const boundary = /\\.|[{}]/g
+  boundary.lastIndex = start
+  for (let match = boundary.exec(masked); match; match = boundary.exec(masked)) {
+    if (match[0] === '{') return (ends.get(match.index) ?? masked.length - 1) + 1
+    if (match[0] === '}') return match.index + 1
   }
-  return spans
+  return masked.length
 }
 
 /** Reuses the owning token stream to ignore comments and verbatim text. */
@@ -1456,7 +1468,10 @@ export function macroDefinitionSpansFromTokens(
   content: string,
   tokens: readonly Token[],
 ): Array<[number, number]> {
-  return macroDefinitionSpans(maskContent(content, [...tokens]))
+  return macroDefinitionSpans(
+    maskContent(content, [...tokens]),
+    tokens.filter((token) => token.type === 'command'),
+  )
 }
 
 /** Collect user macro definitions (\newcommand / \def / \DeclareMathOperator). */
@@ -1856,6 +1871,13 @@ export function parseLatexFile(
     groupEnds: indexGroupEnds(literalMasked),
     commandOccurrences: scanCommandOccurrences(literalMasked),
   }
+
+  symbols.environmentNamePairs = environmentNamePairs(
+    content,
+    blankSpans(masked, macroDefinitionSpans(masked, ctx.commandOccurrences)),
+    tokens,
+    ctx.lineStarts,
+  )
 
   extractLabels(literalCtx, symbols)
   attachLabelContexts(literalCtx, symbols)

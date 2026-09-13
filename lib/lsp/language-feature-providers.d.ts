@@ -1,3 +1,4 @@
+import { VirtualFS } from '../fs/virtual-fs.js';
 import { CompletionResolverRegistry } from './completion-registry.js';
 import { ProjectIndex } from './project-index.js';
 /**
@@ -14,3 +15,4 @@ export declare function createLinkProvider(): monaco.languages.LinkProvider;
 export declare function createSemanticTokensProvider(): monaco.languages.DocumentSemanticTokensProvider;
 /** Code-action provider. Applies workspace edits through `onWorkspaceEdit` if provided. */
 export declare function createCodeActionProvider(index: ProjectIndex): monaco.languages.CodeActionProvider;
+export declare function createLinkedEditingRangeProvider(index: ProjectIndex, fs: VirtualFS): monaco.languages.LinkedEditingRangeProvider;

@@ -9,6 +9,7 @@ import {
   createDocumentHighlightProvider,
   createFoldingRangeProvider,
   createInlayHintsProvider,
+  createLinkedEditingRangeProvider,
   createLinkProvider,
   createSemanticTokensProvider,
   createSignatureHelpProvider,
@@ -40,6 +41,10 @@ export function registerLatexProviders(
     monaco.languages.registerRenameProvider(
       languageId,
       createRenameProvider(index, onWorkspaceEdit),
+    ),
+    monaco.languages.registerLinkedEditingRangeProvider(
+      languageId,
+      createLinkedEditingRangeProvider(index, fs),
     ),
     // Iteration 11 — rounded-out language features.
     monaco.languages.registerSignatureHelpProvider(

@@ -1,6 +1,11 @@
 import { type Position, Uri } from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
-import { createLinkProvider, createSignatureHelpProvider } from '../language-feature-providers'
+import { VirtualFS } from '../../fs/virtual-fs'
+import {
+  createLinkedEditingRangeProvider,
+  createLinkProvider,
+  createSignatureHelpProvider,
+} from '../language-feature-providers'
 import { ProjectIndex } from '../project-index'
 
 // biome-ignore lint/suspicious/noExplicitAny: a minimal Monaco model stub for the link provider.
@@ -48,4 +53,27 @@ it('uses project signature metadata in the Monaco adapter', async () => {
     activeParameter: 0,
     signatures: [{ label: '\\vect{arg1}' }],
   })
+})
+
+it('maps linked editing to Monaco and refuses cancelled or unsynchronized models', async () => {
+  const content = String.raw`\begin{align}x\end{align}`
+  const index = new ProjectIndex()
+  const fs = new VirtualFS()
+  fs.writeFile('main.tex', content)
+  index.updateFile('main.tex', content)
+  const provider = createLinkedEditingRangeProvider(index, fs)
+  const position = { lineNumber: 1, column: 9 } as Position
+  const active = { isCancellationRequested: false } as never
+  const result = await provider.provideLinkedEditingRanges(model(content), position, active)
+  expect(result?.ranges.map((range) => [range.startColumn, range.endColumn])).toEqual([
+    [8, 13],
+    [20, 25],
+  ])
+  expect(result?.wordPattern?.test('align*')).toBe(true)
+  expect(await provider.provideLinkedEditingRanges(model('changed'), position, active)).toBeNull()
+  expect(
+    await provider.provideLinkedEditingRanges(model(content), position, {
+      isCancellationRequested: true,
+    } as never),
+  ).toBeNull()
 })

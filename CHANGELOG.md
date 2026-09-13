@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Changed
 
+- Provide parser-backed linked editing ranges for matched literal environment names
+  through the neutral language service, Monaco and JSON-RPC.
+
 - Reference completion searches directly associated source titles/captions, file
   locations and supported aux fields while inserting only the label key. Neutral
   filter text reaches Monaco and JSON-RPC; duplicate destinations, incomplete aux

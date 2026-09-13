@@ -1,3 +1,4 @@
+import { EnvironmentNamePair } from './environment-pairs.js';
 import { CommandArg } from './package-db.js';
 export interface SourceLocation {
     file: string;
@@ -102,6 +103,8 @@ export interface BibliographyRef {
     location: SourceLocation;
 }
 export interface FileSymbols {
+    /** Matched literal environment names, computed with the owning parser pass. */
+    environmentNamePairs?: EnvironmentNamePair[];
     labels: LabelDef[];
     labelRefs: LabelRef[];
     citations: CitationRef[];
