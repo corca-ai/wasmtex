@@ -47,7 +47,7 @@ interface Signature {
 }
 
 for (const engine of ENGINES) {
-  test(`golden output — ${engine}`, async ({ page }) => {
+  test(`golden output — ${engine}`, async ({ page }, testInfo) => {
     const file = join(GOLDEN_DIR, `${engine}.json`)
     test.skip(
       !UPDATE && !existsSync(file),
@@ -97,6 +97,7 @@ for (const engine of ENGINES) {
     // Page count via pdf-lib (handles PDF 1.5+ compressed object streams, where
     // `/Type /Page` is not visible in the raw bytes). Deterministic, unlike the PDF's
     // timestamp-bearing bytes — which is why the bytes themselves never enter the golden.
+    await testInfo.attach('engine.log', { body: raw.log, contentType: 'text/plain' })
     const pages = raw.pdfBytes.length
       ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()
       : 0
@@ -125,7 +126,7 @@ for (const engine of ENGINES) {
 }
 
 for (const engine of ['xelatex', 'lualatex'] as const) {
-  test(`golden output — ${engine} PDF import packages`, async ({ page }) => {
+  test(`golden output — ${engine} PDF import packages`, async ({ page }, testInfo) => {
     // The first 2026 LuaHBTeX compile loads the engine, format, font database,
     // and PDF backend before it can exercise the imported document. Keep the
     // default timeout for the smaller corpus, but allow this deliberately cold,
@@ -153,6 +154,7 @@ for (const engine of ['xelatex', 'lualatex'] as const) {
           const r = await c.compile()
           const g = r.telemetry?.geometry
           return {
+            log: r.log,
             success: r.success,
             errorCount: r.errors.length,
             diagnosticCodes: [
@@ -180,6 +182,7 @@ for (const engine of ['xelatex', 'lualatex'] as const) {
         texliveUrl: TEXLIVE_URL,
       },
     )
+    await testInfo.attach('engine.log', { body: raw.log, contentType: 'text/plain' })
     const pages = raw.pdfBytes.length
       ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()
       : 0
@@ -203,7 +206,7 @@ for (const engine of ['xelatex', 'lualatex'] as const) {
 }
 
 // Bibliography (pdfLaTeX + BibTeX) — a multi-file project so the bibtex pass runs.
-test('golden output — bibtex', async ({ page }) => {
+test('golden output — bibtex', async ({ page }, testInfo) => {
   const file = join(GOLDEN_DIR, 'bibtex.json')
   test.skip(
     !UPDATE && !existsSync(file),
@@ -223,6 +226,8 @@ test('golden output — bibtex', async ({ page }) => {
       await c.init()
       const r = await c.compile()
       return {
+        bbl: await c.readOutput('main.bbl'),
+        log: r.log,
         success: r.success,
         errorCount: r.errors.length,
         diagnosticCodes: [...new Set((r.telemetry?.diagnostics ?? []).map((d) => d.code))].sort(),
@@ -233,6 +238,7 @@ test('golden output — bibtex', async ({ page }) => {
     }
   }, { files: BIBTEX_FILES, texliveVersion: TEXLIVE_VERSION, texliveUrl: TEXLIVE_URL })
 
+  await testInfo.attach('engine.log', { body: raw.log, contentType: 'text/plain' })
   const pages = raw.pdfBytes.length
     ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()
     : 0
@@ -244,6 +250,8 @@ test('golden output — bibtex', async ({ page }) => {
     geometry: null,
   }
 
+  expect(raw.bbl).toContain('\\bibitem{knuth1984}')
+  expect(raw.bbl).toContain('Addison-Wesley')
   expect(sig.success, 'bibtex compile failed').toBe(true)
   expect(sig.pages, 'bibtex produced no pages').toBeGreaterThan(0)
 
@@ -260,7 +268,7 @@ test('golden output — bibtex', async ({ page }) => {
 // Index (pdfLaTeX + makeindex) — `\index` + `\printindex`, so the index stage runs and the
 // rerun resolves `\printindex`. The dedicated `makeindex.spec.ts` asserts the `.ind` content;
 // this locks the structural signature like the other goldens.
-test('golden output — makeindex', async ({ page }) => {
+test('golden output — makeindex', async ({ page }, testInfo) => {
   const file = join(GOLDEN_DIR, 'makeindex.json')
   test.skip(
     !UPDATE && !existsSync(file),
@@ -280,6 +288,7 @@ test('golden output — makeindex', async ({ page }) => {
       await c.init()
       const r = await c.compile()
       return {
+        log: r.log,
         success: r.success,
         errorCount: r.errors.length,
         diagnosticCodes: [...new Set((r.telemetry?.diagnostics ?? []).map((d) => d.code))].sort(),
@@ -290,6 +299,7 @@ test('golden output — makeindex', async ({ page }) => {
     }
   }, { files: MAKEINDEX_FILES, texliveVersion: TEXLIVE_VERSION, texliveUrl: TEXLIVE_URL })
 
+  await testInfo.attach('engine.log', { body: raw.log, contentType: 'text/plain' })
   const pages = raw.pdfBytes.length
     ? (await PDFDocument.load(Uint8Array.from(raw.pdfBytes))).getPageCount()
     : 0
@@ -312,4 +322,58 @@ test('golden output — makeindex', async ({ page }) => {
   }
 
   expect(sig).toEqual(JSON.parse(readFileSync(file, 'utf8')) as Signature)
+})
+
+// Explicit source lines on separate paragraphs avoid a vacuous lookup test over
+// whatever nodes happen to be emitted. Reuse one worker for cold and warm runs.
+test('golden output — pdfLaTeX source navigation cold and warm', async ({ page }, testInfo) => {
+  test.setTimeout(120_000)
+  await page.goto(APP_URL)
+  const reports = await page.evaluate(async ({ texliveVersion, texliveUrl }) => {
+    const { WasmTexCompiler } = await import('/src/headless.ts')
+    const { SynctexParser } = await import('/src/synctex/synctex-parser.ts')
+    const compiler = new WasmTexCompiler({
+      engine: 'pdflatex', texliveVersion,
+      ...(texliveUrl ? { texliveUrl } : {}),
+      files: { 'main.tex': [
+        '\\documentclass{article}', '\\begin{document}',
+        'First paragraph.', '', 'Second paragraph.', '', 'Third paragraph.',
+        '\\end{document}', '',
+      ].join('\n') },
+    })
+    try {
+      await compiler.init()
+      const reports = []
+      for (let pass = 0; pass < 2; pass++) {
+        const result = await compiler.compile()
+        if (!result.success || !result.synctex) throw new Error(result.log || 'Missing SyncTeX')
+        const parser = new SynctexParser()
+        const data = await parser.parse(result.synctex)
+        const file = [...data.inputs.values()].find(name => /(^|\/)main\.tex$/.test(name))
+        if (!file) throw new Error('SyncTeX main.tex input missing')
+        reports.push({ log: result.log, lookups: [3, 5, 7].map(line => {
+          const forward = parser.forwardLookup(data, file, line)
+          const inverse = forward
+            ? parser.inverseLookup(data, forward.page, forward.x + forward.width / 2, forward.y + forward.height / 2)
+            : null
+          return { line, forward, inverse }
+        }) })
+      }
+      return reports
+    } finally {
+      compiler.dispose()
+    }
+  }, { texliveVersion: TEXLIVE_VERSION, texliveUrl: TEXLIVE_URL })
+  expect(reports).toHaveLength(2)
+  for (const report of reports) {
+    await testInfo.attach('engine.log', { body: report.log, contentType: 'text/plain' })
+    expect(report.lookups).toHaveLength(3)
+    for (const { line, forward, inverse } of report.lookups) {
+      expect(forward?.page).toBe(1)
+      expect(forward?.width).toBeGreaterThan(0)
+      expect(forward?.height).toBeGreaterThan(0)
+      expect(inverse?.file).toMatch(/(^|\/)main\.tex$/)
+      expect(inverse?.line).toBe(line)
+    }
+  }
 })

@@ -14,9 +14,46 @@ on:
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          required=true
+          if [ "$EVENT" = pull_request ]; then
+            git diff --no-renames --name-only -z "$BASE...$HEAD" > changed-paths
+            required=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                src/*|lib/*|e2e/*|test/*|wasm-build/*|public/*|scripts/*|.github/*|package.json|package-lock.json|*config.*|.nvmrc|index.html)
+                  required=true ;;
+              esac
+            done < changed-paths
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "Representative output regression required: $required" >> "$GITHUB_STEP_SUMMARY"
+
   golden:
+    needs: changes
+    if: needs.changes.outputs.required == 'true'
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,17 +85,25 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Golden output regression
-        run: npx playwright test golden-output
+      - name: Require every annual golden
+        run: |
+          golden_dir=e2e/goldens
+          if [ "$TEXLIVE_VERSION" = 2026 ]; then golden_dir="$golden_dir/2026"; fi
+          for name in pdflatex xelatex lualatex bibtex makeindex pdf-import-xelatex pdf-import-lualatex; do
+            test -s "$golden_dir/$name.json"
+          done
+      - name: Golden output and source navigation regression
+        run: npx playwright test golden-output --workers=1 --reporter=line,html
 
       - name: Cross-host parity (Node host ≡ browser golden) — S4 #111
+        if: ${{ !cancelled() }}
         env:
           WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.texlive_year }}
           WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.texlive_url }}
-        run: CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
+        run: CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts --reporter=default --reporter=junit --outputFile.junit=test-results/cross-host.xml
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload browser and Node regression evidence
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: golden-canary-report-${{ matrix.texlive_year }}
@@ -66,3 +111,23 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 30
+
+  output-regression:
+    if: always()
+    needs: [changes, golden]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report required regression outcome
+        env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          REQUIRED: ${{ needs.changes.outputs.required }}
+          GOLDEN_RESULT: ${{ needs.golden.result }}
+        run: |
+          test "$SCOPE_RESULT" = success
+          if [ "$REQUIRED" = true ]; then
+            test "$GOLDEN_RESULT" = success
+            echo 'Both annual output regression jobs passed.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            test "$REQUIRED" = false
+            echo 'Output regression not required: no runtime, fixture, build or CI paths changed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
