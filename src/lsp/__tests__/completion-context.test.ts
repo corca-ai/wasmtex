@@ -109,7 +109,7 @@ describe('analyzeCompletionContext', () => {
 
   it('uses registered signatures for starred commands and shields outer arguments', () => {
     const registry = new CompletionResolverRegistry()
-    registry.registerCommand('pick', [
+    registry.registerCommand('pick*', [
       { kind: 'optional', valueKind: 'enum', list: true },
       { kind: 'required', valueKind: 'label' },
     ])

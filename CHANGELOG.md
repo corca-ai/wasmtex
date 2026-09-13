@@ -18,6 +18,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Signature help shares completion context analysis for nested, optional, masked and
+  starred invocations. Confirmed project macros and active package metadata now reach
+  both the neutral service and Monaco; removed or ambiguous declarations cannot leak
+  a stale signature. Neutral results expose precise argument indices and descriptors.
+
 - Document highlights omit ambiguous duplicate labels, bibliography keys and redefined
   project commands, and do not use command declarations from unrelated roots.
 

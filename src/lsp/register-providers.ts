@@ -42,7 +42,10 @@ export function registerLatexProviders(
       createRenameProvider(index, onWorkspaceEdit),
     ),
     // Iteration 11 — rounded-out language features.
-    monaco.languages.registerSignatureHelpProvider(languageId, createSignatureHelpProvider()),
+    monaco.languages.registerSignatureHelpProvider(
+      languageId,
+      createSignatureHelpProvider(index, completionRegistry),
+    ),
     monaco.languages.registerFoldingRangeProvider(languageId, createFoldingRangeProvider()),
     monaco.languages.registerDocumentHighlightProvider(
       languageId,

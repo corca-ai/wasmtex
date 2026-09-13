@@ -158,14 +158,13 @@ test('extracts pgf choice values and xparse command/environment signatures', () 
   })
   assert.equal(view.keys.find((key) => key.name === 'enabled').value.type, 'boolean')
   assert.equal(view.keys.find((key) => key.name === 'width').default, '2cm')
-  assert.deepEqual(result.commands[0].args, [
-    { kind: 'optional', valueKind: 'free-text' },
-    { kind: 'required', valueKind: 'free-text' },
-  ])
-  assert.deepEqual(result.environments[0].args, [
-    { kind: 'optional', valueKind: 'free-text' },
-    { kind: 'required', valueKind: 'free-text' },
-  ])
+  assert.equal(result.commands[0].argumentSyntax, 'xparse-v1')
+  for (const command of [result.commands[0], result.environments[0]]) {
+    assert.deepEqual(command.args, [
+      { kind: 'optional', valueKind: 'free-text', placeholder: 'arg1', balancedOptional: true },
+      { kind: 'required', valueKind: 'free-text', placeholder: 'arg2' },
+    ])
+  }
 })
 
 test('extracts direct colors, aliases, named colors, and color sets', () => {
@@ -227,4 +226,28 @@ test('merges curated metadata with explicit provenance and deterministic orderin
     ['draft', 'paper'],
   )
   assert.equal(family(merged, 'class-options').keys[1].provenance[0].evidence, 'override')
+})
+
+
+test('only confirms supported xparse argument structures', () => {
+  const result = extractTexSemantics({
+    sourcePath: 'example.sty', scopeKind: 'package', scopeName: 'example',
+    source: String.raw`
+\NewDocumentCommand{\starred}{s O{[} m}{#3}
+\NewDocumentCommand{\delimited}{d<> m}{#2}
+\NewDocumentCommand{\modified}{+m}{#1}
+\NewDocumentCommand{\missing}{O m}{#1}
+`,
+  })
+  const starred = result.commands.find((command) => command.name === 'starred')
+  assert.equal(starred.acceptsStar, true)
+  assert.equal(starred.argumentSyntax, 'xparse-v1')
+  assert.deepEqual(starred.args.map((arg) => arg.placeholder), ['arg2', 'arg3'])
+  for (const name of ['delimited', 'modified', 'missing']) {
+    const command = result.commands.find((command) => command.name === name)
+    assert.deepEqual(command.args, [])
+    assert.equal(command.argumentSyntax, undefined)
+    assert.notEqual(command.confidence, 'exact')
+  }
+  assert.equal(result.unsupported.length, 3)
 })

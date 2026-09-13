@@ -1,3 +1,4 @@
+import { CommandArg } from './package-db.js';
 export interface SourceLocation {
     file: string;
     line: number;
@@ -25,6 +26,10 @@ export interface CommandDef {
     name: string;
     location: SourceLocation;
     argCount?: number;
+    /** Statically confirmed brace/bracket argument structure; absent means unsupported. */
+    arguments?: CommandArg[];
+    /** A statically supported leading xparse star boolean. */
+    acceptsStar?: boolean;
     /** This declaration can replace or retain an existing binding. */
     mayRedefine?: boolean;
 }

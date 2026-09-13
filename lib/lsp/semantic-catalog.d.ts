@@ -37,6 +37,9 @@ export interface TexSemanticKeyFamily {
 export interface TexSemanticCommand {
     name: string;
     args: CommandArg[];
+    /** Confirmed xparse grammar; older extracted argument arrays are not authoritative. */
+    argumentSyntax?: 'xparse-v1';
+    acceptsStar?: boolean;
     doc?: string;
     confidence: TexSemanticConfidence;
     provenance: TexSemanticProvenance[];

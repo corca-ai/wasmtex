@@ -1,3 +1,4 @@
+import { readBalancedGroup } from './balanced-group'
 /**
  * Parser-backed completion context analysis.
  *
@@ -148,44 +149,14 @@ function skipWhitespace(text: string, start: number): number {
   return i
 }
 
-function readBalancedGroup(
-  text: string,
-  open: number,
-): Pick<ParsedGroup, 'closed' | 'contentEnd' | 'end'> {
-  const stack: string[] = [text[open] === '{' ? '}' : ']']
-  for (let i = open + 1; i < text.length; i++) {
-    const ch = text[i]!
-    if (ch === '\\') {
-      i++
-      continue
-    }
-    if (ch === '{') stack.push('}')
-    else if (ch === '[') stack.push(']')
-    else if (ch === stack[stack.length - 1]) {
-      stack.pop()
-      if (stack.length === 0) return { closed: true, contentEnd: i, end: i + 1 }
-    }
-  }
-  return { closed: false, contentEnd: text.length, end: text.length }
-}
-
-function assignSignature(groups: ParsedGroup[], signature: readonly CommandArg[]): void {
-  let signatureIndex = 0
-  for (const group of groups) {
-    while (
-      signatureIndex < signature.length &&
-      signature[signatureIndex]!.kind === 'optional' &&
-      group.delimiter !== 'optional'
-    ) {
-      signatureIndex++
-    }
-    const spec = signature[signatureIndex]
-    if (spec?.kind === group.delimiter) {
-      group.signatureIndex = signatureIndex
-      group.spec = spec
-      signatureIndex++
-    }
-  }
+function nextSignatureIndex(
+  signature: readonly CommandArg[],
+  index: number | undefined,
+  delimiter: 'required' | 'optional',
+): number | undefined {
+  if (index === undefined) return undefined
+  while (signature[index]?.kind === 'optional' && delimiter !== 'optional') index++
+  return signature[index]?.kind === delimiter ? index : undefined
 }
 
 function parseInvocation(
@@ -193,19 +164,34 @@ function parseInvocation(
   token: Token,
   metadata: CompletionCommandMetadataProvider | undefined,
 ): ParsedInvocation | null {
+  if (!/^[a-zA-Z@]+$/.test(token.value)) return null
   let offset = token.end
   let starred = false
   if (text[offset] === '*') {
     starred = true
     offset++
   }
+  const name = `${token.value}${starred ? '*' : ''}`
+  const signature = metadata?.getCommandArguments(name) ?? getCommandSignature(name) ?? []
+  const groups = readInvocationGroups(text, offset, signature)
+  return groups.length ? { command: token.value, starred, groups } : null
+}
+
+function readInvocationGroups(
+  text: string,
+  offset: number,
+  signature: readonly CommandArg[],
+): ParsedGroup[] {
+  let signatureIndex: number | undefined = 0
   const groups: ParsedGroup[] = []
   for (let argumentIndex = 0; argumentIndex < 64; argumentIndex++) {
     offset = skipWhitespace(text, offset)
     const open = text[offset]
     if (open !== '{' && open !== '[') break
     const delimiter = open === '{' ? 'required' : 'optional'
-    const balanced = readBalancedGroup(text, offset)
+    signatureIndex = nextSignatureIndex(signature, signatureIndex, delimiter)
+    const spec = signatureIndex === undefined ? defaultArg(delimiter) : signature[signatureIndex]!
+    const balanced = readBalancedGroup(text, offset, spec.balancedOptional)
     groups.push({
       delimiter,
       open: offset,
@@ -214,15 +200,14 @@ function parseInvocation(
       end: balanced.end,
       closed: balanced.closed,
       argumentIndex,
-      spec: defaultArg(delimiter),
+      spec,
+      ...(signatureIndex === undefined ? {} : { signatureIndex }),
     })
+    if (signatureIndex !== undefined) signatureIndex++
     offset = balanced.end
     if (!balanced.closed) break
   }
-  if (groups.length === 0) return null
-  const signature = metadata?.getCommandArguments(token.value) ?? getCommandSignature(token.value)
-  if (signature) assignSignature(groups, signature)
-  return { command: token.value, starred, groups }
+  return groups
 }
 
 function topLevelSeparators(text: string, start: number, end: number, separator: string): number[] {

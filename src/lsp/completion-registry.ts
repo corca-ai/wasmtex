@@ -45,6 +45,13 @@ export type CompletionResolver = (
  */
 export class CompletionResolverRegistry implements CompletionCommandMetadataProvider {
   private commandArguments = new Map<string, readonly CommandArg[]>()
+  private commandScopes = new Map<
+    string,
+    {
+      commands: Map<string, readonly CommandArg[]>
+      dependencies: readonly string[]
+    }
+  >()
   private resolvers = new Map<CompletionDomain, CompletionResolver>()
 
   registerCommand(command: string, args: readonly CommandArg[]): void {
@@ -53,6 +60,38 @@ export class CompletionResolverRegistry implements CompletionCommandMetadataProv
 
   getCommandArguments(command: string): readonly CommandArg[] | undefined {
     return this.commandArguments.get(command) ?? getCommandSignature(command)
+  }
+
+  registerCommandScope(
+    scope: string,
+    commands: Iterable<readonly [string, readonly CommandArg[]]>,
+    dependencies: readonly string[],
+  ): void {
+    this.commandScopes.set(scope, { commands: new Map(commands), dependencies })
+  }
+
+  getScopedCommandArguments(
+    command: string,
+    scopes: Iterable<string>,
+  ): readonly CommandArg[] | undefined {
+    const override = this.commandArguments.get(command)
+    if (override) return override
+    const pending = [...scopes]
+    const visited = new Set<string>()
+    let result: readonly CommandArg[] | undefined
+    while (pending.length > 0) {
+      const id = pending.pop()!
+      if (visited.has(id)) continue
+      visited.add(id)
+      const scope = this.commandScopes.get(id)
+      if (!scope) continue
+      pending.push(...scope.dependencies)
+      const candidate = scope.commands.get(command)
+      if (!candidate) continue
+      if (result && JSON.stringify(result) !== JSON.stringify(candidate)) return []
+      result = candidate
+    }
+    return result ?? getCommandSignature(command)
   }
 
   registerResolver(domain: CompletionDomain, resolver: CompletionResolver): void {
