@@ -13,6 +13,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- A synchronous Worker message-send failure no longer leaves a response waiter
+  that consumes a subsequent request's reply. Other queued requests retain FIFO
+  order, and the original transport error still reaches the caller.
+
 - The authored pdfTeX controller now retains a locally generated base format and
   preserves project files when format preloading is skipped or fails, including
   INITEX failure. This controller fix requires a newly built engine asset release;

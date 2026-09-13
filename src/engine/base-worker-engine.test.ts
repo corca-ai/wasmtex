@@ -8,12 +8,19 @@ class TestEngine extends BaseWorkerEngine {
   constructor() {
     super('/engine.js', null)
   }
-  attachFakeWorker(): void {
-    this.worker = { postMessage() {}, terminate() {} } as unknown as EngineWorker
+  attachFakeWorker(
+    worker: EngineWorker = {
+      postMessage() {},
+      terminate() {},
+      onmessage: null,
+      onerror: null,
+    },
+  ): void {
+    this.worker = worker
     this.status = 'ready'
   }
-  request(key: string): Promise<unknown> {
-    return this.postMessageWithResponse({ cmd: key }, `cmd:${key}`)
+  request(key: string, transfer?: Transferable[]): Promise<unknown> {
+    return this.postMessageWithResponse({ cmd: key }, `cmd:${key}`, transfer)
   }
   deliver(key: string, data: unknown): boolean {
     return this.deliverResponse(`cmd:${key}`, data)
@@ -71,5 +78,74 @@ describe('TeX Live mirror year binding', () => {
     expect(() => resolveTexliveUrl('https://texlive.example/2025/', '2026')).toThrow(
       /2026 engine cannot use a 2025 mirror/,
     )
+  })
+})
+
+describe('Worker send failure and response ordering', () => {
+  it.each([
+    false,
+    true,
+  ])('does not consume a retry response after send throws (transfer=%s)', async (transfer) => {
+    const engine = new TestEngine()
+    const failure = new Error('transport rejected message')
+    let rejectSend = true
+    engine.attachFakeWorker({
+      onmessage: null,
+      onerror: null,
+      terminate() {},
+      postMessage() {
+        if (rejectSend) throw failure
+      },
+    })
+    try {
+      await expect(
+        engine.request('writefile', transfer ? [new ArrayBuffer(1)] : undefined),
+      ).rejects.toBe(failure)
+      rejectSend = false
+      const retry = engine.request('writefile')
+      engine.deliver('writefile', { result: 'ok' })
+      expect(await Promise.race([retry, Promise.resolve('missing response')])).toEqual({
+        result: 'ok',
+      })
+    } finally {
+      engine.terminate()
+    }
+  })
+
+  it('keeps earlier and later same-key waiters in FIFO order when one send fails', async () => {
+    const engine = new TestEngine()
+    let sends = 0
+    engine.attachFakeWorker({
+      onmessage: null,
+      onerror: null,
+      terminate() {},
+      postMessage() {
+        if (++sends === 2) throw new Error('second send failed')
+      },
+    })
+    const replies: Record<string, unknown> = {}
+    try {
+      const first = engine.request('writefile').then(
+        (value) => {
+          replies.first = value
+        },
+        () => {},
+      )
+      await expect(engine.request('writefile')).rejects.toThrow('second send failed')
+      const third = engine.request('writefile').then(
+        (value) => {
+          replies.third = value
+        },
+        () => {},
+      )
+      engine.deliver('writefile', 'first')
+      engine.deliver('writefile', 'third')
+      await Promise.resolve()
+      expect(replies).toEqual({ first: 'first', third: 'third' })
+      expect(engine.deliver('writefile', 'unexpected')).toBe(false)
+      await Promise.all([first, third])
+    } finally {
+      engine.terminate()
+    }
   })
 })

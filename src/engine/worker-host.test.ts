@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createEngineWorker,
   type EngineWorker,
@@ -18,6 +18,7 @@ function installFactory(factory: WorkerFactory): () => void {
 }
 afterEach(() => {
   for (const dispose of registrations.splice(0).reverse()) dispose()
+  vi.unstubAllGlobals()
 })
 
 describe('worker-host seam (#109)', () => {
@@ -101,4 +102,25 @@ describe('worker factory registration lifetimes', () => {
     disposeB()
     expect(createEngineWorker('unused')).toBe(baseline)
   })
+})
+
+it('returns to the browser factory after the last host registration is disposed', () => {
+  const paths: string[] = []
+  class BrowserWorker {
+    constructor(path: string) {
+      paths.push(path)
+    }
+    postMessage() {}
+    terminate() {}
+    onmessage = null
+    onerror = null
+  }
+  vi.stubGlobal('Worker', BrowserWorker)
+  const adapterWorker = fakeWorker()
+  const dispose = installFactory(() => adapterWorker)
+  expect(createEngineWorker('/adapter.js')).toBe(adapterWorker)
+  expect(paths).toEqual([])
+  dispose()
+  expect(createEngineWorker('/browser.js')).toBeInstanceOf(BrowserWorker)
+  expect(paths).toEqual(['/browser.js'])
 })
