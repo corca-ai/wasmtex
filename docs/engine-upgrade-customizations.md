@@ -114,6 +114,5 @@ Record the inventory decisions, exact pins, patch checks, baseline/candidate
 identities, commands, environment, comparison outcomes, measured costs, release
 links and integrator adoption evidence in the upgrade tracking issue. Link that
 record here when the upgrade completes. The completed 2025/2026 optimization
-record is [#140](https://github.com/corca-ai/wasmtex/issues/140), with releases
-[2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
+record is [#140](https://github.com/corca-ai/wasmtex/issues/140), with releases [2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
 and [2026-52bd7d6287f2a826](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-52bd7d6287f2a826).

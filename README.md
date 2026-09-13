@@ -1,46 +1,52 @@
 # WasmTex
 
-An embeddable, browser-based LaTeX editor with real-time PDF preview — Monaco
-editor, an in-browser pdfLaTeX engine (WASM), and PDF.js. Documents that need
-XeLaTeX or LuaLaTeX (`fontspec`, `unicode-math`, CJK, `\directlua`) are auto-detected;
-the full multi-engine pipeline runs through the [headless compiler](docs/howto.md#headless-compilation)
-on the client or a Node server. TeX Live packages stream from a public CDN. Engine JS/WASM and format assets
-are hosted separately from the installed SDK; see the integration guide.
+An embeddable LaTeX SDK with a headless compiler, optional Monaco editor and PDF
+preview, and editor-neutral language services. The headless compiler runs pdfLaTeX,
+XeLaTeX and LuaLaTeX in browser workers or on Node. The built-in `WasmTex` component
+provides a pdfLaTeX editor and PDF.js preview. TeX Live packages load on demand;
+engine assets are [hosted separately](docs/assets.md).
 
 **[Live Demo](https://corca-ai.github.io/wasmtex/)**
 
 ## Quick Start
 
-WasmTex is **not on npm** — install from GitHub. The install ships a prebuilt `lib/`
-bundle. Package managers may also run its `prepare` build (Node 24+); the
-committed bundle supports installs that skip lifecycle scripts. `monaco-editor` and `pdfjs-dist` are peer
-dependencies.
+Install from GitHub with Node 24+. The package includes a committed `lib/` bundle;
+package managers may also run its `prepare` build. Pin a commit instead of `#main`
+for reproducible installs.
 
 ```bash
-npm install monaco-editor pdfjs-dist
 npm install github:corca-ai/wasmtex#main
 ```
 
+[Download and serve the engine assets](docs/assets.md) under `/wasmtex/2025/`, then
+compile in your browser app:
+
 ```typescript
-import * as pdfjsLib from 'pdfjs-dist'
-import { WasmTex } from 'wasmtex'
-import 'wasmtex/style.css'
+import { WasmTexCompiler } from 'wasmtex/headless'
 
-// Worker setup is REQUIRED — see the Integration Guide for the full block.
-self.MonacoEnvironment = { /* monaco workers */ }
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs', import.meta.url,
-).toString()
-
-const editor = new WasmTex('#editor', '#preview', {
-  files: { 'main.tex': '\\documentclass{article}\\begin{document}Hi!\\end{document}' },
+const compiler = new WasmTexCompiler({
+  assetBaseUrl: '/',
+  files: {
+    'main.tex': String.raw`\documentclass{article}\begin{document}Hello!\end{document}`,
+  },
 })
-await editor.init()
+try {
+  await compiler.init()
+  const result = await compiler.compile()
+  if (result.success && result.pdf) {
+    // Hand these bytes to your PDF renderer or download handler.
+    console.log(`Compiled ${result.pdf.byteLength} PDF bytes`)
+  } else {
+    console.error(result.errors, result.log)
+  }
+} finally {
+  compiler.dispose()
+}
 ```
 
-👉 **Start here:** the [Integration Guide](docs/howto.md) has the complete worker
-setup and copy-pasteable recipes. A minimal example lives in
-[`examples/embed.html`](examples/embed.html).
+For the built-in editor, install `monaco-editor` and `pdfjs-dist`, then follow the
+[complete browser setup](docs/howto.md#worker-setup-required). For server compilation,
+use the [Node recipe](docs/headless.md#server-side-compilation-node).
 
 ## Packages / Entry Points
 
@@ -59,19 +65,17 @@ setup and copy-pasteable recipes. A minimal example lives in
 
 ## Documentation
 
-Use the [documentation index](docs/README.md) to find current guides and historical evidence.
+- **SDK users:** [installation](docs/howto.md), [engine assets](docs/assets.md),
+  [headless / Node](docs/headless.md), [editor recipes](docs/editor-integration.md),
+  and [language integration](docs/language-integration.md).
+- **API contracts:** [editor](docs/api.md), [compiler](docs/compiler-api.md),
+  [language service](docs/language-api.md), [syntax](docs/syntax-api.md), and
+  [SyncTeX](docs/synctex-api.md).
+- **Contributors:** [contribution workflow](CONTRIBUTING.md), [agent guide](AGENTS.md),
+  [development](docs/develop.md), and [architecture](docs/architecture.md).
 
-- **[Integration Guide](docs/howto.md)** — install, worker setup, headless, collaboration, engine selection.
-- **[API Reference](docs/api.md)** — constructor options, methods, events, PdfViewer.
-- **[Architecture](docs/architecture.md)** — SDK structure, VFS, LSP internals.
-- **[Execution Model](docs/execution-model.md)** — client/server hybrid, pluggable per-stage backends.
-- **[Engine & TeX Live](docs/engine.md)** — WASM engines, multi-engine routing, CDN.
-- **[Licensing](docs/licensing.md)** — SDK/engine license scope and release requirements.
-- **[Corresponding source](docs/corresponding-source.md)** — exact engine source archive and verification workflow.
-- **[Proprietary integration](docs/proprietary-integration.md)** — keep a host application closed-source while distributing engines compliantly.
-- **[Bibliography](docs/bibliography.md)** · **[Warmup](docs/warmup.md)** · **[Development guide](docs/develop.md)**
-
-> Contributing to WasmTex itself? Start with **[CONTRIBUTING.md](CONTRIBUTING.md)** (setup, standards, PR process), then [AGENTS.md](AGENTS.md) and [docs/develop.md](docs/develop.md).
+The [documentation index](docs/README.md) also covers engine maintenance, release
+procedures, licensing and historical evidence.
 
 ## Language features
 
@@ -83,7 +87,7 @@ The built-in LaTeX language server (editor-neutral cores in `src/lsp/`, with a M
 | Hover (commands w/ signature + package, citations) | ✅ |
 | Go-to-definition / references / rename | ✅ |
 | Document symbols / outline | ✅ |
-| Diagnostics + [ChkTeX-style linter](docs/api.md#static-linter-chktex-style) | ✅ |
+| Diagnostics + [ChkTeX-style linter](docs/language-api.md#static-linter-chktex-style) | ✅ |
 | Signature help (argument hints) | ✅ |
 | Folding ranges (environments, sections, `% region`) | ✅ |
 | Document highlight (occurrences under cursor) | ✅ |

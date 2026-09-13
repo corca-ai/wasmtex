@@ -50,8 +50,7 @@ archived [font-map record](history/compile-performance-2026-09.md#font-map-index
 
 ## Release and adoption
 
-The qualified #140 releases are
-[2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
+The qualified #140 releases are [2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
 and [2026-52bd7d6287f2a826](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-52bd7d6287f2a826).
 They retain the original format-generation provenance and immutable mirrors.
 `scripts/engine-release-components.json` owns the selected workflow runs;
@@ -65,6 +64,6 @@ This is consumer qualification, not a WasmTex build dependency. The historical
 nested-XeTeX failure was fixed separately in the SDK; use the current
 [nested-output contract](nested-output.md) rather than accepting the old failure.
 
-For a new experiment, use the [CPU diagnostics and testing guide](develop.md#engine-cpu-diagnostics),
+For a new experiment, use the [CPU diagnostics and testing guide](engine-testing.md#engine-cpu-diagnostics),
 measure preparation and end-to-end latency separately, and complete
 [corresponding-source qualification](corresponding-source.md) before promotion.

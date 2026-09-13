@@ -1,6 +1,15 @@
 # Integration Guide
 
-This guide explains how to integrate the `WasmTex` library into your web applications.
+For application developers installing WasmTex. Choose a path before configuring workers:
+
+| Your application needs | Guide |
+| --- | --- |
+| Compile files with your own editor/viewer or on Node | [Headless compilation](headless.md) |
+| Built-in Monaco editor and PDF preview | [Browser setup below](#worker-setup-required) |
+| Language features in an existing editor | [Language service integration](language-integration.md) |
+| Source navigation in a custom PDF viewer | [SyncTeX API](synctex-api.md) |
+
+Contributing to the library itself? Start with [development](develop.md).
 
 ## Installation
 
@@ -35,12 +44,8 @@ bun add github:corca-ai/wasmtex#main
   `wasmtex/node`; DOM type availability does not require a DOM at runtime.
   The [installed-package gate](develop.md#installed-package-verification) checks
   the committed bundle without lifecycle scripts and documents its transport limits.
-- **Engine binaries are not part of the install** (the WASM engines + prebuilt
-  formats ship via CI, not the package). If you self-host assets, pull a verified,
-  matching set with `npm run sync-engine-assets -- --from <baseUrl>`; the
-  [asset self-hosting guide](engine.md#self-hosting-the-engine-assets-manifest--sync) covers the complete process.
-  The sync command accepts only a release whose license manifest is marked
-  `release-cleared`; it will not turn development binaries into a redistributable set.
+- **Engine binaries are not part of the install.** Follow [engine asset setup](assets.md)
+  to download a verified set from a repository checkout and serve it in your app.
 
 ## What's Included
 
@@ -86,278 +91,41 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 ## Basic Usage
 
+Create two containers with nonzero heights before running the TypeScript below:
+
+```html
+<div style="display: grid; grid-template-columns: 1fr 1fr; height: 80vh">
+  <div id="editor-container" style="min-width: 0"></div>
+  <div id="preview-container" style="min-width: 0"></div>
+</div>
+```
+
 ```typescript
-import * as pdfjsLib from 'pdfjs-dist'
 import { WasmTex } from 'wasmtex'
 import 'wasmtex/style.css'
 
-// 1. Worker setup (see section above)
-self.MonacoEnvironment = {
-  getWorker(_workerId: string, label: string) {
-    if (label === 'json') {
-      return new Worker(
-        new URL('monaco-editor/esm/vs/language/json/json.worker.js', import.meta.url),
-        { type: 'module' },
-      )
-    }
-    return new Worker(
-      new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url),
-      { type: 'module' },
-    )
-  },
-}
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url,
-).toString()
+// Run the Worker Setup block above first.
 
 // 2. Create editor
 const editor = new WasmTex('#editor-container', '#preview-container', {
+  assetBaseUrl: '/', // after serving the verified engine assets
+  serviceWorker: false, // enable only when your host serves sw.js
   files: {
     'main.tex': '\\documentclass{article}\\begin{document}Hello world!\\end{document}'
   }
 })
 
+editor.on('status', ({ status, message }) => {
+  if (status === 'error') console.error(message)
+})
 await editor.init()
+// On unmount: editor.dispose()
 ```
 
 `WasmTex` exposes a dedicated stylesheet entrypoint (`wasmtex/style.css`) and does not auto-import it from the JS entry.
 Import it if you want the default built-in layout and viewer styles.
 
 ## Advanced Features
-
-### Headless Compilation
-
-Use the headless entrypoint when your app owns the editor, CRDT state, and PDF UI.
-
-```typescript
-import { WasmTexCompiler } from 'wasmtex/headless'
-
-const compiler = new WasmTexCompiler({
-  assetBaseUrl: 'https://cdn.example.com/',
-  files: {
-    'main.tex': '\\documentclass{article}\\begin{document}Hello\\end{document}',
-  },
-})
-
-await compiler.init()
-const result = await compiler.compile()
-
-if (result.pdf) {
-  renderPdf(result.pdf)
-}
-```
-
-If the host wants to skip a later compile after unrelated content edits, use only
-the headless result's complete dependency manifest:
-
-```ts
-const manifest = result.telemetry?.dependencyManifest
-const canReuse =
-  result.success &&
-  !!result.pdf &&
-  manifest?.complete === true &&
-  changedPaths.every((path) => !manifest.projectInputs.includes(path))
-```
-
-This check assumes the same main file, engine/options, and project topology.
-Compile conservatively when the manifest is absent/incomplete or a file was
-added, deleted, or renamed. The richer `telemetry.dependencies` graph is useful
-for inspection, but its best-effort observations are not itself a reuse proof.
-
-With `incremental: true`, a host that owns the editor cursor can prepare the next
-pdfLaTeX checkpoint during idle time after a successful full compile:
-
-```ts
-await compiler.prepareIncrementalCompile(activeTexPath, cursorOffset)
-```
-
-The offset is UTF-16, matching browser editor offsets. The call is best-effort: it
-returns `true` only when it built a new checkpoint, and leaves the current compile
-result untouched. A later `compile()` waits if preparation is still finishing.
-
-For return visits, opt into the separate durable preamble cache and bind it to the
-immutable mirror revision already used by the compile profile:
-
-```ts
-const compiler = new WasmTexCompiler({
-  completionProfile: {
-    id: 'texlive-2025-production',
-    mirrorRevision: 'sha256:immutable-catalog-revision',
-  },
-  incremental: true,
-  persistentPreambleCache: true,
-})
-```
-
-The durable cache is best-effort and browser-only: missing IndexedDB, a missing
-mirror revision, a changed project preamble dependency, or invalid stored bytes all
-fall back to rebuilding normally.
-
-### Server backends (BibTeX / Biber / xindy offload)
-
-By default every compile stage runs **client-side** (WASM/TS), so nothing leaves the
-device. To offload a stage to a server that runs the same deterministic engine, pass a
-`backends` registry to `WasmTexCompiler`. Stages left unregistered keep the client
-default. The `.aux`-based `BIBTEX_STAGE` and `.bcf`-based `BIBER_STAGE` are distinct
-contracts, so one processor can never receive the other's request.
-
-```typescript
-import { WasmTexCompiler, BackendRegistry, BIBER_STAGE, createBiberBackend } from 'wasmtex/headless'
-
-const backends = new BackendRegistry()
-// BIBER_STAGE accepts only the .bcf-based BiberRequest contract.
-backends.register(BIBER_STAGE, createBiberBackend({ endpoint: '/api/biber' }))
-
-const compiler = new WasmTexCompiler({ files, backends })
-await compiler.init()
-const result = await compiler.compile() // Biber runs remotely; rest stays client-side.
-```
-
-`createBiberBackend` (biblatex `.bcf` → `.bbl`), `createMakeindexBackend` and
-`createXindyBackend` (`.idx` → `.ind`, stage `'index'`) are thin wrappers over
-`createJsonTextBackend` / `createRemoteBackend`; roll your own server backend with those for
-any stage. Wrap any string-producing backend with `withCache(backend, store)` (e.g.
-`new MemoryCacheStore()`) for content-addressed reuse — a stage compiled once on any host is
-then free everywhere. The toolkit is exported from both `wasmtex` and `wasmtex/headless`.
-See [Bibliography backends](bibliography.md).
-
-> The compiler auto-routes the `bibliography` **and `index`** stages. `\printindex` works
-> out of the box, fully client-side, via the bundled makeindex WASM — no server needed. A
-> backend registered for `index` (`createMakeindexBackend`, or `createXindyBackend` for
-> multilingual / complex indexing) offloads that stage to your endpoint instead. The
-> [execution model](execution-model.md#pluggable-stages-available-today) explains how to choose the boundary.
-
-### Server-side compilation (Node)
-
-Requires Node 24+ and curl for synchronous worker package lookups, plus the
-local engine asset tree. This adapter still uses the released Emscripten JS glue
-and MEMFS; see the [execution model](execution-model.md#supported-hosts).
-
-The `wasmtex/node` entry runs the same engines off-browser via a `worker_threads`
-host. Call `installNodeWorkerHost` once (pointing at your local engine assets), then use
-`WasmTexCompiler` exactly as in the browser. pdfLaTeX, LuaLaTeX, **and XeLaTeX** all run
-under Node.
-
-Keep the installation handle and release it after all its compilers. A second active
-Node installation throws; dispose the first before changing asset roots. Repeated
-disposal is safe. The [API contract](api.md#node-host-installation) defines restoration
-when another owner has replaced a global.
-
-```typescript
-import { installNodeWorkerHost, WasmTexCompiler } from 'wasmtex/node'
-
-const nodeHost = installNodeWorkerHost({
-  publicDir: '/path/to/public',                  // holds versioned controller/core/WASM assets
-  assetBaseUrl: 'http://assets.local/',
-})
-
-const compiler = new WasmTexCompiler({
-  assetBaseUrl: 'http://assets.local/',
-  texliveUrl: 'https://texlive.example/immutable/2025/', // packages (pass-through fetch)
-  files: { 'main.tex': '\\documentclass{article}\\begin{document}Hello\\end{document}' },
-})
-try {
-  await compiler.init()
-  const { pdf } = await compiler.compile()
-  // Use pdf here.
-} finally {
-  compiler.dispose()
-  nodeHost.dispose()
-}
-```
-
-> Node ≥ 24 is required, and the engine `.js`/`.wasm` assets must be present under
-> `publicDir` (the package install does not ship them — pull them with
-> `npm run sync-engine-assets -- --from <baseUrl>`).
-
-### Standalone LSP
-
-Use the LSP entrypoints when you want LaTeX diagnostics/outline/rename without
-using the built-in editor/viewer.
-
-```typescript
-import {
-  createLatexLanguageService,
-  HttpTexResourceCatalogProvider,
-  HttpTexSemanticCatalogProvider,
-} from 'wasmtex/lsp'
-import { ensureLanguagesRegistered, registerLatexMonacoProviders } from 'wasmtex/lsp/monaco'
-
-const resourceCatalog = new HttpTexResourceCatalogProvider({
-  baseUrl: compileProfile.texliveUrl,
-  identity: compileProfile.completionCatalog,
-  store: catalogStore, // optional host-owned offline cache
-})
-const semanticCatalog = new HttpTexSemanticCatalogProvider({
-  baseUrl: compileProfile.texliveUrl,
-  identity: compileProfile.completionCatalog,
-  store: semanticStore,
-})
-const lsp = createLatexLanguageService({ files, resourceCatalog, semanticCatalog })
-
-ensureLanguagesRegistered()
-const disposables = registerLatexMonacoProviders(lsp, {
-  onWorkspaceEdit(edit) {
-    // Apply edits to your app state or CRDT layer.
-  },
-})
-
-const diagnostics = lsp.getDiagnostics()
-```
-
-The catalog identity must come from the same compile profile that selects the
-engine and TeX Live mirror. If a custom mirror has no matching catalog, omit the
-provider: project-local resources still complete, but WasmTex deliberately does
-not guess which mirror classes or packages exist. The synchronous
-`getCompletionResult()` call returns `isIncomplete` on the first request for a lazy
-shard. The Monaco and JSON-RPC adapters use `getCompletionResultAsync()`, which waits
-for the request's shard once and returns its candidates on the original trigger—for
-example, immediately after the opening `{` in `\documentclass{`—without requiring a
-second keystroke.
-Use the same identity for the semantic provider. It supplies class/package load
-options, key families, typed values, and package command/environment signatures;
-exact color definitions and option-gated xcolor palettes use the same profile-bound
-shards. Project color declarations remain local and are scoped through the active
-include graph. Schema/year/revision mismatch is isolated rather than mixed with the
-active profile.
-
-When the host changes a long-lived editor to another compile profile, create new
-providers for that exact identity and call
-`lsp.configureCompletion({ completionProfile, resourceCatalog, semanticCatalog })`.
-This retains the project index but clears prior runtime evidence and swaps in a fresh
-resolver registry, so completed loads from the old profile cannot leak into the new one.
-
-If compilation and LSP run in separate processes, forward the snapshot from the
-latest stabilized full compile and await revision validation:
-
-```typescript
-const result = await compiler.compile()
-const snapshot = result.telemetry?.completionSnapshot
-if (snapshot) {
-  lsp.setMainFile(snapshot.identity.root)
-  await lsp.updateCompletionSnapshot(snapshot)
-}
-```
-
-Completion itself never compiles. Editing, adding, or removing any project file makes
-the prior runtime evidence stale immediately. The next matching full compile refreshes
-it. Keep the LSP's host-owned file set aligned with the files used to build the snapshot;
-generated auxiliary files are not part of the project revision.
-
-The same neutral completion path also indexes project-local semantic values. It completes
-counters and lengths, theorem/custom environments, glossary and acronym keys, declared
-font families/aliases, and statically recoverable xkeyval/pgfkeys/LaTeX3 key families and
-enum values. Typed file arguments filter compatible TeX, `.bib`, graphics, source-listing,
-verbatim, CSV/data, or generic project files while preserving the path style already being
-typed (`/`, `./`, or `../`). `.sty` and `.cls` files participate when reached through a
-project-local package/class load edge.
-
-Inside `.bib` files, completion offers BibTeX/biblatex entry types, fields ranked for the
-current entry type, `crossref`/`xdata` targets, and bare `@string` macros. The analyzer is
-safe on unfinished entries and supplies exact replacement ranges to both Monaco and
-JSON-RPC. Arbitrary titles, author text, literal braced/quoted values, dimensions, numbers,
-and package constructs that cannot be recovered statically remain free-form.
 
 ### BibTeX Support
 The editor automatically handles `.bib` and `.bst` files.
@@ -381,265 +149,6 @@ As shown in \\cite{knuth1984}, TeX is great.
 })
 ```
 
-### Engine selection (XeLaTeX / CJK)
-
-WasmTex auto-detects the TeX engine each document needs. You usually do nothing — a
-doc that uses `fontspec`, `unicode-math`, or CJK (`xeCJK`, `xetexko`) is detected and
-routed to **XeLaTeX**, a `\directlua`/`luacode`/`luaotfload` doc to **LuaLaTeX**, and
-everything else to **pdfLaTeX**. You can also force it with a `% !TEX program = …`
-magic comment or the `engine` option.
-
-> **Where the Unicode engines run.** The browser **`WasmTex` UI component runs
-> pdfLaTeX only.** A document that needs XeLaTeX/LuaLaTeX compiles to an *actionable*
-> error there ("this document requires XeLaTeX …") rather than failing cryptically.
-> The **headless `WasmTexCompiler`** (and the Node host, see [Server-side
-> compilation (Node)](#server-side-compilation-node)) does run XeLaTeX/LuaLaTeX when
-> the matching engine WASM is present in its assets dir — so by-name CJK fonts and
-> `\directlua` work there.
-
-```typescript
-// Auto (default): detected from the main file's preamble / magic comment.
-new WasmTex('#editor', '#preview', { files, engine: 'auto' })
-
-// Force a specific engine. (XeLaTeX/LuaLaTeX actually compile under the headless
-// compiler; the browser WasmTex component is pdfLaTeX-only.)
-new WasmTexCompiler({ files, engine: 'xelatex' })
-```
-
-A Korean document, for example, compiles under the headless compiler (or Node host):
-
-```latex
-\documentclass{article}
-\usepackage{xeCJK}
-\setCJKmainfont{Harano Aji Gothic}   % by family name, or a filename like
-                                     % HaranoAjiGothic-Regular.otf
-\begin{document}
-안녕하세요. XeLaTeX + xeCJK 한국어 문서.
-\end{document}
-```
-
-> **Fonts must be on the TeX Live mirror.** Both by-name
-> (`\setmainfont{Latin Modern Roman}`) and by-filename
-> (`\setmainfont{lmroman10-regular.otf}`) work; the font file has to exist on the
-> CDN (the bundled mirror already carries the TeX Live OpenType/TrueType fonts,
-> including the pan-CJK Harano Aji family).
-
-A LuaLaTeX document is detected the same way — a `\directlua`, a `luacode`/`luaotfload`
-package, or `% !TEX program = lualatex` selects **LuaLaTeX** (again, under the headless
-compiler / Node host):
-
-```latex
-% !TEX program = lualatex
-\documentclass{article}
-\usepackage{fontspec}
-\setmainfont{lmroman10-regular.otf}   % by filename (or stem: lmroman10-regular)
-\begin{document}
-LuaLaTeX with \directlua{tex.print("inline Lua")}.
-\end{document}
-```
-
-> **LuaLaTeX fonts: specify by filename, not human name.** Unlike XeLaTeX,
-> LuaLaTeX has no font-name database shipped yet, so `\setmainfont{lmroman10-regular.otf}`
-> or the stem `\setmainfont{lmroman10-regular}` works (kpse resolves it on the CDN),
-> but `\setmainfont{Latin Modern Roman}` does **not** resolve — luaotfload silently
-> falls back to Computer Modern. Shipping a luaotfload names database (to enable
-> human-name lookup) is tracked as a follow-up; until then, prefer XeLaTeX for
-> by-name fonts and CJK.
-
-> **Engine assets.** Each Unicode engine loads from your assets dir
-> (`wasmtex/<version>/`), next to the pdfTeX engine: XeLaTeX needs
-> `wasmtex-xetex` + `wasmtex-dvipdfm`; LuaLaTeX needs `wasmtex-luatex` (it
-> writes PDF directly, so it's a single worker — no dvipdfmx). The standalone IDE /
-> GitHub Pages build ships whatever is available automatically (CI). If you self-host,
-> `npm run sync-engine-assets -- --from <baseUrl>` places the Unicode engines too.
-> **If an engine's WASM is
-> absent, a document that needs it compiles to an actionable error** ("this document
-> requires XeLaTeX/LuaLaTeX …") instead of failing cryptically — so pdfLaTeX-only
-> deployments degrade gracefully. Both XeLaTeX and LuaLaTeX (LuaHBTeX) are built from
-> source and ship via CI; the
-> [multi-engine support guide](engine.md#multi-engine-support-xelatex--lualatex) covers their build and routing details.
-
-### Split-container mode (Editor + PDF only)
-Build a minimal layout by giving both editor and preview nodes.
-
-```typescript
-const editor = new WasmTex('#editor-container', '#preview-container', {
-  files: { 'main.tex': '...' }
-})
-
-editor.on('compile', ({ result }) => {
-  if (result.success && result.pdf) {
-    myCustomViewer.display(result.pdf)
-  }
-})
-```
-
-### Using an Existing Monaco Editor
-
-If your application already manages a Monaco editor, pass it via the `editor` option. WasmTex will attach its LSP features (autocompletion, hover, go-to-definition, diagnostics) and compilation pipeline to your editor without creating a duplicate instance.
-
-#### Setup
-
-You are responsible for:
-1. **Worker configuration** — set up Monaco and pdfjs workers as described in [Worker Setup](#worker-setup-required).
-2. **Editor creation and disposal** — WasmTex will **not** dispose your editor when `latex.dispose()` is called.
-
-WasmTex handles:
-- Registering `latex` and `bibtex` languages (via `ensureLanguagesRegistered`)
-- Switching the editor's model when the active file changes
-- All LSP providers and compilation
-
-#### Example
-
-```typescript
-import * as monaco from 'monaco-editor'
-import * as pdfjsLib from 'pdfjs-dist'
-import { WasmTex, ensureLanguagesRegistered } from 'wasmtex'
-import 'wasmtex/style.css'
-
-// 1. Configure workers (see Worker Setup section)
-self.MonacoEnvironment = {
-  getWorker(_workerId, label) {
-    if (label === 'json') {
-      return new Worker(
-        new URL('monaco-editor/esm/vs/language/json/json.worker.js', import.meta.url),
-        { type: 'module' },
-      )
-    }
-    return new Worker(
-      new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url),
-      { type: 'module' },
-    )
-  },
-}
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url,
-).toString()
-
-// 2. Register LaTeX/BibTeX languages before creating the editor
-//    so that syntax highlighting is available from the start.
-ensureLanguagesRegistered()
-
-// 3. Create your own Monaco editor
-const source = '\\documentclass{article}\n\\begin{document}\nHello!\n\\end{document}'
-
-const myEditor = monaco.editor.create(document.getElementById('editor')!, {
-  language: 'latex',
-  value: source,
-  automaticLayout: true,
-})
-
-// 4. Pass it to WasmTex
-const latex = new WasmTex('#editor', '#preview', {
-  editor: myEditor,
-  files: { 'main.tex': source },
-})
-
-await latex.init()
-```
-
-#### Disposal
-
-```typescript
-// WasmTex cleans up its own resources (engines, LSP, models)
-// but leaves your editor instance alive.
-latex.dispose()
-
-// myEditor is still usable — dispose it on your own terms.
-myEditor.dispose()
-```
-
-### Multi-File Navigation
-
-WasmTex handles cross-file navigation (go-to-definition, inverse search) internally.
-Use the `fileOpen` event to keep your host UI in sync:
-
-```typescript
-// Track which file is active (e.g. for file tabs)
-latex.on('fileOpen', ({ path }) => {
-  highlightTab(path)
-})
-
-// Programmatic file switching
-latex.openFile('chapters/intro.tex')
-
-// Query the current file
-const current = latex.getActiveFile()
-```
-
-When a rename (F2) affects multiple files, the `workspaceEdit` event reports all edits:
-
-```typescript
-latex.on('workspaceEdit', ({ edits }) => {
-  const affectedFiles = new Set(edits.map(e => e.file))
-  console.log('Rename touched:', [...affectedFiles])
-})
-```
-
-### Intelligent Rename (F2)
-Press **F2** on a symbol to rename it across the project. Supports Labels, Citations, and custom Commands.
-
-### Collaborative Editing (Yjs)
-
-WasmTex supports real-time collaborative editing via Yjs and y-monaco.
-Enable `collaboration: true` so that WasmTex never calls `model.setValue()` on
-Monaco models — content ownership is delegated entirely to the CRDT layer.
-
-```typescript
-import * as Y from 'yjs'
-import { MonacoBinding } from 'y-monaco'
-import { WebsocketProvider } from 'y-websocket'
-import * as pdfjsLib from 'pdfjs-dist'
-import { WasmTex } from 'wasmtex'
-import 'wasmtex/style.css'
-
-// Worker setup (see "Worker Setup" section above)
-self.MonacoEnvironment = { /* ... */ }
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs', import.meta.url,
-).toString()
-
-// Yjs setup
-const ydoc = new Y.Doc()
-const provider = new WebsocketProvider('ws://localhost:1234', 'my-room', ydoc)
-const yfiles = ydoc.getMap('files')
-const bindings = new Map<string, MonacoBinding>()
-
-// Create WasmTex with collaboration enabled
-const latex = new WasmTex('#editor', '#preview', {
-  files: { 'main.tex': '\\documentclass{article}\n\\begin{document}\nHello!\n\\end{document}' },
-  collaboration: true,
-})
-
-// Bind y-monaco to each model as it is created
-latex.on('modelCreate', ({ path, model }) => {
-  let ytext = yfiles.get(path) as Y.Text
-  if (!ytext) { ytext = new Y.Text(); yfiles.set(path, ytext) }
-  bindings.set(path, new MonacoBinding(
-    ytext, model, new Set([latex.getMonacoEditor()]), provider.awareness,
-  ))
-})
-
-// Clean up bindings when models are disposed
-latex.on('modelDispose', ({ path }) => {
-  bindings.get(path)?.destroy()
-  bindings.delete(path)
-})
-
-await latex.init()
-```
-
-**How it works:**
-- WasmTex creates Monaco models and emits `modelCreate` for each file.
-- Your code attaches a `MonacoBinding` that syncs the model content via Yjs.
-- Remote edits arrive as `model.applyEdits()` → triggers `onDidChangeContent` →
-  WasmTex updates its VFS and recompiles automatically.
-- `collaboration: true` prevents WasmTex from calling `model.setValue()`,
-  which would conflict with the CRDT state.
-- Use `fileOpen` to switch Yjs bindings when the active file changes
-  (e.g. via go-to-definition or `openFile()`).
-
 ## References
 
 - **[Runnable example](../examples/embed.html)**: Minimal embed (constructor + worker setup) you can copy into a bundled app.
@@ -648,26 +157,31 @@ await latex.init()
 - **[Bibliography backends](bibliography.md)**: BibTeX vs biblatex/Biber selection.
 - **[Warmup / Preload](warmup.md)**: Eliminate first-compile cold start.
 
-## Preparing transport for the selected engine
 
-The headless compiler owns engine detection. A host can observe its actual selection
-without repeating magic-comment or package rules:
+## Moved reference sections
 
-```ts
-const compiler = new WasmTexCompiler({
-  files: { "main.tex": source },
-  engine: "auto",
-  onEngineSelected: ({ engine }) => {
-    // Cancel prior optional preparation, then start transport for this engine.
-    // Do not await it or change compiler inputs from this observer.
-    prepareTransport(engine)
-  },
-})
-```
+These anchors preserve existing bookmarks. Follow the links to the focused guides.
 
-The callback runs after engine options are fixed and before engine initialization,
-once on initial selection and again when the engine kind changes. It reports an
-attempt, not successful readiness. Promises do not block initialization; synchronous
-and asynchronous failures are logged without changing compile results. The host owns
-cancellation on engine transitions and disposal. HTTP preparation must preserve engine
-file materialization and lookup transitions, as required by the [optimization policy](engine-optimization-policy.md#sdk-preparation-is-part-of-compatibility).
+<a id="headless-compilation"></a>
+<a id="server-backends-bibtex--biber--xindy-offload"></a>
+<a id="server-side-compilation-node"></a>
+See [Headless Compilation](headless.md#headless-compilation) in its dedicated guide.
+
+<a id="standalone-lsp"></a>
+See [Standalone LSP](language-integration.md#standalone-lsp) in its dedicated guide.
+
+<a id="engine-selection-xelatex--cjk"></a>
+See [Engine selection](headless.md#engine-selection-xelatex--cjk) in its dedicated guide.
+
+<a id="split-container-mode-editor--pdf-only"></a>
+<a id="using-an-existing-monaco-editor"></a>
+<a id="setup"></a>
+<a id="example"></a>
+<a id="disposal"></a>
+<a id="multi-file-navigation"></a>
+<a id="intelligent-rename-f2"></a>
+<a id="collaborative-editing-yjs"></a>
+See [Split-container mode](editor-integration.md#split-container-mode-editor--pdf-only) in its dedicated guide.
+
+<a id="preparing-transport-for-the-selected-engine"></a>
+See [Preparing transport for the selected engine](headless.md#preparing-transport-for-the-selected-engine) in its dedicated guide.

@@ -128,7 +128,7 @@ upgrade. Keep those assumptions explicit and covered by tests.
   versioned side-by-side (`2025` and `2026`), so upgrade on need
   (security, a package users want, a fix) — not on every release.
 
-The [engine guide](engine.md#building-the-unicode-engine-from-source) also covers
+The [engine guide](engine-build.md#building-the-unicode-engine-from-source) also covers
 the from-source build mechanics.
 
 ---

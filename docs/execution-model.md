@@ -16,14 +16,14 @@ Both run the same released JS/WASM/controller files. Node does not replace the
 engine filesystem with a native TeX installation. Its adapter maps asset URLs
 to a local directory and leaves package resolution on the configured mirror.
 Dispose compilers before disposing the global host installation.
-The [Node installation contract](api.md#node-host-installation) rejects a second
+The [Node installation contract](compiler-api.md#node-host-installation) rejects a second
 active Node adapter and allows a new one after disposal. This does not provide
 simultaneous Node asset roots. The internal worker-factory seam still permits scoped
 overrides: newest live registration wins, and cleanup in either order skips disposed
 registrations, even when two registrations used the same factory function. Adapters
 must retain and call their cleanup handles. Releasing a Node host removes its own
 registration without clobbering a later override or reviving a disposed one.
-See the [Node integration recipe](howto.md#server-side-compilation-node).
+See the [Node integration recipe](headless.md#server-side-compilation-node).
 
 Deno/Bun, standalone WASI runtimes and Python/Go/Rust embeddings have no shipped
 host adapter here. The current artifact imports Emscripten/JavaScript facilities;
@@ -76,7 +76,7 @@ not deploy that service. `withCache` can wrap string-producing backends with
 keys that include stage, backend identity/version/options and request content.
 The integrator must update backend identity when changed server inputs can
 change output. See [bibliography backends](bibliography.md) and the
-[backend API](api.md#server-backends) for payloads and fallback behavior.
+[backend API](compiler-api.md#server-backends) for payloads and fallback behavior.
 
 ## Determinism and verification
 
@@ -90,7 +90,7 @@ pdfLaTeX, XeLaTeX, LuaLaTeX and BibTeX. Optimization qualification additionally
 compares baseline/candidate outputs with the existing narrow metadata
 normalization and fixed clocks where required. Structural golden equality is
 not a claim that arbitrary raw PDFs are byte-identical on every host.
-Use the [development tests](develop.md#cross-host-node-engine-tests) and
+Use the [development tests](engine-testing.md#cross-host-node-engine-tests) and
 [optimization policy](engine-optimization-policy.md) for the exact gates.
 
 Completion snapshots follow the same revision/root/engine/profile identity.

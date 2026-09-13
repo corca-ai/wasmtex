@@ -1,7 +1,7 @@
 # Contributing to WasmTex
 
-Thanks for your interest in WasmTex — an embeddable, browser-based LaTeX editor
-with real-time PDF preview. This guide covers how to set up, make changes, and get
+Thanks for your interest in WasmTex — a headless LaTeX SDK
+with optional editor and PDF preview. This guide covers how to set up, make changes, and get
 them merged. By participating you agree to abide by our
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -36,7 +36,7 @@ all you need.
 | `lib/` | **Committed** built bundle consumers install. Generated — do not hand-edit (see below). |
 | `e2e/` | Playwright specs, golden corpus, and benchmarks. |
 | `scripts/` | Build, engine-asset, and license/compliance tooling (`*.mjs`, with `*.test.mjs`). |
-| `docs/` | All prose documentation. Start at [AGENTS.md](AGENTS.md) / [README](README.md). |
+| `docs/` | Current guides and governed evidence collections. Start at the [documentation index](docs/README.md). |
 | `wasm-build/` | Dockerized TeX Live → WASM engine build inputs. |
 
 For architecture context, read [docs/architecture.md](docs/architecture.md) and
@@ -107,7 +107,7 @@ npm run test       # unit tests
   `npm run update:golden` and review the diff.
 - **Cross-host / engine smoke tests** are env-gated (e.g. `NODE_COMPILE_SMOKE=1`,
   `CROSS_HOST_PARITY=1`) and need synced engine assets — see
-  [docs/develop.md](docs/develop.md#cross-host-node-engine-tests).
+  [engine testing](docs/engine-testing.md#cross-host-node-engine-tests).
 
 A [lefthook](https://github.com/evilmartians/lefthook) pre-commit hook runs typecheck,
 lint, unit tests, and the duplication check in parallel. Install hooks with `npx lefthook
@@ -147,8 +147,8 @@ required. Contributors are credited collectively as "WasmTex contributors."
 ## Documentation
 
 Docs are first-class here. If you change behavior, update the matching page in `docs/` and
-follow the maintenance rules in [docs/metadoc.md](docs/metadoc.md). The docs index lives in
-[AGENTS.md](AGENTS.md).
+follow the maintenance rules in [docs/metadoc.md](docs/metadoc.md). The full index lives in
+[docs/README.md](docs/README.md); [AGENTS.md](AGENTS.md) lists required contributor reading.
 
 ---
 

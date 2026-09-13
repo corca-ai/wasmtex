@@ -1,6 +1,10 @@
 # API Reference
 
-Full reference for the `WasmTex` SDK.
+Entry-point index and reference for the browser `WasmTex` component. Its compile
+engine is pdfLaTeX; use the [headless compiler API](compiler-api.md) for multi-engine
+compilation. Separate references cover [language features](language-api.md), [syntax snapshots](syntax-api.md) and [SyncTeX](synctex-api.md).
+
+For a running example, follow [browser setup](howto.md). On this page: [options](#options), [methods](#methods), [events](#events) and [viewer controls](#pdfviewer-api).
 
 ## Entry Points
 
@@ -17,20 +21,9 @@ Full reference for the `WasmTex` SDK.
 | `wasmtex/synctex` | SyncTeX parser + PDF↔source mapping (`SynctexParser`, `TextMapper`). |
 | `wasmtex/style.css` | Optional built-in UI/viewer styles. |
 
-## Node host installation
-
-`installNodeWorkerHost(options)` from `wasmtex/node` installs an engine worker factory
-and a local-asset `fetch` shim. Only one Node host may be active in an SDK module
-instance. A second installation throws before modifying either global, including when
-its options match the active host. Failed setup releases the installation reservation.
-
-Dispose every compiler using the host before calling its handle's `dispose()`.
-Disposal is idempotent and permits a fresh installation; reusing an older disposed
-handle cannot tear down the new host. The handle restores the preceding fetch only
-if its own shim still owns `globalThis.fetch`, and removes only its worker registration.
-An independently installed replacement is preserved. Separate copies of the SDK in
-one Node realm do not coordinate these globals; use one SDK/host installation per realm.
-See the [Node recipe](howto.md#server-side-compilation-node).
+<a id="node-host-installation"></a>
+The [Node host installation contract](compiler-api.md#node-host-installation)
+explains global ownership and disposal.
 
 ## Constructor
 
@@ -44,7 +37,7 @@ new WasmTex(
 
 ## Styling
 
-`WasmTex` does not inject the optional "batteries-included" stylesheet from the JS entrypoint anymore.
+`WasmTex` does not inject its stylesheet from the JavaScript entry.
 When you use built-in editor/viewer containers (preview panel, binary overlays, loading bar, controls), import:
 
 ```ts
@@ -62,28 +55,28 @@ or a CSS selector string.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `editor` | `IStandaloneCodeEditor` | - | External Monaco editor instance. WasmTex will use it instead of creating one and will **not** dispose it on cleanup. |
-| `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine. `'auto'` detects it from the main file — a `% !TEX program = …` magic comment, or `fontspec`/`unicode-math`/CJK (`xeCJK`)/`\directlua` in the preamble — falling back to pdfLaTeX. See [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex). |
+| `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine. `'auto'` detects it from the main file — a `% !TEX program = …` magic comment, or `fontspec`/`unicode-math`/CJK (`xeCJK`)/`\directlua` in the preamble — falling back to pdfLaTeX. The component reports an actionable error for Unicode engines; use [headless](headless.md#engine-selection-xelatex--cjk) to compile them. |
 | `texliveVersion` | `'2025' \| '2026'` | `'2025'` | Exact TeX Live engine/assets year. The selected year namespaces engine files, formats, caches, and mirror requests together. |
 | `texliveUrl` | `string` | Immutable R2 snapshot for the selected year | Exact profile mirror endpoint. A 2026 engine must receive a 2026 mirror URL and matching completion profile. |
 | `resourceCatalog` | `TexResourceCatalogProvider` | - | Exact completion catalog for the selected compile profile. Custom `texliveUrl` hosts should inject their matching provider; without one, resource completion is project-local only. |
 | `semanticCatalog` | `TexSemanticCatalogProvider` | - | Versioned class/package options, key families, and typed command/environment metadata for the same compile profile. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable identity attached to compile-observed completion snapshots. Catalog-backed hosts should use the catalog's exact mirror revision. |
 | `mainFile` | `string` | `'main.tex'` | Main TeX file name |
-| `files` | `Record<string, string \| Uint8Array>` | `{}` | Initial project files (path → content) |
+| `files` | `Record<string, string \| Uint8Array>` | bundled sample project | Initial project files (path → content). Pass `{}` to start empty. |
 | `serviceWorker`| `boolean`| `true` | Cache texlive packages via SW |
 | `assetBaseUrl` | `string` | `auto` | Base URL for WASM/Worker assets |
 | `skipFormatPreload` | `boolean` | `false` | Skip initial `.fmt` preload during engine bootstrap |
 | `disablePreambleSnapshot` | `boolean` | `false` | Disable [precompiled preamble snapshots](engine.md#preamble-snapshots) and always run a full compile. Escape hatch for documents incompatible with preamble precompilation. |
-| `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) in the interactive loop (pdfLaTeX only). A body edit after a page break re-typesets only the tail and splices it (PDF **and** SyncTeX) onto the cached head for an immediate, **exact** **fast paint** — no reconcile needed for a single-file `final` edit. The `status` event's `incremental` flag marks a fast paint. Falls back to a full compile for XeLaTeX/LuaLaTeX, preamble/early edits, and label/citation edits, and to a background reconcile for multi-file tails. Opt-in. |
-| `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. Near-instant return visits, works offline. No-ops without IndexedDB. See `clearCache()`. |
+| `incremental` | `boolean` | `false` | Enable [incremental compilation](compiler-api.md#incremental-compilation) in the interactive loop (pdfLaTeX only). A body edit after a page break re-typesets only the tail and splices it (PDF **and** SyncTeX) onto the cached head for an immediate, **exact** **fast paint** — no reconcile needed for a single-file `final` edit. The `status` event's `incremental` flag marks a fast paint. Falls back to a full compile for XeLaTeX/LuaLaTeX, preamble/early edits, and label/citation edits, and to a background reconcile when exact SyncTeX cannot be spliced (including a changed head). Opt-in. |
+| `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. Reuses cached resources on return visits; [offline prerequisites](warmup.md#persistent-cache) still apply. No-ops without IndexedDB. See `clearCache()`. |
 | `persistentPreambleCache` | `boolean` | `false` | Persist [pdfLaTeX preamble snapshots](engine.md#durable-preamble-snapshots) in a bounded IndexedDB cache across compiler sessions. Requires `completionProfile.mirrorRevision`; otherwise reuse fails closed. |
 | `editorContainerClassName` | `string` | `''` | Extra class name(s) for the editor container |
 | `previewContainerClassName` | `string` | `''` | Extra class name(s) for the preview container |
 | `runtimeScopeAttribute` | `string` | `data-wasmtex-runtime` | Attribute used to scope runtime UI styles |
 | `collaboration` | `boolean` | `false` | Enable collaborative editing. When `true`, WasmTex never calls `model.setValue()` on Monaco models, leaving content ownership to an external CRDT/OT system (e.g. Yjs). Listen for `modelCreate`/`modelDispose` events to bind your provider. |
-| `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. Eliminates blocking sync XHR during first compilation. See [Warmup](warmup.md). |
+| `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. Preloads the supplied file set; unresolved resources can still require blocking worker requests. See [Warmup](warmup.md). |
 | `toolbar` | `boolean` | `true` | Show or hide the PDF viewer toolbar (zoom controls, page info, download button). Set to `false` to hide the toolbar entirely from initialization. |
-| `lint` | `boolean \| Partial<LintConfig>` | `true` | [Static linter](#static-linter-chktex-style) (ChkTeX-style). `false` disables it; an object overrides per-rule `enabled`/`severity`. |
+| `lint` | `boolean \| Partial<LintConfig>` | `true` | [Static linter](language-api.md#static-linter-chktex-style) (ChkTeX-style). `false` disables it; an object overrides per-rule `enabled`/`severity`. |
 
 ## Standalone Functions
 
@@ -116,7 +109,8 @@ await clearTexliveCache({ version: '2025' })
 ## Additional Exports
 
 The `wasmtex` barrel also exports these helpers for advanced/host-driven setups.
-All are tree-shakeable and free of editor/viewer dependencies.
+Use the dedicated `headless`, `warmup`, `syntax` and `lsp` entries when you need
+a runtime import boundary without Monaco/PDF.js; the root entry also exports the UI.
 
 ### Capability detection
 
@@ -146,7 +140,7 @@ Full guide: **[Bibliography backends](bibliography.md)**.
 
 ### Per-stage backends
 
-The toolkit behind the [`backends`](#server-backends) option, also re-exported
+The toolkit behind the [`backends`](compiler-api.md#server-backends) option, also re-exported
 from `wasmtex/headless`:
 
 | Export | Purpose |
@@ -163,811 +157,14 @@ from `wasmtex/headless`:
 
 See [Execution model](execution-model.md) for the client/server boundary.
 
-### Command database & signatures
-
-For hosts building their own completion/hover UI on top of `wasmtex/lsp`:
-
-| Export | Purpose |
-|--------|---------|
-| `getCommandSignature` / `parseSignature` / `formatSignature` | Resolve and render a command's argument signature. |
-| `getCommandPackage` | The source `\usepackage` a command belongs to. |
-| `registerShard` | Register an extra package-command shard with the DB. |
-| `PackageShardLoader` / `ShardStore` / `PackageShardLoaderOptions` / `PackageShard` | On-demand per-package shard fetching + pluggable cache store. |
-| `CommandArg` / `CompletionValueKind` | Typed argument descriptor and its semantic value domain. Arguments may also declare comma-list, key-family, resource-selector, and project-key-family selector relationships. |
-| `HttpTexResourceCatalogProvider` / `TexResourceCatalogProvider` | Profile-bound exact class/package/bibliography/font availability. |
-| `HttpTexSemanticCatalogProvider` / `TexSemanticCatalogProvider` | Profile-bound typed options, key/value families, commands, environments, colors, provenance, and coverage. |
-| `analyzeCompletionContext` / `CompletionContext` | Parse a LaTeX command invocation or `.bib` entry at a cursor, including unfinished input, list/key-value position, selectors, BibTeX entry metadata, and an exact replacement range. |
-| `CompletionResolverRegistry` / `createDefaultCompletionRegistry` | Register isolated command metadata and host-neutral value-domain resolvers. |
-| `CompletionResolver` / `CompletionResolverEnvironment` | Resolver contract over the active document, project index, VFS, position, and optional cancellation token. |
-
-### Shared syntax lifecycle
-
-Create one `LatexSyntaxService` when LaTeX language features and another semantic
-consumer must observe the same parse. Pass it to `LatexLanguageService`, then use
-stable `fileId` values across path moves:
-
-```ts
-import { LatexLanguageService } from 'wasmtex/lsp'
-import { LatexSyntaxService } from 'wasmtex/syntax'
-
-const syntax = new LatexSyntaxService()
-const language = new LatexLanguageService({ syntaxService: syntax })
-const snapshot = language.updateDocument({
-  fileId: 'document-42',
-  path: 'chapters/intro.tex',
-  content: '$E = mc^2$',
-  documentVersion: 7,
-})
-```
-
-`snapshot` and all subsequent LSP queries are backed by the same `ProjectIndex`.
-`moveDocument` and `removeDocument` preserve or retire the stable identity.
-Markdown documents expose math regions plus ATX and setext section scopes, but
-do not contribute LaTeX symbols to the project index. `getStats()` reports
-parse passes for integration budgets.
-
-Document Syntax Snapshot schema 8 is the singular source-preserving contract for
-notation roots, visible prose, section/environment scopes, neutral source-order blocks,
-declarations, macros, and includes. Blocks expose non-overlapping heading, paragraph,
-display-math, list-item, table-row, caption, and glossary/acronym entry boundaries with
-their revision-local parent scope. They intentionally do not classify discourse or
-mathematical meaning. The notation arena uses revision-local numeric node IDs with
-parent/child references and exact UTF-16 ranges. IDs are not stable across edits.
-Malformed or unknown TeX remains representable through incomplete and opaque states;
-`assertLatexSyntaxSchemaVersion` rejects incompatible wire versions explicitly.
-`findLatexNotationPath(snapshot, offset)` returns the root-to-leaf arena path using
-binary search over ordered source ranges. `getStats()` exposes parse, notation-node,
-recovery, serialized-byte, last-invalidation, and last-transfer counters without
-adding a serialized interval index. Counters that require serialization are computed
-lazily when stats are requested.
-
-`upsert(document, cancellationToken?)` accepts a token with a live
-`isCancellationRequested` property. Cancellation throws `LatexSyntaxCancelledError`
-before any partial file snapshot or project-index mutation becomes visible.
-
-The CST preserves groups, consumed command arguments, scripts, delimiters,
-alignments, nested environments, modifiers, styles, and explicit named operators.
-For example, `\hat y` retains a modifier-to-nucleus path and
-`\operatorname{ECE}` has one named surface covering each `ECE` character. In
-contrast, `\mathrm{ECE}` is a style over three ordinary tokens and plain `ECE`
-remains three juxtaposed tokens.
-
-`MATH_COMMAND_SPECS` and `getMathCommandSpec(name)` expose the immutable neutral
-command registry. A spec contains argument syntax and roles, optional single-token
-consumption, TeX math class, star policy, structural/opaque/ignored expansion policy,
-and exact or curated package provenance. The built-in families cover modifiers,
-styles, named surfaces, fractions and roots, large operators, class overrides,
-delimiters, multiscripts, layout choices, spacing/text, Unicode math styles, and
-explicitly opaque package DSLs. These records describe TeX structure only; they do not
-declare application, binders, derivatives, intervals, products, or domain meaning.
-
-Each macro event carries bounded
-definition and invocation source ranges plus an expansion outcome (`expanded`,
-`cycle`, `truncated`, or `unresolved`). `editable: false` means the apparent
-meaning is generated: consumers may navigate to its source but must not create
-an automatic edit against a synthetic occurrence. Project inventory changes
-relink definition ranges without reparsing unchanged callers.
-
-Complete bounded expansions that have one compositional shape are lowered onto
-the call-site CST node. Thus a declared operator and direct
-`\operatorname`, or a project wrapper and its direct modifier/style form, use
-the same node kinds while retaining different call/definition provenance.
-Complete composite expansions expose a neutral generated-notation tree on the
-macro event. Its nodes carry structure but no source ranges or editability; the
-event's real call and definition ranges remain the only provenance. Dynamic,
-cyclic, truncated, or structurally unsupported expansions stay opaque. Macro
-events also expose the exact required and explicitly supplied optional
-arguments at the invocation; omitted defaults remain declaration evidence
-rather than fake source occurrences.
-
-`getInvalidatedFiles()` returns the current snapshots whose syntax or
-provenance changed in the latest inventory mutation. An ordinary leaf edit
-returns only that file; adding, changing, moving, or removing a macro
-definition additionally returns only callers of the affected macro names.
-Hosts forward this explicit closure rather than retransmitting the project.
-
-Structural declarations preserve the neutral source data needed downstream.
-Operator declarations include their command name, displayed surface, limits
-form, and separate source ranges. Paired delimiters retain both delimiters.
-Macro declarations retain parameter count, optional default, and body when
-statically complete. Glossary and acronym declarations retain key, short/long
-forms, top-level fields/options (including plural and description fields), and
-exact source ranges. Incomplete declarations remain local `incomplete`
-records instead of invalidating the document.
-
-The snapshot intentionally contains no mathematical application, binder, derivative,
-interval, overloaded-operator, concept, law, pack, entity, or UI types. Downstream
-semantic engines own those interpretations and may depend on WasmTex; the reverse
-dependency is forbidden.
-
 ### Linter
 
 `lintSource(content, path, config?)`, `DEFAULT_LINT_CONFIG`, and the types
-`LintConfig`, `LintRuleConfig`, `LintRuleId`. See
-[Static linter](#static-linter-chktex-style).
-
-## Headless Compiler
-
-Use `wasmtex/headless` when your app owns the editor, collaboration layer, and PDF rendering.
-
-```ts
-import { WasmTexCompiler } from 'wasmtex/headless'
-
-const compiler = new WasmTexCompiler({
-  assetBaseUrl: 'https://cdn.example.com/',
-  files: {
-    'main.tex': '\\documentclass{article}\\begin{document}Hi\\end{document}',
-  },
-})
-
-await compiler.init()
-const result = await compiler.compile()
-```
-
-### `WasmTexCompilerOptions`
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `files` | `Record<string, string \| Uint8Array>` | `{}` | Initial project files. |
-| `mainFile` | `string` | `'main.tex'` | Main TeX file. |
-| `engine` | `'auto' \| 'pdflatex' \| 'xelatex' \| 'lualatex'` | `'auto'` | TeX engine; `'auto'` detects from the main file. See [Multi-engine support](engine.md#multi-engine-support-xelatex--lualatex). |
-| `texliveVersion` | `'2025' \| '2026'` | `'2025'` | Exact TeX Live engine/assets year; keep it aligned with the selected mirror profile. |
-| `texliveUrl` | `string` | Immutable R2 snapshot for the selected year | TeX Live package endpoint. |
-| `assetBaseUrl` | `string` | `'/'` | Base URL for WasmTex WASM assets (`wasmtex/...`). |
-| `skipFormatPreload` | `boolean` | `false` | Skip `.fmt` preload during engine bootstrap. |
-| `disablePreambleSnapshot` | `boolean` | `false` | Disable [precompiled preamble snapshots](engine.md#preamble-snapshots) and always run a full compile. |
-| `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. No-ops without IndexedDB. |
-| `persistentPreambleCache` | `boolean` | `false` | Persist [pdfLaTeX preamble snapshots](engine.md#durable-preamble-snapshots) across compiler sessions. Requires an immutable `completionProfile.mirrorRevision` and IndexedDB. |
-| `warmupCache` | `WarmupCache` | - | Pre-fetched TeX Live files from `warmup()`. |
-| `onEngineSelected` | `(selection: Readonly<EngineDetection>) => void \| Promise<void>` | - | Headless compiler notification before initialization of each newly selected engine, including Auto changes. Contains `engine`, `reason`, and `forced`. Returned promises are not awaited; observer failures are logged without failing compilation. Same-engine edits do not notify again. |
-| `onLoadProgress` | `(event: LoadProgressEvent) => void` | - | Load progress for a host UI: `{ phase: 'format', percent }` while the precompiled format downloads, `{ phase: 'file', file, count }` for every TeX Live file fetched on demand. Pair with `warmup({ onProgress })` for the prefetch phase. |
-| `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
-| `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
-| `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
-| `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
-
-#### Server backends
-
-`backends` lets a headless/server integrator move a compile stage off the
-device. Construct a [`BackendRegistry`](#per-stage-backends) and register a
-**server** backend for a stage — the default for every unregistered stage stays
-client/local. Classic BibTeX uses `BIBTEX_STAGE` with `BibliographyStageRequest`
-(`{ aux, bibFiles }`); Biber uses `BIBER_STAGE` with `BiberRequest`
-(`{ bcf, bibFiles }`). These contracts cannot be registered in each other's slots.
-
-```ts
-import { WasmTexCompiler, BackendRegistry, BIBER_STAGE, createBiberBackend } from 'wasmtex/headless'
-
-const backends = new BackendRegistry()
-backends.register(BIBER_STAGE, createBiberBackend({ endpoint: 'https://my-host/biber' }))
-
-const compiler = new WasmTexCompiler({ files, backends })
-await compiler.init()
-await compiler.compile() // Biber runs on your endpoint; client biblatex-lite is skipped
-```
-
-`createBiberBackend` (biblatex/Biber → `.bbl`), `createMakeindexBackend` and
-`createXindyBackend` (the `index` stage, `.idx` → `.ind`) build server backends
-over the same endpoint contract; `createRemoteBackend` / `createJsonTextBackend`
-build one for any custom stage. Wrap any backend with `withCache` for the shared
-content-addressed cache.
-
-> **Wired today:** the compiler auto-routes the `bibliography` and `index` stages.
-> `\printindex` runs client-side via the bundled makeindex WASM by default; a backend
-> registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
-> See the [execution model](execution-model.md#pluggable-stages-available-today).
-
-#### Incremental compilation
-
-With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\newpage`) re-typesets only the *tail* of the document — booting the engine from a cached checkpoint at the latest page break before the change and splicing the new tail pages onto a cached head PDF. On long documents this turns a multi-second recompile into a ~200 ms one (≈3–5× and climbing with length).
-
-Headless hosts that know the active cursor can move the first checkpoint-build cost to idle
-time. After a stabilized full compile and before the next edit, call
-`await compiler.prepareIncrementalCompile(activePath, offset)`. `offset` is a UTF-16 offset
-in that file; an included-file path warms the boundary before its `\include`/`\input` in the
-main document. This is best-effort and returns `false` when no safe boundary exists or the
-checkpoint is already warm.
-
-- **pdfLaTeX only** — XeLaTeX/LuaLaTeX always do a full compile.
-- **Optional peer dependency**: splicing uses [`pdf-lib`](https://www.npmjs.com/package/pdf-lib). If it isn't installed, incremental silently falls back to a full compile.
-- **Automatic fallback** to a full compile when the preamble changed, there's no page break before the edit, or the edit touches labels/sectioning (so cross-references stay correct — LaTeX's usual two-pass reconcile still applies).
-- Transparent: `compile()` returns the same `CompileResult` shape; no API change beyond the option. A fast-path result carries `synctex: null` (the tail compiles in isolation) but sets **`synctexData`** to the tail SyncTeX spliced onto the last full compile's head — exact for the spliced PDF. Consume it as `result.synctexData ?? parse(result.synctex)` for correct inverse/forward search on incremental compiles. Multi-file `\include` documents are supported — each chapter is spliced at its own file-relative lines; `synctexData` is null (reuse the last full SyncTeX) only when the head changed since the last full compile or none was recorded.
-
-The **editor** `WasmTex({ incremental: true })` wires this into the interactive loop: a
-servable edit renders its checkpoint splice immediately as a **fast paint**. The tail's SyncTeX is
-**spliced** onto the last full compile's head (page + source-line + input-tag offsets), so the fast
-paint carries **exact** SyncTeX — click-to-source works immediately and, because the edit is `final`
-(cross-references unchanged) and the head is unchanged, **no background reconcile is needed** (a real
-throughput win, not just latency hiding). The `status` event carries `incremental: true` on such a
-fast paint. It also **speculatively pre-builds** the checkpoint near the cursor while the loop is idle,
-so the first edit is fast too. Same fallbacks as above; label/citation edits skip the fast paint and go
-straight to a full compile (no stale-reference flash). The SyncTeX splice covers both single-file and
-multi-file documents — `\include`/`\input` chapters splice at their own file-relative lines; only a head
-that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
-
-#### Heap checkpoints (arbitrary-line incremental compilation)
-
-With `incremental: true` in a browser, the headless compiler loads the **checkpoint
-engine** (`wasmtex-pdftex-checkpoint.*`, the same pdfTeX instrumented with Binaryen's
-Asyncify) and the page-break checkpoints above are superseded by **heap checkpoints**
-(#81): a compile can be suspended before TeX reads a chosen line of the main file and its
-entire state — a sparse copy of wasm memory plus the worker's file state — kept as a
-checkpoint. An edit that leaves everything before that line unchanged *resumes* the
-suspended run: TeX typesets only the rest of the document and writes the complete PDF and
-SyncTeX itself (nothing is spliced, `pdf-lib` is not needed). A checkpoint is restored by a
-memory copy, so it serves any number of edits after it.
-
-- **Placement**: every full compile takes a checkpoint at the paragraph boundary before the
-  region the last edit touched (edits cluster), and `prepareIncrementalCompile(path, offset)`
-  takes one before the cursor's paragraph during idle time. Up to 4 are kept (LRU, ~35–80 MB
-  each as sparse images) and freed with the compiler.
-- **Validity**: the main-file bytes before the checkpoint line, and every project file TeX had
-  opened by then (from the run's recorder), must be unchanged. Preamble edits, edits before
-  the earliest checkpoint, and label/citation/numbering edits take the full path (the latter
-  because a resumed run reads cross-references from the `.aux` the original run loaded).
-- **Result**: a resumed compile is an ordinary `CompileResult` with `phaseTimings.checkpointResume`
-  set; `result.heapCheckpoints` lists the checkpoints a compile took.
-- **Cost**: the Asyncify build adds code and full-compile overhead. The headless
-  compiler selects it only with `incremental: true` in browser workers; Node keeps
-  the plain build and page-break path. Measure checkpoint preparation, resumed
-  edits and total latency separately with the [development probes](develop.md#engine-cpu-diagnostics).
-
-#### Accessible export (tagged PDF / PDF-UA)
-
-`compiler.exportAccessiblePdf(options?)` compiles the project as a tagged, PDF/UA-declared
-PDF on a sibling compiler, leaving the interactive `compile()` path and its engine untouched.
-Nothing is reimplemented: the main file gets the LaTeX kernel's own switch,
-`\DocumentMetadata{lang=…, pdfversion=2.0, pdfstandard=ua-2, tagging=on}`, in front of
-`\documentclass` (on the same line, so no line number moves), unless it already declares its
-own `\DocumentMetadata`, which is then trusted as written.
-
-```ts
-const out = await compiler.exportAccessiblePdf({ lang: 'ko-KR' }) // lang/standard optional
-out.result.pdf        // the tagged PDF (a CompileResult: log, errors, …)
-out.declaration       // { lang, standard: 'ua-2' | 'ua-1', injected }
-out.documentClass     // 'article' …
-out.classSupport      // 'supported' | 'unsupported' | 'unknown'
-out.kernelSupported   // false on the TeX Live 2025 profile (kernel predates tagging=on)
-out.tagging           // read back from the PDF: { tagged, lang, uaPart, figures, figuresWithAlt, headings, tables, title }
-out.notes             // human-readable caveats for the host to show
-```
-
-- **Engine requirement**: the tagging kernel ships with LaTeX 2025-06, i.e. the **TeX Live
-  2026** profile. On 2025 the compile still runs but `kernelSupported` is false and the notes
-  say so.
-- **Language**: detected from `\hypersetup{pdflang=…}`, `\DocumentMetadata{lang=…}`, babel
-  (`main=` or the last option), polyglossia `\setmainlanguage`, or kotex; `en-US` otherwise.
-  Pass `lang` to override.
-- **Classes**: `classSupport` comes from a verified matrix (TeX Live 2026, veraPDF PDF/UA-2):
-  `supported` — the standard classes, amsart and KOMA-Script (which prints "Activated tagging
-  detected but not supported!" and still produces a clean structure tree); `partial` —
-  llncs, IEEEtran, elsarticle (structure tree, but tagging errors in the log; check the
-  output); `unsupported` — memoir, acmart, revtex, beamer (structure violations or
-  failed compiles). Unknown classes are attempted and reported. Every class, even
-  `article`, currently fails veraPDF clause 8.2.2 on a few rules (tabular `\hline`, the
-  footnote rule) the kernel does not yet mark as artifacts — that is the kernel's baseline,
-  not something the export can fix.
-- **Alt text**: `\includegraphics[alt={…}]{…}` becomes the figure's `/Alt`; a missing one is a
-  tagpdf error in the log and shows up in `tagging.figuresWithAlt` and the notes. The linter's
-  `a11y-graphics-alt`, `a11y-float-caption`, `a11y-heading-skip` and `a11y-pdf-metadata` rules
-  point at the sources of these gaps before export (info severity by default).
-- **Cost**: a tagged compile is roughly 3× a plain warm compile on the sibling (its own
-  preamble snapshot applies). Nothing is cached across sessions.
-
-The export module and the TikZ figure-worker pool are loaded on first use (dynamic
-imports), so a host's startup bundle carries only the headless compiler itself.
-
-`inspectPdfTagging(pdf)` (exported) produces the `tagging` report for any PDF bytes — it
-inflates object streams itself, so hosts need no PDF library for an accessibility summary.
-
-#### TikZ figure externalization
-
-`tikzExternalization` (default `{ mode: 'document' }`) makes the TikZ/pgfplots
-[`external` library](https://tikz.dev/library-external) work without shell escape. A document
-that calls `\tikzexternalize` normally needs `pdflatex -shell-escape` to spawn one pdflatex per
-picture; in the browser that `system()` call fails, every picture logs a shell-escape error and
-is typeset inline again on each compile. With externalization on, the headless compiler drives
-the library itself, so the document's own `\tikzexternalize` (and its `prefix=`,
-`\tikzsetnextfilename`, `\tikzexternaldisable`, …) behave as documented upstream:
-
-1. The main job runs in the library's `mode=list and make`: it writes the figure list, includes
-   every figure whose PDF exists, and keeps the library's own MD5 of each picture in
-   `<figure>.md5`.
-2. Each figure that is missing or whose MD5 changed is rendered by a **figure job** — a compile
-   of the same document on a sibling `WasmTexCompiler` with the library's grab mode selecting
-   that picture (the other pictures are skipped by the library's `optimize` path). The sibling
-   keeps its own preamble snapshot, so a figure job costs about the picture alone. Up to
-   `workers` figure jobs run concurrently (default `min(3, hardwareConcurrency - 1)`); each
-   worker is a full engine (one more worker heap per figure worker).
-3. The figure PDFs (and `.dpth` baseline files) are written into the main engine and the main
-   job runs once more. The pool is created on first use and disposed with the compiler.
-
-`mode: 'auto'` additionally externalizes documents that load `tikz`/`pgfplots` but never call
-`\tikzexternalize`, by activating the library at the end of the preamble (same line as
-`\begin{document}`, so no line number moves). Its contract is *never worse than inline*:
-
-- Documents the library cannot externalize faithfully stay inline and say why in
-  `telemetry.tikzExternalization.blocked`: `beamer` (overlay steps inside pictures),
-  `remember-picture` (page-anchored/overlay pictures, `current page`, `\tikzmark`),
-  `wrapped-environment` (a `tikzpicture` hidden inside a user-defined environment or
-  command, which the library's picture skipping cannot see), and `too-few-pictures` (fewer
-  than 3 pictures — a figure worker's own preamble snapshot would cost more than they save;
-  counted statically across the project's `.tex` files, and for documents that build pictures
-  in loops, by the first compile's figure list, which then redoes that one compile inline).
-- If a figure job ever fails, the compile is redone inline, `fallback: true` is reported, and
-  auto stays off for the rest of the compiler session.
-- `\ref`/`\pageref` inside pictures resolve: the main job's `.aux` is handed to the figure
-  workers under the real job's name, as the library expects. `\label` inside pictures travels
-  through the library's `.dpth` files.
-- A broken picture does not fail its figure job (TeX ships the page anyway), so errors found in
-  figure logs are merged into `result.errors` at their source lines on every compile until the
-  picture changes; `pictureErrors` counts them.
-
-`mode: 'off'` leaves every document exactly as today. A main file can override the host's
-mode with a magic comment next to `% !TEX program`:
-
-```latex
-% !WASMTEX tikz-externalization = off
-```
-
-(`off`, `document`, or `auto`), so a host that defaults to `'auto'` needs no setting of its
-own for the one project that wants out, and the choice travels with the project.
-
-`result.telemetry.tikzExternalization` reports `{ mode, figures, compiled, reused, failed,
-workers, figureTimeMs, pictureErrors, fallback?, blocked? }` for the compile; a failed figure
-job appends its log tail to `result.log`. Figure workers are released after five idle minutes
-(rendered figures stay cached); the default worker count is `min(3, hardwareConcurrency - 1)`,
-or 1 when `navigator.deviceMemory` reports 4 GiB or less.
-
-Measured on a 15-picture document (10 node graphs + 5 pgfplots axes, preamble snapshot on): a
-warm text-only recompile drops from 1108 ms inline to ~140 ms; a single-picture edit costs
-that picture's job (140–680 ms) plus the main job. Rendering all 15 from scratch takes about
-the same as the inline compile with three workers.
-
-### `WasmTexCompiler` Methods
-
-- `init(): Promise<void>`
-- `compile(): Promise<CompileResult>`
-- `prepareIncrementalCompile(path?: string, offset?: number): Promise<boolean>` — with
-  `incremental: true`, build an eligible pdfLaTeX checkpoint while idle. Defaults to the end
-  of the main file. A `compile()` waits for an in-flight preparation; preparation returns
-  `false` while a compile or unsynchronized project edit is active.
-- `setFile(path, content): void`
-- `loadProject(files): Promise<void>`
-- `getFile(path): string | Uint8Array | null`
-- `listFiles(): string[]`
-- `getMainFile(): string`
-- `setMainFile(path): void`
-- `getProjectIndex(): ProjectIndex` — escape hatch to the shared symbol index (labels, citations, commands) for host-built tooling.
-- `getCompletionSnapshotState(): CompletionSnapshotState` — `absent`, `fresh`, or `stale`; any project edit stales runtime evidence until a matching full compile.
-- `readOutput(path): Promise<string | null>` — reads generated files such as `main.log`, `main.aux`, or `main.bbl`.
-- `flushCache(): Promise<void>`
-- `clearCache(): Promise<void>` — clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live mirror namespace; use `clearTexliveCache({ version })` to clear every mirror for a year.
-- `dispose(): void`
-
-### Headless operation lifetime
-
-One main-engine operation runs at a time. Overlapping `compile()` calls reject
-with an `Error` containing `in progress`; they are not queued or merged. The
-first compile reserves its place while waiting for an existing incremental
-preparation. Preparations share an in-flight task and return `false` while a
-compile owns or is waiting for the worker. Concurrent `init()` calls share
-initialization. An input edit during `init()` also rejects initialization with
-`AbortError`; retry `init()` with the current inputs.
-
-`setFile()` remains synchronous and allowed during compilation or preparation.
-A file write, a changed `setMainFile()`, `loadProject()`, or `dispose()` invalidates
-that run: its promise rejects with `AbortError`, and late engine/backend results
-cannot publish output, auxiliary files, dependency manifests, completion evidence,
-or checkpoints for the new inputs. Reasserting the same main file is a no-op.
-The last completed index can retain historical evidence; runtime completion
-state becomes stale until a matching full compile. Handle `AbortError` as an
-obsolete run and compile again after its promise settles.
-
-`loadProject()` cancels and waits for the previous operation before replacing
-files. Await it before another project load, file/root write, or compile; those
-calls reject while replacement is pending. `readOutput()`, `flushCache()`, and
-`clearCache()` also reject if another main-engine operation owns the worker.
-`flushCache()` marks project files for resynchronization and clears checkpoints.
-
-Cancellation retires the affected workers and their checkpoints. The next
-compile initializes fresh workers and resends the current files, so it can cost
-more than an uninterrupted warm compile. Remote backend work may continue on its
-server, but its late response is ignored. `dispose()` additionally requires a new
-`init()` before compiling again. These rules describe `WasmTexCompiler`; the UI
-component has its own compile scheduler.
-
-### Compile phase timings
-
-pdfLaTeX engine results may expose `CompileResult.phaseTimings`. These worker-side
-durations separate the costs hidden inside the host-visible `compileTime`:
-
-| Field | Description |
-|-------|-------------|
-| `workerTotalMs` | Total time in the worker compile routine. |
-| `heapRestoreMs` | Time spent restoring the reusable WASM initialization heap. |
-| `heapSnapshotMs` | One-time time spent capturing that pristine initialization heap. |
-| `heapSnapshotBytes` | Bytes retained by the initialization snapshot. |
-| `heapSizeBytes` | Current grow-only WASM heap size after the compile. |
-| `preambleBuildMs` | Time spent building a document-specific preamble format; zero on a snapshot hit. |
-| `formatInstallMs` | Time spent installing the selected format in the worker filesystem. |
-| `preambleExportMs` | Time spent copying a rebuilt format for durable persistence. |
-| `postProcessMs` | Time spent extracting PDF/SyncTeX, recorder data, and runtime observations. |
-| `texRunMs` | Time spent in the TeX entry point, including a correctness fallback when required. |
-
-Treat absent timings as an older or non-pdfLaTeX engine rather than synthesizing
-zeros. The performance benchmark prints both compile passes' phase timings and can
-exercise a staged engine build with `WASMTEX_PUBLIC_DIR=/path/to/public`.
-
-### Compile telemetry
-
-`CompileResult.telemetry` is a machine-readable description of a compile — branch on stable fields instead of scraping the log. It's headless **data only**; the host decides how to surface it (problem panel, preview overlay, cache layer). The legacy `errors` / `glyphCoverage` fields remain for back-compat; telemetry is their superset.
-
-```ts
-const { telemetry } = await compiler.compile()
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `diagnostics` | `Diagnostic[]` | Every error/warning with a stable `code` (`tex-error`, `package-error`, `missing-package`, `font-not-found`, `missing-glyph`, `undefined-reference`, `undefined-citation`, `rerun-needed`, `overfull-box`, `package-warning`, `latex-warning`), `severity`, `message`, and optional `file`/`line`. A `missing-glyph` entry carries the affected font + characters in `glyph`. |
-| `resolver` | `ResolverEvidenceReport` | Bounded, profile-bound evidence for TeX Live lookups. Each entry identifies the engine stage, requested name, kpathsea format, final outcome (`resolved`, `mirror-absent`, or `transport-error`), and the cache/bloom/network attempts that led to it. `dropped` and `complete` describe the 1024-entry retention bound. |
-| `texliveDependencies` | `TexliveDependencySet` | The exact TeX Live dependency set of the session so far — the union, across rerun passes and across every compile since `init()`, of every resource the TeX passes resolved (`files`, each with the kpathsea request `filename` and, when it differs, the mirror `candidate`) or found absent (`notFound`). Names only, bound to `texliveVersion` and `profile`; `complete` is false when a retention bound dropped entries. Replay it through [`warmup({ dependencies })`](warmup.md#exact-dependency-prefetch-dependencies) next session. |
-| `tikzExternalization` | `TikzExternalizationTelemetry` | Figure externalization outcome: `{ mode, figures, compiled, reused, failed, workers, figureTimeMs, pictureErrors, fallback?, blocked? }`. See [TikZ figure externalization](#tikz-figure-externalization). |
-| `geometry` | `DocumentGeometry` | Page/box geometry parsed from the XDV — per page: `width`/`height` (media box, bp), `textRuns` (positioned runs with `x`/`y`/`width`/`size`/`glyphs`, plus `text`/`font` when available), `rules`, and a `contentBox`. The substrate for text extraction, click-to-source, cropping, and overlays. **XeLaTeX only** (the engine that emits XDV); `reliable: false` flags an unparseable/desynced run. |
-| `dependencies` | `DependencyGraph` | What the compile depended on: `nodes` (each with `kind: 'tex' \| 'class' \| 'package' \| 'font' \| 'image' \| 'bib' \| 'other'`, `origin: 'project' \| 'system'`, and `discoveredBy`) + `edges` (`includes`/`loads`/`uses-font`/`reads`) + `root`. Rich tooling data derived from the log and enriched with source declarations, XDV fonts, and each TeX engine's `.fls` recorder. It remains useful when observations are incomplete, so do not treat the graph alone as a safe invalidation proof. |
-| `dependencyManifest` | `DependencyManifest` | Versioned, normalized project-input boundary produced by `WasmTexCompiler`. `projectInputs` includes arbitrary project files read by the engine plus the inputs forwarded to bibliography/index stages. `complete: true` is a correctness guarantee, not a confidence score. `coverage` identifies the contributing stages/signals; `incompleteReason` explains why a host must compile conservatively. |
-| `completionSnapshot` | `CompletionSnapshot` | Versioned, bounded runtime evidence produced only as a by-product of this full compile. Its identity binds the project revision, root, engine, TeX Live year, and mirror/profile. Fields independently report `observed`/`unsupported`, `complete`, and truncation. |
-
-Coordinates are PDF points (bp) measured from each page's top-left. Geometry text and dependency fonts are best-effort — XeTeX emits run text only for some runs, and font edges come from the XeLaTeX XDV.
-
-Resolver evidence is delivered only in the returned result; wasmtex does not send it
-to an analytics service. Cache hits distinguish warmup, persistent, and current-session
-state. Negative hits distinguish warmup/durable state from an immutable-mirror response,
-while a request that received no mirror response is `transport-error` and is not added to
-the negative cache. Candidate values are filenames, never URLs. Hosts should classify
-user-facing problems from these stable fields and the attached `profile`, not console text.
-
-#### Safe host-side invalidation
-
-Only the manifest from the current successful rendered result can justify reusing
-that result. The host must also know that the compile profile and root are unchanged,
-and should conservatively compile on project topology changes (add/delete/rename):
-
-```ts
-const result = await compiler.compile()
-const manifest = result.telemetry?.dependencyManifest
-
-const mayReuseAfterContentChanges =
-  result.success &&
-  !!result.pdf &&
-  manifest?.complete === true &&
-  changedPaths.every((path) => !manifest.projectInputs.includes(path))
-```
-
-pdfLaTeX and LuaLaTeX full compiles use recorder-backed manifests. XeLaTeX records
-its TeX inputs, but its separate dvipdfmx conversion stage does not yet expose an
-authoritative project-input list, so the combined manifest remains incomplete.
-Incremental checkpoint results are also explicitly incomplete until tail recorder
-observations can be soundly combined with the unchanged head. Failed or partial
-results never carry `complete: true`.
-
-The bibliography coverage follows the actual stage request: because the current
-compiler forwards every project `.bib`, every one is listed, along with a selected
-project-local `.bst`. Generated `.bbl`/`.ind` files and engine scratch files are
-excluded from `projectInputs`.
-
-## LSP Core
-
-Use `wasmtex/lsp` when you want LaTeX intelligence without taking WasmTex's editor/viewer.
-
-```ts
-import { createLatexLanguageService } from 'wasmtex/lsp'
-
-const lsp = createLatexLanguageService({
-  files: {
-    'main.tex': '\\section{Intro}\\label{sec:intro}\\ref{missing}',
-  },
-})
-
-const diagnostics = lsp.getDiagnostics()
-const outline = lsp.getOutline('main.tex')
-```
-
-Construct it with `createLatexLanguageService(options?)` or `new LatexLanguageService(options?)`;
-`options` (`LatexLanguageServiceOptions`) seeds `files`, `aux`, `engineCommands`,
-`semanticTrace`, `lint`, an optional isolated `completionRegistry`, and optional
-profile-bound `resourceCatalog` and `semanticCatalog` providers. The editor-neutral result types — `SemanticToken`, `InlayHint`,
-`CodeAction`, `DocumentLink`, `FoldingRange`, `SignatureHelp`, `WorkspaceSymbol`,
-`Diagnostic`, `FileSymbols`, `SectionDef`, `BibCompletionContext`, `ParsedBibFile`,
-`ProjectValue`, and `ProjectKeyDefinition` — are exported from `wasmtex/lsp` for typing
-your own UI.
-
-### `LatexLanguageService` Methods
-
-**Project state**
-- `loadProject(files): void`
-- `updateFile(path, content): void`
-- `removeFile(path): boolean`
-- `getFile(path): string | Uint8Array | null`
-- `listFiles(): string[]`
-- `updateAux(content): void` — feed back `.aux` numbers (resolves `\ref`/`\cite` inlay hints).
-- `updateEngineCommands(commands): void` — feed back the engine's command hash (improves completion).
-- `updateSemanticTrace(trace): void` — feed back semantic-trace data for richer tokens.
-- `setMainFile(path): void` — selects the compile root used to validate runtime snapshot identity.
-- `configureCompletion(configuration): void` — atomically replaces the completion profile, resource/semantic providers, and optional registry while retaining the existing project index; prior runtime evidence is cleared so profile-scoped metadata cannot leak across a host profile switch.
-- `updateCompletionSnapshot(snapshot): Promise<CompletionSnapshotState>` — validates bounds/profile and recomputes the current project revision before accepting runtime evidence.
-- `getCompletionSnapshotState(): CompletionSnapshotState` — reports `absent`, `fresh`, or `stale` and returns a defensive snapshot copy.
-
-**Language features** (all return editor-neutral types)
-- `getDiagnostics(): Diagnostic[]`
-- `getFileSymbols(path): FileSymbols | undefined`
-- `getOutline(path): SectionDef[]`
-- `getCompletionContext(path, line, column): CompletionContext | null`
-- `getCompletions(path, line, column, cancellationToken?): NeutralCompletionItem[]`
-- `getCompletionResult(path, line, column, cancellationToken?): NeutralCompletionList` — includes `isIncomplete` while a lazy resource shard is loading.
-- `getCompletionResultAsync(path, line, column, cancellationToken?): Promise<NeutralCompletionList>` — waits once for the lazy resource/semantic catalog work started by this request, then recomputes the result. Monaco and JSON-RPC use this form so a trigger such as the opening `{` in `\documentclass{` can return the cold catalog without another keystroke.
-- `getHover(path, line, column): NeutralHover | null`
-- `getDefinition(path, line, column): NeutralLocation | null`
-- `getReferences(path, line, column): NeutralLocation[]`
-- `getSignatureHelp(path, line, column): SignatureHelp | null`
-- `getDocumentHighlights(path, line, column): LFRange[]`
-- `getWorkspaceSymbols(query): WorkspaceSymbol[]`
-- `getFoldingRanges(path): FoldingRange[]`
-- `getInlayHints(path): InlayHint[]`
-- `getDocumentLinks(path): DocumentLink[]`
-- `getSemanticTokens(path): SemanticToken[]`
-- `getCodeActions(path, line): CodeAction[]`
-- `getRenameEdits(path, line, column, newName): LatexWorkspaceEdit | undefined`
-
-**Escape hatches**
-- `getProjectIndex(): ProjectIndex`
-- `getVirtualFileSystem(): VirtualFS`
-- `getCompletionRegistry(): CompletionResolverRegistry`
-- `getResourceCatalogState(kind): TexResourceCatalogState | null`
-- `loadResourceCatalog(kind, cancellationToken?): Promise<TexResourceCatalogState> | null`
-- `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
-- `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
-
-`ProjectIndex.getStats()` returns `ProjectIndexStats`, including deterministic counts and
-an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
-than as a JavaScript heap profiler.
-
-### Exact TeX Live resource completion
-
-The host chooses the catalog identity as part of the compile profile; the LSP does
-not discover it by querying CTAN or by compiling on completion:
-
-```ts
-import {
-  createLatexLanguageService,
-  HttpTexResourceCatalogProvider,
-  HttpTexSemanticCatalogProvider,
-} from 'wasmtex/lsp'
-
-const identity = {
-  schemaVersion: 1,
-  texliveYear: '2025',
-  mirrorRevision: '2025-0123456789abcdef',
-} as const
-const resourceCatalog = new HttpTexResourceCatalogProvider({
-  baseUrl: 'https://cdn.example/2025/',
-  identity,
-  store: catalogStore, // optional async get/set store, e.g. IndexedDB-backed
-})
-const semanticCatalog = new HttpTexSemanticCatalogProvider({
-  baseUrl: 'https://cdn.example/2025/',
-  identity,
-  store: semanticStore,
-})
-
-const lsp = createLatexLanguageService({ files, resourceCatalog, semanticCatalog })
-```
-
-A long-lived host that switches compile profiles should construct fresh providers and
-call `lsp.configureCompletion({ completionProfile, resourceCatalog, semanticCatalog })`.
-The replacement is synchronous, keeps project symbols intact, discards the previous
-runtime snapshot, and uses a fresh isolated resolver registry; in-flight loads on the
-old providers can therefore never populate the new profile.
-
-The provider loads immutable `catalog/<mirrorRevision>/index.json` and only the
-requested class/package/bibliography/font shard. It verifies the shard hash and
-fails closed on schema, year, or mirror-revision mismatch. `WasmTexOptions` accepts
-the same provider for the built-in Monaco integration. Project-local `.cls`, `.sty`,
-`.bst`, biblatex, and supported font files remain available without a catalog and
-take precedence over matching mirror records.
-
-`getCompletionResult()` remains the non-blocking synchronous primitive and reports
-`isIncomplete` while a requested shard loads. `getCompletionResultAsync()` collects
-only the catalog work started by that cursor context, waits for it once, and recomputes
-the neutral result. The built-in Monaco and JSON-RPC adapters use the asynchronous form;
-catalog errors still degrade to project-local candidates instead of holding the request.
-
-Semantic shards are selected as `class/<name>` or `package/<name>`. They expose
-`TexSemanticKeyFamily`, `TexSemanticKey`, `TexSemanticCommand`, `TexSemanticColor`, provenance,
-confidence, dependencies, engine constraints, and coverage. A key with value type
-`flag` inserts only its name; other keys insert a `key=` snippet. Enum and boolean
-values complete directly, while color/file/command/bibliography/font values reuse
-the corresponding typed resolver. Already-used keys disappear only when the shard
-marks them non-repeatable; unknown values are never rejected.
-
-Project-local completion does not require either catalog. The active include/load graph
-contributes counters, lengths, custom/theorem environments, glossary/acronym keys, font
-families/aliases, and recoverable key families/enums. Typed file domains cover TeX,
-bibliography, graphics, listings/verbatim, data, and generic files. `.bib` documents add
-entry-type, type-ranked field, `crossref`/`xdata`, and `@string` domains. Literal prose,
-braced/quoted bibliography values, dimensions/numbers, and dynamic declarations remain
-free-form unless a host registers more metadata.
-
-The `color` domain is include-graph and package aware. Base `color`/`xcolor` names,
-option-gated `dvipsnames`/`svgnames`/`x11names` palettes, and project declarations
-from `definecolor`, `providecolor`, `colorlet`, and `definecolorset` feed the same
-resolver used by `color`, `textcolor`, `colorbox`, `fcolorbox`, and typed keys such
-as `linkcolor`. Completion inside an xcolor expression replaces only its active name
-segment. Starred palette options such as `svgnames*` expose only names subsequently
-activated by `definecolors` or `providecolors`. A color candidate may include `NeutralCompletionItem.data.wasmtex.color.css`
-and provenance metadata; both the Monaco and JSON-RPC adapters preserve that object.
-
-### Runtime completion snapshots
-
-Static catalogs describe what a selected class/package version declares. A normal
-compile can additionally observe commands, environments, counters, colors, key
-families, and loaded resources created dynamically by TeX. This evidence is returned
-as `CompileResult.telemetry.completionSnapshot`; requesting completion never starts a
-compile. `pdflatex` currently observes command/registry fields. XeLaTeX and LuaLaTeX
-use the same schema and explicitly mark unavailable fields `unsupported`.
-
-Precedence is deterministic: project declarations override fresh runtime observations,
-which override inferred static metadata. Exact/declared catalog candidates remain
-available when runtime evidence has no matching record. Any file add, removal, or edit
-immediately makes the snapshot stale and removes its candidates; only a snapshot whose
-SHA-256 project revision and compile profile match the current LSP project becomes fresh.
-
-### Static linter (ChkTeX-style)
-
-`getDiagnostics()` includes style/correctness lint warnings (no compile needed)
-alongside the reference/citation checks. The linter is comment/verbatim/math
-aware (it never fires inside comments, `\verb`, verbatim environments, or — for
-text rules — math mode). Each rule is individually toggleable with a severity;
-lint diagnostics use codes distinct from the index diagnostics, so the two never
-double-report. Results are cached per `.tex` file, and `updateFile()` re-lints
-only content that changed.
-
-Configure via the `lint` option (on `WasmTex` and `LatexLanguageService`):
-`false` disables the linter; an object overrides per-rule `enabled`/`severity`.
-
-```ts
-import { createLatexLanguageService } from 'wasmtex/lsp'
-
-const service = createLatexLanguageService({
-  files,
-  lint: {
-    'straight-double-quotes': { enabled: false, severity: 'info' }, // turn one rule off
-    'space-before-punctuation': { enabled: true, severity: 'error' }, // bump severity
-  },
-})
-```
-
-You can also lint a single string directly: `lintSource(content, path, config?)`.
-`DEFAULT_LINT_CONFIG` exposes the defaults.
-
-| Rule (`code`) | Default | Flags |
-|---------------|---------|-------|
-| `nbsp-before-ref` | info | A plain space before `\ref`/`\cite`/… (suggests `~`). |
-| `space-before-punctuation` | warning | Whitespace before `, ; : ! ?`. |
-| `doubled-space` | info | Two or more spaces between words. |
-| `ellipsis` | info | Literal `...` (suggests `\dots`/`\ldots`). |
-| `straight-double-quotes` | info | A straight `"` (suggests `` `` `` / `''`). |
-| `display-math-dollars` | warning | `$$ … $$` (suggests `\[ … \]`). |
-| `en-dash-range` | info | A hyphen between digits, e.g. `10-20` (suggests `--`). |
-| `math-operator-as-text` | warning | `sin`, `log`, … as plain text in math mode (suggests `\sin`). |
-| `footnote-spacing` | info | A space before `\footnote`. |
-| `abbreviation-spacing` | info (off) | `e.g.`/`i.e.` followed by a plain space. Off by default. |
-
-### Monaco Adapter
-
-Use `wasmtex/lsp/monaco` when you want the existing Monaco completion, hover,
-definition, reference, symbol, and rename providers.
-
-```ts
-import { createLatexLanguageService } from 'wasmtex/lsp'
-import { ensureLanguagesRegistered, registerLatexMonacoProviders } from 'wasmtex/lsp/monaco'
-
-ensureLanguagesRegistered()
-const service = createLatexLanguageService({ files })
-const disposables = registerLatexMonacoProviders(service, {
-  onWorkspaceEdit(edit) {
-    // Apply via your app state or Yjs transaction.
-  },
-})
-```
-
-The Monaco providers are thin adapters over editor-neutral cores in `src/lsp/`
-(`neutral-providers.ts`, `language-features.ts`) — none of which import Monaco —
-so the same logic backs both the Monaco adapter and the LSP server below.
-
-### Standalone LSP server
-
-Use `wasmtex/lsp/server` to run the language intelligence as a JSON-RPC
-[Language Server](https://microsoft.github.io/language-server-protocol/) in any
-host (VS Code, Neovim, or a browser Web Worker). `LatexLspServer` is
-transport-agnostic: give it a `send` callback and feed it incoming messages with
-`handle()`. It implements `initialize`, `textDocument/didOpen`/`didChange`,
-`completion`, `hover`, `definition`, `references`, `rename`, and pushes
-`publishDiagnostics`.
-
-
-Requests are tracked until their result or error settles. `$/cancelRequest` affects
-only a currently active ID; unknown or completed IDs are ignored. A cancelled
-request receives one `RequestCancelled` (`-32800`) error when its operation settles,
-including when that operation rejects. Cancellation does not roll back document or
-snapshot updates or abort shared catalog loading. IDs can be reused after settlement;
-reusing an active ID is rejected without replacing its original operation.
-
-Malformed supported-method parameters return `InvalidParams` (`-32602`), while
-unexpected service failures return `InternalError` (`-32603`). Invalid document
-notifications are ignored before mutation and receive no response. Positions must
-be nonnegative protocol integers; text and URIs must have the expected string types.
-Document changes use full text synchronization; ranged changes are rejected instead
-of being mistaken for replacement documents. Missing document versions retain the
-existing default of zero and an empty change list remains a no-op.
-
-Three WasmTex extension methods carry runtime evidence: send
-`wasmtex/updateCompletionSnapshot` with `{ snapshot }` and await its response before
-requesting completion; query `wasmtex/completionSnapshotState` with no parameters. Set
-the active compile root with `wasmtex/setMainFile` and `{ path }` when it differs from
-the `LatexLanguageService` default `main.tex` (or pass `mainFile` to its constructor).
-Separate compiler hosts should also pass the exact `completionProfile` expected by the
-language service; catalog identities independently verify TeX Live mirror compatibility.
-Invalid, wrong-profile, or unsupported-version payloads return a JSON-RPC error;
-over-budget collections are deterministically truncated and marked incomplete. A
-revision mismatch is retained as `stale`, never consumed as completion data.
-
-```ts
-import { LatexLspServer } from 'wasmtex/lsp/server'
-
-// Browser Web Worker transport (host side mirrors this).
-const server = new LatexLspServer((msg) => self.postMessage(msg))
-self.onmessage = (e) => server.handle(e.data)
-```
-
-```ts
-// Node stdio transport sketch (for a VS Code / Neovim binary):
-const server = new LatexLspServer((msg) => writeMessage(process.stdout, msg))
-readMessages(process.stdin, (msg) => server.handle(msg))
-```
-
-## SyncTeX (`wasmtex/synctex`)
-
-Parse the engine's SyncTeX output and map between PDF positions and source
-locations — for hosts that render the PDF themselves (the built-in `PdfViewer`
-already uses this internally). `CompileResult.synctex` holds the raw bytes.
-
-```ts
-import { SynctexParser, TextMapper } from 'wasmtex/synctex'
-
-const data = new SynctexParser(synctexBytes).parse()      // { ...SynctexData }
-// PDF → source (inverse search) and source → PDF (forward search):
-const mapper = new TextMapper(data)
-```
-
-`SynctexParser.forwardLookup(data, file, line)` returns the primary PDF region for
-hosts that paint one marker. Use `forwardLookupAll(data, file, line)` to preserve
-every distinct region. A single source line can map to separated boxes, such as the
-bottom of the left column and the top of the right column in a two-column document;
-combining those boxes into one bounding rectangle would cover unrelated page content.
-The built-in viewer paints all returned regions.
-
-| Export | Purpose |
-|--------|---------|
-| `SynctexParser` | Parses raw (or gzipped) `.synctex` bytes into `SynctexData`. |
-| `TextMapper` | Maps between `PdfLocation` and `SourceLocation` using the parsed data. |
-| `normalizeSynctexInputName` | Normalizes an input path as SyncTeX records it (for matching project files). |
-| `SynctexData` / `SynctexNode` / `PdfLocation` / `SourceLocation` | Result/coordinate types. |
-| `TextMapperPage` / `TextMapperItem` | Minimal text extraction and coordinate conversion contract for any PDF renderer; no PDF.js dependency. |
+`LintConfig`, `LintRuleConfig`, `LintRuleId`. See [Static linter](language-api.md#static-linter-chktex-style)
 
 ## Methods
 
-- `init(): Promise<void>` — Initializes the WASM engines and runs the first compilation.
+- `init(): Promise<void>` — Initializes the engine and runs the first compilation. Initialization failures are reported through `status: error` rather than rejecting this promise; inspect compile results for TeX errors.
 - `loadProject(files: Record<string, string | Uint8Array>): void` — Replaces the entire project with new files.
 - `saveProject(): Record<string, string | Uint8Array>` — Returns a snapshot of every project file (the inverse of `loadProject`); flushes the active editor buffer into the VFS first.
 - `setFile(path: string, content: string | Uint8Array): void` — Adds or updates a single file.
@@ -998,8 +195,8 @@ Use `editor.on(event, handler)` / `editor.off(event, handler)` to subscribe/unsu
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `compile` | `{ result: CompileResult }` | A compilation cycle finished. `result.telemetry` carries machine-readable diagnostics, geometry, and the dependency graph — see [Compile telemetry](#compile-telemetry). |
-| `status` | `{ status: string, message?: string, preambleSnapshot?: boolean, incremental?: boolean }` | Editor lifecycle state changed (e.g. `'compiling'`, `'ready'`, `'error'`). `message` provides human-readable progress text; `preambleSnapshot` is `true` when a cached `.fmt` was reused; `incremental` is `true` when a `'ready'` reflects an [incremental](#incremental-compilation) fast paint (exact when SyncTeX was spliced; a background reconcile follows only when it couldn't be). Compile results also expose `preambleRebuilt` when the preamble `.fmt` cache was rebuilt. |
+| `compile` | `{ result: CompileResult }` | A compilation cycle finished. `result.telemetry` carries machine-readable diagnostics, geometry, and the dependency graph — see [Compile telemetry](compiler-api.md#compile-telemetry). |
+| `status` | `{ status: string, message?: string, preambleSnapshot?: boolean, incremental?: boolean }` | Editor lifecycle state changed (e.g. `'compiling'`, `'ready'`, `'error'`). `message` provides human-readable progress text; `preambleSnapshot` is `true` when a cached `.fmt` was reused; `incremental` is `true` when a `'ready'` reflects an [incremental](compiler-api.md#incremental-compilation) fast paint (exact when SyncTeX was spliced; a background reconcile follows only when it couldn't be). Compile results also expose `preambleRebuilt` when the preamble `.fmt` cache was rebuilt. |
 | `filechange` | `{ path: string, content: string \| Uint8Array }` | File content was modified. |
 | `filesUpdate` | `{ files: string[] }` | Files were added or deleted. `files` is the full list of current paths. |
 | `cursorChange` | `{ path: string, line: number, column: number }` | Cursor moved in the editor. |
@@ -1014,8 +211,6 @@ Use `editor.on(event, handler)` / `editor.off(event, handler)` to subscribe/unsu
 
 ```ts
 const editor = new WasmTex('#editor', '#preview')
-await editor.init()
-
 editor.on('diagnostics', ({ diagnostics }) => {
   for (const d of diagnostics) {
     console.log(`[${d.severity}] line ${d.line}: ${d.message}`)
@@ -1023,6 +218,7 @@ editor.on('diagnostics', ({ diagnostics }) => {
   // render into your own UI…
   renderDiagnosticsPanel(diagnostics)
 })
+await editor.init()
 ```
 
 ## PdfViewer API
@@ -1052,36 +248,45 @@ if (viewer) {
 
 ## Collaboration
 
-When `collaboration: true` is set, WasmTex delegates all content ownership to your CRDT/OT layer. It will never call `model.setValue()`, so your binding stays authoritative.
+Enable `collaboration: true` and follow the [Yjs integration recipe](editor-integration.md#collaborative-editing-yjs).
+Initial models are created during construction: bind existing models through
+`listFiles()` / `getModel()`, then handle `modelCreate` and `modelDispose` for later changes.
 
-### Example: Yjs + y-monaco
+<a id="example-yjs--y-monaco"></a>
+The complete example is maintained in the recipe above.
 
-```ts
-import * as Y from 'yjs'
-import { WebsocketProvider } from 'y-websocket'
-import { MonacoBinding } from 'y-monaco'
+## Moved reference sections
 
-const ydoc = new Y.Doc()
-const provider = new WebsocketProvider('wss://your-server', 'room-id', ydoc)
+These anchors preserve existing bookmarks. Follow the links to the focused guides.
 
-const editor = new WasmTex('#editor', '#preview', { collaboration: true })
-await editor.init()
+<a id="shared-syntax-lifecycle"></a>
+See [Shared syntax lifecycle](syntax-api.md#shared-syntax-lifecycle) in its dedicated guide.
 
-const bindings = new Map()
+<a id="command-database--signatures"></a>
+See [Command database & signatures](language-api.md#command-database--signatures) in its dedicated guide.
 
-editor.on('modelCreate', ({ path, model }) => {
-  const ytext = ydoc.getText(path)
-  const binding = new MonacoBinding(
-    ytext,
-    model,
-    new Set([editor.getMonacoEditor()]),
-    provider.awareness,
-  )
-  bindings.set(path, binding)
-})
+<a id="headless-compiler"></a>
+<a id="wasmtexcompileroptions"></a>
+<a id="server-backends"></a>
+<a id="incremental-compilation"></a>
+<a id="heap-checkpoints-arbitrary-line-incremental-compilation"></a>
+<a id="accessible-export-tagged-pdf--pdf-ua"></a>
+<a id="tikz-figure-externalization"></a>
+<a id="wasmtexcompiler-methods"></a>
+<a id="headless-operation-lifetime"></a>
+<a id="compile-phase-timings"></a>
+<a id="compile-telemetry"></a>
+<a id="safe-host-side-invalidation"></a>
+See [Headless Compiler](compiler-api.md#headless-compiler) in its dedicated guide.
 
-editor.on('modelDispose', ({ path }) => {
-  bindings.get(path)?.destroy()
-  bindings.delete(path)
-})
-```
+<a id="lsp-core"></a>
+<a id="latexlanguageservice-methods"></a>
+<a id="exact-tex-live-resource-completion"></a>
+<a id="runtime-completion-snapshots"></a>
+<a id="static-linter-chktex-style"></a>
+<a id="monaco-adapter"></a>
+<a id="standalone-lsp-server"></a>
+See [LSP Core](language-api.md#lsp-core) in its dedicated guide.
+
+<a id="synctex-wasmtexsynctex"></a>
+See [SyncTeX](synctex-api.md#synctex-wasmtexsynctex) in its dedicated guide.

@@ -56,6 +56,19 @@ successfully before a documentation change is submitted.
 - Avoid unqualified performance promises. Separate preparation, compile, paint,
   network, WASM capacity and process RSS; dated benchmarks are not live metrics.
 
+## Audience and examples
+
+- Write SDK-user guides around imports, inputs, results and cleanup. State external
+  prerequisites before the first example (engine assets, containers, workers).
+- Label repository-only commands explicitly. Installed packages do not include
+  `scripts/`, `public/` or contributor tooling; link to a checkout procedure.
+- Keep source builds, CI gates, profiling and internal state machines in contributor
+  guides. Link from a user recipe only when the detail helps a real integration choice.
+- Give each long reference a short task map. Split by public entry point or a
+  distinct workflow; preserve old fragments and update current incoming links.
+- Distinguish runnable examples from sketches with host-provided values. Check
+  constructor/event timing, asynchronous return values and resource disposal.
+
 ## Writing Rules
 
 - Use stable terms consistent with current architecture.

@@ -12,8 +12,8 @@ and historical evidence.
 | Work | Required reading |
 | --- | --- |
 | Architecture or client/server boundary | [Architecture](docs/architecture.md), [execution model](docs/execution-model.md). |
-| Integration or public API | [Integration](docs/howto.md), [API reference](docs/api.md); [bibliography](docs/bibliography.md) for backend changes. |
-| Syntax, LSP or completion | [Language service architecture](docs/language-service.md), [API reference](docs/api.md). |
+| Integration or public API | [Integration](docs/howto.md), [editor API](docs/api.md), [compiler API](docs/compiler-api.md); [bibliography](docs/bibliography.md) for backend changes. |
+| Syntax, LSP or completion | [Language service architecture](docs/language-service.md), [language API](docs/language-api.md), [syntax API](docs/syntax-api.md). |
 | Engine, memory, build flags or performance | [Engine runtime](docs/engine.md), [optimization policy](docs/engine-optimization-policy.md), [current performance decisions](docs/compile-performance.md). |
 | Warmup or caching | [Warmup](docs/warmup.md), [engine runtime](docs/engine.md), [optimization policy](docs/engine-optimization-policy.md). |
 | TeX Live source/year or mirror upgrade | [Upgrade procedure](docs/texlive-upgrade.md), [customization inventory](docs/engine-upgrade-customizations.md), [mirror operations](docs/texlive-mirror-operations.md). |

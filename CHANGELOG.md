@@ -11,6 +11,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ## [Unreleased]
 
+### Changed
+
+- Separate SDK integration/API guides from contributor build and profiling procedures;
+  correct engine asset setup, LuaLaTeX font support, SyncTeX usage and Yjs model binding.
+
 ### Fixed
 
 - A synchronous Worker message-send failure no longer leaves a response waiter

@@ -14,7 +14,7 @@ identified engine release that existing CorTeX projects can adopt transparently.
 ```
 [ Host Application ]
       ↓
-[ WasmTex SDK ] (src/index.ts → WasmTex in src/wasmtex.ts)
+[ WasmTexCompiler (headless) ] or [ WasmTex (browser component) ]
       ├── [ VirtualFS ] (src/fs/virtual-fs.ts) - In-memory file management
       ├── [ LSP Engine ] (src/lsp/) - Completion, Hover, Diagnostics, Rename
       ├── [ Worker Orchestrator ] (src/engine/) - Engine selection + compile scheduling
@@ -22,10 +22,10 @@ identified engine release that existing CorTeX projects can adopt transparently.
       │     ├── XeLaTeX Workers (WASM) - XeTeX + dvipdfmx (fontspec / unicode-math / CJK)
       │     ├── LuaLaTeX Worker (WASM) - LuaHBTeX (writes PDF directly, single worker)
       │     └── BibTeX Worker (WASM) - Bibliography generation
-      └── [ UI Components ] (src/ui/, src/viewer/) - Optional (hidden in headless mode)
+      └── [ UI Components ] (src/editor/, src/viewer/) - WasmTex only; absent from headless imports
 ```
 
-- **SDK Core**: The `wasmtex` entry (`src/index.ts`) barrel-exports the `WasmTex` class (`src/wasmtex.ts`), which orchestrates VFS, LSP, and Engines.
+- **Compile core**: `wasmtex/headless` exports `WasmTexCompiler`; it owns multi-engine orchestration without a UI. The root `wasmtex` entry exports the separate browser `WasmTex` orchestrator. Both reuse engine and filesystem modules.
 - **Workers**: in the browser, WASM engines run in Web Workers to keep the main thread responsive; under Node the same engines run via a `worker_threads` host (`installNodeWorkerHost`, `wasmtex/node`).
 - **Communication**: Asynchronous via `postMessage`. The worker bridge correlates responses by request ID where available and queues legacy command-keyed waiters.
 - **SyncTeX**: A parser (`src/synctex/`) processes SyncTeX text for bidirectional PDF ↔ Source navigation.
@@ -75,7 +75,7 @@ The compile core is decoupled from the editor so it can run with no DOM:
 
 The compiler routes bibliography and index stages
 through a `BackendRegistry` (`src/engine/backend-registry.ts`); the default for every
-stage is **client/local** (WASM/TS), so nothing leaves the device. Pass a registry via the
+stage is **local to the compiler host** (WASM/TS). Package/font downloads still use the configured mirror. Pass a registry via the
 `backends` option on `WasmTexCompilerOptions` to re-route a stage to a **server** backend:
 
 ```ts
@@ -93,8 +93,7 @@ request. With no registry the client BibTeX/biblatex-lite paths are unchanged.
 `createBiberBackend` and `createXindyBackend` are server-first backends for full
 biblatex/Biber and xindy; the compiler auto-routes both bibliography slots and the `index`
 slot. Wrap any backend with `withCache`
-(`src/engine/content-cache.ts`) to dedupe identical work. See
-[Execution Model](execution-model.md) and [Bibliography Backends](bibliography.md).
+(`src/engine/content-cache.ts`) to dedupe identical work. See [Execution Model](execution-model.md) and [Bibliography Backends](bibliography.md).
 
 ## Tech Stack
 
@@ -114,5 +113,5 @@ The syntax service owns source-preserving snapshots and the project index.
 Language features consume those snapshots plus profile-bound static and runtime
 completion evidence. Monaco and JSON-RPC are adapters over the neutral service.
 Read [language service architecture](language-service.md) for parser, indexing,
-completion and provenance details; [the API reference](api.md#lsp-core) owns the
+completion and provenance details; [the API reference](language-api.md#lsp-core) owns the
 public interface.

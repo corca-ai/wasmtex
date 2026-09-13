@@ -204,5 +204,5 @@ preview and provenance data that JSON-RPC and Monaco adapters preserve.
 
 
 For the SDK module boundary, see [architecture](architecture.md). Public contracts
-and integration examples live in [the API reference](api.md#lsp-core) and
-in [the integration guide](howto.md#standalone-lsp).
+and integration examples live in [the API reference](language-api.md#lsp-core) and
+in [the integration guide](language-integration.md#standalone-lsp).
