@@ -43,6 +43,36 @@ describe('uriFromPath / pathFromUri', () => {
 })
 
 describe('LatexLspServer', () => {
+  it('serves linked environment names with protocol positions and updates them on edits', async () => {
+    const { server, sent } = makeServer({
+      files: { 'main.tex': String.raw`\begin{align}x\end{align}` },
+    })
+    await server.handle({
+      id: 101,
+      method: 'textDocument/linkedEditingRange',
+      params: {
+        textDocument: { uri: URI },
+        position: { line: 0, character: 8 },
+      },
+    })
+    expect(result(sent, 101)).toEqual({
+      ranges: [
+        { start: { line: 0, character: 7 }, end: { line: 0, character: 12 } },
+        { start: { line: 0, character: 19 }, end: { line: 0, character: 24 } },
+      ],
+      wordPattern: '[A-Za-z0-9@:_*\\-]+',
+    })
+    await server.handle({
+      id: 102,
+      method: 'textDocument/linkedEditingRange',
+      params: {
+        textDocument: { uri: URI },
+        position: { line: -1, character: 8 },
+      },
+    })
+    expect(responseFor(sent, 102)?.error?.code).toBe(-32602)
+  })
+
   it('preserves context search and the exact reference edit over JSON-RPC', async () => {
     const { server, sent } = makeServer({
       files: {

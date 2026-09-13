@@ -156,6 +156,27 @@ entity identity.
 an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
 than as a JavaScript heap profiler.
 
+### Linked environment editing
+
+`getLinkedEditingRanges(path, line, column)` returns `LinkedEditingRanges | null`
+with two 1-based, end-exclusive name ranges and a `wordPattern` string. Both
+names must be complete, literal and correctly nested. A cursor in either name,
+including its end boundary, selects the same pair. The parser computes pairs with
+its existing token stream; cursor queries do not tokenize again.
+
+Comments, escaped commands, verbatim-like environments, false conditional branches
+and macro/environment definition templates do not authorize linked edits. Malformed
+or mismatched delimiters break pairing instead of searching past them for a matching
+name. Names use ASCII letters, digits, `@`, `:`, `_`, `*` and `-`; dynamic names and
+other syntax return no pair. This is source editing, not environment validity checking.
+
+The Monaco adapter registers `LinkedEditingRangeProvider`; hosts enable Monaco's
+`linkedEditing` option for editable models. The JSON-RPC server advertises
+`linkedEditingRangeProvider` and handles `textDocument/linkedEditingRange` with
+zero-based protocol positions. Hosts own access control, model/index synchronization,
+remote-edit cancellation and ordinary undo/collaboration behavior; the neutral query
+never writes source.
+
 ### Reference completion context
 
 Reference candidates search label keys, directly associated source titles/captions,

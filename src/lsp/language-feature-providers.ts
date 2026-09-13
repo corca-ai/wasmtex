@@ -4,7 +4,9 @@
  * core, and converts the result to Monaco types.
  */
 import * as monaco from 'monaco-editor'
+import type { VirtualFS } from '../fs/virtual-fs'
 import { CompletionResolverRegistry } from './completion-registry'
+import { ENVIRONMENT_NAME_PATTERN, linkedEnvironmentRanges } from './environment-pairs'
 import {
   type CodeAction,
   getCodeActions,
@@ -176,6 +178,26 @@ function toMonacoCodeAction(action: CodeAction): monaco.languages.CodeAction {
         textEdit: { range: toRange(e.edit.range), text: e.edit.newText },
         versionId: undefined,
       })),
+    },
+  }
+}
+
+export function createLinkedEditingRangeProvider(
+  index: ProjectIndex,
+  fs: VirtualFS,
+): monaco.languages.LinkedEditingRangeProvider {
+  return {
+    provideLinkedEditingRanges(model, position, token) {
+      const path = model.uri.path.replace(/^\//, '')
+      if (token.isCancellationRequested || fs.readFile(path) !== model.getValue()) return null
+      const ranges = linkedEnvironmentRanges(
+        index.getFileSymbols(path)?.environmentNamePairs ?? [],
+        position.lineNumber,
+        position.column,
+      )
+      return ranges
+        ? { ranges: ranges.map(toRange), wordPattern: new RegExp(ENVIRONMENT_NAME_PATTERN) }
+        : null
     },
   }
 }

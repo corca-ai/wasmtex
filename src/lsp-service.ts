@@ -13,6 +13,11 @@ import type {
   CompletionResolverRegistry,
 } from './lsp/completion-registry'
 import { computeDiagnostics, type Diagnostic } from './lsp/diagnostic-provider'
+import {
+  ENVIRONMENT_NAME_PATTERN,
+  type LinkedEditingRanges,
+  linkedEnvironmentRanges,
+} from './lsp/environment-pairs'
 import { IncrementalLinter } from './lsp/incremental-linter'
 import {
   type CodeAction,
@@ -527,6 +532,15 @@ export class LatexLanguageService {
     return getFoldingRanges(this.textOf(path))
   }
 
+  getLinkedEditingRanges(path: string, line: number, column: number): LinkedEditingRanges | null {
+    const ranges = linkedEnvironmentRanges(
+      this.index.getFileSymbols(path)?.environmentNamePairs ?? [],
+      line,
+      column,
+    )
+    return ranges ? { ranges, wordPattern: ENVIRONMENT_NAME_PATTERN } : null
+  }
+
   getDocumentHighlights(path: string, line: number, column: number): LFRange[] {
     return getDocumentHighlights(path, line, column, this.index)
   }
@@ -703,3 +717,5 @@ export type {
   CompletionSnapshotValue,
 } from './types'
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace }
+
+export type { LinkedEditingRanges } from './lsp/environment-pairs'

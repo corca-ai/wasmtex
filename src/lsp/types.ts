@@ -1,3 +1,4 @@
+import type { EnvironmentNamePair } from './environment-pairs'
 import type { CommandArg } from './package-db'
 
 export interface SourceLocation {
@@ -137,6 +138,8 @@ export interface BibliographyRef {
 }
 
 export interface FileSymbols {
+  /** Matched literal environment names, computed with the owning parser pass. */
+  environmentNamePairs?: EnvironmentNamePair[]
   labels: LabelDef[]
   labelRefs: LabelRef[]
   citations: CitationRef[]

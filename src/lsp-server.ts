@@ -176,6 +176,17 @@ export class LatexLspServer {
         return this.definition(positionParams(params))
       case 'textDocument/references':
         return this.references(positionParams(params))
+      case 'textDocument/linkedEditingRange': {
+        const { textDocument, position } = positionParams(params)
+        const result = this.service.getLinkedEditingRanges(
+          pathFromUri(textDocument.uri),
+          position.line + 1,
+          position.character + 1,
+        )
+        return result
+          ? { ranges: result.ranges.map(toLspRange), wordPattern: result.wordPattern }
+          : null
+      }
       case 'textDocument/rename':
         return this.rename(params)
       case 'wasmtex/updateCompletionSnapshot':
@@ -374,5 +385,6 @@ function serverCapabilities(): object {
     definitionProvider: true,
     referencesProvider: true,
     renameProvider: true,
+    linkedEditingRangeProvider: true,
   }
 }
