@@ -1,5 +1,7 @@
 import { Token } from './latex-tokenizer.js';
 import { FileSymbols } from './types.js';
+/** Shared classification for source consumers; argument-taking macros need no fi. */
+export declare function isConditionalOpener(name: string): boolean;
 /**
  * Spans of source that are not interpretable LaTeX code: comments, inline
  * `\verb`, verbatim environment bodies, and false conditional branches. Other

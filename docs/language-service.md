@@ -19,6 +19,21 @@ Language features are backed by a small, error-tolerant LaTeX parser:
   are **shallow-expanded** (bounded depth, cycle-guarded) so the symbols they
   generate are indexed at their call sites.
 
+### Diagnostic repair evidence
+
+The diagnostic repair modules reuse the parser's masked command and group index.
+Their required-argument scanner consumes TeX control-sequence arguments as single
+tokens before considering nested invocations. Review planning recomputes the
+proposal instead of trusting edits supplied by a client.
+
+Package repair combines source-matched direct engine errors with a revision-bound
+completion snapshot and exact resource-catalog availability. The complete recorder
+inventory accounts for resources loaded indirectly through classes and packages;
+partial command or semantic catalogs are never absence evidence. Runtime evidence
+admission and asynchronous catalog queries are fenced against source, root and
+profile changes. See [reviewed diagnostic repair](language-api.md#reviewed-diagnostic-repair)
+for the public host lifecycle and limits.
+
 ### Project Index
 `ProjectIndex` maintains symbols across all host-owned files in the `VirtualFS`. Besides
 labels, citations, and commands, it records active classes/packages, counters, lengths,

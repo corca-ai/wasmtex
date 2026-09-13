@@ -89,6 +89,17 @@ const required = (
  * optional arguments omitted from the compact command snippets.
  */
 const builtinTypedSignatures = new Map<string, CommandArg[]>([
+  ['iftrue', []],
+  ['iffalse', []],
+  ['else', []],
+  ['fi', []],
+  ['textbf', [required('text', 'free-text')]],
+  ['textit', [required('text', 'free-text')]],
+  ['texttt', [required('text', 'free-text')]],
+  ['textrm', [required('text', 'free-text')]],
+  ['textsf', [required('text', 'free-text')]],
+  ['textnormal', [required('text', 'free-text')]],
+  ['emph', [required('text', 'free-text')]],
   ['frac', [required('numerator', 'free-text'), required('denominator', 'free-text')]],
   ['sqrt', [optional('index', 'free-text'), required('radicand', 'free-text')]],
   [

@@ -13,6 +13,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Reviewed diagnostic repair proposals for missing required argument slots and
+  profile-bound package dependencies, with source/compile revision checks and
+  root preamble edits for errors in included files.
+
 - Exact-token reference repair queries and reviewed expected-source edits for
   undefined references and explicitly selected duplicate-label occurrences.
 

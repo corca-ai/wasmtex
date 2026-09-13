@@ -97,6 +97,11 @@ function isUserConditional(n: string): boolean {
   return n.length > 2 && n.startsWith('if') && n !== 'iff' && !ARG_CONDITIONAL_MACROS.has(n)
 }
 
+/** Shared classification for source consumers; argument-taking macros need no fi. */
+export function isConditionalOpener(name: string): boolean {
+  return name === 'if' || IF_OPENERS.has(name) || isUserConditional(name)
+}
+
 /** Spans of false conditional branches (`\iffalse`…`\else`/`\fi`, `\iftrue`…`\else`…`\fi`).
  *  Conditional tokens inside a verbatim body are inert (it's raw text, not code), so they
  *  must neither open, close, nor pair — otherwise an `\iffalse` in a code listing would
@@ -122,8 +127,7 @@ function handleConditionalToken(
   const n = t.value
   if (n === 'iffalse') stack.push({ kind: 'false', falseStart: t.end, elseSeen: false })
   else if (n === 'iftrue') stack.push({ kind: 'true', falseStart: -1, elseSeen: false })
-  else if (n === 'if' || IF_OPENERS.has(n) || isUserConditional(n))
-    stack.push({ kind: 'other', falseStart: -1, elseSeen: false })
+  else if (isConditionalOpener(n)) stack.push({ kind: 'other', falseStart: -1, elseSeen: false })
   else if (n === 'else') handleElse(stack[stack.length - 1], t, spans)
   else if (n === 'fi') handleFi(stack.pop(), t, spans)
 }

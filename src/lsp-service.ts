@@ -14,6 +14,22 @@ import type {
 } from './lsp/completion-registry'
 import { computeDiagnostics, type Diagnostic } from './lsp/diagnostic-provider'
 import {
+  type DiagnosticRepairSource,
+  getDiagnosticRepairs,
+  planArgumentRepair,
+  planDiagnosticRepair,
+  revalidateArgumentRepairs,
+} from './lsp/diagnostic-repair'
+import {
+  bindDiagnosticCompileContext,
+  type DiagnosticCompileEvidence,
+} from './lsp/diagnostic-repair-context'
+import type {
+  LatexDiagnosticCompileContext,
+  LatexDiagnosticCompileContextResult,
+  LatexDiagnosticRepairProposal,
+} from './lsp/diagnostic-repair-types'
+import {
   ENVIRONMENT_NAME_PATTERN,
   type LinkedEditingRanges,
   linkedEnvironmentRanges,
@@ -66,6 +82,7 @@ import type {
 } from './lsp/resource-catalog'
 import type { TexSemanticCatalogProvider, TexSemanticCatalogState } from './lsp/semantic-catalog'
 
+export type * from './lsp/diagnostic-repair-types'
 export type * from './lsp/reference-repair-types'
 
 import { getStructuralSelectionIndex, structuralSelectionRanges } from './lsp/structural-selection'
@@ -90,6 +107,7 @@ export type {
 import { type LatexDocumentInput, type LatexFileSyntax, LatexSyntaxService } from './syntax'
 import type {
   CompletionSnapshot,
+  CompletionSnapshotEngine,
   CompletionSnapshotProfile,
   CompletionSnapshotState,
 } from './types'
@@ -202,6 +220,8 @@ export interface LatexLanguageServiceOptions {
   mainFile?: string
   /** Exact runtime completion profile expected from a separate compiler host. */
   completionProfile?: CompletionSnapshotProfile
+  /** Selected engine, required for diagnostic repairs based on compile evidence. */
+  completionEngine?: CompletionSnapshotEngine
   aux?: string
   engineCommands?: string[]
   semanticTrace?: string | SemanticTrace
@@ -222,6 +242,7 @@ export interface LatexLanguageServiceOptions {
 /** Atomically replace the profile-bound completion sources without rebuilding the project index. */
 export interface LatexCompletionConfiguration {
   completionProfile?: CompletionSnapshotProfile
+  completionEngine?: CompletionSnapshotEngine
   completionRegistry?: CompletionResolverRegistry
   resourceCatalog?: TexResourceCatalogProvider
   semanticCatalog?: TexSemanticCatalogProvider
@@ -259,8 +280,13 @@ export class LatexLanguageService {
   private semanticCatalog: TexSemanticCatalogProvider | undefined
   private mainFile: string
   private completionProfile: CompletionSnapshotProfile | undefined
+  private completionEngine: CompletionSnapshotEngine | undefined
   private projectRevisionEpoch = 0
   private completionSnapshotUpdate = 0
+  private diagnosticContextUpdate = 0
+  private diagnosticCompileContext:
+    | { revision: number; contextRevision: string; evidence: DiagnosticCompileEvidence }
+    | undefined
 
   constructor(options: LatexLanguageServiceOptions = {}) {
     this.syntaxService = options.syntaxService ?? new LatexSyntaxService()
@@ -271,6 +297,7 @@ export class LatexLanguageService {
     this.semanticCatalog = options.semanticCatalog
     this.mainFile = options.mainFile ?? 'main.tex'
     this.completionProfile = options.completionProfile
+    this.completionEngine = options.completionEngine
     this.completionRegistry =
       options.completionRegistry ??
       createDefaultCompletionRegistry({
@@ -431,6 +458,7 @@ export class LatexLanguageService {
   configureCompletion(configuration: LatexCompletionConfiguration): void {
     this.completionSnapshotUpdate++
     this.completionProfile = configuration.completionProfile
+    this.completionEngine = configuration.completionEngine
     this.resourceCatalog = configuration.resourceCatalog
     this.semanticCatalog = configuration.semanticCatalog
     this.completionRegistry =
@@ -591,6 +619,92 @@ export class LatexLanguageService {
       { index: this.index, fs: this.fs, root: this.mainFile },
       request,
       cancellation,
+    )
+  }
+
+  private diagnosticRepairSource(): DiagnosticRepairSource {
+    const contextRevision = `${this.completionSnapshotUpdate}:${this.diagnosticContextUpdate}`
+    const compiled = this.diagnosticCompileContext
+    const compileEvidence =
+      compiled?.revision === this.projectRevisionEpoch &&
+      compiled.contextRevision === contextRevision
+        ? compiled.evidence
+        : undefined
+    return {
+      fs: this.fs,
+      index: this.index,
+      root: this.mainFile,
+      revision: this.projectRevisionEpoch,
+      contextRevision,
+      registry: this.completionRegistry,
+      ...(compileEvidence ? { compileEvidence } : {}),
+      ...(this.resourceCatalog ? { resourceCatalog: this.resourceCatalog } : {}),
+    }
+  }
+
+  async updateDiagnosticCompileContext(
+    context: LatexDiagnosticCompileContext,
+    cancellation?: CompletionCancellationToken,
+  ): Promise<LatexDiagnosticCompileContextResult> {
+    this.diagnosticContextUpdate++
+    this.diagnosticCompileContext = undefined
+    const state = this.diagnosticRepairSource()
+    const result = await bindDiagnosticCompileContext(
+      {
+        ...state,
+        profile: this.completionProfile,
+        engine: this.completionEngine,
+      },
+      context,
+      cancellation,
+    )
+    if (!result.ok) return result
+    const current = this.diagnosticRepairSource()
+    if (state.revision !== current.revision || state.contextRevision !== current.contextRevision)
+      return { ok: false, reason: 'stale' }
+    if (cancellation?.isCancellationRequested) return { ok: false, reason: 'cancelled' }
+    this.diagnosticCompileContext = {
+      revision: state.revision,
+      contextRevision: state.contextRevision,
+      evidence: result.evidence,
+    }
+    return { ok: true, undefinedCommands: result.evidence.undefinedCommands.length }
+  }
+
+  clearDiagnosticCompileContext(): void {
+    this.diagnosticContextUpdate++
+    this.diagnosticCompileContext = undefined
+  }
+
+  async getDiagnosticRepairs(
+    path: string,
+    offset: number,
+    cancellation?: CompletionCancellationToken,
+  ) {
+    const source = this.diagnosticRepairSource()
+    const result = await getDiagnosticRepairs(source, path, offset, cancellation)
+    return this.isDiagnosticRepairSourceCurrent(source)
+      ? revalidateArgumentRepairs(source, path, offset, result, cancellation)
+      : { ok: false as const, reason: 'stale' as const }
+  }
+
+  async planDiagnosticRepair(
+    request: LatexDiagnosticRepairProposal,
+    cancellation?: CompletionCancellationToken,
+  ) {
+    const source = this.diagnosticRepairSource()
+    const result = await planDiagnosticRepair(source, request, cancellation)
+    if (!this.isDiagnosticRepairSourceCurrent(source))
+      return { ok: false as const, reason: 'stale' as const }
+    return result.ok && request.kind === 'missing-required-argument'
+      ? planArgumentRepair(source, request, cancellation)
+      : result
+  }
+
+  private isDiagnosticRepairSourceCurrent(source: DiagnosticRepairSource): boolean {
+    const current = this.diagnosticRepairSource()
+    return (
+      source.revision === current.revision && source.contextRevision === current.contextRevision
     )
   }
 
