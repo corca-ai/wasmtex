@@ -31,6 +31,7 @@ import {
   getShardEnvironments,
   parseSignature,
 } from './package-db'
+import { projectCommandMetadata } from './project-command-metadata'
 import type { EngineCommandInfo, Occurrence, ProjectIndex } from './project-index'
 import type {
   NeutralCompletionItem,
@@ -356,7 +357,11 @@ export function provideCompletionResult(
   if (options.cancellationToken?.isCancellationRequested) {
     return { items: [], isIncomplete: false }
   }
-  const context = analyzeCompletionContext(doc, pos, registry)
+  const context = analyzeCompletionContext(
+    doc,
+    pos,
+    projectCommandMetadata(index, doc.path, registry),
+  )
   if (!context) return { items: [], isIncomplete: false }
   return registry.resolveResult(context, {
     document: doc,

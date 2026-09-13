@@ -80,8 +80,8 @@ describe('bundled command DB lookups', () => {
 
   it('returns a signature for a bundled command', () => {
     expect(getCommandSignature('frac')).toEqual([
-      { kind: 'required', placeholder: '' },
-      { kind: 'required', placeholder: '' },
+      { kind: 'required', placeholder: 'numerator', valueKind: 'free-text' },
+      { kind: 'required', placeholder: 'denominator', valueKind: 'free-text' },
     ])
   })
 

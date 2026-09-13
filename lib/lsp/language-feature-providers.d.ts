@@ -1,3 +1,4 @@
+import { CompletionResolverRegistry } from './completion-registry.js';
 import { ProjectIndex } from './project-index.js';
 /**
  * Monaco bindings for the editor-neutral language features in
@@ -5,7 +6,7 @@ import { ProjectIndex } from './project-index.js';
  * core, and converts the result to Monaco types.
  */
 import * as monaco from 'monaco-editor';
-export declare function createSignatureHelpProvider(): monaco.languages.SignatureHelpProvider;
+export declare function createSignatureHelpProvider(index?: ProjectIndex, registry?: CompletionResolverRegistry): monaco.languages.SignatureHelpProvider;
 export declare function createFoldingRangeProvider(): monaco.languages.FoldingRangeProvider;
 export declare function createDocumentHighlightProvider(index: ProjectIndex): monaco.languages.DocumentHighlightProvider;
 export declare function createInlayHintsProvider(index: ProjectIndex): monaco.languages.InlayHintsProvider;

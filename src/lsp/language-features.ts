@@ -6,10 +6,14 @@
  * (`register-providers.ts`) binds these to monaco APIs; the same cores can back
  * a standalone LSP server (see the editor-agnostic-core architecture work).
  */
+import {
+  analyzeCompletionContext,
+  type CompletionCommandMetadataProvider,
+} from './completion-context'
 import { maskSpans } from './latex-parser'
 import { CITE_CMDS, INPUT_CMDS, REF_CMDS } from './latex-patterns'
 import { tokenize } from './latex-tokenizer'
-import { getCommandPackage, getCommandSignature } from './package-db'
+import { type CommandArg, getCommandPackage, getCommandSignature } from './package-db'
 import type { ProjectIndex } from './project-index'
 import { buildLineStarts, offsetToLineCol } from './source-position'
 
@@ -40,60 +44,47 @@ export interface SignatureHelp {
   /** Rendered signature, e.g. `\href{url}{text}`. */
   label: string
   parameters: string[]
+  /** Index in the declared signature, including omitted optional arguments. */
   activeParameter: number
+  command: string
+  starred: boolean
+  /** Index among argument groups actually present at the call site. */
+  argumentIndex: number
+  /** Confirmed argument structure and value domains, without editor-specific types. */
+  parameterDetails: CommandArg[]
 }
 
-const COMMAND_CALL_RE = /\\([a-zA-Z@]+)\s*[[{]/g
-
-/** Argument hints for the command whose argument list contains the cursor. */
+/** Argument hints use exactly the same invocation analysis as completion. */
 export function getSignatureHelp(
   content: string,
   line: number,
   column: number,
+  metadata?: CompletionCommandMetadataProvider,
 ): SignatureHelp | null {
-  // Scan the whole prefix up to the cursor so multi-line argument lists work.
-  const lineStart = buildLineStarts(content)[line - 1]
-  if (lineStart === undefined) return null
-  const upto = content.slice(0, lineStart + (column - 1))
-
-  // Find the nearest command call whose argument list still encloses the cursor.
-  let best: { name: string; argStart: number } | null = null
-  for (const m of upto.matchAll(COMMAND_CALL_RE)) {
-    best = { name: m[1]!, argStart: m.index + m[0].length - 1 }
-  }
-  if (!best) return null
-
-  const sig = getCommandSignature(best.name)
-  if (!sig || sig.length === 0) return null
-
-  // Count opened argument groups between the call and the cursor → active param.
-  const { opened, depth } = countOpenGroups(upto, best.argStart)
-  if (depth === 0) return null // cursor is outside the argument list
-
-  const parameters = sig.map((a) =>
-    a.kind === 'required' ? `{${a.placeholder || 'arg'}}` : `[${a.placeholder || 'opt'}]`,
+  const lines = content.split('\n')
+  const context = analyzeCompletionContext(
+    { path: '', getText: () => content, lineAt: (number) => lines[number - 1] ?? '' },
+    { line, column },
+    metadata,
+  )
+  if (context?.type !== 'argument' || context.signatureIndex === undefined) return null
+  const name = `${context.command}${context.starred ? '*' : ''}`
+  const signature = metadata?.getCommandArguments(name) ?? getCommandSignature(name)
+  if (!signature?.length) return null
+  const parameters = signature.map((argument) =>
+    argument.kind === 'required'
+      ? `{${argument.placeholder || 'arg'}}`
+      : `[${argument.placeholder || 'opt'}]`,
   )
   return {
-    label: `\\${best.name}${parameters.join('')}`,
+    label: `\\${context.command}${context.starred ? '*' : ''}${parameters.join('')}`,
     parameters,
-    activeParameter: Math.min(opened - 1, sig.length - 1),
+    activeParameter: context.signatureIndex,
+    command: context.command,
+    starred: context.starred,
+    argumentIndex: context.argumentIndex,
+    parameterDetails: signature.map((argument) => ({ ...argument })),
   }
-}
-
-/** Count top-level groups opened (and current nesting depth) from `from` onward. */
-function countOpenGroups(text: string, from: number): { opened: number; depth: number } {
-  let depth = 0
-  let opened = 0
-  for (let i = from; i < text.length; i++) {
-    const ch = text[i]
-    if (ch === '{' || ch === '[') {
-      if (depth === 0) opened++
-      depth++
-    } else if (ch === '}' || ch === ']') {
-      depth = Math.max(0, depth - 1)
-    }
-  }
-  return { opened, depth }
 }
 
 // --- Folding ranges ----------------------------------------------------------

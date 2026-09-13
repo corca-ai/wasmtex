@@ -1,3 +1,5 @@
+import { CompletionCommandMetadataProvider } from './completion-context.js';
+import { CommandArg } from './package-db.js';
 import { ProjectIndex } from './project-index.js';
 /** 1-based, end-exclusive source range. */
 export interface LFRange {
@@ -10,10 +12,17 @@ export interface SignatureHelp {
     /** Rendered signature, e.g. `\href{url}{text}`. */
     label: string;
     parameters: string[];
+    /** Index in the declared signature, including omitted optional arguments. */
     activeParameter: number;
+    command: string;
+    starred: boolean;
+    /** Index among argument groups actually present at the call site. */
+    argumentIndex: number;
+    /** Confirmed argument structure and value domains, without editor-specific types. */
+    parameterDetails: CommandArg[];
 }
-/** Argument hints for the command whose argument list contains the cursor. */
-export declare function getSignatureHelp(content: string, line: number, column: number): SignatureHelp | null;
+/** Argument hints use exactly the same invocation analysis as completion. */
+export declare function getSignatureHelp(content: string, line: number, column: number, metadata?: CompletionCommandMetadataProvider): SignatureHelp | null;
 export interface FoldingRange {
     startLine: number;
     endLine: number;

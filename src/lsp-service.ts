@@ -41,6 +41,7 @@ import {
   provideHover,
   provideReferences,
 } from './lsp/neutral-providers'
+import { projectCommandMetadata } from './lsp/project-command-metadata'
 import type { ProjectIndex } from './lsp/project-index'
 import type {
   NeutralCompletionItem,
@@ -509,7 +510,12 @@ export class LatexLanguageService {
   }
 
   getSignatureHelp(path: string, line: number, column: number): SignatureHelp | null {
-    return getSignatureHelp(this.textOf(path), line, column)
+    return getSignatureHelp(
+      this.textOf(path),
+      line,
+      column,
+      projectCommandMetadata(this.index, path, this.completionRegistry),
+    )
   }
 
   getFoldingRanges(path: string): FoldingRange[] {
@@ -547,7 +553,11 @@ export class LatexLanguageService {
   }
 
   getCompletionContext(path: string, line: number, column: number): CompletionContext | null {
-    return analyzeCompletionContext(this.docFor(path), { line, column }, this.completionRegistry)
+    return analyzeCompletionContext(
+      this.docFor(path),
+      { line, column },
+      projectCommandMetadata(this.index, path, this.completionRegistry),
+    )
   }
 
   getCompletions(

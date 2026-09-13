@@ -7,6 +7,7 @@ import {
   HttpTexSemanticCatalogProvider,
   InMemoryTexSemanticCatalogProvider,
   type TexSemanticCatalogIdentity,
+  type TexSemanticCatalogState,
   type TexSemanticCatalogStore,
   type TexSemanticColor,
   type TexSemanticKey,
@@ -252,6 +253,154 @@ describe('typed semantic completion', () => {
     expect(
       complete(service, '\\usepackage{hyperref}\n\\begin{hyper¦}').items.map((item) => item.label),
     ).toContain('hyperbox')
+  })
+
+  it('requires confirmed xparse package grammar and honors its optional nesting and star', () => {
+    const provenance = [
+      {
+        evidence: 'declared' as const,
+        sourcePath: 'demo.sty',
+        line: 1,
+        extractor: 'NewDocumentCommand',
+      },
+    ]
+    const args = [
+      { kind: 'optional' as const, balancedOptional: true },
+      { kind: 'required' as const },
+    ]
+    const demo = shard(
+      'package/demo',
+      [],
+      [
+        {
+          name: 'confirmed',
+          args,
+          argumentSyntax: 'xparse-v1',
+          acceptsStar: true,
+          confidence: 'exact',
+          provenance,
+        },
+        { name: 'legacy', args, confidence: 'exact', provenance },
+      ],
+    )
+    const service = new LatexLanguageService({
+      files: { 'main.tex': '\\usepackage{demo}' },
+      semanticCatalog: new InMemoryTexSemanticCatalogProvider(identity, [demo]),
+    })
+    for (const command of ['confirmed', 'confirmed*', 'legacy']) {
+      const line = `\\${command}[[x]]{`
+      service.updateFile('main.tex', `\\usepackage{demo}\n${line}`)
+      const help = service.getSignatureHelp('main.tex', 2, line.length + 1)
+      if (command === 'legacy') expect(help).toBeNull()
+      else {
+        expect(help).toMatchObject({ activeParameter: 1, argumentIndex: 1 })
+        expect(service.getCompletionContext('main.tex', 2, line.length + 1)).toMatchObject({
+          signatureIndex: 1,
+          argumentIndex: 1,
+        })
+      }
+    }
+  })
+
+  it('lets confirmed package declarations replace builtin argument and star structure', () => {
+    const provenance = [
+      {
+        evidence: 'declared' as const,
+        sourcePath: 'demo.sty',
+        line: 1,
+        extractor: 'RenewDocumentCommand',
+      },
+    ]
+    const demo = shard(
+      'package/demo',
+      [],
+      ['sqrt', 'section'].map((name) => ({
+        name,
+        args: [{ kind: 'required' as const }, { kind: 'required' as const }],
+        argumentSyntax: 'xparse-v1' as const,
+        acceptsStar: false,
+        confidence: 'exact' as const,
+        provenance,
+      })),
+    )
+    const service = new LatexLanguageService({
+      files: { 'main.tex': String.raw`\usepackage{demo}` },
+      semanticCatalog: new InMemoryTexSemanticCatalogProvider(identity, [demo]),
+    })
+    for (const command of ['sqrt', 'section']) {
+      const line = `\\${command}{a}{`
+      service.updateFile('main.tex', `${String.raw`\usepackage{demo}`}\n${line}`)
+      expect(service.getSignatureHelp('main.tex', 2, line.length + 1)).toMatchObject({
+        activeParameter: 1,
+        argumentIndex: 1,
+      })
+    }
+    service.updateFile('main.tex', `${String.raw`\usepackage{demo}`}\n${String.raw`\section*{`}`)
+    expect(service.getSignatureHelp('main.tex', 2, 11)).toBeNull()
+  })
+
+  it('scopes signature metadata to active packages and retracts removed imports', () => {
+    const demo = shard(
+      'package/demo',
+      [],
+      [
+        {
+          name: 'demoquery',
+          args: [{ kind: 'required', placeholder: 'package-arg' }],
+          confidence: 'exact',
+          provenance: key('x', 'flag').provenance,
+        },
+      ],
+    )
+    const service = new LatexLanguageService({
+      files: {
+        'a.tex': '\\usepackage{demo}\n\\demoquery{}',
+        'b.tex': '\\demoquery{}',
+      },
+      semanticCatalog: new InMemoryTexSemanticCatalogProvider(identity, [demo]),
+    })
+    expect(service.getSignatureHelp('a.tex', 2, 12)).toMatchObject({
+      label: '\\demoquery{package-arg}',
+    })
+    expect(service.getSignatureHelp('b.tex', 1, 12)).toBeNull()
+    service.updateFile('a.tex', '\\demoquery{}')
+    expect(service.getSignatureHelp('a.tex', 1, 12)).toBeNull()
+    service.updateFile('a.tex', '\\usepackage{demo}\n\\demoquery{}')
+    expect(service.getSignatureHelp('a.tex', 2, 12)).toMatchObject({
+      label: '\\demoquery{package-arg}',
+    })
+  })
+
+  it('does not restore removed package signatures when a pending shard arrives', async () => {
+    const demo = shard(
+      'package/demo',
+      [],
+      [
+        {
+          name: 'latequery',
+          args: [{ kind: 'required', placeholder: 'loaded' }],
+          confidence: 'exact',
+          provenance: key('x', 'flag').provenance,
+        },
+      ],
+    )
+    let resolveLoad!: (state: TexSemanticCatalogState) => void
+    const pending = new Promise<TexSemanticCatalogState>((resolve) => {
+      resolveLoad = resolve
+    })
+    const service = new LatexLanguageService({
+      files: { 'main.tex': '\\usepackage{demo}\n\\latequery{}' },
+      semanticCatalog: {
+        identity,
+        getState: () => ({ status: 'idle' }),
+        load: () => pending,
+      },
+    })
+    expect(service.getSignatureHelp('main.tex', 2, 12)).toBeNull()
+    service.updateFile('main.tex', '\\latequery{}')
+    resolveLoad({ status: 'ready', shard: demo })
+    await pending
+    expect(service.getSignatureHelp('main.tex', 1, 12)).toBeNull()
   })
 
   it('preserves richer builtin typing when a shard also declares the command', () => {

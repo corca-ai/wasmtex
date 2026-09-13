@@ -4,6 +4,7 @@
  * core, and converts the result to Monaco types.
  */
 import * as monaco from 'monaco-editor'
+import { CompletionResolverRegistry } from './completion-registry'
 import {
   type CodeAction,
   getCodeActions,
@@ -15,18 +16,30 @@ import {
   getSignatureHelp,
   type LFRange,
 } from './language-features'
+import { projectCommandMetadata } from './project-command-metadata'
 import type { ProjectIndex } from './project-index'
 
 function toRange(r: LFRange): monaco.Range {
   return new monaco.Range(r.startLine, r.startColumn, r.endLine, r.endColumn)
 }
 
-export function createSignatureHelpProvider(): monaco.languages.SignatureHelpProvider {
+export function createSignatureHelpProvider(
+  index?: ProjectIndex,
+  registry = new CompletionResolverRegistry(),
+): monaco.languages.SignatureHelpProvider {
   return {
     signatureHelpTriggerCharacters: ['{', '[', ','],
     signatureHelpRetriggerCharacters: ['}', ']'],
     provideSignatureHelp(model, position) {
-      const help = getSignatureHelp(model.getValue(), position.lineNumber, position.column)
+      const metadata = index
+        ? projectCommandMetadata(index, model.uri.path.replace(/^\//, ''), registry)
+        : registry
+      const help = getSignatureHelp(
+        model.getValue(),
+        position.lineNumber,
+        position.column,
+        metadata,
+      )
       if (!help) return null
       return {
         value: {

@@ -46,6 +46,8 @@ export type CompletionValueKind =
 
 export interface CommandArg {
   kind: 'required' | 'optional'
+  /** xparse optional arguments balance bare bracket pairs; legacy arguments do not. */
+  balancedOptional?: boolean
   /** The snippet placeholder text, e.g. `text` from `${1:text}` (may be empty). */
   placeholder?: string
   /** Semantic domain used to resolve completion values for this argument. */
@@ -87,6 +89,8 @@ const required = (
  * optional arguments omitted from the compact command snippets.
  */
 const builtinTypedSignatures = new Map<string, CommandArg[]>([
+  ['frac', [required('numerator', 'free-text'), required('denominator', 'free-text')]],
+  ['sqrt', [optional('index', 'free-text'), required('radicand', 'free-text')]],
   [
     'documentclass',
     [
@@ -364,6 +368,24 @@ const builtinTypedSignatures = new Map<string, CommandArg[]>([
   ],
   ['pgfkeys', [required('options', 'key-value', { keyFamily: 'pgfkeys', list: true })]],
 ])
+
+// Sectioning stars consume only the full title; an optional short title belongs
+// exclusively to the unstarred form.
+for (const name of [
+  'part',
+  'chapter',
+  'section',
+  'subsection',
+  'subsubsection',
+  'paragraph',
+  'subparagraph',
+]) {
+  builtinTypedSignatures.set(name, [
+    optional('short title', 'free-text'),
+    required('title', 'free-text'),
+  ])
+  builtinTypedSignatures.set(`${name}*`, [required('title', 'free-text')])
+}
 
 /** Parse a snippet (`\name{$1}[$2]…`) into its argument signature. */
 export function parseSignature(snippet: string): CommandArg[] {

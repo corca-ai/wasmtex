@@ -93,6 +93,36 @@ your own UI.
 - `getSemanticCatalogState(scopeId): TexSemanticCatalogState | null`
 - `loadSemanticCatalog(scopeId, cancellationToken?): Promise<TexSemanticCatalogState> | null`
 
+Signature help shares the completion invocation analyzer and scoped command metadata.
+`activeParameter` indexes the declared signature, including omitted optional arguments;
+`argumentIndex` indexes groups actually supplied at the call site. `command`, `starred`,
+and defensive `parameterDetails` records identify the confirmed argument structure.
+`parameters` retains the rendered strings for existing adapters.
+
+Nested calls return to the enclosing command after closing. Comments, verbatim,
+inactive branches, unmatched argument shapes, and unknown signatures produce no help.
+Known sectioning stars use their own signature. Registry overrides can register an
+explicit `name*` signature; an arbitrary star does not inherit the unstarred form.
+Project `newcommand` declarations support up to nine parameters and a first optional
+default. Project xparse declarations support `m`, `o`, `O{default}` and a leading `s`;
+other specifiers remain unsupported. `CommandArg.balancedOptional` records xparse
+bracket nesting; legacy optional arguments end at the first brace-unprotected `]`.
+The leading star boolean is represented by `starred`, while displayed argument names retain their declaration parameter numbers.
+Conflicting or replacement declarations suppress catalog fallback. TeX binding order
+and dynamic execution are not resolved. Runtime hash-table arity alone does not prove
+brace/bracket argument structure and is not promoted into signature help.
+
+Package/class semantic signatures are selected from the current active load graph,
+including declared package dependencies. Extracted xparse records require
+`argumentSyntax: 'xparse-v1'`: the extractor confirms `m`, `o`, `O{default}` and
+leading `s`, with `acceptsStar` recording the latter. Older xparse shards lack this
+confirmation and are excluded from argument help; regenerate their immutable catalog
+before relying on these signatures. Unsupported specs retain command discovery but
+provide no inferred argument structure. Removing a load retracts its signature even
+if an earlier asynchronous shard request finishes later. Explicit host registry
+commands remain service-local overrides. Monaco and the neutral service use the same
+project and package metadata selection.
+
 Document highlights identify structural label, citation and project command occurrences
 in the requested file. They omit targets with conflicting declarations in the active
 include/load component, including shared files reached from multiple roots. Command

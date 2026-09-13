@@ -1,3 +1,4 @@
+import { readBalancedGroup } from './balanced-group'
 import {
   CITE_CMDS,
   COMMAND_TOKEN,
@@ -8,6 +9,7 @@ import {
   USEPACKAGE_CMDS,
 } from './latex-patterns'
 import { type Token, tokenize, VERBATIM_ENVIRONMENTS } from './latex-tokenizer'
+import type { CommandArg } from './package-db'
 import { buildLineStarts, offsetToLineCol } from './source-position'
 import type { CommandDef, FileSymbols, SectionLevel, SourceLocation } from './types'
 
@@ -249,37 +251,46 @@ function blankSpans(content: string, spans: Array<[number, number]>): string {
 
 type GroupEndIndex = ReadonlyMap<number, number>
 
-/**
- * Index matching braces/brackets once. Extractors consult this index instead
- * of rescanning to the end of the document for every malformed invocation.
- * Curly and square delimiters intentionally use independent stacks, matching
- * the previous per-delimiter nesting behavior.
- */
+/** Index required groups and legacy optional delimiters once. A brace-protected
+ * closing bracket cannot end an optional group at an outer brace depth. */
 function indexGroupEnds(text: string): GroupEndIndex {
   const ends = new Map<number, number>()
   const braces: number[] = []
-  const brackets: number[] = []
-  const opening: Record<string, number[] | undefined> = { '{': braces, '[': brackets }
-  const closing: Record<string, number[] | undefined> = { '}': braces, ']': brackets }
+  const brackets = new Map<number, number[]>()
   for (let i = 0; i < text.length; i++) {
     const ch = text.charAt(i)
     if (ch === '\\') {
       i++
       continue
     }
-    const openStack = opening[ch]
-    if (openStack) {
-      openStack.push(i)
-      continue
+    if (ch === '{') braces.push(i)
+    else if (ch === '}') {
+      brackets.delete(braces.length)
+      recordGroupEnd(ends, braces.pop(), i)
+    } else if (ch === '[') {
+      const starts = brackets.get(braces.length) ?? []
+      starts.push(i)
+      brackets.set(braces.length, starts)
+    } else if (ch === ']') {
+      recordGroupEnds(ends, brackets.get(braces.length), i)
+      brackets.delete(braces.length)
     }
-    const closeStack = closing[ch]
-    const start = closeStack?.pop()
-    if (start !== undefined) ends.set(start, i)
   }
   return ends
 }
 
-/** Extract the content of a balanced brace group whose `{` is at startIndex. */
+function recordGroupEnds(
+  ends: Map<number, number>,
+  starts: number[] | undefined,
+  end: number,
+): void {
+  for (const start of starts ?? []) ends.set(start, end)
+}
+
+function recordGroupEnd(ends: Map<number, number>, start: number | undefined, end: number): void {
+  if (start !== undefined) ends.set(start, end)
+}
+
 function extractBraceContent(
   text: string,
   startIndex: number,
@@ -550,11 +561,12 @@ function pushCommandDef(
   symbols: FileSymbols,
   argCount?: string,
   mayRedefine = false,
-): void {
+): CommandDef {
   const def: CommandDef = { name, location: locAt(ctx, backslashOffset + 1) }
   if (argCount) def.argCount = Number.parseInt(argCount, 10)
   if (mayRedefine) def.mayRedefine = true
   symbols.commands.push(def)
+  return def
 }
 
 function extractNewCommands(ctx: Ctx, symbols: FileSymbols): void {
@@ -563,7 +575,7 @@ function extractNewCommands(ctx: Ctx, symbols: FileSymbols): void {
     // Search past the defining keyword's own backslash (m.index) so a defined name that is
     // a prefix of that keyword (`\r` ⊂ `\renewcommand`) resolves to the macro, not the keyword.
     const nameIdx = ctx.masked.indexOf(`\\${name}`, m.index + 1)
-    pushCommandDef(
+    const definition = pushCommandDef(
       ctx,
       name,
       nameIdx,
@@ -573,6 +585,64 @@ function extractNewCommands(ctx: Ctx, symbols: FileSymbols): void {
         m[1] !== 'NewDocumentCommand' &&
         m[1] !== 'NewExpandableDocumentCommand',
     )
+    const args = declaredCommandArguments(ctx, m)
+    if (args) {
+      definition.arguments = args.arguments
+      if (args.acceptsStar) definition.acceptsStar = true
+    }
+  }
+}
+
+interface DeclaredArguments {
+  arguments: CommandArg[]
+  acceptsStar?: boolean
+}
+
+function xparseArguments(spec: string): DeclaredArguments | undefined {
+  const args: CommandArg[] = []
+  spec = spec.trimStart()
+  const acceptsStar = spec.startsWith('s')
+  if (acceptsStar) spec = spec.slice(1)
+  for (let cursor = 0; cursor < spec.length; cursor++) {
+    const token = spec[cursor]!
+    if (/\s/.test(token)) continue
+    if (!'moO'.includes(token) || args.length + Number(acceptsStar) === 9) return undefined
+    args.push(xparseArgument(token, args.length + 1 + Number(acceptsStar)))
+    if (token === 'O') {
+      const group = readInvocationGroup(spec, skipSpace(spec, cursor + 1))
+      if (group?.delimiter !== 'required') return undefined
+      cursor = group.end - 1
+    }
+  }
+  return { arguments: args, acceptsStar }
+}
+
+function xparseArgument(token: string, number: number): CommandArg {
+  return {
+    kind: token === 'm' ? 'required' : 'optional',
+    ...(token === 'm' ? {} : { balancedOptional: true }),
+    placeholder: `arg${number}`,
+    valueKind: 'free-text',
+  }
+}
+
+function declaredCommandArguments(ctx: Ctx, match: RegExpExecArray): DeclaredArguments | undefined {
+  const groups = invocationGroups(ctx.masked, match.index + match[0].length, ctx.groupEnds)
+  if (match[1]!.endsWith('DocumentCommand')) {
+    if (groups[0]?.delimiter !== 'required' || groups[1]?.delimiter !== 'required') return undefined
+    return xparseArguments(groups[0].value)
+  }
+  const count = match[4] === undefined ? 0 : Number(match[4])
+  if (!Number.isInteger(count) || count > 9) return undefined
+  const optional = groups[0]?.delimiter === 'optional'
+  if (optional && count === 0) return undefined
+  if (groups[optional ? 1 : 0]?.delimiter !== 'required') return undefined
+  return {
+    arguments: Array.from({ length: count }, (_, index) => ({
+      kind: optional && index === 0 ? 'optional' : 'required',
+      placeholder: `arg${index + 1}`,
+      valueKind: 'free-text',
+    })),
   }
 }
 
@@ -859,24 +929,15 @@ function indexedInvocationGroup(
 function scanInvocationGroup(text: string, start: number): ParsedInvocationGroup | null {
   const open = text[start]
   if (open !== '{' && open !== '[') return null
-  const close = open === '{' ? '}' : ']'
-  let depth = 1
-  for (let cursor = start + 1; cursor < text.length; cursor++) {
-    if (text[cursor] === '\\') {
-      cursor++
-      continue
-    }
-    if (text[cursor] === open) depth++
-    else if (text[cursor] === close && --depth === 0) {
-      return {
+  const group = readBalancedGroup(text, start)
+  return group.closed
+    ? {
         delimiter: open === '{' ? 'required' : 'optional',
-        value: text.slice(start + 1, cursor),
+        value: text.slice(start + 1, group.contentEnd),
         contentStart: start + 1,
-        end: cursor + 1,
+        end: group.end,
       }
-    }
-  }
-  return null
+    : null
 }
 
 function readInvocationGroup(
@@ -1191,9 +1252,9 @@ function extractDeclareKeys(ctx: Ctx, symbols: FileSymbols): void {
     const groups = groupsAfterCommand(ctx, command)
     const contentGroup = firstRequired(groups)
     if (!contentGroup) continue
-    const family = normalizeKeyFamily(
-      groups.find((group) => group.delimiter === 'optional')?.value ?? 'document',
-    )
+    const rawFamily = groups.find((group) => group.delimiter === 'optional')?.value ?? 'document'
+    if (/[\\#{}]/.test(rawFamily)) continue
+    const family = normalizeKeyFamily(rawFamily)
     const declarations: KeyDeclaration[] = []
     const choices = new Map<string, string[]>()
     let cursor = 0

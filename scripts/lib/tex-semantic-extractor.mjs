@@ -62,7 +62,7 @@ function readGroup(text, offset) {
       continue
     }
     if (char === '{') stack.push('}')
-    else if (char === '[') stack.push(']')
+    else if (char === '[' && stack.at(-1) === ']') stack.push(']')
     else if (char === stack.at(-1)) {
       stack.pop()
       if (stack.length === 0) {
@@ -329,23 +329,40 @@ function parseKeyValueOptions(value) {
 
 function xparseArguments(spec) {
   const args = []
+  spec = spec.trimStart()
+  const acceptsStar = spec.startsWith('s')
+  if (acceptsStar) spec = spec.slice(1)
   for (let cursor = 0; cursor < spec.length; cursor++) {
     const token = spec[cursor]
     if (/\s/.test(token)) continue
-    if (token === 'm' || token === 'r' || token === 'R') {
-      args.push({ kind: 'required', valueKind: 'free-text' })
-    } else if ('oOdDsteE'.includes(token)) {
-      args.push({ kind: 'optional', valueKind: 'free-text' })
-    }
-    if ('ODRrtdE'.includes(token)) {
-      while (cursor + 1 < spec.length && (spec[cursor + 1] === '{' || spec[cursor + 1] === '[')) {
-        const group = readGroup(spec, cursor + 1)
-        if (!group) break
-        cursor = group.end - 1
-      }
+    if (!'moO'.includes(token) || args.length + Number(acceptsStar) === 9) return null
+    args.push({
+      kind: token === 'm' ? 'required' : 'optional',
+      placeholder: `arg${args.length + 1 + Number(acceptsStar)}`,
+      valueKind: 'free-text',
+      ...(token !== 'm' ? { balancedOptional: true } : {}),
+    })
+    if (token === 'O') {
+      const group = readGroup(spec, skipSpace(spec, cursor + 1))
+      if (group?.delimiter !== 'required') return null
+      cursor = group.end - 1
     }
   }
-  return args
+  return { args, acceptsStar }
+}
+
+function extractedSignature(name, spec, sourcePath, call, unsupported) {
+  const signature = xparseArguments(spec)
+  if (!signature) {
+    unsupported.push({ line: call.line, construct: call.name, reason: 'unsupported argument spec' })
+  }
+  return {
+    name,
+    args: signature?.args ?? [],
+    ...(signature ? { argumentSyntax: 'xparse-v1', acceptsStar: signature.acceptsStar } : {}),
+    confidence: signature ? 'exact' : 'inferred',
+    provenance: provenance(sourcePath, call.line, call.name),
+  }
 }
 
 function parsePgfKeys({ definitions, scopeName, families, sourcePath, line }) {
@@ -621,12 +638,10 @@ export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }
         unsupported.push({ line: call.line, construct: call.name, reason: 'dynamic command name' })
         continue
       }
-      commands.set(name, {
+      commands.set(
         name,
-        args: xparseArguments(required[1]?.value ?? ''),
-        confidence: 'exact',
-        provenance: provenance(sourcePath, call.line, call.name),
-      })
+        extractedSignature(name, required[1]?.value ?? '', sourcePath, call, unsupported),
+      )
       continue
     }
     if (/DocumentEnvironment$/.test(call.name)) {
@@ -639,12 +654,10 @@ export function extractTexSemantics({ source, sourcePath, scopeKind, scopeName }
         })
         continue
       }
-      environments.set(name, {
+      environments.set(
         name,
-        args: xparseArguments(required[1]?.value ?? ''),
-        confidence: 'exact',
-        provenance: provenance(sourcePath, call.line, call.name),
-      })
+        extractedSignature(name, required[1]?.value ?? '', sourcePath, call, unsupported),
+      )
     }
   }
 

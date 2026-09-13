@@ -65,6 +65,9 @@ export interface TexSemanticKeyFamily {
 export interface TexSemanticCommand {
   name: string
   args: CommandArg[]
+  /** Confirmed xparse grammar; older extracted argument arrays are not authoritative. */
+  argumentSyntax?: 'xparse-v1'
+  acceptsStar?: boolean
   doc?: string
   confidence: TexSemanticConfidence
   provenance: TexSemanticProvenance[]
@@ -348,11 +351,24 @@ export function registerTexSemanticShard(
   registry: CompletionResolverRegistry,
   shard: TexSemanticShard,
 ): void {
-  for (const command of shard.commands) {
-    const builtin = getCommandSignature(command.name)
-    registry.registerCommand(
-      command.name,
-      builtin?.some((argument) => argument.valueKind) ? builtin : command.args,
-    )
+  registry.registerCommandScope(
+    shard.scope.id,
+    shard.commands.flatMap((command) => {
+      const args = semanticCommandArguments(command)
+      return command.acceptsStar && command.argumentSyntax === 'xparse-v1'
+        ? [[command.name, args] as const, [`${command.name}*`, args] as const]
+        : [[command.name, args] as const, [`${command.name}*`, []] as const]
+    }),
+    shard.dependencies.map((name) => `package/${name}`),
+  )
+}
+
+function semanticCommandArguments(command: TexSemanticCommand): CommandArg[] {
+  const extracted = command.provenance.some((source) => /DocumentCommand$/.test(source.extractor))
+  if (extracted && command.argumentSyntax !== 'xparse-v1') {
+    return []
   }
+  if (command.argumentSyntax === 'xparse-v1') return command.args
+  const builtin = getCommandSignature(command.name)
+  return builtin?.some((argument) => argument.valueKind) ? builtin : command.args
 }

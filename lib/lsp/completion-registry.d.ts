@@ -27,9 +27,12 @@ export type CompletionResolver = (context: CompletionContext, environment: Compl
  */
 export declare class CompletionResolverRegistry implements CompletionCommandMetadataProvider {
     private commandArguments;
+    private commandScopes;
     private resolvers;
     registerCommand(command: string, args: readonly CommandArg[]): void;
     getCommandArguments(command: string): readonly CommandArg[] | undefined;
+    registerCommandScope(scope: string, commands: Iterable<readonly [string, readonly CommandArg[]]>, dependencies: readonly string[]): void;
+    getScopedCommandArguments(command: string, scopes: Iterable<string>): readonly CommandArg[] | undefined;
     registerResolver(domain: CompletionDomain, resolver: CompletionResolver): void;
     hasResolver(domain: CompletionDomain): boolean;
     resolve(context: CompletionContext, environment: CompletionResolverEnvironment): NeutralCompletionItem[];

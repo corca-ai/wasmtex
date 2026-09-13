@@ -377,10 +377,20 @@ describe('parseLatexFile', () => {
       expect(result.bibItems[0]!.key).toBe('a')
       expect(result.bibItems[1]!.key).toBe('b')
     })
+
+    it('recognizes optional arguments after literal opening brackets', () => {
+      const result = parseLatexFile('Text [\n\\bibitem[Shown]{key} Author', 'refs.tex')
+      expect(result.bibItems.map((item) => item.key)).toEqual(['key'])
+    })
   })
 
   // --- Edge cases ---
   describe('edge cases', () => {
+    it('does not infer keys in dynamically computed DeclareKeys families', () => {
+      const result = parseLatexFile(String.raw`\DeclareKeys[\family]{key .code={}}`, 'main.tex')
+      expect(result.keys).toEqual([])
+    })
+
     it('keeps malformed command-prefix parsing within the interactive budget', () => {
       const malformedPrefixes = [
         String.raw`\bibitem[`,

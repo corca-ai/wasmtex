@@ -2,6 +2,8 @@
 export type CompletionValueKind = 'tex-class' | 'tex-package' | 'bib-style' | 'biblatex-style' | 'project-tex' | 'project-bib' | 'project-image' | 'project-listing' | 'project-data' | 'project-file' | 'font-family' | 'color' | 'label' | 'citation' | 'environment' | 'counter' | 'length' | 'glossary-key' | 'acronym-key' | 'key-family' | 'bib-entry-type' | 'bib-field' | 'bib-entry-key' | 'bib-string' | 'boolean' | 'enum' | 'number' | 'dimension' | 'command' | 'key-value' | 'free-text';
 export interface CommandArg {
     kind: 'required' | 'optional';
+    /** xparse optional arguments balance bare bracket pairs; legacy arguments do not. */
+    balancedOptional?: boolean;
     /** The snippet placeholder text, e.g. `text` from `${1:text}` (may be empty). */
     placeholder?: string;
     /** Semantic domain used to resolve completion values for this argument. */
