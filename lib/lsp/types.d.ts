@@ -118,8 +118,19 @@ export interface FileSymbols {
     bibliographies: BibliographyRef[];
     bibItems: BibitemDef[];
 }
+/** Literal fields observed in a compiled LaTeX newlabel record, not expanded TeX. */
+export interface AuxLabel {
+    number: string;
+    page?: string;
+}
 export interface AuxData {
     labels: Map<string, string>;
+    /** Structured records; absent for legacy callers supplying number-only data. */
+    labelDetails?: Map<string, AuxLabel>;
+    /** Repeated definitions cannot supply one unambiguous reference value. */
+    ambiguousLabels?: Set<string>;
+    /** False when referenced output files could not all be resolved. */
+    complete?: boolean;
     citations: Set<string>;
     includes: string[];
 }

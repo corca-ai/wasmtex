@@ -279,19 +279,27 @@ export interface InlayHint {
   label: string
 }
 
-const REF_RESOLVE_RE = new RegExp(`\\\\(?:${REF_CMDS})\\{([^}]+)\\}`, 'g')
+const REF_RESOLVE_RE = /\\(ref|eqref|pageref)\{([^{}\\,]+)\}/g
 
 /** Inline resolved `.aux` numbers next to `\ref` (e.g. `\ref{fig:x}` → "(3.2)"). */
 export function getInlayHints(content: string, index: ProjectIndex): InlayHint[] {
   const aux = index.getAuxLabels()
-  if (aux.size === 0) return []
+  if (aux.size === 0 || !index.hasCompleteAuxData()) return []
   const lineStarts = buildLineStarts(content)
   const isMasked = buildIsMasked(content)
   const hints: InlayHint[] = []
+  const commands = new Set(
+    tokenize(content)
+      .filter((token) => token.type === 'command')
+      .map((token) => token.start),
+  )
   for (const m of content.matchAll(REF_RESOLVE_RE)) {
-    if (isMasked(m.index)) continue
-    const resolved = aux.get(m[1]!.trim())
-    if (!resolved) continue
+    if (isMasked(m.index) || !commands.has(m.index)) continue
+    const name = m[2]!.trim()
+    const resolved = m[1] === 'pageref' ? index.resolveLabelPage(name) : aux.get(name)
+    // An aux field may still contain executable TeX. Never present its source as
+    // though it were the expanded reference text.
+    if (!resolved || /[\\{}%$~_^#&]/.test(resolved)) continue
     const { line, column } = offsetToLineCol(lineStarts, m.index + m[0].length)
     hints.push({ line, column, label: ` (${resolved})` })
   }

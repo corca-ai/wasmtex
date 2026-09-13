@@ -59,7 +59,7 @@ import type { TikzFigurePool } from './engine/tikz-figure-pool'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { VirtualFS } from './fs/virtual-fs'
-import { parseAuxFile } from './lsp/aux-parser'
+import { parseAuxFiles, readAuxFiles } from './lsp/aux-files'
 import { parseBibFile, rebuildBibIndex } from './lsp/bib-parser'
 import { ProjectIndex } from './lsp/project-index'
 import { parseTraceFile } from './lsp/trace-parser'
@@ -1499,8 +1499,15 @@ export class WasmTexCompiler {
   private async updateMetadata(result: CompileResult): Promise<void> {
     if (!this.engine) return
     const base = this.mainFile.replace(/\.tex$/, '')
-    const aux = (await this.operations.observe(this.engine.readFile(`${base}.aux`))).resume()
-    if (aux) this.projectIndex.updateAuxData(parseAuxFile(aux))
+    const engine = this.engine
+    const aux = (
+      await this.operations.observe(
+        readAuxFiles(`${base}.aux`, async (path) =>
+          (await this.operations.observe(engine.readFile(path))).resume(),
+        ),
+      )
+    ).resume()
+    this.projectIndex.updateAuxData(parseAuxFiles(aux))
     if (result.engineCommands?.length) {
       this.projectIndex.updateEngineCommands(result.engineCommands)
     }

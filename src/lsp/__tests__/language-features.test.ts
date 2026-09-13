@@ -237,6 +237,38 @@ describe('getWorkspaceSymbols', () => {
 })
 
 describe('getInlayHints', () => {
+  it('does not display TeX active or special characters as expanded reference text', () => {
+    for (const value of ['$x$', 'A~B', 'x_1', 'x^2', '#1', 'A&B']) {
+      const index = new ProjectIndex()
+      index.updateAux(`\\newlabel{x}{{${value}}{${value}}}`)
+      expect(getInlayHints('\\ref{x} \\pageref{x}', index)).toEqual([])
+    }
+  })
+  it('distinguishes a label number from its compiled page', () => {
+    const index = new ProjectIndex()
+    index.updateAux('\\newlabel{sec:a}{{2}{7}}')
+    const hints = getInlayHints('\\ref{sec:a} \\eqref{sec:a} \\pageref{sec:a}', index)
+    expect(hints.map((hint) => hint.label)).toEqual([' (2)', ' (2)', ' (7)'])
+  })
+
+  it('does not infer unsupported reference command semantics from a number', () => {
+    const index = new ProjectIndex()
+    index.updateAux('\\newlabel{sec:a}{{2}{7}{Introduction}{section.2}{}}')
+    expect(getInlayHints('\\autoref{sec:a} \\cref{sec:a} \\nameref{sec:a}', index)).toEqual([])
+  })
+
+  it('omits unavailable pages and unexpanded TeX instead of using the number', () => {
+    const index = new ProjectIndex()
+    index.updateAux('\\newlabel{a}{{2}}\n\\newlabel{b}{{\\thecounter}{\\thepage}}')
+    expect(getInlayHints('\\pageref{a} \\ref{b} \\pageref{b}', index)).toEqual([])
+  })
+
+  it('only resolves literal keys on actual supported command tokens', () => {
+    const index = new ProjectIndex()
+    index.updateAux('\\newlabel{x}{{2}{7}}')
+    expect(getInlayHints('\\\\ref{x} \\ref{x,x} \\ref{\\key} \\verb|\\ref{x}|', index)).toEqual([])
+  })
+
   it('shows the resolved aux number next to a \\ref', () => {
     const index = new ProjectIndex()
     index.updateAuxData({ labels: new Map([['fig:x', '3.2']]), citations: new Set(), includes: [] })
