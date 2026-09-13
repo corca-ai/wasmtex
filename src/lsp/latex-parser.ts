@@ -1252,9 +1252,9 @@ function extractDeclareKeys(ctx: Ctx, symbols: FileSymbols): void {
     const groups = groupsAfterCommand(ctx, command)
     const contentGroup = firstRequired(groups)
     if (!contentGroup) continue
-    const family = normalizeKeyFamily(
-      groups.find((group) => group.delimiter === 'optional')?.value ?? 'document',
-    )
+    const rawFamily = groups.find((group) => group.delimiter === 'optional')?.value ?? 'document'
+    if (/[\\#{}]/.test(rawFamily)) continue
+    const family = normalizeKeyFamily(rawFamily)
     const declarations: KeyDeclaration[] = []
     const choices = new Map<string, string[]>()
     let cursor = 0

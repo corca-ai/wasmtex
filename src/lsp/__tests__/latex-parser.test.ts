@@ -386,6 +386,11 @@ describe('parseLatexFile', () => {
 
   // --- Edge cases ---
   describe('edge cases', () => {
+    it('does not infer keys in dynamically computed DeclareKeys families', () => {
+      const result = parseLatexFile(String.raw`\DeclareKeys[\family]{key .code={}}`, 'main.tex')
+      expect(result.keys).toEqual([])
+    })
+
     it('keeps malformed command-prefix parsing within the interactive budget', () => {
       const malformedPrefixes = [
         String.raw`\bibitem[`,
