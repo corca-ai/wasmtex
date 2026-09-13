@@ -159,7 +159,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     fmtFile: string,
     formatUrl?: string,
     warmup?: TexFmtWarmupPlan,
-    persistentCache?: { version: TexliveVersion },
+    persistentCache?: { version: TexliveVersion; texliveUrl: string },
     resolverProfile?: CompletionSnapshotProfile,
     suppliedWarmup?: WarmupCache,
   ) {
@@ -172,7 +172,10 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       resolverProfile ??
       ({ id: 'texlive-2025', texliveYear: '2025', mirrorRevision: null } as const)
     if (persistentCache && isIndexedDbSupported()) {
-      this.durableCache = new PersistentCache({ version: persistentCache.version })
+      this.durableCache = new PersistentCache({
+        ...persistentCache,
+        mirrorRevision: this.resolverProfile.mirrorRevision,
+      })
     }
   }
 
@@ -384,15 +387,17 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     const drivers = [this.tex, ...this.extraCacheDrivers()]
     // Advance the watermark only after the save resolves (see persistIfNeeded): a failed
     // save must retry on a later compile, not mark the fetched files as already-persisted.
-    void persistIfNeeded(this.persist, async () => {
-      const dumps = await Promise.all(drivers.map((d) => d.dumpCache()))
-      let cache: WarmupCache = { files: [], notFound: [] }
-      for (const dump of dumps) {
-        cache = mergeWarmupCaches(cache, { files: dump.files, notFound: dump.notFound })
-      }
-      if (this.bloomBytes) cache.bloomFilter = this.bloomBytes
-      await store.save(cache)
-    })
+    void persistIfNeeded(this.persist, () =>
+      store.saveFrom(async () => {
+        const dumps = await Promise.all(drivers.map((d) => d.dumpCache()))
+        let cache: WarmupCache = { files: [], notFound: [] }
+        for (const dump of dumps) {
+          cache = mergeWarmupCaches(cache, { files: dump.files, notFound: dump.notFound })
+        }
+        if (this.bloomBytes) cache.bloomFilter = this.bloomBytes
+        return cache
+      }),
+    )
   }
 
   /** Build the LaTeX format once (`compileformat`), caching the bytes; then make
@@ -482,7 +487,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   }
 
   async clearCache(): Promise<void> {
-    // Drop the durable IndexedDB cache for this version (no-op when disabled).
+    // Drop the durable IndexedDB cache for this mirror namespace (no-op when disabled).
     await this.durableCache?.clear()
   }
 

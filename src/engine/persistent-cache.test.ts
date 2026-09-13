@@ -53,6 +53,25 @@ async function cacheWithAB(store: BinaryStore): Promise<PersistentCache> {
   return cache
 }
 
+async function storedKey(store: BinaryStore, suffix: string): Promise<string> {
+  const key = (await store.keys()).find((key) => key.endsWith(suffix))
+  if (!key) throw new Error(`Missing stored ${suffix}`)
+  return key
+}
+
+async function readStoredMeta(store: BinaryStore) {
+  const key = await storedKey(store, ':meta')
+  return JSON.parse(new TextDecoder().decode((await store.get(key))!))
+}
+
+async function patchStoredMeta(store: BinaryStore, patch: Record<string, unknown>) {
+  const meta = await readStoredMeta(store)
+  await store.set(
+    await storedKey(store, ':meta'),
+    new TextEncoder().encode(JSON.stringify({ ...meta, ...patch })).buffer,
+  )
+}
+
 describe('PersistentCache', () => {
   it('returns null before anything is saved', async () => {
     const cache = new PersistentCache({ store: new MemoryBinaryStore() })
@@ -86,7 +105,7 @@ describe('PersistentCache', () => {
   it('isolates entries by TeX Live version', async () => {
     const store = new MemoryBinaryStore()
     const c2025 = new PersistentCache({ store, version: '2025' })
-    const otherVersion = new PersistentCache({ store, version: 'test-version' })
+    const otherVersion = new PersistentCache({ store, version: '2026' })
 
     await c2025.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: buf([1]) }] }))
     expect(await otherVersion.load()).toBeNull()
@@ -150,36 +169,17 @@ describe('PersistentCache', () => {
     expect(loaded!.notFound).toEqual([])
   })
 
-  it('repairs legacy metadata that contains the same key as a file and a 404', async () => {
+  it('reconciles metadata that contains the same key as a file and a 404', async () => {
     const store = new MemoryBinaryStore()
-    await store.set('tl:2025:f:26/recovered.sty', buf([7, 8, 9]))
-    await store.set(
-      'tl:2025:meta',
-      new TextEncoder().encode(
-        JSON.stringify({
-          schema: 1,
-          version: '2025',
-          entries: {
-            '26/recovered.sty': {
-              format: 26,
-              filename: 'recovered.sty',
-              size: 3,
-              lastAccess: 1,
-            },
-          },
-          notFound: [{ format: 26, filename: 'recovered.sty' }],
-          hasBloom: false,
-        }),
-      ).buffer as ArrayBuffer,
-    )
-
     const cache = new PersistentCache({ store })
+    await cache.save(
+      warmup({ files: [{ format: 26, filename: 'recovered.sty', data: buf([7, 8, 9]) }] }),
+    )
+    await patchStoredMeta(store, { notFound: [{ format: 26, filename: 'recovered.sty' }] })
     const loaded = await cache.load()
     expect(loaded!.files.map((file) => file.filename)).toEqual(['recovered.sty'])
     expect(loaded!.notFound).toEqual([])
-
-    const repaired = JSON.parse(new TextDecoder().decode((await store.get('tl:2025:meta'))!))
-    expect(repaired.notFound).toEqual([])
+    expect((await readStoredMeta(store)).notFound).toEqual([])
   })
 
   it('evicts least-recently-used files past the byte budget', async () => {
@@ -200,102 +200,67 @@ describe('PersistentCache', () => {
     expect(loaded!.files.map((f) => f.filename)).toEqual(['new.sty'])
   })
 
-  it('evicts the oldest files first to stay within the byte budget', async () => {
+  it.each([
+    { scenario: 'ordinary saves', reload: false, remaining: ['b.sty', 'c.sty'] },
+    { scenario: 'refresh then reload', reload: true, remaining: ['a.sty', 'c.sty'] },
+  ])('evicts by stored recency after $scenario', async ({ reload, remaining }) => {
     const store = new MemoryBinaryStore()
     let clock = 1000
     const six = () => buf([0, 0, 0, 0, 0, 0])
     // Budget fits two 6-byte files but not three.
     const cache = new PersistentCache({ store, maxBytes: 12, now: () => clock })
-
     await cache.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: six() }] }))
     clock = 1100
     await cache.save(warmup({ files: [{ format: 26, filename: 'b.sty', data: six() }] }))
-    clock = 1200
-    await cache.save(warmup({ files: [{ format: 26, filename: 'c.sty', data: six() }] }))
-
-    // a.sty is the oldest and is evicted; the two newest survive.
-    const loaded = await cache.load()
-    expect(loaded!.files.map((f) => f.filename).sort()).toEqual(['b.sty', 'c.sty'])
-  })
-
-  it('load() preserves stored recency so a reload does not flatten LRU order', async () => {
-    const store = new MemoryBinaryStore()
-    let clock = 1000
-    const six = () => buf([0, 0, 0, 0, 0, 0])
-    const cache = new PersistentCache({ store, maxBytes: 12, now: () => clock })
-
-    await cache.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: six() }] }))
-    clock = 1100
-    await cache.save(warmup({ files: [{ format: 26, filename: 'b.sty', data: six() }] }))
-    clock = 1200
-    // Re-fetch 'a' in a later warmup: now 'a' is MRU and 'b' is the true LRU.
-    await cache.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: six() }] }))
-
-    clock = 1300
-    await cache.load() // must NOT bump every entry to `now` (that flattens recency)
-
+    if (reload) {
+      clock = 1200
+      // Refresh a, making b the oldest. Loading must preserve that ordering.
+      await cache.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: six() }] }))
+      clock = 1300
+      await cache.load()
+    }
     clock = 1400
     await cache.save(warmup({ files: [{ format: 26, filename: 'c.sty', data: six() }] }))
-
-    // 'b' is the genuinely least-recently-used and must be the one evicted. If load()
-    // had reset a & b to the same timestamp, the tie-break would evict 'a' instead.
-    const loaded = await cache.load()
-    expect(loaded!.files.map((f) => f.filename).sort()).toEqual(['a.sty', 'c.sty'])
+    expect((await cache.load())!.files.map((file) => file.filename).sort()).toEqual(remaining)
   })
 
-  it('treats a schema/version mismatch as a miss', async () => {
+  it.each([
+    { schema: 999 },
+    { version: 'wrong' },
+    { identity: undefined },
+    { identity: 'wrong' },
+  ])('treats mismatched schema/version/identity as a miss: %j', async (patch) => {
     const store = new MemoryBinaryStore()
-    // Forge a meta record with a wrong schema.
-    await store.set(
-      'tl:2025:meta',
-      new TextEncoder().encode(JSON.stringify({ schema: 999, version: '2025', entries: {} }))
-        .buffer as ArrayBuffer,
-    )
-    const cache = new PersistentCache({ store, version: '2025' })
+    const cache = await cacheWithAB(store)
+    await patchStoredMeta(store, patch)
     expect(await cache.load()).toBeNull()
   })
 
   it('load() tolerates a stored meta record missing entries', async () => {
     const store = new MemoryBinaryStore()
-    await store.set(
-      'tl:2025:meta',
-      new TextEncoder().encode(
-        JSON.stringify({
-          schema: 1,
-          version: '2025',
-          notFound: [{ format: 26, filename: 'missing.sty' }],
-          hasBloom: false,
-        }),
-      ).buffer as ArrayBuffer,
-    )
-
-    const cache = new PersistentCache({ store, version: '2025' })
+    const cache = new PersistentCache({ store })
+    await cache.save(warmup({ notFound: [{ format: 26, filename: 'missing.sty' }] }))
+    await patchStoredMeta(store, { entries: undefined })
     await expect(cache.load()).resolves.toEqual(
       warmup({ notFound: [{ format: 26, filename: 'missing.sty' }] }),
     )
   })
 
-  it('save() tolerates a stored meta record missing notFound (defensive, like load())', async () => {
+  it('save() tolerates a stored meta record missing notFound', async () => {
     const store = new MemoryBinaryStore()
-    // A schema/version-valid meta with no `notFound` field (partial write / older writer).
-    // load() guards with `?? []`; save() must too, or `meta.notFound.map(...)` throws and
-    // the whole write chain rejects.
-    await store.set(
-      'tl:2025:meta',
-      new TextEncoder().encode(JSON.stringify({ schema: 1, version: '2025', entries: {} }))
-        .buffer as ArrayBuffer,
-    )
-    const cache = new PersistentCache({ store, version: '2025' })
+    const cache = new PersistentCache({ store })
+    await cache.save(warmup())
+    await patchStoredMeta(store, { notFound: undefined })
     await expect(
       cache.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: buf([1]) }] })),
     ).resolves.toBeUndefined()
-    expect((await cache.load())!.files.map((f) => f.filename)).toContain('a.sty')
+    expect((await cache.load())!.files.map((file) => file.filename)).toContain('a.sty')
   })
 
   it('clear() removes only the targeted version', async () => {
     const store = new MemoryBinaryStore()
     const c2025 = new PersistentCache({ store, version: '2025' })
-    const otherVersion = new PersistentCache({ store, version: 'test-version' })
+    const otherVersion = new PersistentCache({ store, version: '2026' })
     await c2025.save(warmup({ files: [{ format: 26, filename: 'a.sty', data: buf([1]) }] }))
     await otherVersion.save(warmup({ files: [{ format: 26, filename: 'b.sty', data: buf([2]) }] }))
 
@@ -307,7 +272,7 @@ describe('PersistentCache', () => {
   it('skips entries whose data was lost without throwing', async () => {
     const store = new MemoryBinaryStore()
     const cache = await cacheWithAB(store)
-    await store.delete('tl:2025:f:26/a.sty') // simulate partial data loss
+    await store.delete(await storedKey(store, ':f:26/a.sty')) // simulate partial data loss
 
     const loaded = await cache.load()
     expect(loaded!.files.map((f) => f.filename)).toEqual(['b.sty'])
@@ -319,22 +284,22 @@ describe('PersistentCache', () => {
     await cache.save(
       warmup({ files: [{ format: 26, filename: 'lost.sty', data: buf([1, 2, 3]) }] }),
     )
-    await store.delete('tl:2025:f:26/lost.sty')
+    await store.delete(await storedKey(store, ':f:26/lost.sty'))
 
     await cache.save(warmup({ notFound: [{ format: 26, filename: 'lost.sty' }] }))
 
     expect(await cache.load()).toEqual(warmup({ notFound: [{ format: 26, filename: 'lost.sty' }] }))
-    const meta = JSON.parse(new TextDecoder().decode((await store.get('tl:2025:meta'))!))
+    const meta = await readStoredMeta(store)
     expect(meta.entries).not.toHaveProperty('26/lost.sty')
   })
 
   it('prunes meta entries whose data was lost so their size stops counting', async () => {
     const store = new MemoryBinaryStore()
     const cache = await cacheWithAB(store)
-    await store.delete('tl:2025:f:26/a.sty') // data lost
+    await store.delete(await storedKey(store, ':f:26/a.sty')) // data lost
     await cache.load() // load() prunes the phantom entry
 
-    const meta = JSON.parse(new TextDecoder().decode((await store.get('tl:2025:meta'))!))
+    const meta = await readStoredMeta(store)
     expect(Object.keys(meta.entries)).toEqual(['26/b.sty'])
   })
 
@@ -344,14 +309,14 @@ describe('PersistentCache', () => {
     // drops the file the concurrent save just recorded.
     const store = new YieldingStore()
     const cache = await cacheWithAB(store)
-    await store.delete('tl:2025:f:26/a.sty') // a.sty is now a phantom entry
+    await store.delete(await storedKey(store, ':f:26/a.sty')) // a.sty is now a phantom entry
 
     await Promise.all([
       cache.load(),
       cache.save(warmup({ files: [{ format: 26, filename: 'new.sty', data: buf([3]) }] })),
     ])
 
-    const meta = JSON.parse(new TextDecoder().decode((await store.get('tl:2025:meta'))!))
+    const meta = await readStoredMeta(store)
     const keys = Object.keys(meta.entries)
     expect(keys).toContain('26/new.sty') // the concurrent save survives
     expect(keys).not.toContain('26/a.sty') // the phantom is still pruned

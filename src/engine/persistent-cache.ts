@@ -5,12 +5,13 @@
  * key), plus the bloom filter and the 404 set, so a return visit performs
  * ~zero network fetches for already-seen assets and works offline.
  *
- * The cache is namespaced by TeX Live year (`version`) so bumping the year
- * invalidates cleanly. Storage is abstracted behind {@link BinaryStore}: the
+ * The cache is namespaced by TeX Live year and immutable mirror identity.
+ * Legacy year-only records are never restored. Storage is abstracted behind {@link BinaryStore}: the
  * browser uses {@link IndexedDbBinaryStore}; environments without IndexedDB
  * fall back to an in-memory store (no durability, but no errors either).
  */
 import type { CachedTexliveFile, TexliveFileEntry, WarmupCache } from '../types'
+import { defaultTexliveUrl } from './default-texlive-mirrors'
 
 /** Minimal async binary key→value store. */
 export interface BinaryStore {
@@ -120,24 +121,68 @@ interface CacheEntryMeta {
 interface CacheMeta {
   schema: number
   version: string
+  identity: string
   entries: Record<string, CacheEntryMeta>
   notFound: TexliveFileEntry[]
   hasBloom: boolean
 }
 
-const SCHEMA = 1
-/** Default cache budget: 150 MB of TeX Live assets per version. */
+const SCHEMA = 2
+/** Default cache budget: 150 MB of TeX Live assets per mirror namespace. */
 const DEFAULT_MAX_BYTES = 150 * 1024 * 1024
 
 export interface PersistentCacheOptions {
   /** TeX Live year; namespaces all keys. Defaults to '2025'. */
   version?: string
+  /** Absolute immutable TeX Live mirror URL. Defaults to the shipped mirror for supported years. */
+  texliveUrl?: string
+  /** Additional immutable mirror revision; changing it separates entries at the same URL. */
+  mirrorRevision?: string | null
   /** Override the backing store (defaults to IndexedDB, falling back to memory). */
   store?: BinaryStore
   /** Soft byte budget; least-recently-used files are evicted past it. */
   maxBytes?: number
   /** Clock injection point for deterministic tests. */
   now?: () => number
+}
+
+/** Fail closed for endpoints whose stable identity cannot be resolved here. */
+function mirrorIdentity(options: PersistentCacheOptions, version: string): string | null {
+  const raw =
+    options.texliveUrl ??
+    (version === '2025' || version === '2026' ? defaultTexliveUrl(version) : undefined)
+  if (typeof raw !== 'string' || !/^https?:\/\//i.test(raw) || raw.trim() !== raw) return null
+  const revision = options.mirrorRevision ?? null
+  if (
+    revision !== null &&
+    (typeof revision !== 'string' || !revision.trim() || revision.trim() !== revision)
+  )
+    return null
+  try {
+    const url = new URL(raw)
+    if (
+      !['https:', 'http:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      return null
+    if (!url.pathname.endsWith('/')) url.pathname += '/'
+    return JSON.stringify([url.href, revision])
+  } catch {
+    return null
+  }
+}
+
+function versionPrefix(version: string): string {
+  return `tl:${encodeURIComponent(version)}:`
+}
+
+async function deletePrefix(store: BinaryStore, prefix: string): Promise<void> {
+  for (const key of await store.keys()) {
+    if (key.startsWith(prefix)) await store.delete(key)
+  }
 }
 
 /**
@@ -147,13 +192,18 @@ export interface PersistentCacheOptions {
 export class PersistentCache {
   private store: BinaryStore
   readonly version: string
+  private readonly identity: string | null
+  private readonly prefix: string
   private maxBytes: number
   private now: () => number
   /** Serializes save() so overlapping persists can't lose-update the meta. */
   private writeChain: Promise<void> = Promise.resolve()
+  private generation = 0
 
   constructor(options: PersistentCacheOptions = {}) {
     this.version = options.version ?? '2025'
+    this.identity = mirrorIdentity(options, this.version)
+    this.prefix = `${versionPrefix(this.version)}v2:${encodeURIComponent(this.identity ?? '')}:`
     this.store =
       options.store ??
       (isIndexedDbSupported() ? new IndexedDbBinaryStore() : new MemoryBinaryStore())
@@ -162,22 +212,28 @@ export class PersistentCache {
   }
 
   private metaKey(): string {
-    return `tl:${this.version}:meta`
+    return `${this.prefix}meta`
   }
   private fileKey(format: number, filename: string): string {
-    return `tl:${this.version}:f:${format}/${filename}`
+    return `${this.prefix}f:${format}/${filename}`
   }
   private bloomKey(): string {
-    return `tl:${this.version}:bloom`
+    return `${this.prefix}bloom`
   }
 
   private async readMeta(): Promise<CacheMeta | null> {
+    if (!this.identity) return null
     const buf = await this.store.get(this.metaKey())
     if (!buf) return null
     try {
       const meta = JSON.parse(new TextDecoder().decode(buf)) as CacheMeta
-      // A schema or version mismatch is treated as a cache miss (clean invalidation).
-      if (meta.schema !== SCHEMA || meta.version !== this.version) return null
+      // A schema, version or identity mismatch is treated as a cache miss (clean invalidation).
+      if (
+        meta.schema !== SCHEMA ||
+        meta.version !== this.version ||
+        meta.identity !== this.identity
+      )
+        return null
       return meta
     } catch {
       return null
@@ -189,7 +245,7 @@ export class PersistentCache {
     await this.store.set(this.metaKey(), buf.buffer as ArrayBuffer)
   }
 
-  /** Rehydrate the cached WarmupCache, or null if nothing is stored for this version. */
+  /** Rehydrate the cached WarmupCache, or null if nothing is stored for this mirror identity. */
   async load(): Promise<WarmupCache | null> {
     const meta = await this.readMeta()
     if (!meta) return null
@@ -275,15 +331,24 @@ export class PersistentCache {
     return run
   }
 
+  /** Persist an asynchronous worker dump unless clear() invalidates it while reading. */
+  async saveFrom(read: () => Promise<WarmupCache>): Promise<void> {
+    const generation = this.generation
+    const cache = await read()
+    if (generation === this.generation) await this.save(cache)
+  }
+
   private async doSave(cache: WarmupCache): Promise<void> {
+    if (!this.identity) return
     const meta: CacheMeta = (await this.readMeta()) ?? {
       schema: SCHEMA,
       version: this.version,
+      identity: this.identity,
       entries: {},
       notFound: [],
       hasBloom: false,
     }
-    // readMeta only validates schema/version, so a partially-written/older record may lack
+    // readMeta only validates schema/version/identity, so a partially-written/older record may lack
     // these fields — normalize before dereferencing (load() is defensive the same way).
     meta.entries ??= {}
     meta.notFound ??= []
@@ -353,23 +418,24 @@ export class PersistentCache {
     }
   }
 
-  /** Drop everything stored for this version. */
-  async clear(): Promise<void> {
-    const prefix = `tl:${this.version}:`
-    for (const key of await this.store.keys()) {
-      if (key.startsWith(prefix)) await this.store.delete(key)
-    }
+  /** Drop this mirror namespace after preceding saves finish. Other mirrors remain. */
+  clear(): Promise<void> {
+    this.generation += 1
+    const run = this.writeChain.then(async () => {
+      if (this.identity) await deletePrefix(this.store, this.prefix)
+    })
+    this.writeChain = run.catch(() => {})
+    return run
   }
 }
 
 /**
  * Clear the durable TeX Live asset cache for a given TeX Live year (default
  * '2025'). No-op when IndexedDB is unavailable. Useful for "clear cache"
- * actions without an engine instance.
+ * actions without an engine instance. Removes all mirror namespaces and legacy
+ * year-only records for that year; unrelated years and stores are untouched.
  */
 export async function clearTexliveCache(options?: { version?: string }): Promise<void> {
   if (!isIndexedDbSupported()) return
-  const cacheOptions: PersistentCacheOptions = {}
-  if (options?.version) cacheOptions.version = options.version
-  await new PersistentCache(cacheOptions).clear()
+  await deletePrefix(new IndexedDbBinaryStore(), versionPrefix(options?.version ?? '2025'))
 }

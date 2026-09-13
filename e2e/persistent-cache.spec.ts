@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const APP_URL = 'http://localhost:6001'
+const TEXLIVE_VERSION = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
 
 // A document whose packages (xcolor, hyperref) are NOT in the warmup manifest,
 // so the worker must fetch them on a cold first compile.
@@ -28,10 +29,17 @@ async function setDocAndCompile(page: import('@playwright/test').Page, content: 
   await expect(page.locator('#status')).toHaveText(/Ready/, { timeout: 90_000 })
 }
 
+test.afterEach(async ({ page }, testInfo) => {
+  const log = await page
+    .evaluate(() => (window as any).__lastCompile?.log ?? 'No compile result')
+    .catch(String)
+  await testInfo.attach('engine.log', { body: log, contentType: 'text/plain' })
+})
+
 test.describe('Iteration 5: persistent TeX Live cache', () => {
   test('second load serves already-fetched packages without re-downloading', async ({ page }) => {
     // Start from a clean durable cache so the first session is genuinely cold.
-    await page.goto(`${APP_URL}?cache=1`)
+    await page.goto(`${APP_URL}?cache=1&tl=${TEXLIVE_VERSION}`)
     await waitReady(page)
     await page.evaluate(() => (window as any).__engine.clearCache())
     await page.reload()
@@ -86,7 +94,7 @@ test.describe('Iteration 5: persistent TeX Live cache', () => {
   ].join('\n')
 
   test('rehydrated same-named TFM and VF entries still typeset', async ({ page }) => {
-    await page.goto(`${APP_URL}?cache=1`)
+    await page.goto(`${APP_URL}?cache=1&tl=${TEXLIVE_VERSION}`)
     await waitReady(page)
     await page.evaluate(() => (window as any).__engine.clearCache())
     await page.reload()
@@ -120,7 +128,7 @@ test.describe('Iteration 5: persistent TeX Live cache', () => {
   })
 
   test('clearCache() forces a cold re-fetch on the next load', async ({ page }) => {
-    await page.goto(`${APP_URL}?cache=1`)
+    await page.goto(`${APP_URL}?cache=1&tl=${TEXLIVE_VERSION}`)
     await waitReady(page)
     await setDocAndCompile(page, DOC)
     await page.evaluate(async () => {

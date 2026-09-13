@@ -17,6 +17,7 @@
  * `compile*` protocol via {@link CompileWorkerDriver}.
  */
 import type { CompileResult } from '../types'
+import { resolveTexliveUrl } from './base-worker-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import { BaseTexFmtEngine, createCompileWorker, unicodeFormatUrl } from './tex-fmt-engine'
 import type { WasmTexEngineOptions } from './wasmtex-engine'
@@ -38,7 +39,9 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       'wasmtex-xetex.fmt',
       unicodeFormatUrl('xetex', options),
       undefined,
-      options.persistentCache ? { version } : undefined,
+      options.persistentCache
+        ? { version, texliveUrl: resolveTexliveUrl(options.texliveUrl ?? null, version) }
+        : undefined,
       options.resolverProfile ?? {
         id: `texlive-${version}`,
         texliveYear: version,

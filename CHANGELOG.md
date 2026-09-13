@@ -78,6 +78,12 @@ Keep them user-facing and concise. Example:
 
 ### Changed
 
+- Persistent TeX Live assets, negative lookups, and Bloom filters are isolated by
+  year, mirror URL, and optional revision. Legacy year-only entries become misses.
+  Instance cache clearing and the soft file-byte budget apply to one mirror;
+  `clearTexliveCache({ version })` still clears all cached data for that year.
+  Direct `PersistentCache` users can set `texliveUrl` and `mirrorRevision`.
+
 - ⚠️ Headless overlapping compiles now reject with an `in progress` error.
   Edits, root changes, project replacement, and disposal abort obsolete compile
   and preparation promises with `AbortError`. Project replacement waits for

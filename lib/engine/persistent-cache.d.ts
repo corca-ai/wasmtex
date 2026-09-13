@@ -31,6 +31,10 @@ export declare class IndexedDbBinaryStore implements BinaryStore {
 export interface PersistentCacheOptions {
     /** TeX Live year; namespaces all keys. Defaults to '2025'. */
     version?: string;
+    /** Absolute immutable TeX Live mirror URL. Defaults to the shipped mirror for supported years. */
+    texliveUrl?: string;
+    /** Additional immutable mirror revision; changing it separates entries at the same URL. */
+    mirrorRevision?: string | null;
     /** Override the backing store (defaults to IndexedDB, falling back to memory). */
     store?: BinaryStore;
     /** Soft byte budget; least-recently-used files are evicted past it. */
@@ -45,17 +49,20 @@ export interface PersistentCacheOptions {
 export declare class PersistentCache {
     private store;
     readonly version: string;
+    private readonly identity;
+    private readonly prefix;
     private maxBytes;
     private now;
     /** Serializes save() so overlapping persists can't lose-update the meta. */
     private writeChain;
+    private generation;
     constructor(options?: PersistentCacheOptions);
     private metaKey;
     private fileKey;
     private bloomKey;
     private readMeta;
     private writeMeta;
-    /** Rehydrate the cached WarmupCache, or null if nothing is stored for this version. */
+    /** Rehydrate the cached WarmupCache, or null if nothing is stored for this mirror identity. */
     load(): Promise<WarmupCache | null>;
     /** Reconcile metadata with backing blobs, serialized behind the writeChain and
      *  re-reading current state so it never overwrites a concurrent save(). */
@@ -66,15 +73,18 @@ export declare class PersistentCache {
      * can't lose-update the shared meta record.
      */
     save(cache: WarmupCache): Promise<void>;
+    /** Persist an asynchronous worker dump unless clear() invalidates it while reading. */
+    saveFrom(read: () => Promise<WarmupCache>): Promise<void>;
     private doSave;
     private evict;
-    /** Drop everything stored for this version. */
+    /** Drop this mirror namespace after preceding saves finish. Other mirrors remain. */
     clear(): Promise<void>;
 }
 /**
  * Clear the durable TeX Live asset cache for a given TeX Live year (default
  * '2025'). No-op when IndexedDB is unavailable. Useful for "clear cache"
- * actions without an engine instance.
+ * actions without an engine instance. Removes all mirror namespaces and legacy
+ * year-only records for that year; unrelated years and stores are untouched.
  */
 export declare function clearTexliveCache(options?: {
     version?: string;

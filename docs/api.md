@@ -527,7 +527,7 @@ the same as the inline compile with three workers.
 - `getCompletionSnapshotState(): CompletionSnapshotState` — `absent`, `fresh`, or `stale`; any project edit stales runtime evidence until a matching full compile.
 - `readOutput(path): Promise<string | null>` — reads generated files such as `main.log`, `main.aux`, or `main.bbl`.
 - `flushCache(): Promise<void>`
-- `clearCache(): Promise<void>` — clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live year.
+- `clearCache(): Promise<void>` — clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live mirror namespace; use `clearTexliveCache({ version })` to clear every mirror for a year.
 - `dispose(): void`
 
 ### Headless operation lifetime
@@ -966,7 +966,7 @@ The built-in viewer paints all returned regions.
 - `getPdf(): Uint8Array | null` — Returns the last successfully generated PDF.
 - `getCompletionSnapshotState(): CompletionSnapshotState` — Returns the runtime completion snapshot state from the latest full compile.
 - `revealLine(line: number, file?: string): void` — Navigates the editor to a specific line/file.
-- `clearCache(): Promise<void>` — Clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live year.
+- `clearCache(): Promise<void>` — Clears the [persistent TeX Live cache](engine.md#persistent-cache) (IndexedDB) for the active TeX Live mirror namespace; use `clearTexliveCache({ version })` to clear every mirror for a year.
 - `dispose(): void` — Cleans up the editor, workers, and DOM.
 
 ## Escape Hatches

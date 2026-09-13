@@ -158,7 +158,7 @@ worker without these commands simply ignores them and fetches on demand.
 **Persistent cache (return visits).** With `persistentCache: true` the Unicode
 engines also use the durable IndexedDB cache (see [Persistent cache](#persistent-cache)):
 the worker exposes `dumpcache`, and after a successful compile the engine persists
-every fetched file (keyed by TeX Live year). On the next visit the engine rehydrates
+every fetched file (keyed by TeX Live year and mirror identity). On the next visit the engine rehydrates
 that set and injects it instead of prefetching from the CDN, so a return visit does
 ~zero network and works offline. `clearCache()` / `clearTexliveCache()` drop it.
 
@@ -623,14 +623,16 @@ of previously fetched assets. Offline use additionally requires engine assets,
 project inputs and every needed package; unseen resources still need a network.
 
 **How it works:**
-- On init, the engine rehydrates the durable cache (versioned by TeX Live year)
+- On init, the engine rehydrates the durable cache (bound to TeX Live year and mirror identity)
   and injects every stored file into the worker — so files seen in a previous
   session are already present and never re-fetched.
 - After a compile that fetched new files, the engine exports the worker's TeX
   Live cache (`dumpcache`) and persists it (non-blocking, best-effort).
-- The store has a byte budget (default 150 MB per version) with least-recently-
-  used eviction, and is keyed by TeX Live year so bumping the year invalidates
-  cleanly.
+- Each year/mirror namespace has a soft file-byte budget (default 150 MB) with
+  least-recently-used eviction. Eviction does not remove another mirror's data;
+  several mirror namespaces can therefore occupy more than one budget. Bloom
+  and negative metadata are outside the file budget, and a just-saved payload
+  larger than the budget is retained, as before.
 
 ```ts
 new WasmTex('#editor', '#preview', { persistentCache: true })
@@ -639,12 +641,22 @@ new WasmTex('#editor', '#preview', { persistentCache: true })
 
 Warmup and persistent caching can be combined. Measure duplicate preparation
 and unused downloads before enabling both for every visit. The durable asset
-cache is year-keyed, not mirror-revision-keyed: switching mirrors within one year
-requires host-owned isolation or clearing. It is distinct from the build/profile
-identity used by durable preamble snapshots. See [warmup](warmup.md).
+cache keys include the year, normalized absolute mirror URL, and optional resolver
+profile `mirrorRevision`. Different URLs or revisions never share files, Bloom
+filters, or negative lookups. The endpoint must identify immutable contents.
+This is distinct from the engine build/profile identity of durable preamble
+snapshots, whose keys are unchanged. Caller-supplied warmup bytes still need to
+match the selected profile. See [warmup](warmup.md).
 
-**Clearing.** Call `clearCache()` on the editor/compiler, or the standalone
-`clearTexliveCache({ version })`, to drop the durable cache for a TeX Live year:
+**Migration and clearing.** Old year-only entries and records missing the current
+identity are cache misses; the first return visit repopulates from the selected
+mirror. Old entries remain unused until a year-wide clear. `clearCache()` on an
+enabled editor/compiler drops its mirror namespace; the pdfTeX path also clears
+its separate durable preamble cache. `PersistentCache.clear()` waits for that
+instance's preceding saves and invalidates worker dumps started before clearing. The standalone `clearTexliveCache({ version })`
+removes every mirror namespace and legacy entry for that year. Stop concurrent
+writers before a year-wide clear; other instances/tabs can otherwise repopulate
+it. These operations do not flush already running workers' in-memory files:
 
 ```ts
 await editor.clearCache()

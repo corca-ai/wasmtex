@@ -21,7 +21,7 @@ import { readResponseWithProgress } from './fetch-gz'
 import { enrichGlyphSuggestions } from './glyph-suggestions'
 import { buildDiagnostics, parseGlyphGaps, parseTexErrors } from './parse-errors'
 import { type PersistState, persistIfNeeded } from './persist-watermark'
-import type { BinaryStore } from './persistent-cache'
+import type { BinaryStore, PersistentCacheOptions } from './persistent-cache'
 import { isIndexedDbSupported, PersistentCache } from './persistent-cache'
 import { durablePreambleKey, PreambleSnapshotCache, preambleSha256 } from './preamble-cache'
 import { extractPreamble } from './preamble-utils'
@@ -209,6 +209,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private activePreambleDependencies = new Set<string>()
   private preamblePersistInFlight: Promise<void> | null = null
   private durableCache: PersistentCache | null = null
+  private readonly persistentAssetOptions: PersistentCacheOptions
   private bloomFilter: ArrayBuffer | undefined
   /** Main file name, tracked for source-based dependency extraction. */
   private mainFileName = 'main.tex'
@@ -241,6 +242,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     this.persistentCacheEnabled = !!options?.persistentCache && isIndexedDbSupported()
     this.assetBaseUrl = base
     this.effectiveTexliveUrl = resolveTexliveUrl(options?.texliveUrl ?? null, version)
+    this.persistentAssetOptions = {
+      version,
+      texliveUrl: this.effectiveTexliveUrl,
+      mirrorRevision: options?.resolverProfile?.mirrorRevision ?? null,
+    }
     this.preambleMirrorRevision = options?.preambleCacheIdentity?.mirrorRevision ?? null
     this.resolver = new ResolverEvidenceCollector(
       'pdftex',
@@ -602,7 +608,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private async resolveWarmupCache(): Promise<WarmupCache | undefined> {
     let resolved = this.warmupCache
     if (this.persistentCacheEnabled) {
-      this.durableCache = new PersistentCache({ version: this.version })
+      this.durableCache = new PersistentCache(this.persistentAssetOptions)
       try {
         const stored = await this.durableCache.load()
         if (stored) {
@@ -660,8 +666,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Persist the worker's current TeX Live cache to the durable store (if enabled). */
   async persistTexliveCache(): Promise<void> {
     if (!this.durableCache) return
-    const dump = await this.dumpTexliveCache()
-    await this.durableCache.save(dump)
+    await this.durableCache.saveFrom(() => this.dumpTexliveCache())
   }
 
   /** Number of files the worker has reported downloading on demand this session. */
@@ -669,11 +674,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     return this.persist.downloadCount
   }
 
-  /** Clear the durable TeX Live cache for this version. */
+  /** Clear this mirror namespace and the separate durable preamble cache. */
   async clearCache(): Promise<void> {
     const cache =
       this.durableCache ??
-      (isIndexedDbSupported() ? new PersistentCache({ version: this.version }) : null)
+      (isIndexedDbSupported() ? new PersistentCache(this.persistentAssetOptions) : null)
     await Promise.all([cache?.clear(), this.preambleCache?.clear()])
   }
 
