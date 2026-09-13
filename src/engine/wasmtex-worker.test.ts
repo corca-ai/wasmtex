@@ -124,6 +124,35 @@ describe('CompileWorkerDriver resolver evidence', () => {
     })
   })
 
+  it('refuses a retained output from a fatal status-1 pass but preserves warning output', async () => {
+    let log = '!  ==> Fatal error occurred, no output PDF file produced!'
+    const pdf = Uint8Array.of(1, 2).buffer
+    class Driver extends CompileWorkerDriver {
+      prepare() {
+        this.status = 'ready'
+        this.worker = {
+          postMessage: () =>
+            this.deliverResponse('cmd:compile', {
+              cmd: 'compile',
+              result: 'ok',
+              status: 1,
+              log,
+              pdf,
+            }),
+        } as unknown as EngineWorker
+      }
+    }
+    const driver = new Driver('/engine.js', '/tl/', '2026')
+    driver.prepare()
+    expect(await driver.run('compilelatex')).toMatchObject({ success: false, out: null, log })
+    log = 'LaTeX Warning: Reference undefined.\nOutput written on main.pdf (1 page).'
+    expect(await driver.run('compilelatex')).toMatchObject({
+      success: true,
+      out: new Uint8Array(pdf),
+      log,
+    })
+  })
+
   it('collects worker resolver messages into the command result', async () => {
     let onmessage: ((ev: { data: unknown }) => void) | null = null
     setWorkerFactory(

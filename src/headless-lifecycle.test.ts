@@ -55,6 +55,26 @@ function setup(options: Partial<WasmTexCompilerOptions> = {}) {
 afterEach(() => vi.restoreAllMocks())
 
 describe('headless operation ownership', () => {
+  it('withdraws compile metadata after failure even when the engine keeps its old aux file', async () => {
+    const { compiler, engine } = setup({ files: { 'main.tex': '\\section{Title}\\label{valid}' } })
+    const aux = '\\newlabel{valid}{{2}{7}}'
+    vi.spyOn(engine, 'readFile').mockResolvedValue(aux)
+    engine.compile.mockResolvedValue({ ...result, engineCommands: ['kept\t111\t0'] })
+    await compiler.init()
+    await compiler.compile()
+    const index = compiler.getProjectIndex()
+    expect(index.resolveLabel('valid')).toBe('2')
+    expect(index.getEngineCommands().has('kept')).toBe(true)
+    engine.compile.mockResolvedValue({ ...result, success: false, pdf: null })
+    await compiler.compile()
+    expect(index.resolveLabel('valid')).toBeUndefined()
+    expect(index.getEngineCommands().size).toBe(0)
+    expect(index.findLabelDef('valid')?.name).toBe('valid')
+    // Raw filesystem access intentionally does not promise current output.
+    expect(await compiler.readOutput('main.aux')).toBe(aux)
+    compiler.dispose()
+  })
+
   it('rejects overlapping compile calls without releasing the first owner', async () => {
     const { compiler, engine, started, output } = setup()
     await compiler.init()

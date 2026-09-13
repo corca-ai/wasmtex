@@ -23,6 +23,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Reject retained PDF/SyncTeX artifacts and success after TeX explicitly reports
+  a fatal no-output pass, preserving ordinary warning output and warm recovery
+  with existing published engine controllers (#168).
+
 - Completing an unfinished argument keeps its literal suffix but cannot replace
   the next command or source line. This keeps an open reference usable in Monaco
   when the document continues after the cursor.

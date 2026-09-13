@@ -7,6 +7,7 @@ import type {
   TexliveVersion,
 } from '../types'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
+import { compileArtifact, hasFatalNoOutput } from './compile-output'
 import { type RawResolverEvidence, ResolverEvidenceCollector } from './resolver-evidence'
 import { createEngineWorker } from './worker-host'
 
@@ -201,11 +202,13 @@ export class CompileWorkerDriver extends WasmTexWorker {
     const data = await this.postMessageWithResponse({ cmd: command }, 'cmd:compile')
     const resolver = this.resolver.finish()
     this.status = 'ready'
-    const success = data.result === 'ok' && (data.status === 0 || data.status === 1)
-    const out = data.pdf ? new Uint8Array(data.pdf) : null
+    const log = data.log || ''
+    const noOutput = hasFatalNoOutput(log)
+    const success = !noOutput && data.result === 'ok' && (data.status === 0 || data.status === 1)
+    const out = compileArtifact(data.pdf, noOutput)
     return {
       success,
-      log: data.log || '',
+      log,
       out,
       ...(data.inputFiles ? { inputFiles: data.inputFiles } : {}),
       ...(typeof data.inputFilesComplete === 'boolean'

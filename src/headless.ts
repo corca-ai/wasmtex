@@ -1498,6 +1498,14 @@ export class WasmTexCompiler {
 
   private async updateMetadata(result: CompileResult): Promise<void> {
     if (!this.engine) return
+    if (!result.success) {
+      // Aux files may survive an early stop. Keep source symbols, but do not
+      // publish those files or retained engine observations as current facts.
+      this.projectIndex.updateAux('')
+      this.projectIndex.updateEngineCommands([])
+      this.projectIndex.updateSemanticTrace(parseTraceFile(''))
+      return
+    }
     const base = this.mainFile.replace(/\.tex$/, '')
     const engine = this.engine
     const aux = (
