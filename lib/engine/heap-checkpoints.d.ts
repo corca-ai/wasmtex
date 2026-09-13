@@ -1,4 +1,4 @@
-import { CompileResult } from '../types';
+import { CompileResult } from '../types.js';
 /** Project text files (path → content), including the main file. */
 export type SourceSet = Map<string, string>;
 export interface HeapCheckpointEngine {

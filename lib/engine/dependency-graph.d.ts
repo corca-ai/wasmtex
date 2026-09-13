@@ -1,4 +1,4 @@
-import { DependencyGraph } from '../types';
+import { DependencyGraph } from '../types.js';
 export interface DependencyOpts {
     /** TeX engine `.fls` input list (`CompileResult.inputFiles`). */
     inputFiles?: string[] | undefined;

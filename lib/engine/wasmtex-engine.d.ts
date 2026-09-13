@@ -1,9 +1,9 @@
-import { CachedTexliveFile, CompileResult, CompletionSnapshotProfile, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types';
-import { BaseWorkerEngine } from './base-worker-engine';
-import { CompileEngine } from './compile-engine';
-import { EngineCompletionObservation } from './completion-snapshot';
-import { BinaryStore } from './persistent-cache';
-import { RawResolverEvidence } from './resolver-evidence';
+import { CachedTexliveFile, CompileResult, CompletionSnapshotProfile, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types.js';
+import { BaseWorkerEngine } from './base-worker-engine.js';
+import { CompileEngine } from './compile-engine.js';
+import { EngineCompletionObservation } from './completion-snapshot.js';
+import { BinaryStore } from './persistent-cache.js';
+import { RawResolverEvidence } from './resolver-evidence.js';
 export interface WasmTexEngineOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;

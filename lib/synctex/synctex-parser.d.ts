@@ -1,4 +1,4 @@
-import { PdfLocation, SourceLocation } from './text-mapper';
+import { PdfLocation, SourceLocation } from './text-mapper.js';
 /**
  * SyncTeX file parser for PDF↔source bidirectional navigation.
  *
@@ -17,7 +17,7 @@ import { PdfLocation, SourceLocation } from './text-mapper';
  * We convert to PDF points (bp, 1/72 inch) for use with PDF.js viewports.
  *   pdf_pt = sp * unit * magnification / 1000 / 65536 * 72 / 72.27
  */
-export type { PdfLocation, SourceLocation } from './text-mapper';
+export type { PdfLocation, SourceLocation } from './text-mapper.js';
 export interface SynctexNode {
     type: 'hbox' | 'vbox' | 'kern' | 'glue' | 'math' | 'void_vbox' | 'void_hbox';
     input: number;

@@ -1,6 +1,6 @@
-import { WasmTexEventMap, WasmTexOptions } from './component-types';
-import { CompletionSnapshotState } from './types';
-import { PdfViewer } from './viewer/pdf-viewer';
+import { WasmTexEventMap, WasmTexOptions } from './component-types.js';
+import { CompletionSnapshotState } from './types.js';
+import { PdfViewer } from './viewer/pdf-viewer.js';
 import type * as Monaco from 'monaco-editor';
 type EventHandler<T> = (event: T) => void;
 type EditorContainerInput = string | HTMLElement;

@@ -1,5 +1,5 @@
-import { Token } from './lsp/latex-tokenizer';
-import { LatexStructuralDeclaration } from './syntax-contract';
+import { Token } from './lsp/latex-tokenizer.js';
+import { LatexStructuralDeclaration } from './syntax-contract.js';
 interface DeclarationDocument {
     fileId: string;
     path: string;

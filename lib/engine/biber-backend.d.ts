@@ -1,4 +1,4 @@
-import { BackendRegistry, BIBER_STAGE, ToolBackend } from './backend-registry';
+import { BackendRegistry, BIBER_STAGE, ToolBackend } from './backend-registry.js';
 /**
  * Biber as a server-first pluggable backend (M4 / #116, execution-model principle 3).
  *

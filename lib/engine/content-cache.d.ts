@@ -1,4 +1,4 @@
-import { ToolBackend } from './backend-registry';
+import { ToolBackend } from './backend-registry.js';
 /**
  * Content-addressed cache (S5 / #112, execution-model). A stage's output is a pure
  * function of its inputs (the same deterministic engine, browser or server — proven by

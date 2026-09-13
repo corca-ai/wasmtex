@@ -1,5 +1,5 @@
-import { Token } from './latex-tokenizer';
-import { FileSymbols } from './types';
+import { Token } from './latex-tokenizer.js';
+import { FileSymbols } from './types.js';
 /**
  * Spans of source that are not interpretable LaTeX code: comments, inline
  * `\verb`, verbatim environment bodies, and false conditional branches. Other

@@ -1,8 +1,8 @@
-import { VirtualFS } from '../fs/virtual-fs';
-import { CompletionCommandMetadataProvider, CompletionContext, CompletionDomain } from './completion-context';
-import { CommandArg } from './package-db';
-import { ProjectIndex } from './project-index';
-import { NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralPosition } from './protocol';
+import { VirtualFS } from '../fs/virtual-fs.js';
+import { CompletionCommandMetadataProvider, CompletionContext, CompletionDomain } from './completion-context.js';
+import { CommandArg } from './package-db.js';
+import { ProjectIndex } from './project-index.js';
+import { NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralPosition } from './protocol.js';
 /** Minimal cancellation shape shared by Monaco, headless hosts, and resolver implementations. */
 export interface CompletionCancellationToken {
     readonly isCancellationRequested: boolean;

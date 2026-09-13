@@ -1,4 +1,4 @@
-import { FontGlyphGap } from '../types';
+import { FontGlyphGap } from '../types.js';
 /**
  * Fill `gap.suggestions` with mirror fonts that cover the gap's script, so a host can
  * offer a one-click substitute when the chosen font lacks the script's glyphs (#89,

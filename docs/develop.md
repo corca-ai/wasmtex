@@ -35,6 +35,7 @@ npm run dev               # Start dev server
 | `npm run test` | Unit tests (Vitest, `vitest run`) |
 | `npm run test:watch` | Unit tests in watch mode |
 | `npm run test:e2e` | End-to-end tests (Playwright) |
+| `npm run test:package-consumer` | Install the checked-out package without lifecycle scripts in an isolated consumer; verify imports, types, UI bundling and missing-file/export rejection |
 | `npm run test:golden` / `npm run update:golden` | Golden-output tests (write/refresh `e2e/goldens/*.json`) |
 | `npm run lint` / `npm run lint:fix` | Lint (Biome) — check / apply fixes |
 | `npm run format` | Format code (Biome) |
@@ -134,6 +135,38 @@ commit `lib/` in the same change.** The `lib-fresh` CI job rebuilds and fails th
 `lib/` drifts from `src/`. The build is deterministic (no sourcemaps / absolute paths; Node
 24 everywhere), so a clean rebuild is byte-identical. `lib/**` is marked
 `linguist-generated` in `.gitattributes`, so it's collapsed in PR diffs.
+
+The declaration build preserves per-module named exports and rewrites parsed relative
+module specifiers to resolvable `.js` paths (or `/index.js` for directory barrels).
+This lets ESM consumers use NodeNext as well as Bundler resolution; the corresponding
+`.d.ts` files still supply the types. An unresolved relative declaration fails the build.
+
+### Installed package verification
+
+`npm run test:package-consumer` needs Node 24 and npm registry access. It packs the
+current `lib/` with `npm pack --ignore-scripts`, installs the tarball into an OS temp
+directory, and removes the directory on success or failure. It never builds the SDK.
+The CI `package-consumer` job runs before any checkout dependency installation or
+`prepare`, independently of `lib-fresh` and the existing declaration export guard.
+
+The consumer has no repository source, ancestor development dependencies, engine
+assets, or SDK lifecycle execution. Seven neutral entry points execute under Node
+without Monaco/PDF peers; a module-resolution hook also rejects attempts to import
+those peers. Then the consumer installs its own exact tooling/peer versions from the
+repository lock: TypeScript and tsgo check representative named/type exports from all
+nine entries with Bundler and NodeNext resolution, with `skipLibCheck: false`.
+Vite bundles the UI/Monaco entries and both public CSS aliases. This is a package
+resolution/build check, not a browser UI interaction or real engine compile test.
+
+Finally the probe removes a runtime entry and a named type export from the installed
+copy and requires the actual Node/type checks to reject them. These mutations never
+touch repository files. Keep the fixtures in `scripts/package-consumer/` aligned with
+new public entry points; the gate rejects unaccounted entry-point additions.
+
+The tarball proves npm's package file selection and consumption of the checked-out
+bundle without a build. It does not exercise GitHub transport, authentication, ref
+selection, Bun, or a package manager's script-enabled Git preparation. GitHub remains
+the official install source; pin its commit and follow the [installation contract](howto.md#installation).
 
 ## Architecture & Internals
 

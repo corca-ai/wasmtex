@@ -1,4 +1,4 @@
-import { BackendRegistry, INDEX_STAGE, ToolBackend } from './backend-registry';
+import { BackendRegistry, INDEX_STAGE, ToolBackend } from './backend-registry.js';
 /** The per-stage backend name the compiler resolves the index pass through. Shared with
  *  the server xindy backend (`xindy-backend.ts`, which uses the literal `'index'`). */
 export { INDEX_STAGE };

@@ -1,9 +1,9 @@
-import { VirtualFS } from '../fs/virtual-fs';
-import { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry';
-import { ProjectIndex } from './project-index';
-import { NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralHover, NeutralLocation, NeutralPosition } from './protocol';
-import { TexResourceCatalogProvider } from './resource-catalog';
-import { TexSemanticCatalogProvider } from './semantic-catalog';
+import { VirtualFS } from '../fs/virtual-fs.js';
+import { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry.js';
+import { ProjectIndex } from './project-index.js';
+import { NeutralCompletionItem, NeutralCompletionList, NeutralDocument, NeutralHover, NeutralLocation, NeutralPosition } from './protocol.js';
+import { TexResourceCatalogProvider } from './resource-catalog.js';
+import { TexSemanticCatalogProvider } from './semantic-catalog.js';
 type LegacyCompletionContextType = 'command' | 'ref' | 'cite' | 'begin' | 'end' | 'usepackage' | 'include';
 interface LegacyCompletionContext {
     type: LegacyCompletionContextType;

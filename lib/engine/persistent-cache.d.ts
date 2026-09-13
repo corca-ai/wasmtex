@@ -1,4 +1,4 @@
-import { WarmupCache } from '../types';
+import { WarmupCache } from '../types.js';
 /** Minimal async binary key→value store. */
 export interface BinaryStore {
     get(key: string): Promise<ArrayBuffer | null>;

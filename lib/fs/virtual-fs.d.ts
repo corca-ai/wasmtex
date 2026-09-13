@@ -1,4 +1,4 @@
-import { VirtualFile } from '../types';
+import { VirtualFile } from '../types.js';
 interface VirtualFSOptions {
     /** If true, start with no files (skip default main.tex template). */
     empty?: boolean;

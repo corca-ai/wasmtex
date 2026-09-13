@@ -1,4 +1,4 @@
-import { ProjectIndex } from './project-index';
+import { ProjectIndex } from './project-index.js';
 export interface Diagnostic {
     file: string;
     line: number;

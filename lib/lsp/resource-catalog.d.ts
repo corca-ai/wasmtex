@@ -1,4 +1,4 @@
-import { CompletionCancellationToken } from './completion-registry';
+import { CompletionCancellationToken } from './completion-registry.js';
 export declare const TEX_RESOURCE_CATALOG_SCHEMA_VERSION = 1;
 export type TexResourceKind = 'tex-class' | 'tex-package' | 'bib-style' | 'biblatex-style' | 'font-file';
 export interface TexResourceCatalogIdentity {

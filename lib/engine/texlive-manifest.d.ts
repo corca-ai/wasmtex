@@ -1,4 +1,4 @@
-import { TexliveFileEntry } from '../types';
+import { TexliveFileEntry } from '../types.js';
 /** Files that return 200 from the CDN and are needed for first compilation. */
 export declare const PRELOAD_FILES: TexliveFileEntry[];
 /**

@@ -1,5 +1,5 @@
-import { Diagnostic } from '../lsp/diagnostic-provider';
-import { TexError } from '../types';
+import { Diagnostic } from '../lsp/diagnostic-provider.js';
+import { TexError } from '../types.js';
 import type * as Monaco from 'monaco-editor';
 /** Minimal model surface needed to build a marker (line count + per-line max column).
  *  Lets {@link errorToMarker} be unit-tested without the live `monaco.editor` global. */

@@ -1,4 +1,4 @@
-import { DocumentGeometry, FontGlyphGap, PageGeometry } from '../types';
+import { DocumentGeometry, FontGlyphGap, PageGeometry } from '../types.js';
 export interface NotdefPlacement {
     /** Page number (\count0 from bop). */
     page: number;

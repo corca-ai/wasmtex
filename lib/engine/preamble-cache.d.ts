@@ -1,5 +1,5 @@
-import { completionFileDigest } from './completion-snapshot';
-import { BinaryStore } from './persistent-cache';
+import { completionFileDigest } from './completion-snapshot.js';
+import { BinaryStore } from './persistent-cache.js';
 export interface PreambleCacheIdentity {
     engineBuildId: string;
     mirrorRevision: string;

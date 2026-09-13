@@ -100,8 +100,9 @@
     "gen:tex-semantic-catalog": "node scripts/gen-tex-semantic-catalog.mjs",
     "check:tex-semantic-catalog": "node scripts/check-tex-semantic-catalog.mjs",
     "probe:tex-semantics": "node scripts/run-tex-semantic-probes.mjs",
-    "build:lib": "BUILD_MODE=lib vite build && node scripts/check-dts-exports.mjs",
-    "prepare": "npm run build:lib"
+    "build:lib": "BUILD_MODE=lib vite build && node scripts/fix-dts-specifiers.mjs && node scripts/check-dts-exports.mjs",
+    "prepare": "npm run build:lib",
+    "test:package-consumer": "node scripts/package-consumer/check.mjs"
   },
   "peerDependencies": {
     "monaco-editor": "^0.55.1",
@@ -127,6 +128,7 @@
     "monaco-editor": "^0.55.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624",
+    "typescript": "5.9.3",
     "vite": "^8.2.0",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.0.18"

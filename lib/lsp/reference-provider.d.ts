@@ -1,4 +1,4 @@
-import { ProjectIndex } from './project-index';
+import { ProjectIndex } from './project-index.js';
 import type * as monaco from 'monaco-editor';
 /** Monaco find-all-references adapter over the editor-neutral {@link provideReferences}.
  *  Delegating (rather than re-implementing the `\label`/`\ref` matching) keeps a single

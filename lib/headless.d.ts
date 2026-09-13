@@ -1,16 +1,16 @@
-import { AccessibleExportOptions } from './engine/accessible-export';
-import { BackendRegistry } from './engine/backend-registry';
-import { EngineDetection, EngineOption } from './engine/engine-select';
-import { TikzExternalizationOptions } from './engine/tikz-externalization';
-import { ProjectIndex } from './lsp/project-index';
-import { AccessibleExportResult, CompileResult, CompletionSnapshotState, LoadProgressEvent, TexliveVersion, WarmupCache } from './types';
-export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api';
-export * from './backend-api';
-export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api';
-export type { AccessibleExportOptions } from './engine/accessible-export';
-export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot';
-export type { EngineDetection } from './engine/engine-select';
-export type { AccessibleExportResult, CompilePhaseTimings, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types';
+import { AccessibleExportOptions } from './engine/accessible-export.js';
+import { BackendRegistry } from './engine/backend-registry.js';
+import { EngineDetection, EngineOption } from './engine/engine-select.js';
+import { TikzExternalizationOptions } from './engine/tikz-externalization.js';
+import { ProjectIndex } from './lsp/project-index.js';
+import { AccessibleExportResult, CompileResult, CompletionSnapshotState, LoadProgressEvent, TexliveVersion, WarmupCache } from './types.js';
+export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api.js';
+export * from './backend-api.js';
+export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api.js';
+export type { AccessibleExportOptions } from './engine/accessible-export.js';
+export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot.js';
+export type { EngineDetection } from './engine/engine-select.js';
+export type { AccessibleExportResult, CompilePhaseTimings, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, } from './types.js';
 /**
  * One-shot accessible export without an interactive compiler: builds a compiler from
  * `options` (typically the TeX Live 2026 profile, whatever profile the editor uses), compiles

@@ -39,7 +39,7 @@ export interface CompileResult {
      *  compile carries `synctex: null` (the tail is compiled in isolation) but sets `synctexData`
      *  to the tail SyncTeX **spliced** onto the last full compile's head — exact for the spliced
      *  PDF. Consume this in preference to parsing `synctex` yourself: `synctexData ?? parse(synctex)`. */
-    synctexData?: import('./synctex/synctex-parser').SynctexData | null;
+    synctexData?: import('./synctex/synctex-parser.js').SynctexData | null;
     /** Raw .fmt format file data (if built during this session) */
     format?: Uint8Array | undefined;
     /** Whether a cached preamble format was used for this compilation */

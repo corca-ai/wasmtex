@@ -1,5 +1,5 @@
-import { NeutralLocation } from './protocol';
-import { SourceLocation } from './types';
+import { NeutralLocation } from './protocol.js';
+import { SourceLocation } from './types.js';
 import * as monaco from 'monaco-editor';
 /** Convert a SourceLocation to a Monaco Location (uri + range).
  *  Monaco-only — kept out of `latex-patterns.ts` so the pure parser (and the headless

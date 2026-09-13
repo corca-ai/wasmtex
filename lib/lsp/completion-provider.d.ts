@@ -1,6 +1,6 @@
-import { VirtualFS } from '../fs/virtual-fs';
-import { CompletionResolverRegistry } from './completion-registry';
-import { ProjectIndex } from './project-index';
+import { VirtualFS } from '../fs/virtual-fs.js';
+import { CompletionResolverRegistry } from './completion-registry.js';
+import { ProjectIndex } from './project-index.js';
 import * as monaco from 'monaco-editor';
 /** Monaco completion adapter over the editor-neutral completion result. */
 export declare function createCompletionProvider(index: ProjectIndex, fs: VirtualFS, registry?: CompletionResolverRegistry): monaco.languages.CompletionItemProvider;

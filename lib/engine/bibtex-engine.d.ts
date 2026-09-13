@@ -1,5 +1,5 @@
-import { TexliveVersion } from '../types';
-import { WasmTexWorker } from './wasmtex-worker';
+import { TexliveVersion } from '../types.js';
+import { WasmTexWorker } from './wasmtex-worker.js';
 export declare class BibtexEngine extends WasmTexWorker {
     constructor(options?: {
         assetBaseUrl?: string;

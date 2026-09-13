@@ -1,5 +1,5 @@
-import { Diagnostic } from './diagnostic-provider';
-import { LintConfig } from './linter';
+import { Diagnostic } from './diagnostic-provider.js';
+import { LintConfig } from './linter.js';
 type LintSetting = boolean | Partial<LintConfig>;
 type LintRunner = (content: string, filePath: string, config?: Partial<LintConfig>) => Diagnostic[];
 export declare class IncrementalLinter {

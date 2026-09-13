@@ -1,4 +1,4 @@
-import { CompletionSnapshot, CompletionSnapshotEngine, CompletionSnapshotProfile } from '../types';
+import { CompletionSnapshot, CompletionSnapshotEngine, CompletionSnapshotProfile } from '../types.js';
 export declare const COMPLETION_SNAPSHOT_SCHEMA_VERSION: 1;
 export declare const COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES: number;
 export interface CompletionSnapshotProjectFile {

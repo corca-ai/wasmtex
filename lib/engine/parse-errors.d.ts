@@ -1,4 +1,4 @@
-import { Diagnostic, FontGlyphGap, TexError } from '../types';
+import { Diagnostic, FontGlyphGap, TexError } from '../types.js';
 /** A structured event from the log's parenthesized file open/close markers
  *  (`(./file.tex … )`). `eol` marks the end of source line `lineIndex`. The single
  *  source of truth for the paren scanner — {@link buildFileContext} and the

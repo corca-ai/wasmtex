@@ -1,5 +1,5 @@
-import { CompileResult, DependencyManifest } from '../types';
-import { TexEngine } from './engine-select';
+import { CompileResult, DependencyManifest } from '../types.js';
+import { TexEngine } from './engine-select.js';
 export interface AuxiliaryDependencyObservation {
     stage: 'bibliography' | 'index';
     projectInputs: string[];

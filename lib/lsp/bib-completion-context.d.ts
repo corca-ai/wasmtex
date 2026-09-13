@@ -1,5 +1,5 @@
-import { CompletionValueKind } from './package-db';
-import { NeutralDocument, NeutralPosition, NeutralRange } from './protocol';
+import { CompletionValueKind } from './package-db.js';
+import { NeutralDocument, NeutralPosition, NeutralRange } from './protocol.js';
 export type BibCompletionDomain = Extract<CompletionValueKind, 'bib-entry-type' | 'bib-field' | 'bib-entry-key' | 'bib-string'>;
 export interface BibCompletionContext {
     type: 'bibtex';

@@ -1,5 +1,5 @@
-import { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry';
-import { CommandArg } from './package-db';
+import { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry.js';
+import { CommandArg } from './package-db.js';
 export declare const TEX_SEMANTIC_CATALOG_SCHEMA_VERSION = 1;
 export type TexSemanticScopeKind = 'class' | 'package';
 export type TexSemanticConfidence = 'exact' | 'observed' | 'inferred' | 'overridden';

@@ -1,5 +1,5 @@
-import { EngineStatus, TexliveVersion } from '../types';
-import { EngineWorker } from './worker-host';
+import { EngineStatus, TexliveVersion } from '../types.js';
+import { EngineWorker } from './worker-host.js';
 /** Shared base for WASM worker engines (pdfTeX, BibTeX). */
 export declare abstract class BaseWorkerEngine<TMsg = unknown> {
     protected worker: EngineWorker | null;

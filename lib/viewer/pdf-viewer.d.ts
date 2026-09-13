@@ -1,5 +1,5 @@
-import { SynctexData } from '../synctex/synctex-parser';
-import { SourceLocation } from '../synctex/text-mapper';
+import { SynctexData } from '../synctex/synctex-parser.js';
+import { SourceLocation } from '../synctex/text-mapper.js';
 /** Configure the pdfjs-dist worker source.
  *
  *  **Must be called in the consumer's own source code** so that the consumer's

@@ -1,4 +1,4 @@
-import { ProjectIndex } from './project-index';
+import { ProjectIndex } from './project-index.js';
 /** 1-based, end-exclusive source range. */
 export interface LFRange {
     startLine: number;

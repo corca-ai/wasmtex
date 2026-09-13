@@ -1,4 +1,4 @@
-import { ProjectIndex } from './project-index';
+import { ProjectIndex } from './project-index.js';
 import type * as Monaco from 'monaco-editor';
 export interface WorkspaceEditInfo {
     edits: Array<{

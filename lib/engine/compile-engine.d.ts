@@ -1,7 +1,7 @@
-import { CompileResult, EngineStatus } from '../types';
-import { EngineCompletionObservation } from './completion-snapshot';
-import { EngineDetection, TexEngine } from './engine-select';
-import { WasmTexEngineOptions } from './wasmtex-engine';
+import { CompileResult, EngineStatus } from '../types.js';
+import { EngineCompletionObservation } from './completion-snapshot.js';
+import { EngineDetection, TexEngine } from './engine-select.js';
+import { WasmTexEngineOptions } from './wasmtex-engine.js';
 /** The engine surface used by `WasmTex` (browser) and `WasmTexCompiler` (headless). */
 export interface CompileEngine {
     init(): Promise<void>;

@@ -1,4 +1,4 @@
-import { ProjectIndex } from './project-index';
+import { ProjectIndex } from './project-index.js';
 /**
  * Monaco bindings for the editor-neutral language features in
  * `language-features.ts`. Each provider reads the model text, calls the pure
