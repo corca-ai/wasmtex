@@ -4,6 +4,7 @@ import { VirtualFS } from '../../fs/virtual-fs'
 import {
   createLinkedEditingRangeProvider,
   createLinkProvider,
+  createSelectionRangeProvider,
   createSignatureHelpProvider,
 } from '../language-feature-providers'
 import { ProjectIndex } from '../project-index'
@@ -76,4 +77,38 @@ it('maps linked editing to Monaco and refuses cancelled or unsynchronized models
       isCancellationRequested: true,
     } as never),
   ).toBeNull()
+})
+
+it('maps multiple structural selection positions and refuses an unsynchronized model', async () => {
+  const content = String.raw`\textbf{word}`
+  const index = new ProjectIndex()
+  const fs = new VirtualFS()
+  fs.writeFile('main.tex', content)
+  index.updateFile('main.tex', content)
+  const provider = createSelectionRangeProvider(index, fs)
+  const positions = [
+    { lineNumber: 1, column: 10 },
+    { lineNumber: 1, column: 1 },
+  ] as Position[]
+  const token = { isCancellationRequested: false } as never
+  const result = await provider.provideSelectionRanges(model(content), positions, token)
+  expect(
+    result?.map((ranges) => ranges.map(({ range }) => [range.startColumn, range.endColumn])),
+  ).toEqual([
+    [
+      [9, 13],
+      [8, 14],
+      [1, 14],
+    ],
+    [[1, 14]],
+  ])
+  expect(await provider.provideSelectionRanges(model('changed'), positions, token)).toEqual([
+    [],
+    [],
+  ])
+  expect(
+    await provider.provideSelectionRanges(model(content), positions, {
+      isCancellationRequested: true,
+    } as never),
+  ).toEqual([[], []])
 })

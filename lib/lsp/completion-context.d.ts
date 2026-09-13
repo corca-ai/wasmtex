@@ -1,4 +1,6 @@
+import { readBalancedGroup } from './balanced-group.js';
 import { BibCompletionContext } from './bib-completion-context.js';
+import { Token } from './latex-tokenizer.js';
 import { CommandArg, CompletionValueKind } from './package-db.js';
 import { NeutralDocument, NeutralPosition, NeutralRange } from './protocol.js';
 export type CompletionDomain = 'command' | CompletionValueKind;
@@ -50,6 +52,10 @@ export interface CommandArgumentCompletionContext extends CompletionContextBase 
     keyFamilySelector?: RelatedCompletionArgument;
 }
 export type CompletionContext = CommandNameCompletionContext | CommandArgumentCompletionContext | BibCompletionContext;
+type GroupReader = typeof readBalancedGroup;
 /** Analyze a completion position using the full active document. Never throws. */
 export declare function analyzeCompletionContext(document: NeutralDocument, position: NeutralPosition, metadata?: CompletionCommandMetadataProvider): CompletionContext | null;
+/** Source ranges from the same confirmed invocation grammar as parameter hints.
+ * The owning parser can supply indexed group reads; this never tokenizes source. */
+export declare function confirmedInvocationSelectionRanges(text: string, token: Token, metadata: CompletionCommandMetadataProvider, readGroup: GroupReader): Array<[number, number]>;
 export {};

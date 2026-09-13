@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Changed
 
+- Expose source-backed argument, invocation and environment selection ranges through
+  the neutral language service, Monaco and JSON-RPC, reusing confirmed argument grammar.
+
 - Provide parser-backed linked editing ranges for matched literal environment names
   through the neutral language service, Monaco and JSON-RPC.
 

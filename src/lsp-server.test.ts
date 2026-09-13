@@ -493,3 +493,39 @@ describe('LatexLspServer', () => {
     expect(responseFor(sent, 10)!.error!.code).toBe(-32602)
   })
 })
+
+it('serves nested selection parents and validates each protocol position', async () => {
+  const { server, sent } = makeServer({ files: { 'main.tex': String.raw`\textbf{word}` } })
+  await server.handle({
+    id: 201,
+    method: 'textDocument/selectionRange',
+    params: {
+      textDocument: { uri: URI },
+      positions: [
+        { line: 0, character: 9 },
+        { line: 0, character: 20 },
+      ],
+    },
+  })
+  expect(result(sent, 201)).toEqual([
+    {
+      range: { start: { line: 0, character: 8 }, end: { line: 0, character: 12 } },
+      parent: {
+        range: { start: { line: 0, character: 7 }, end: { line: 0, character: 13 } },
+        parent: {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 13 } },
+        },
+      },
+    },
+    { range: { start: { line: 0, character: 20 }, end: { line: 0, character: 20 } } },
+  ])
+  await server.handle({
+    id: 202,
+    method: 'textDocument/selectionRange',
+    params: {
+      textDocument: { uri: URI },
+      positions: [{ line: -1, character: 0 }],
+    },
+  })
+  expect(responseFor(sent, 202)?.error?.code).toBe(-32602)
+})

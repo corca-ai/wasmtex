@@ -11,5 +11,5 @@ export interface EnvironmentNamePair {
     end: NeutralRange;
 }
 /** Consume the parser's existing token stream and source-preserving template mask. */
-export declare function environmentNamePairs(source: string, masked: string, tokens: readonly Token[], lineStarts: number[]): EnvironmentNamePair[];
+export declare function environmentNamePairs(source: string, masked: string, tokens: readonly Token[], lineStarts: number[], sourceRanges?: Array<[number, number]>): EnvironmentNamePair[];
 export declare function linkedEnvironmentRanges(pairs: readonly EnvironmentNamePair[], line: number, column: number): NeutralRange[] | null;

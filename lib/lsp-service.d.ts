@@ -115,6 +115,7 @@ export declare class LatexLanguageService {
     private textOf;
     getSignatureHelp(path: string, line: number, column: number): SignatureHelp | null;
     getFoldingRanges(path: string): FoldingRange[];
+    getSelectionRanges(path: string, line: number, column: number, cancellation?: CompletionCancellationToken): import('./lsp/protocol.js').NeutralRange[];
     getLinkedEditingRanges(path: string, line: number, column: number): LinkedEditingRanges | null;
     getDocumentHighlights(path: string, line: number, column: number): LFRange[];
     getWorkspaceSymbols(query: string): WorkspaceSymbol[];

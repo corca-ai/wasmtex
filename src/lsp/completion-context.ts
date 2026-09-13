@@ -159,10 +159,13 @@ function nextSignatureIndex(
   return signature[index]?.kind === delimiter ? index : undefined
 }
 
+type GroupReader = typeof readBalancedGroup
+
 function parseInvocation(
   text: string,
   token: Token,
   metadata: CompletionCommandMetadataProvider | undefined,
+  readGroup: GroupReader = readBalancedGroup,
 ): ParsedInvocation | null {
   if (!/^[a-zA-Z@]+$/.test(token.value)) return null
   let offset = token.end
@@ -173,7 +176,7 @@ function parseInvocation(
   }
   const name = `${token.value}${starred ? '*' : ''}`
   const signature = metadata?.getCommandArguments(name) ?? getCommandSignature(name) ?? []
-  const groups = readInvocationGroups(text, offset, signature)
+  const groups = readInvocationGroups(text, offset, signature, readGroup)
   return groups.length ? { command: token.value, starred, groups } : null
 }
 
@@ -181,6 +184,7 @@ function readInvocationGroups(
   text: string,
   offset: number,
   signature: readonly CommandArg[],
+  readGroup: GroupReader,
 ): ParsedGroup[] {
   let signatureIndex: number | undefined = 0
   const groups: ParsedGroup[] = []
@@ -191,7 +195,7 @@ function readInvocationGroups(
     const delimiter = open === '{' ? 'required' : 'optional'
     signatureIndex = nextSignatureIndex(signature, signatureIndex, delimiter)
     const spec = signatureIndex === undefined ? defaultArg(delimiter) : signature[signatureIndex]!
-    const balanced = readBalancedGroup(text, offset, spec.balancedOptional)
+    const balanced = readGroup(text, offset, spec.balancedOptional)
     groups.push({
       delimiter,
       open: offset,
@@ -466,4 +470,37 @@ export function analyzeCompletionContext(
   } catch {
     return null
   }
+}
+
+/** Source ranges from the same confirmed invocation grammar as parameter hints.
+ * The owning parser can supply indexed group reads; this never tokenizes source. */
+export function confirmedInvocationSelectionRanges(
+  text: string,
+  token: Token,
+  metadata: CompletionCommandMetadataProvider,
+  readGroup: GroupReader,
+): Array<[number, number]> {
+  const name = `${token.value}${text[token.end] === '*' ? '*' : ''}`
+  const signature = metadata.getCommandArguments(name) ?? getCommandSignature(name)
+  if (!signature?.length) return []
+  const invocation = parseInvocation(text, token, metadata, readGroup)
+  if (!invocation) return []
+  const ranges: Array<[number, number]> = []
+  let next = 0
+  let incomplete = false
+  let end = token.end
+  for (const group of invocation.groups) {
+    if (group.signatureIndex === undefined) break
+    if (!group.closed) {
+      incomplete = true
+      break
+    }
+    ranges.push([group.contentStart, group.contentEnd], [group.open, group.end])
+    next = group.signatureIndex + 1
+    end = group.end
+  }
+  if (!incomplete && next > 0 && signature.slice(next).every((arg) => arg.kind === 'optional')) {
+    ranges.push([token.start, end])
+  }
+  return ranges
 }

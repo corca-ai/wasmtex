@@ -16,3 +16,4 @@ export declare function createSemanticTokensProvider(): monaco.languages.Documen
 /** Code-action provider. Applies workspace edits through `onWorkspaceEdit` if provided. */
 export declare function createCodeActionProvider(index: ProjectIndex): monaco.languages.CodeActionProvider;
 export declare function createLinkedEditingRangeProvider(index: ProjectIndex, fs: VirtualFS): monaco.languages.LinkedEditingRangeProvider;
+export declare function createSelectionRangeProvider(index: ProjectIndex, fs: VirtualFS, registry?: CompletionResolverRegistry): monaco.languages.SelectionRangeProvider;

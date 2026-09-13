@@ -176,6 +176,19 @@ export class LatexLspServer {
         return this.definition(positionParams(params))
       case 'textDocument/references':
         return this.references(positionParams(params))
+      case 'textDocument/selectionRange': {
+        if (!Array.isArray(params?.positions))
+          throw new RpcError(-32602, 'positions must be an array')
+        return params.positions.map((position) => {
+          const parsed = positionParams({ ...params, position })
+          const ranges = this.service.getSelectionRanges(
+            pathFromUri(parsed.textDocument.uri),
+            parsed.position.line + 1,
+            parsed.position.character + 1,
+          )
+          return lspSelectionRange(ranges, parsed.position)
+        })
+      }
       case 'textDocument/linkedEditingRange': {
         const { textDocument, position } = positionParams(params)
         const result = this.service.getLinkedEditingRanges(
@@ -386,5 +399,19 @@ function serverCapabilities(): object {
     referencesProvider: true,
     renameProvider: true,
     linkedEditingRangeProvider: true,
+    selectionRangeProvider: true,
   }
+}
+
+interface LspSelectionRange {
+  range: ReturnType<typeof toLspRange>
+  parent?: LspSelectionRange
+}
+
+function lspSelectionRange(ranges: NeutralRange[], position: LspPosition): LspSelectionRange {
+  let parent: LspSelectionRange | undefined
+  for (let index = ranges.length - 1; index >= 0; index--) {
+    parent = { range: toLspRange(ranges[index]!), ...(parent ? { parent } : {}) }
+  }
+  return parent ?? { range: { start: { ...position }, end: { ...position } } }
 }

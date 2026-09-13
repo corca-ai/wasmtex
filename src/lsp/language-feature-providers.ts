@@ -20,6 +20,7 @@ import {
 } from './language-features'
 import { projectCommandMetadata } from './project-command-metadata'
 import type { ProjectIndex } from './project-index'
+import { getStructuralSelectionIndex, structuralSelectionRanges } from './structural-selection'
 
 function toRange(r: LFRange): monaco.Range {
   return new monaco.Range(r.startLine, r.startColumn, r.endLine, r.endColumn)
@@ -198,6 +199,31 @@ export function createLinkedEditingRangeProvider(
       return ranges
         ? { ranges: ranges.map(toRange), wordPattern: new RegExp(ENVIRONMENT_NAME_PATTERN) }
         : null
+    },
+  }
+}
+
+export function createSelectionRangeProvider(
+  index: ProjectIndex,
+  fs: VirtualFS,
+  registry = new CompletionResolverRegistry(),
+): monaco.languages.SelectionRangeProvider {
+  return {
+    provideSelectionRanges(model, positions, token) {
+      const path = model.uri.path.replace(/^\//, '')
+      if (token.isCancellationRequested || fs.readFile(path) !== model.getValue())
+        return positions.map(() => [])
+      const metadata = projectCommandMetadata(index, path, registry)
+      const structure = getStructuralSelectionIndex(index.getFileSymbols(path))
+      return positions.map((position) =>
+        structuralSelectionRanges(
+          structure,
+          position.lineNumber,
+          position.column,
+          metadata,
+          token,
+        ).map((range) => ({ range: toRange(range) })),
+      )
     },
   }
 }

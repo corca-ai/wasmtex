@@ -156,6 +156,38 @@ entity identity.
 an estimated retained UTF-16 metadata size. It is intended for regression budgets rather
 than as a JavaScript heap profiler.
 
+### Structural selection
+
+`getSelectionRanges(path, line, column, cancellationToken?)` returns a flat array
+of 1-based, end-exclusive UTF-16 ranges, smallest first. Every parent strictly
+contains the preceding range; duplicates and crossing candidates are omitted.
+The cursor is inside a half-open source range. Empty, out-of-document, cancelled
+and masked positions return an empty array.
+
+Complete brace groups provide content and delimiter ranges. Confirmed command
+signatures use the same invocation reader and project/package authority as
+parameter hints; supplied optional groups respect legacy versus xparse bracket
+rules. A complete supported invocation adds its command range. Unknown commands,
+unsupported stars, unbraced arguments and incomplete calls do not invent an
+invocation range, although independently complete brace groups remain selectable.
+Properly nested literal environment pairs add their full source range.
+
+The parser caches group boundaries and source masks with its existing token pass.
+Queries read those boundaries without retokenizing or exposing the private cache
+in public file symbols. `ProjectIndex.getStats().estimatedBytes` includes the cache's
+estimated payload. Project grammar is resolved at query time so cross-file
+signature changes cannot leave a cached invocation decision behind. Comments,
+verbatim, inactive branches and definition templates provide no selection ranges;
+macro expansion never adds a virtual editor location. Mathematical semantics
+remain the responsibility of downstream consumers.
+
+The Monaco adapter maps each requested cursor to its own range chain and rejects
+cancelled or text-unsynchronized requests. JSON-RPC advertises
+`selectionRangeProvider` and supports `textDocument/selectionRange`, converting
+chains to nested `parent` records. A protocol position without structural evidence
+gets a zero-width range at that position. Hosts own model/revision lifetimes and
+can keep this read-only navigation available to viewers.
+
 ### Linked environment editing
 
 `getLinkedEditingRanges(path, line, column)` returns `LinkedEditingRanges | null`
