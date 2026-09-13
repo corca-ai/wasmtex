@@ -27,20 +27,23 @@ export type WorkerFactory = (enginePath: string) => EngineWorker
 // Default: a browser Web Worker. Referenced lazily (inside the factory), so importing
 // this module on a host without a global `Worker` is fine as long as the host installs
 // its own factory via setWorkerFactory() before creating any engine.
-let factory: WorkerFactory = (enginePath) => new Worker(enginePath) as unknown as EngineWorker
+const browserFactory: WorkerFactory = (enginePath) =>
+  new Worker(enginePath) as unknown as EngineWorker
+const registrations: Array<{ factory: WorkerFactory }> = []
 
 /** Install a host-specific worker factory (e.g. Node `worker_threads`). Call before
- *  constructing an engine. Returns an idempotent cleanup that restores the previous
- *  factory, unless another host has replaced this one in the meantime. */
+ *  constructing an engine. The newest live registration wins. Cleanup is idempotent,
+ *  can run in any order, and never restores an already disposed registration. */
 export function setWorkerFactory(next: WorkerFactory): () => void {
-  const previous = factory
-  factory = next
+  const registration = { factory: next }
+  registrations.push(registration)
   return () => {
-    if (factory === next) factory = previous
+    const index = registrations.indexOf(registration)
+    if (index !== -1) registrations.splice(index, 1)
   }
 }
 
 /** Create an engine worker via the installed factory (browser Web Worker by default). */
 export function createEngineWorker(enginePath: string): EngineWorker {
-  return factory(enginePath)
+  return (registrations.at(-1)?.factory ?? browserFactory)(enginePath)
 }

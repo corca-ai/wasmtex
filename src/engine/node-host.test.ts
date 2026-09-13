@@ -2,14 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installNodeWorkerHost } from './node-host'
-import { setWorkerFactory } from './worker-host'
+import { installNodeWorkerHost, type NodeWorkerHostInstallation } from './node-host'
 
 // installNodeWorkerHost replaces globalThis.fetch with a shim that serves
 // assetBaseUrl resources from publicDir and passes everything else through.
 // The shim is typed `typeof fetch`, so its first parameter legally includes a
 // Request — which it must resolve via `.url`, not String(request).
 describe('installNodeWorkerHost fetch shim asset routing', () => {
+  let host: NodeWorkerHostInstallation | undefined
   let tmp: string
   let publicDir: string
   let realFetch: typeof globalThis.fetch
@@ -27,10 +27,9 @@ describe('installNodeWorkerHost fetch shim asset routing', () => {
   })
 
   afterEach(() => {
+    host?.dispose()
+    host = undefined
     globalThis.fetch = realFetch
-    setWorkerFactory(() => {
-      throw new Error('worker factory not installed')
-    })
     rmSync(tmp, { recursive: true, force: true })
   })
 
@@ -47,7 +46,7 @@ describe('installNodeWorkerHost fetch shim asset routing', () => {
     ['a Request object', (u: string): RequestInfo | URL => new Request(u)],
   ])('serves %s from disk without hitting the passthrough fetch', async (_name, makeInput) => {
     const spy = vi.fn(async () => new Response('cdn', { status: 200 }))
-    installNodeWorkerHost({ publicDir, assetBaseUrl: base, baseFetch: spy })
+    host = installNodeWorkerHost({ publicDir, assetBaseUrl: base, baseFetch: spy })
 
     const resp = await globalThis.fetch(makeInput(url))
     expect(await bodyOf(resp)).toEqual(bytes)
@@ -57,7 +56,7 @@ describe('installNodeWorkerHost fetch shim asset routing', () => {
   it('passes a non-asset URL through to the base fetch (string/URL/Request)', async () => {
     const cdn = 'https://cdn.example/2025/font.tfm'
     const spy = vi.fn(async () => new Response('cdn', { status: 200 }))
-    installNodeWorkerHost({ publicDir, assetBaseUrl: base, baseFetch: spy })
+    host = installNodeWorkerHost({ publicDir, assetBaseUrl: base, baseFetch: spy })
 
     await globalThis.fetch(cdn)
     await globalThis.fetch(new URL(cdn))
@@ -68,7 +67,7 @@ describe('installNodeWorkerHost fetch shim asset routing', () => {
   it('never serves a dot-segment request from outside publicDir', async () => {
     writeFileSync(join(tmp, 'package.json'), 'outside-public-dir')
     const spy = vi.fn(async () => new Response('cdn', { status: 200 }))
-    installNodeWorkerHost({ publicDir, assetBaseUrl: base, baseFetch: spy })
+    host = installNodeWorkerHost({ publicDir, assetBaseUrl: base, baseFetch: spy })
 
     const resp = await globalThis.fetch(`${base}../package.json`)
     expect(resp.status).toBe(404)
@@ -77,11 +76,11 @@ describe('installNodeWorkerHost fetch shim asset routing', () => {
   })
 
   it('restores the previous global fetch when disposed', () => {
-    const handle = installNodeWorkerHost({ publicDir, assetBaseUrl: base })
+    host = installNodeWorkerHost({ publicDir, assetBaseUrl: base })
     expect(globalThis.fetch).not.toBe(realFetch)
 
-    handle.dispose()
-    handle.dispose()
+    host.dispose()
+    host.dispose()
     expect(globalThis.fetch).toBe(realFetch)
   })
 })

@@ -70,39 +70,43 @@ async function compileWith({ assets, document, engine, texliveUrl, texliveVersio
   const { installNodeWorkerHost } = await import('../lib/node.js')
   const { WasmTexCompiler } = await import('../lib/headless.js')
   const assetBaseUrl = 'http://assets.local/'
-  installNodeWorkerHost({ publicDir: assets, assetBaseUrl })
-  // Compile from inside a folder as well as at the root: a release that reads
-  // its output by the wrong name only fails for the nested one, and a corpus
-  // that never nests would call that release output-preserving.
-  const results = []
-  const scope = arg('scope', 'all')
-  if (!['all', 'root', 'nested'].includes(scope)) throw Error('Scope must be all, root, or nested')
-  const mainFiles = scope === 'root' ? ['main.tex'] : scope === 'nested' ? ['nested/main.tex'] : ['main.tex', 'nested/main.tex']
-  for (const mainFile of mainFiles) {
-    const compiler = new WasmTexCompiler({
-      assetBaseUrl,
-      engine,
-      files: { [mainFile]: document.source },
-      mainFile,
-      texliveUrl,
-      texliveVersion,
-    })
-    try {
-      await compiler.init()
-      const result = await compiler.compile()
-      results.push({
+  const host = installNodeWorkerHost({ publicDir: assets, assetBaseUrl })
+  try {
+    // Compile from inside a folder as well as at the root: a release that reads
+    // its output by the wrong name only fails for the nested one, and a corpus
+    // that never nests would call that release output-preserving.
+    const results = []
+    const scope = arg('scope', 'all')
+    if (!['all', 'root', 'nested'].includes(scope)) throw Error('Scope must be all, root, or nested')
+    const mainFiles = scope === 'root' ? ['main.tex'] : scope === 'nested' ? ['nested/main.tex'] : ['main.tex', 'nested/main.tex']
+    for (const mainFile of mainFiles) {
+      const compiler = new WasmTexCompiler({
+        assetBaseUrl,
+        engine,
+        files: { [mainFile]: document.source },
         mainFile,
-        digest: result.pdf ? typesetDigest(result.pdf) : null,
-        bytes: result.pdf?.length ?? 0,
-        success: result.success,
-        pdfBase64: arg('report') && result.pdf ? Buffer.from(result.pdf).toString('base64') : undefined,
-        log: result.log, errors: result.errors, diagnostics: result.telemetry?.diagnostics,
+        texliveUrl,
+        texliveVersion,
       })
-    } finally {
-      compiler.dispose()
+      try {
+        await compiler.init()
+        const result = await compiler.compile()
+        results.push({
+          mainFile,
+          digest: result.pdf ? typesetDigest(result.pdf) : null,
+          bytes: result.pdf?.length ?? 0,
+          success: result.success,
+          pdfBase64: arg('report') && result.pdf ? Buffer.from(result.pdf).toString('base64') : undefined,
+          log: result.log, errors: result.errors, diagnostics: result.telemetry?.diagnostics,
+        })
+      } finally {
+        compiler.dispose()
+      }
     }
+    return results
+  } finally {
+    host.dispose()
   }
-  return results
 }
 
 async function main() {

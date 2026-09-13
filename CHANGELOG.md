@@ -105,6 +105,10 @@ Keep them user-facing and concise. Example:
 
 ### Fixed
 
+- Node host installation rejects a second active adapter without changing globals.
+  Disposal permits reinstall and cannot revive a disposed worker factory or remove
+  a newer replacement. Dispose compilers before releasing their host handle.
+
 - Published declarations use ESM-compatible relative import paths so TypeScript
   NodeNext consumers can resolve the complete API. An isolated package installation
   gate now checks public imports/types, UI bundling, and missing-file/export failures.

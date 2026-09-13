@@ -130,7 +130,7 @@ describe.runIf(REAL_ENDPOINT)('real Biber server e2e (opt-in, #175)', () => {
 
     const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
     const ASSET = 'http://assets.local/'
-    installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
+    const host = installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
 
     const backends = new BackendRegistry()
     backends.register(BIBER_STAGE, createBiberBackend({ endpoint: REAL_ENDPOINT! }))
@@ -167,6 +167,7 @@ describe.runIf(REAL_ENDPOINT)('real Biber server e2e (opt-in, #175)', () => {
       expect(bbl as string).toMatch(/\\entry\{knuth84\}/)
     } finally {
       compiler.dispose()
+      host.dispose()
     }
   }, 90_000)
 })

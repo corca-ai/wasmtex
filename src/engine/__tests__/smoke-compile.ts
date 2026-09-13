@@ -44,7 +44,7 @@ export async function smokeCompile(
   const { WasmTexCompiler } = await import('../../headless')
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
   const ASSET = 'http://assets.local/'
-  installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
+  const host = installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
   const compiler = new WasmTexCompiler({
     engine: 'pdflatex',
     assetBaseUrl: ASSET,
@@ -62,5 +62,6 @@ export async function smokeCompile(
     }
   } finally {
     compiler.dispose()
+    host.dispose()
   }
 }

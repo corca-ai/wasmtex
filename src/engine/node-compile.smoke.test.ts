@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { NodeWorkerHostInstallation } from './node-host'
 import { smokeTexliveProfile } from './smoke-texlive-profile'
 
 /**
@@ -18,6 +19,11 @@ import { smokeTexliveProfile } from './smoke-texlive-profile'
 const RUN = process.env.NODE_COMPILE_SMOKE === '1'
 
 describe.runIf(RUN)('node compile smoke (#121)', () => {
+  let host: NodeWorkerHostInstallation | undefined
+  afterEach(() => {
+    host?.dispose()
+    host = undefined
+  })
   it('compiles a trivial pdfLaTeX document to a PDF under Node', async () => {
     const { installNodeWorkerHost } = await import('./node-host')
     const { WasmTexCompiler } = await import('../headless')
@@ -34,7 +40,7 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
       mirrorRevision,
       texliveYear: texliveProfile.version,
     } as const
-    installNodeWorkerHost({
+    host = installNodeWorkerHost({
       publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
       assetBaseUrl: ASSET,
     })
@@ -139,7 +145,7 @@ describe.runIf(RUN)('node compile smoke (#121)', () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
     const ASSET = 'http://assets.local/'
     const texliveProfile = smokeTexliveProfile()
-    installNodeWorkerHost({
+    host = installNodeWorkerHost({
       publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
       assetBaseUrl: ASSET,
     })
