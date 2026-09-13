@@ -47,18 +47,20 @@ export function cacheStructuralSelectionIndex(
   lineStarts: number[],
   excluded: OffsetRange[],
   environments: OffsetRange[],
+  existingGroups?: ReadonlyMap<number, number>,
 ): void {
-  const groups = indexGroupEnds(masked)
+  const groups = existingGroups ?? indexGroupEnds(masked)
   const ranges = [...environments]
   for (const [start, end] of groups) {
     if (masked[start] === '{') ranges.push([start + 1, end], [start, end + 1])
   }
+  const hasOptional = [...groups.keys()].some((start) => masked[start] === '[')
   indexes.set(symbols, {
     masked,
     lineStarts,
     commands: tokens.filter((token) => token.type === 'command' && masked[token.start] === '\\'),
     groups,
-    balancedGroups: indexGroupEnds(masked, true),
+    balancedGroups: hasOptional ? indexGroupEnds(masked, true) : groups,
     ranges,
     excluded,
   })

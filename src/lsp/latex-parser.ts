@@ -1812,7 +1812,8 @@ export function parseLatexFile(
     bibItems: [],
   }
 
-  const masked = maskContent(content, [...tokens])
+  const sourceMasks = collectMaskSpans([...tokens])
+  const masked = blankSpans(content, sourceMasks)
   const ctx: Ctx = {
     masked,
     lineStarts: buildLineStarts(masked),
@@ -1847,8 +1848,9 @@ export function parseLatexFile(
     structuralMasked,
     tokens,
     ctx.lineStarts,
-    [...collectMaskSpans([...tokens]), ...definitionSpans],
+    [...sourceMasks, ...definitionSpans],
     environmentRanges,
+    definitionSpans.length === 0 ? ctx.groupEnds : undefined,
   )
 
   extractLabels(literalCtx, symbols)

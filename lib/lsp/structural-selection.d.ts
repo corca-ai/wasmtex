@@ -16,7 +16,7 @@ interface StructuralSelectionIndex {
 }
 export declare function getStructuralSelectionIndex(symbols: FileSymbols | undefined): StructuralSelectionIndex | undefined;
 export declare function structuralSelectionEstimatedBytes(symbols: FileSymbols): number;
-export declare function cacheStructuralSelectionIndex(symbols: FileSymbols, masked: string, tokens: readonly Token[], lineStarts: number[], excluded: OffsetRange[], environments: OffsetRange[]): void;
+export declare function cacheStructuralSelectionIndex(symbols: FileSymbols, masked: string, tokens: readonly Token[], lineStarts: number[], excluded: OffsetRange[], environments: OffsetRange[], existingGroups?: ReadonlyMap<number, number>): void;
 /** Smallest-to-largest, strict containment; a query never mutates the cached index. */
 export declare function structuralSelectionRanges(index: StructuralSelectionIndex | undefined, line: number, column: number, metadata: CompletionCommandMetadataProvider, cancellation?: CompletionCancellationToken): NeutralRange[];
 export {};
