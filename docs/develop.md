@@ -348,3 +348,40 @@ npx vitest run src/engine/cross-host-parity.smoke.test.ts
 
 For 2025 use the corresponding year and immutable mirror from the workflow.
 Do not update goldens or broaden normalization to accept a cleanup regression.
+
+### Authored Worker static checks
+
+`npm run lint:workers` checks the 13 runtime JavaScript/CJS files directly under
+`wasm-build/`, including controllers, resolver helpers and Emscripten library
+bridges. `biome.workers.json` is the explicit inventory; the command fails if a
+new top-level runtime JS file is absent from it. `npm run lint` invokes the same
+command locally, in the pre-commit hook and in CI.
+
+Generated Emscripten modules in `wasm-build/dist*/`, downloaded `public/` assets,
+external source trees and the Node-only development probes in `wasm-build/tests/`
+are outside this runtime inventory. The separate configuration checks undeclared
+variables, unreachable code and selected correctness rules without reformatting
+legacy controllers. Globals are scoped per file: generated Emscripten runtime/C
+exports (the Makefiles own their build contract), resolver helpers imported by
+pdfTeX, or the `LibraryManager`/`mergeInto` build-time bridge environment. Browser
+and Node standard globals remain Biome defaults. No broad lint suppression is
+needed. Full `checkJs` is deferred: the generated core and dynamic FS/Worker
+protocol require a separate declaration contract; this lint gate does not claim
+to type-check messages or WASM memory accesses.
+
+Existing controller protocol, resolver, heap-restore and job-name behavior tests
+remain in `npm test`. `worker-format-fallback.test.ts` runs the actual pdfTeX
+controller with a filesystem and a substituted TeX core to cover first/repeated
+format generation and failure without losing project files. Its opt-in real-core
+counterpart stages this checkout's pdfTeX controller over the selected released
+assets and runs a multi-file cold/repeat/edited sequence:
+
+```bash
+NODE_COMPILE_SMOKE=1 npx vitest run src/engine/worker-format-fallback.smoke.test.ts
+```
+
+The annual golden workflow runs that command against both pinned profiles.
+Staging changes only a temporary controller copy; it is not a release assembly
+or proof that an unchanged downloaded controller contains the source fix. Normal
+preloaded-format output comparisons and release qualification remain governed
+by the [engine optimization policy](engine-optimization-policy.md).

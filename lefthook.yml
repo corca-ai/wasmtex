@@ -5,6 +5,8 @@ pre-commit:
       run: npx tsgo --noEmit
     lint:
       run: npx biome check --diagnostic-level=error src/
+    worker-lint:
+      run: npm run lint:workers
     test:
       run: npx vitest run
     cpd:

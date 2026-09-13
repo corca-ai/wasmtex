@@ -198,6 +198,29 @@ function cleanDir(dir) {
     }
 }
 
+// Preserve files outside the WASM heap while INITEX uses the working directory.
+function snapshotDirectory(dir, entries) {
+    entries = entries || [];
+    FS.readdir(dir).forEach(function(name) {
+        if (name === "." || name === "..") return;
+        var path = dir + "/" + name;
+        if (FS.isDir(FS.stat(path).mode)) {
+            entries.push({ path: path, data: null });
+            snapshotDirectory(path, entries);
+        } else {
+            entries.push({ path: path, data: FS.readFile(path, { encoding: "binary" }).slice() });
+        }
+    });
+    return entries;
+}
+
+function restoreDirectory(entries) {
+    entries.forEach(function(entry) {
+        if (entry.data === null) FS.mkdirTree(entry.path);
+        else FS.writeFile(entry.path, entry.data);
+    });
+}
+
 // --- Execution context -------------------------------------------------------
 
 // Prepare for a compilation by resetting the log, restoring the heap to its
@@ -529,7 +552,7 @@ function cacheFileName(format, name) {
 
 function kpse_find_file_impl(nameptr, format, _mustexist) {
     var reqname = UTF8ToString(nameptr);
-    
+
     // Strip leading '*' or '&' — INITEX/fmt loader prefixes.
     if (reqname.startsWith("*") || reqname.startsWith("&")) {
         reqname = reqname.substring(1);
@@ -577,7 +600,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
     function tryFetch(name) {
         // Notify host about the download
         self.postMessage({ "cmd": "downloading", "file": name });
-        
+
         var url = self.texlive_endpoint + "pdftex/" + format + "/" + name;
         var xhr = new XMLHttpRequest();
         xhr.open("GET", url, false);
@@ -619,7 +642,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         var arraybuffer = xhr.response;
         // fileid header comes from texlive server; static hosting won't have it
         var fileid = xhr.getResponseHeader("fileid") || reqname;
-        var savepath = TEXCACHEROOT + "/" + cacheFileName(format, fileid);
+        savepath = TEXCACHEROOT + "/" + cacheFileName(format, fileid);
         var data = new Uint8Array(arraybuffer);
         FS.writeFile(savepath, data);
 
@@ -657,8 +680,6 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         );
         return 0;
     }
-
-    return 0;
 }
 
 // --- PK font fetching --------------------------------------------------------
@@ -702,7 +723,7 @@ function kpse_find_pk_impl(nameptr, dpi) {
         var arraybuffer = xhr.response;
         // pkid header comes from texlive server; static hosting won't have it
         var fileid = xhr.getResponseHeader("pkid") || reqname;
-        var savepath = TEXCACHEROOT + "/" + fileid;
+        savepath = TEXCACHEROOT + "/" + fileid;
         FS.writeFile(savepath, new Uint8Array(arraybuffer));
         pk200_cache[cacheKey] = savepath;
         return allocateString(savepath);
@@ -710,8 +731,6 @@ function kpse_find_pk_impl(nameptr, dpi) {
         pk404_cache[cacheKey] = 1;
         return 0;
     }
-
-    return 0;
 }
 
 // --- Compilation routines ----------------------------------------------------
@@ -747,51 +766,59 @@ async function compileLaTeXRoutine(data) {
 
     // Build format file on first compilation.
     if (!self._fmtData) {
-        prepareExecutionContext();
-        cleanDir(TEXCACHEROOT);
-        cleanDir(WORKROOT);
-        prepareExecutionContext();
+        // INITEX needs a clean directory, but the caller's project must survive
+        // both success and failure. Keep /tex and its resolver maps consistent.
+        var savedFiles = snapshotDirectory(WORKROOT);
+        try {
+            cleanDir(WORKROOT);
+            prepareExecutionContext();
 
-        try { FS.writeFile(WORKROOT + "/pdfetex", ""); } catch(e) {}
-        
-        // Dummy 'nul:' device for TeX
-        try { FS.writeFile(WORKROOT + "/nul:", ""); } catch(e) {}
-        
-        // Inject minimal language.dat to speed up format building (avoids 100+ XHRs)
-        var minLangDat = [
-            "usenglish hyphen.tex",
-            "=usenglishmax",
-            "ukenglish  loadhyph-en-gb.tex",
-            ""
-        ].join("\n");
-        try { FS.writeFile(WORKROOT + "/language.dat", minLangDat); } catch(e) {}
+            try { FS.writeFile(WORKROOT + "/pdfetex", ""); } catch(e) {}
 
-        writeTexmfCnf();
+            // Dummy 'nul:' device for TeX
+            try { FS.writeFile(WORKROOT + "/nul:", ""); } catch(e) {}
 
-        // Ensure no stale format file exists in WORKROOT before -ini run.
-        // An incompatible stale format would leave 2025 INITEX "stymied".
-        try { FS.unlink(WORKROOT + "/pdflatex.fmt"); } catch(e) {}
+            // Inject minimal language.dat to speed up format building (avoids 100+ XHRs)
+            var minLangDat = [
+                "usenglish hyphen.tex",
+                "=usenglishmax",
+                "ukenglish  loadhyph-en-gb.tex",
+                ""
+            ].join("\n");
+            try { FS.writeFile(WORKROOT + "/language.dat", minLangDat); } catch(e) {}
 
-        // Re-add * prefix to enable e-TeX extensions (required by modern LaTeX)
-        // The mirror resolver strips this '*' before requesting the format.
-        var fmtStatus = runMain("pdfetex", ["-ini", "-interaction=nonstopmode", "*pdflatex.ini"]);
+            writeTexmfCnf();
 
-        if (fmtStatus === 0) {
-            try {
-                self._fmtData = builtFmt;
-                self._fmtBuiltThisSession = true;
-                self._fmtIsNative = true;
-            } catch(e) {
-                console.error("[compile] Format build succeeded but can't read output: " + e);
+            // Ensure no stale format file exists in WORKROOT before -ini run.
+            // An incompatible stale format would leave 2025 INITEX "stymied".
+            try { FS.unlink(WORKROOT + "/pdflatex.fmt"); } catch(e) {}
+
+            // Re-add * prefix to enable e-TeX extensions (required by modern LaTeX)
+            // The mirror resolver strips this '*' before requesting the format.
+            var fmtStatus = runMain("pdfetex", ["-ini", "-interaction=nonstopmode", "*pdflatex.ini"]);
+
+            if (fmtStatus === 0) {
+                try {
+                    self._fmtData = FS.readFile(WORKROOT + "/pdflatex.fmt", { encoding: "binary" });
+                    self._fmtBuiltThisSession = true;
+                    self._fmtIsNative = true;
+                } catch(e) {
+                    self.memlog += "\nFormat build succeeded but cannot read output: " + e;
+                    fmtStatus = -253;
+                }
             }
-        } else {
-            self.postMessage({
-                "result": "failed",
-                "status": fmtStatus,
-                "log": self.memlog,
-                "cmd": "compile"
-            });
-            return; // STOP HERE
+            if (fmtStatus !== 0) {
+                self.postMessage({
+                    "result": "failed",
+                    "status": fmtStatus,
+                    "log": self.memlog,
+                    "cmd": "compile"
+                });
+                return; // STOP HERE
+            }
+        } finally {
+            cleanDir(WORKROOT);
+            restoreDirectory(savedFiles);
         }
         prepareExecutionContext();
         try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
@@ -1403,9 +1430,9 @@ self["onmessage"] = function(ev) {
     } else if (cmd === "preload404") {
         // Batch-inject known 404 entries into the cache to avoid wasted sync XHR.
         var entries = data["entries"];
-        var msgId = data["msgId"];
+        msgId = data["msgId"];
         for (var i = 0; i < entries.length; i++) {
-            var cacheKey = entries[i].format + "/" + entries[i].filename;
+            cacheKey = entries[i].format + "/" + entries[i].filename;
             if (!(cacheKey in texlive200_cache)) {
                 texlive404_cache[cacheKey] = 1;
                 texlive404_source[cacheKey] = data["source"] === "durable-negative"

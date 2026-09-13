@@ -121,7 +121,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
       
       for (var i = 0; i < exts.length; i++) {
         if (reqname.endsWith(exts[i])) continue;
-        var retryXhr = tryFetch(reqname + exts[i]);
+        retryXhr = tryFetch(reqname + exts[i]);
         if (retryXhr && retryXhr.status === 200) {
           xhr = retryXhr;
           reqname += exts[i];
