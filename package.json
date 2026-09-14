@@ -106,7 +106,7 @@
     "lint:workers": "node scripts/check-worker-scope.mjs && biome lint --config-path=biome.workers.json wasm-build --error-on-warnings"
   },
   "peerDependencies": {
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.56.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624"
   },
@@ -119,18 +119,18 @@
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.3",
-    "@playwright/test": "^1.58.2",
+    "@biomejs/biome": "^2.5.13",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.2",
     "@typescript/native-preview": "^7.0.0-dev.20260219.1",
     "@vitest/coverage-v8": "^4.1.10",
     "jscpd": "^4.0.8",
-    "lefthook": "^2.1.1",
-    "monaco-editor": "^0.55.1",
+    "lefthook": "^2.1.12",
+    "monaco-editor": "^0.56.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624",
     "typescript": "5.9.3",
-    "vite": "^8.2.0",
+    "vite": "^8.3.0",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.0.18"
   }
