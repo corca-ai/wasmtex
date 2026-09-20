@@ -232,8 +232,10 @@ the library itself, so the document's own `\tikzexternalize` (and its `prefix=`,
   than 3 pictures — a figure worker's own preamble snapshot would cost more than they save;
   counted statically across the project's `.tex` files, and for documents that build pictures
   in loops, by the first compile's figure list, which then redoes that one compile inline).
-- If a figure job ever fails, the compile is redone inline, `fallback: true` is reported, and
-  auto stays off for the rest of the compiler session.
+- If the automatically injected main pass produces no successful result or PDF, or a
+  figure job fails, the compile is redone inline once, `fallback: true` is reported, and
+  auto stays off for the rest of the compiler session. Engine exceptions and cancelled
+  operations are not retried; author-requested externalization keeps its own semantics.
 - `\ref`/`\pageref` inside pictures resolve: the main job's `.aux` is handed to the figure
   workers under the real job's name, as the library expects. `\label` inside pictures travels
   through the library's `.dpth` files.

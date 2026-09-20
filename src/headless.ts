@@ -1198,6 +1198,19 @@ export class WasmTexCompiler {
     if (kind && (result.success || result.pdf)) {
       return this.externalizeTikzFigures(result, kind, resolverReports)
     }
+    // The injected list-and-make main pass can itself fail before any figure
+    // jobs exist. Auto mode must recover this case just like a failed figure:
+    // restore the author's source and leave this compiler inline thereafter.
+    // Exceptions and cancelled operations never reach this result-only path.
+    if (kind === 'inject' && this.engine) {
+      this.tikzAutoDisabled = true
+      ;(
+        await this.operations.observe(this.engine.writeFile(this.mainFile, this.mainSource()))
+      ).resume()
+      const inline = (await this.operations.observe(this.engine.compile())).resume()
+      resolverReports.push(inline.telemetry?.resolver)
+      return withTikzTelemetry(inline, { ...emptyTikzTelemetry('auto'), fallback: true })
+    }
     if (this.opts.tikzExternalization?.mode === 'auto' && this.tikzAutoBlocker) {
       result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
       result.telemetry.tikzExternalization = {
