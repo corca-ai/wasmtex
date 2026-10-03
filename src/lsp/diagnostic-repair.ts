@@ -3,6 +3,7 @@ import type { CompletionCommandMetadataProvider } from './completion-context'
 import type { CompletionCancellationToken, CompletionResolverRegistry } from './completion-registry'
 import type { DiagnosticCompileEvidence } from './diagnostic-repair-context'
 import { repairInvocations } from './diagnostic-repair-invocations'
+import { getPdfMetadataRepairs } from './diagnostic-repair-metadata'
 import { getPackageRepairs } from './diagnostic-repair-package'
 import type {
   LatexArgumentRepairProposal,
@@ -139,7 +140,14 @@ export async function getDiagnosticRepairs(
   if (!argumentsResult.ok) return argumentsResult
   const packages = await getPackageRepairs(source, path, offset, cancellation)
   if (!packages.ok) return packages
-  return { ok: true, proposals: [...argumentsResult.proposals, ...packages.proposals] }
+  return {
+    ok: true,
+    proposals: [
+      ...argumentsResult.proposals,
+      ...packages.proposals,
+      ...getPdfMetadataRepairs(source, path, offset),
+    ],
+  }
 }
 
 export function revalidateArgumentRepairs(
@@ -156,7 +164,7 @@ export function revalidateArgumentRepairs(
         ok: true,
         proposals: [
           ...current.proposals,
-          ...previous.proposals.filter((value) => value.kind === 'missing-package'),
+          ...previous.proposals.filter((value) => value.kind !== 'missing-required-argument'),
         ],
       }
     : current
@@ -203,6 +211,8 @@ function sameRepairEvidence(
       actual.package === expected.package &&
       JSON.stringify(actual.evidence) === JSON.stringify(expected.evidence)
     )
+  if (actual.kind === 'pdf-metadata' && expected.kind === actual.kind)
+    return JSON.stringify(actual.metadata) === JSON.stringify(expected.metadata)
   return false
 }
 

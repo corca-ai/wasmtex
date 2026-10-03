@@ -35,7 +35,11 @@ export interface LatexPackageRepairProposal extends LatexDiagnosticRepairBase {
         resource: TexResourceRecord;
     };
 }
-export type LatexDiagnosticRepairProposal = LatexArgumentRepairProposal | LatexPackageRepairProposal;
+export interface LatexPdfMetadataRepairProposal extends LatexDiagnosticRepairBase {
+    kind: 'pdf-metadata';
+    metadata: Partial<Record<'pdftitle' | 'pdfauthor', string>>;
+}
+export type LatexDiagnosticRepairProposal = LatexArgumentRepairProposal | LatexPackageRepairProposal | LatexPdfMetadataRepairProposal;
 export type LatexDiagnosticRepairRefusal = 'stale' | 'cancelled' | 'limit' | 'unsupported';
 export type LatexDiagnosticRepairsResult = {
     ok: true;

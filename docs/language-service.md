@@ -26,6 +26,11 @@ Their required-argument scanner consumes TeX control-sequence arguments as singl
 tokens before considering nested invocations. Review planning recomputes the
 proposal instead of trusting edits supplied by a client.
 
+PDF metadata repair uses the same root/revision fences and preamble boundary
+proof, preserving explicit metadata and declining macro expansion. Accessible
+PDF preflight is a host-neutral source analysis shared by SDK lint and host
+export reviews; hosts supply their suppression directive name.
+
 Package repair combines source-matched direct engine errors with a revision-bound
 completion snapshot and exact resource-catalog availability. The complete recorder
 inventory accounts for resources loaded indirectly through classes and packages;

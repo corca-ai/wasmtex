@@ -926,4 +926,17 @@ export type {
 } from './types'
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace }
 
+export type {
+  AccessiblePdfEngine,
+  AccessiblePdfMetadataRequirement,
+  AccessiblePdfPreflight,
+  AccessiblePdfPreflightIssue,
+  AccessiblePdfPreflightIssueCode,
+  AccessiblePdfPreflightIssueKind,
+  AccessiblePdfProject,
+  AccessiblePdfRuleId,
+  AccessiblePdfSourceOptions,
+} from './lsp/accessible-pdf'
+
+export { accessiblePdfSourceDiagnostics, buildAccessiblePdfPreflight } from './lsp/accessible-pdf'
 export type { LinkedEditingRanges } from './lsp/environment-pairs'

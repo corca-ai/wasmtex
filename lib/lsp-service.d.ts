@@ -171,4 +171,6 @@ export type { ProjectIndexStats } from './lsp/project-index.js';
 export type { AuxData, AuxLabel, BibEntry, BibStringDef, ParsedBibFile, ProjectKeyDefinition, ProjectKeyValueType, ProjectValue, ProjectValueRole, } from './lsp/types.js';
 export type { CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, } from './types.js';
 export type { Diagnostic, FileSymbols, SectionDef, SemanticTrace };
+export type { AccessiblePdfEngine, AccessiblePdfMetadataRequirement, AccessiblePdfPreflight, AccessiblePdfPreflightIssue, AccessiblePdfPreflightIssueCode, AccessiblePdfPreflightIssueKind, AccessiblePdfProject, AccessiblePdfRuleId, AccessiblePdfSourceOptions, } from './lsp/accessible-pdf.js';
+export { accessiblePdfSourceDiagnostics, buildAccessiblePdfPreflight } from './lsp/accessible-pdf.js';
 export type { LinkedEditingRanges } from './lsp/environment-pairs.js';
