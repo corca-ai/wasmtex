@@ -13,6 +13,13 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Host-bounded heap checkpoint retention and automatic TikZ first-pass inline
+  recovery, preserving the behavior already adopted by SDK consumers.
+- Host-neutral accessible-PDF preflight and diagnostics, including configurable
+  next-line suppression directives and shared figure/heading lint semantics.
+- Reviewed PDF metadata repair plans that copy literal title/author values into
+  missing hyperref metadata without overwriting source-owned keys.
+
 - Reviewed diagnostic repair proposals for missing required argument slots and
   profile-bound package dependencies, with source/compile revision checks and
   root preamble edits for errors in included files.

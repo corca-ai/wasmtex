@@ -110,7 +110,7 @@ function classInsertion(
   return offset
 }
 
-function topLevel(
+export function topLevel(
   index: NonNullable<ReturnType<typeof getStructuralSelectionIndex>>,
   offset: number,
 ): boolean {

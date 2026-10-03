@@ -31,7 +31,7 @@ import {
   resolveEngine,
   type TexEngine,
 } from './engine/engine-select'
-import type { HeapCheckpointCompiler } from './engine/heap-checkpoints'
+import type { HeapCheckpointCompiler, HeapCheckpointOptions } from './engine/heap-checkpoints'
 import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
 import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine/index-backend'
 import { MakeindexEngine } from './engine/makeindex-engine'
@@ -338,6 +338,10 @@ export interface WasmTexCompilerOptions {
    *  splicing; falls back to a full compile when unavailable or unsafe (preamble or
    *  cross-reference changes). Defaults to false. */
   incremental?: boolean
+  /** Retained arbitrary-line checkpoint limits; omitted values keep SDK defaults.
+   * Applies to the browser pdfLaTeX heap path, not legacy page-break checkpoints.
+   * A checkpoint exceeding the budget is dropped; full compilation still works. */
+  heapCheckpointOptions?: Pick<HeapCheckpointOptions, 'maxCheckpoints' | 'maxBytes'>
   /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
    *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
    *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of
@@ -450,6 +454,11 @@ export class WasmTexCompiler {
   private exportSynced = new Map<string, string | Uint8Array>()
 
   constructor(options: WasmTexCompilerOptions = {}) {
+    for (const value of Object.values(options.heapCheckpointOptions ?? {})) {
+      if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+        throw new RangeError('Invalid heap checkpoint budget')
+      }
+    }
     this.opts = options
     this.mainFile = options.mainFile ?? 'main.tex'
     this.assetBaseUrl = resolveAssetBase(options.assetBaseUrl)
@@ -554,6 +563,7 @@ export class WasmTexCompiler {
             await this.operations.observe(import('./engine/heap-checkpoints'))
           ).resume().HeapCheckpointCompiler)(this.engine, {
             mainFile: this.mainFile,
+            ...this.opts.heapCheckpointOptions,
           })
         : null
     try {
@@ -1197,6 +1207,19 @@ export class WasmTexCompiler {
   ): Promise<CompileResult> {
     if (kind && (result.success || result.pdf)) {
       return this.externalizeTikzFigures(result, kind, resolverReports)
+    }
+    // The injected list-and-make main pass can itself fail before any figure
+    // jobs exist. Auto mode must recover this case just like a failed figure:
+    // restore the author's source and leave this compiler inline thereafter.
+    // Exceptions and cancelled operations never reach this result-only path.
+    if (kind === 'inject' && this.engine) {
+      this.tikzAutoDisabled = true
+      ;(
+        await this.operations.observe(this.engine.writeFile(this.mainFile, this.mainSource()))
+      ).resume()
+      const inline = (await this.operations.observe(this.engine.compile())).resume()
+      resolverReports.push(inline.telemetry?.resolver)
+      return withTikzTelemetry(inline, { ...emptyTikzTelemetry('auto'), fallback: true })
     }
     if (this.opts.tikzExternalization?.mode === 'auto' && this.tikzAutoBlocker) {
       result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }

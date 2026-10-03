@@ -1,6 +1,7 @@
 import { AccessibleExportOptions } from './engine/accessible-export.js';
 import { BackendRegistry } from './engine/backend-registry.js';
 import { EngineDetection, EngineOption } from './engine/engine-select.js';
+import { HeapCheckpointOptions } from './engine/heap-checkpoints.js';
 import { TikzExternalizationOptions } from './engine/tikz-externalization.js';
 import { ProjectIndex } from './lsp/project-index.js';
 import { AccessibleExportResult, CompileResult, CompletionSnapshotState, LoadProgressEvent, TexliveVersion, WarmupCache } from './types.js';
@@ -62,6 +63,10 @@ export interface WasmTexCompilerOptions {
      *  splicing; falls back to a full compile when unavailable or unsafe (preamble or
      *  cross-reference changes). Defaults to false. */
     incremental?: boolean;
+    /** Retained arbitrary-line checkpoint limits; omitted values keep SDK defaults.
+     * Applies to the browser pdfLaTeX heap path, not legacy page-break checkpoints.
+     * A checkpoint exceeding the budget is dropped; full compilation still works. */
+    heapCheckpointOptions?: Pick<HeapCheckpointOptions, 'maxCheckpoints' | 'maxBytes'>;
     /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
      *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
      *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of

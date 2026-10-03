@@ -60,6 +60,7 @@ const result = await compiler.compile()
 | `onEngineSelected` | `(selection: Readonly<EngineDetection>) => void \| Promise<void>` | - | Headless compiler notification before initialization of each newly selected engine, including Auto changes. Contains `engine`, `reason`, and `forced`. Returned promises are not awaited; observer failures are logged without failing compilation. Same-engine edits do not notify again. |
 | `onLoadProgress` | `(event: LoadProgressEvent) => void` | - | Load progress for a host UI: `{ phase: 'format', percent }` while the precompiled format downloads, `{ phase: 'file', file, count }` for every TeX Live file fetched on demand. Pair with `warmup({ onProgress })` for the prefetch phase. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
+| `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number }` | 4 checkpoints / 320 MiB | Retained browser pdfLaTeX heap checkpoints, bounded by count and sparse-image bytes. Values must be nonnegative safe integers. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
@@ -232,8 +233,10 @@ the library itself, so the document's own `\tikzexternalize` (and its `prefix=`,
   than 3 pictures — a figure worker's own preamble snapshot would cost more than they save;
   counted statically across the project's `.tex` files, and for documents that build pictures
   in loops, by the first compile's figure list, which then redoes that one compile inline).
-- If a figure job ever fails, the compile is redone inline, `fallback: true` is reported, and
-  auto stays off for the rest of the compiler session.
+- If the automatically injected main pass produces no successful result or PDF, or a
+  figure job fails, the compile is redone inline once, `fallback: true` is reported, and
+  auto stays off for the rest of the compiler session. Engine exceptions and cancelled
+  operations are not retried; author-requested externalization keeps its own semantics.
 - `\ref`/`\pageref` inside pictures resolve: the main job's `.aux` is handed to the figure
   workers under the real job's name, as the library expects. `\label` inside pictures travels
   through the library's `.dpth` files.

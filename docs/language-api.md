@@ -201,7 +201,7 @@ reviewed reference repair should use these exact-token APIs.
 ### Reviewed diagnostic repair
 
 `getDiagnosticRepairs(path, offset, cancellation?)` asynchronously returns typed
-`missing-required-argument` and `missing-package` proposals at a command token.
+`missing-required-argument`, `missing-package`, and `pdf-metadata` proposals at a command token.
 Offsets and edit ranges are UTF-16 and end-exclusive. Each proposal contains a
 diagnostic, exact source anchor, selected root, revision fences and expected-source
 edits. `planDiagnosticRepair(proposal, cancellation?)` recomputes the evidence and
@@ -209,6 +209,16 @@ returns fresh edits, or refuses stale, cancelled, unsupported or over-limit work
 Neither method writes source. Hosts present the review and own permissions,
 collaborative application and Undo; they must recheck their project/model identity
 before applying the returned edits.
+
+PDF metadata proposals are available at a selected root's `\documentclass`,
+`\title`, `\author`, or `\hypersetup` token. They copy unambiguous literal
+root-preamble title/author values to absent `pdftitle`/`pdfauthor` keys, adding
+hyperref if needed. Explicit keys (including empty values) are preserved across
+the selected root graph. Macro-valued metadata, redefinitions and uncertain
+preamble boundaries produce no proposal. Planning rechecks source/root/revision
+and recomputes edits; the host reviews and applies through its ordinary
+collaborative edit and Undo path. This does not rewrite `\DocumentMetadata`
+or certify PDF/UA conformance.
 
 Required-argument proposals add only empty `{}` slots. Supported omitted optional
 arguments and legal single-token required arguments are not missing arguments.
@@ -586,3 +596,26 @@ self.onmessage = (e) => server.handle(e.data)
 const server = new LatexLspServer((msg) => writeMessage(process.stdout, msg))
 readMessages(process.stdin, (msg) => server.handle(msg))
 ```
+
+### Accessible PDF source preflight
+
+`buildAccessiblePdfPreflight({ engine, snapshot: { files, mainFile }, ignoreDirective? })`
+returns source issues and counts by `fix`, `review`, and `compatibility`.
+`accessiblePdfSourceDiagnostics(files, { engine?, mainFile?, ignoreDirective? })`
+returns the same source findings as neutral diagnostics. Hosts own profile
+selection, localized guidance, source navigation and document writes.
+
+Stable `a11y-<code>` IDs cover incomplete existing metadata, figure alternatives,
+heading order, generic link labels, math structure, table headers, and known
+class compatibility. Export preflight also reports the resolved XeLaTeX path.
+The parser masks comments, literal examples and inactive branches. These are
+bounded source heuristics; a setting's presence is not evidence of PDF/UA
+conformance or meaningful alternatives.
+
+The default next-source-line directive is `% wasmtex-ignore <rule-id>`.
+A host can supply its own directive name without changing rule semantics.
+The existing linter's `a11y-graphics-alt` and `a11y-heading-skip` IDs remain
+available and use the same figure/heading analysis. Hosts consuming the full
+preflight diagnostics should disable these two overlapping lint rules.
+`artifact`, non-empty `alt`, and non-empty `actualtext` are accepted; empty
+alternatives and `artifact=false` are not.

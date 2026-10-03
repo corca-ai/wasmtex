@@ -1,3 +1,4 @@
+import { accessibilityReviewIssues } from './accessible-pdf'
 /**
  * ChkTeX-grade static linter: style/correctness warnings without compiling.
  *
@@ -295,31 +296,27 @@ function displayMathDollars(ctx: LintContext): RawDiagnostic[] {
 /** `\includegraphics` whose options carry no `alt=`: the image will be tagged without a
  *  text alternative (graphicx ≥ 2021 supports `alt={…}` regardless of tagging). */
 function graphicsAlt(ctx: LintContext): RawDiagnostic[] {
-  const out: RawDiagnostic[] = []
-  const content = ctx.content
-  const command = '\\includegraphics'
-  let from = 0
-  for (;;) {
-    const offset = content.indexOf(command, from)
-    if (offset < 0) break
-    from = offset + command.length
-    if (ctx.isMasked(offset)) continue
-    let cursor = from
-    if (content[cursor] === '*') cursor++
-    // The optional argument is read without a regex: a `[^\]]*` scan per occurrence is
-    // quadratic on adversarial input (CodeQL js/polynomial-redos).
-    if (content[cursor] === '[') {
-      const close = content.indexOf(']', cursor + 1)
-      if (close >= 0 && /(?:^|,)\s*alt\s*=/.test(content.slice(cursor + 1, close))) continue
-    }
-    out.push({
-      offset,
-      length: command.length,
+  return sharedAccessibilityRule(ctx, 'figure-alt-review')
+}
+
+function sharedAccessibilityRule(
+  ctx: LintContext,
+  code: 'figure-alt-review' | 'heading-order-review',
+): RawDiagnostic[] {
+  const masked = ctx.content
+    .split('')
+    .map((char, offset) => (ctx.isMasked(offset) && char !== '\n' ? ' ' : char))
+    .join('')
+  return accessibilityReviewIssues('', ctx.content, masked)
+    .filter((issue) => issue.code === code)
+    .map((issue) => ({
+      offset: issue.offset,
+      length: issue.length,
       message:
-        'Image has no text alternative; add alt={…} to \\includegraphics so screen readers can describe it.',
-    })
-  }
-  return out
+        code === 'figure-alt-review'
+          ? 'Image has no text alternative; add alt={…}, actualtext={…}, or mark it as artifact.'
+          : 'Heading level skipped; use the next structural level down.',
+    }))
 }
 
 /** `figure`/`table` floats without a `\caption`: the tagged float has no accessible name. */
@@ -344,37 +341,8 @@ function floatCaption(ctx: LintContext): RawDiagnostic[] {
   return out
 }
 
-const HEADING_LEVELS: Record<string, number> = {
-  part: -1,
-  chapter: 0,
-  section: 1,
-  subsection: 2,
-  subsubsection: 3,
-  paragraph: 4,
-  subparagraph: 5,
-}
-
-/** A heading more than one level deeper than the previous one (e.g. `\section` straight to
- *  `\subsubsection`) breaks the outline that assistive technology navigates by. */
 function headingSkip(ctx: LintContext): RawDiagnostic[] {
-  const out: RawDiagnostic[] = []
-  const re =
-    /\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?\s*(?=[[{])/g
-  let previous: number | null = null
-  for (const m of ctx.content.matchAll(re)) {
-    const offset = m.index ?? 0
-    if (ctx.isMasked(offset)) continue
-    const level = HEADING_LEVELS[m[1]!]!
-    if (previous !== null && level > previous + 1) {
-      out.push({
-        offset,
-        length: m[0].trimEnd().length,
-        message: `Heading level skipped: \\${m[1]} follows a level-${previous} heading; use the next level down so the document outline stays navigable.`,
-      })
-    }
-    previous = level
-  }
-  return out
+  return sharedAccessibilityRule(ctx, 'heading-order-review')
 }
 
 /** Root files only: a PDF without a title or language is read out by file name and in the
