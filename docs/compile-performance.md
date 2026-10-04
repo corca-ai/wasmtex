@@ -11,7 +11,7 @@ to their source files and requalification requirements.
 | Area | Current implementation | Boundary / cost |
 | --- | --- | --- |
 | Unicode initial memory | XeTeX and LuaHBTeX start at 128 MiB with growth enabled. | This is initial WASM memory, not browser RSS or a maximum document budget. |
-| Initial heap snapshots | XeTeX, LuaHBTeX and dvipdfmx retain the nonzero prefix and restore the omitted suffix as zeros. | Preserves the original reset extent; distinct from resumable checkpoints. |
+| Initial heap snapshots | pdfTeX trims the zero suffix; XeTeX, LuaHBTeX and dvipdfmx pack occupied page prefixes and clear omitted gaps. | Preserves the original reset extent; distinct from resumable checkpoints. |
 | Warmup | All three engine families accept supplied warmup data; hosts can merge profile-matched learned dependency sets. | Preparation costs time/network/memory; filesystem preloading must preserve lookup behavior. |
 | Conversion evidence | dvipdfmx reports bounded successful file opens, including native-cache hits. | Adds observations; XeLaTeX dependency completeness remains false. |
 | dvipdfmx font maps | Auxiliary lookup index and cached list tails preserve original ownership and iteration. | Includes the separately qualified missing-SFD lifetime fix; no cross-document font-object cache. |
@@ -27,14 +27,14 @@ was approximately 17–50 MiB; Lua's gzip-9 JS/WASM size increased 327–383 KB.
 See the [final experiment qualification](history/compile-performance-2026-09.md#costs-and-release-qualification)
 for per-year inputs, memory methodology and exact results.
 
-The source pdfTeX controller now also omits the initialization snapshot's zero
+The released pdfTeX controller also omits the initialization snapshot's zero
 suffix. The [October memory experiment](history/heap-memory-2026-10.md) measured
 64 MiB → approximately 0.95 MiB retained by that copy, with similar initialization
 and slightly lower repeat/edit times in a small browser probe. WASM capacity is
-unchanged; process RSS was not measured. This is an unpromoted controller
-candidate, rather than an update to the released engines listed below.
+unchanged. Separate release runs sampled aggregate browser peak RSS of
+941 → 869 MiB for pdfLaTeX; these are corpus observations, not memory budgets.
 
-The Unicode source candidate uses a shared sparse initialization snapshot,
+The released Unicode controllers use a shared sparse initialization snapshot,
 omitting internal zero gaps as well. XeTeX also releases the fetched ICU JS
 buffer once its C copy is registered and captured. The same October record
 measured combined XeTeX/converter snapshot storage of 95.60 → 28.58 MiB, plus
@@ -68,8 +68,11 @@ archived [font-map record](history/compile-performance-2026-09.md#font-map-index
 
 ## Release and adoption
 
-The qualified #140 releases are [2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
+The previous #140 releases are [2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
 and [2026-52bd7d6287f2a826](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-52bd7d6287f2a826).
+The current heap-memory releases are
+[2025-6d7baaeed54984d4](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d7baaeed54984d4)
+and [2026-b614b6f4378863d1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-b614b6f4378863d1).
 They retain the original format-generation provenance and immutable mirrors.
 `scripts/engine-release-components.json` owns the selected workflow runs;
 artifact manifests and receipts own the released file identities. Do not infer

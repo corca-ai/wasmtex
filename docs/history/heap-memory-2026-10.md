@@ -335,3 +335,57 @@ similar small-corpus timing. No annual browser/Node parity matrix, broad
 project-switch/image qualification, source rebuild/release assembly, 2025
 browser timing or consumer rollout is claimed. The optimization policy still
 governs promotion.
+
+## Annual release qualification
+
+The source-only decision above describes the experiment before promotion.
+Subsequent release qualification rebuilt all affected families from
+`544ade05da6c87959b5253f7b097a8fe0fbe31dc` and preserved the original formats.
+Source PR [#184](https://github.com/corca-ai/wasmtex/pull/184) passed CI,
+CodeQL, annual browser goldens, nested output and Node/browser parity before
+merging. The release assembler pins these successful builds:
+
+| Year | pdfTeX / BibTeX | XeTeX / converter | LuaHBTeX | Original format runs: pdf / Xe / Lua |
+| --- | --- | --- | --- | --- |
+| 2025 | 37180497408 | 37180499923 | 37180502805 | 33882993861 / 33882993816 / 33882993731 |
+| 2026 | 37180498587 | 37180501256 | 37180504675 | 33885489901 / 33885502236 / 33885505118 |
+
+Unchanged BibTeX8 and MakeIndex families retain their previous build pins.
+Schema-2 receipts record engine and format provenance separately. The releases
+are `2025-6d7baaeed54984d4` and `2026-b614b6f4378863d1`; complete corresponding
+source is published on their matching `engine-<releaseId>` tags. The SDK
+release registration owns archive hashes and workflow-run identities.
+
+Both annual rebuilt sets preserve ordinary/checkpoint pdfTeX, LuaHBTeX,
+BibTeX and dvipdfmx core bytes. Emitted controllers match those measured in
+the source experiment. XeTeX relinking changed core bytes, so both rebuilt
+annual engines repeated the real-core output/edit/abort/recovery differential
+and the broad Unicode feature comparison using the original formats. All
+four selected tests passed. No output goldens or format files were refreshed.
+The rebuilt 2026 XeTeX browser probe also preserved all 16 normalized outputs,
+auxiliary/SyncTeX hashes, diagnostics, dependencies, converter inputs, glyph
+geometry, logs and file requests against the baseline memory probe.
+
+Annual controller qualification additionally passed browser golden/nested
+output (11 tests per year), Node/browser parity, project-switch images,
+headless lifecycle and missing-format fallback (12 tests per year).
+Checkpoint and headless incremental SyncTeX passed all three tests per year.
+Those test harnesses now honor the annual smoke profile and asset override;
+the previous hardcoded public directory/year prevented annual staging.
+Release PR gates repeat output and host-parity checks against assembled builds.
+
+Separate rebuilt-asset memory runs sampled aggregate browser peak RSS of
+940.70 → 868.72 MiB for pdfLaTeX (28/27 samples) and 1,144.9 MiB for XeLaTeX
+(32 samples). The prior same-harness XeTeX baseline was 1,236.06 MiB.
+The rebuilt XeTeX/converter retained 29,677,048 + 286,960 snapshot bytes and
+zero fetched ICU bytes after first compilation. Linear-memory capacities and
+reset extents stayed unchanged. Lua's controller and core bytes match its
+measured candidate. These sampled RSS runs are memory evidence, not latency
+benchmarks; shared-page accounting and missed short peaks still apply.
+
+The quiet small-corpus timing evidence above remains the performance basis.
+It does not prove universal speedup or production latency: the pooled XeTeX
+preamble edit was approximately 1.1% slower, within observed run variability.
+Consumer adoption must qualify its canonical annual profiles, browser cache
+lifecycle and deployment separately. CorTeX owns that adoption and rollback;
+its checkout is not needed to build or use these WasmTex releases.

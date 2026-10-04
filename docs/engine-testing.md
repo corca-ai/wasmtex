@@ -106,7 +106,7 @@ CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 
 For the Unicode initialization-heap optimization, stage baseline and candidate
 asset trees separately, retaining identical WASM, generated JS, and base formats.
-For the current Unicode source candidate, concatenate `wasm-build/heap-snapshot.js`
+For controller-only Unicode test staging, concatenate `wasm-build/heap-snapshot.js`
 before each of `xetex-worker.js`, `luatex-worker.js` and `dvipdfm-worker.js`,
 writing the corresponding `wasmtex-<engine>.worker.js` in the candidate tree.
 The source build scripts produce the same self-contained controllers.
