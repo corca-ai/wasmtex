@@ -25,8 +25,8 @@ this project's own JS controller and library glue:
   and imports the generated `wasmtex-xetex.js` module. LuaTeX and dvipdfmx
   bundle the same helper before their controllers; it needs no separate asset
   download. For test staging, use this same concatenation rather than copying
-  a Unicode controller alone. Existing release controllers predate this source
-  candidate; see [memory qualification](history/heap-memory-2026-10.md).
+  a Unicode controller alone. Current releases bundle this helper, with
+  [memory qualification](history/heap-memory-2026-10.md) for both annual lines.
 - `wasm-build/xetex-library.js` (`--js-library`) connects the generated module to
   controller functions. Together they implement the
   CDN scheme (the `pdftex/<format>/` layout, extension→format-dir routing, request-

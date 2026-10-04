@@ -2,8 +2,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SynctexParser } from '../synctex/synctex-parser'
-import { buildSectionedDoc as buildDoc, SMOKE_TEXLIVE as TEXLIVE } from './__tests__/smoke-compile'
+import { buildSectionedDoc as buildDoc } from './__tests__/smoke-compile'
 import { installNodeWorkerHost, type NodeWorkerHostInstallation } from './node-host'
+import { smokeTexliveProfile } from './smoke-texlive-profile'
 
 /**
  * #99 P2 (host-integration path): the headless `WasmTexCompiler({ incremental: true })` — which a host app
@@ -14,13 +15,15 @@ import { installNodeWorkerHost, type NodeWorkerHostInstallation } from './node-h
  */
 const RUN = process.env.P2GT === '1'
 const ASSET = 'http://assets.local/'
+const PROFILE = smokeTexliveProfile()
 
 async function makeCompiler(mainTex: string, incremental: boolean) {
   const { WasmTexCompiler } = await import('../headless')
   return new WasmTexCompiler({
     engine: 'pdflatex',
     assetBaseUrl: ASSET,
-    texliveUrl: TEXLIVE,
+    texliveUrl: PROFILE.url,
+    texliveVersion: PROFILE.version,
     files: { 'main.tex': mainTex },
     incremental,
   })
@@ -30,7 +33,10 @@ describe.runIf(RUN)('#99 P2: headless WasmTexCompiler returns spliced synctexDat
   let host: NodeWorkerHostInstallation
   beforeEach(() => {
     const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-    host = installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
+    host = installNodeWorkerHost({
+      publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
+      assetBaseUrl: ASSET,
+    })
   })
   afterEach(() => host?.dispose())
 

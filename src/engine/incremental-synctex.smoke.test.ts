@@ -2,8 +2,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { SynctexParser } from '../synctex/synctex-parser'
-import { buildSectionedDoc as buildDoc, SMOKE_TEXLIVE as TEXLIVE } from './__tests__/smoke-compile'
+import { buildSectionedDoc as buildDoc } from './__tests__/smoke-compile'
 import type { FileSet, IncrementalCompiler } from './incremental'
+import { smokeTexliveProfile } from './smoke-texlive-profile'
 import type { WasmTexPdftexEngine } from './wasmtex-engine'
 
 /**
@@ -17,6 +18,7 @@ import type { WasmTexPdftexEngine } from './wasmtex-engine'
  *   P2GT=1 npx vitest run src/engine/incremental-synctex.smoke.test.ts
  */
 const RUN = process.env.P2GT === '1'
+const PROFILE = smokeTexliveProfile()
 
 type Doc = { source: string; files: FileSet }
 type Parsed = Awaited<ReturnType<SynctexParser['parse']>>
@@ -34,8 +36,15 @@ async function withEngine(
   const { IncrementalCompiler: Inc } = await import('./incremental')
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const ASSET = 'http://assets.local/'
-  const host = installNodeWorkerHost({ publicDir: join(root, 'public'), assetBaseUrl: ASSET })
-  const engine = new Engine({ assetBaseUrl: ASSET, texliveUrl: TEXLIVE })
+  const host = installNodeWorkerHost({
+    publicDir: process.env.WASMTEX_SMOKE_PUBLIC_DIR ?? join(root, 'public'),
+    assetBaseUrl: ASSET,
+  })
+  const engine = new Engine({
+    assetBaseUrl: ASSET,
+    texliveUrl: PROFILE.url,
+    texliveVersion: PROFILE.version,
+  })
   try {
     await engine.init()
     await fn(engine, new Inc(engine), new SynctexParser())
