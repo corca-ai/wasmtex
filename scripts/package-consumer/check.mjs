@@ -6,7 +6,9 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -139,7 +141,24 @@ try {
   cpSync(join(fixtures, 'browser.mjs'), join(temp, 'browser.mjs'))
   writeFileSync(join(temp, 'index.html'), '<script type="module" src="/browser.mjs"></script>')
   run(process.execPath, ['node_modules/vite/bin/vite.js', 'build'])
+  const browserChunks = readdirSync(join(temp, 'dist/assets'))
+    .filter((name) => name.endsWith('.js'))
+    .map((name) => readFileSync(join(temp, 'dist/assets', name), 'utf8'))
+  assert(
+    browserChunks.every((chunk) => !/\bimport\s*\(\s*['"`]pdf-lib['"`]/.test(chunk)),
+    'Installed pdf-lib must become a browser chunk, not an unresolvable bare import',
+  )
   console.log('consumer: Vite bundles the installed UI/Monaco graph and both CSS aliases')
+
+  const pdfLib = join(temp, 'node_modules/pdf-lib')
+  const savedPdfLib = join(temp, 'optional-pdf-lib')
+  renameSync(pdfLib, savedPdfLib)
+  try {
+    run(process.execPath, ['node_modules/vite/bin/vite.js', 'build'])
+  } finally {
+    renameSync(savedPdfLib, pdfLib)
+  }
+  console.log('consumer: browser bundling also works without the optional PDF splicer')
 
   // Prove the probes reject the two historical failure classes. Mutations touch
   // only the installed temp copy and are restored before cleanup.

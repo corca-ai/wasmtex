@@ -63,6 +63,10 @@ export interface WasmTexCompilerOptions {
      *  splicing; falls back to a full compile when unavailable or unsafe (preamble or
      *  cross-reference changes). Defaults to false. */
     incremental?: boolean;
+    /** Allow the Asyncify engine for arbitrary-line checkpoints when incremental is on.
+     * Set false to use the plain engine and page-break checkpoints on memory-constrained
+     * browser runtimes. Defaults to true; Node always uses the plain engine. */
+    heapCheckpoints?: boolean;
     /** Retained arbitrary-line checkpoint limits; omitted values keep SDK defaults.
      * Applies to the browser pdfLaTeX heap path, not legacy page-break checkpoints.
      * A checkpoint exceeding the budget is dropped; full compilation still works. */

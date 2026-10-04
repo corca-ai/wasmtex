@@ -126,8 +126,8 @@ that changed since the last full compile falls back to a background full reconci
 
 #### Heap checkpoints (arbitrary-line incremental compilation)
 
-With `incremental: true` in a browser, the headless compiler loads the **checkpoint
-engine** (`wasmtex-pdftex-checkpoint.*`, the same pdfTeX instrumented with Binaryen's
+With `incremental: true` in a browser (unless `heapCheckpoints: false`), the
+headless compiler loads the **checkpoint engine** (`wasmtex-pdftex-checkpoint.*`, the same pdfTeX instrumented with Binaryen's
 Asyncify) and the page-break checkpoints above are superseded by **heap checkpoints**
 (#81): a compile can be suspended before TeX reads a chosen line of the main file and its
 entire state — a sparse copy of wasm memory plus the worker's file state — kept as a
@@ -150,6 +150,15 @@ memory copy, so it serves any number of edits after it.
   compiler selects it only with `incremental: true` in browser workers; Node keeps
   the plain build and page-break path. Measure checkpoint preparation, resumed
   edits and total latency separately with the [development probes](engine-testing.md#engine-cpu-diagnostics).
+
+Set `heapCheckpoints: false` to keep the plain engine while retaining page-break
+checkpoints, preamble reuse and ordinary compilation. This avoids admitting the
+Asyncify binary on browser runtimes whose optimizing compiler uses excessive
+native memory; bounding `heapCheckpointOptions` only bounds retained snapshots,
+not that compiler memory. The host owns runtime admission. With `incremental` off,
+`heapCheckpoints: true` does not enable incremental compilation on its own.
+The optional `pdf-lib` peer stays lazy, but bundlers resolve an installed copy
+into a browser chunk. Missing splicing support still falls back to a full compile.
 
 #### Accessible export (tagged PDF / PDF-UA)
 

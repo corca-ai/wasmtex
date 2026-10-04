@@ -89,7 +89,9 @@ without Monaco/PDF peers; a module-resolution hook also rejects attempts to impo
 those peers. Then the consumer installs its own exact tooling/peer versions from the
 repository lock: TypeScript and tsgo check representative named/type exports from all
 nine entries with Bundler and NodeNext resolution, with `skipLibCheck: false`.
-Vite bundles the UI/Monaco entries and both public CSS aliases. This is a package
+Vite bundles the UI/Monaco entries and both public CSS aliases. The probe rejects
+unresolved bare `pdf-lib` imports with the optional peer installed, then removes
+that peer and verifies the browser bundle can still build. This is a package
 resolution/build check, not a browser UI interaction or real engine compile test.
 
 Finally the probe removes a runtime entry and a named type export from the installed

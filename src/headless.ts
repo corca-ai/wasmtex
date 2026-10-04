@@ -338,6 +338,10 @@ export interface WasmTexCompilerOptions {
    *  splicing; falls back to a full compile when unavailable or unsafe (preamble or
    *  cross-reference changes). Defaults to false. */
   incremental?: boolean
+  /** Allow the Asyncify engine for arbitrary-line checkpoints when incremental is on.
+   * Set false to use the plain engine and page-break checkpoints on memory-constrained
+   * browser runtimes. Defaults to true; Node always uses the plain engine. */
+  heapCheckpoints?: boolean
   /** Retained arbitrary-line checkpoint limits; omitted values keep SDK defaults.
    * Applies to the browser pdfLaTeX heap path, not legacy page-break checkpoints.
    * A checkpoint exceeding the budget is dropped; full compilation still works. */
@@ -500,7 +504,8 @@ export class WasmTexCompiler {
       texliveVersion: this.opts.texliveVersion ?? '2025',
       // The checkpoint (Asyncify) engine build is a browser-worker asset; Node hosts keep
       // the plain build and the page-break checkpoints.
-      heapCheckpoints: !!this.opts.incremental && !isNodeRuntime(),
+      heapCheckpoints:
+        !!this.opts.incremental && this.opts.heapCheckpoints !== false && !isNodeRuntime(),
       ...(this.opts.warmupCache ? { warmupCache: this.opts.warmupCache } : {}),
     }
     if (this.opts.texliveUrl) opts.texliveUrl = this.opts.texliveUrl
@@ -558,7 +563,9 @@ export class WasmTexCompiler {
     // The heap checkpoint controller only matters once compiles run; load it beside the
     // engine so hosts that never enable incremental compiles never ship it (#81).
     this.heap =
-      this.opts.incremental && this.engine instanceof WasmTexPdftexEngine
+      this.opts.incremental &&
+      this.opts.heapCheckpoints !== false &&
+      this.engine instanceof WasmTexPdftexEngine
         ? new ((
             await this.operations.observe(import('./engine/heap-checkpoints'))
           ).resume().HeapCheckpointCompiler)(this.engine, {
