@@ -26,8 +26,9 @@ let pdfLibPromise: Promise<PdfLibModule> | null = null
 
 async function loadPdfLib(): Promise<PdfLibModule> {
   if (!pdfLibPromise) {
-    // Indirect specifier so bundlers keep this an optional runtime import.
-    pdfLibPromise = import(/* @vite-ignore */ 'pdf-lib').catch(() => {
+    // Stay lazy, but let a host bundler resolve the installed optional peer. An
+    // ignored bare import survives browser builds and cannot resolve at runtime.
+    pdfLibPromise = import('pdf-lib').catch(() => {
       pdfLibPromise = null
       throw new PdfLibUnavailableError()
     })

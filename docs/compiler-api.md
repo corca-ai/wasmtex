@@ -157,6 +157,8 @@ Asyncify binary on browser runtimes whose optimizing compiler uses excessive
 native memory; bounding `heapCheckpointOptions` only bounds retained snapshots,
 not that compiler memory. The host owns runtime admission. With `incremental` off,
 `heapCheckpoints: true` does not enable incremental compilation on its own.
+The optional `pdf-lib` peer stays lazy, but bundlers resolve an installed copy
+into a browser chunk. Missing splicing support still falls back to a full compile.
 
 #### Accessible export (tagged PDF / PDF-UA)
 

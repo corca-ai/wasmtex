@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Browser bundlers can resolve the optional PDF splicer lazily instead of shipping
+  an unresolvable bare import that silently defeats page-break incremental compilation.
+
 - Independent `heapCheckpoints: false` admission for headless compilers: retain
   page-break incremental compilation with the plain engine on memory-constrained runtimes.
 
