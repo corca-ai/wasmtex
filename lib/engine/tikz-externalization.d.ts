@@ -31,6 +31,9 @@ export interface TikzExternalizationOptions {
      *  full engine worker with its own preamble snapshot. Defaults to
      *  `min(3, hardwareConcurrency - 1)`, at least 1. */
     workers?: number;
+    /** Release idle figure engines after this many milliseconds (default 300,000).
+     *  Zero releases them as soon as the figure batch completes. Rendered PDFs stay cached. */
+    idleMs?: number;
 }
 /** How externalization is switched on for a given main source. */
 export type TikzExternalizationKind = 'document' | 'inject';

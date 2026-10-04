@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   countPictures,
   defaultFigureWorkers,
@@ -223,6 +223,65 @@ class FakeCompiler implements FigureCompiler {
 }
 
 describe('TikzFigurePool', () => {
+  it('releases engines after a batch but reuses cached figures and can render a changed one', async () => {
+    const spawned: FakeCompiler[] = []
+    const pool = new TikzFigurePool(
+      () => {
+        const compiler = new FakeCompiler(spawned.length)
+        vi.spyOn(compiler, 'dispose')
+        spawned.push(compiler)
+        return compiler
+      },
+      1,
+      'main.tex',
+      0,
+    )
+    const source = (name: string) => `\\def\\pgfactualjobname{${name}}`
+    const first = await pool.render([{ name: 'f0', md5: 'a' }], source, () => [])
+    expect(first.rendered.get('f0')?.pdf).toEqual(new TextEncoder().encode('pdf:f0:0'))
+    expect(pool.liveWorkers).toBe(0)
+    expect(spawned[0]!.dispose).toHaveBeenCalledOnce()
+    expect(pool.isCurrent('f0', 'a')).toBe(true)
+    await pool.render([], source, () => [])
+    expect(spawned).toHaveLength(1)
+    await pool.render([{ name: 'f0', md5: 'b' }], source, () => [])
+    expect(spawned).toHaveLength(2)
+    expect(pool.isCurrent('f0', 'b')).toBe(true)
+    expect(pool.liveWorkers).toBe(0)
+    pool.dispose()
+  })
+
+  it.each([
+    'init',
+    'compile',
+  ] as const)('releases all engines after a rejected %s', async (method) => {
+    const spawned: FakeCompiler[] = []
+    const pool = new TikzFigurePool(
+      () => {
+        const compiler = new FakeCompiler(spawned.length)
+        vi.spyOn(compiler, 'dispose')
+        vi.spyOn(compiler, method).mockRejectedValue(new Error('engine failed'))
+        spawned.push(compiler)
+        return compiler
+      },
+      2,
+      'main.tex',
+    )
+    await expect(
+      pool.render(
+        [
+          { name: 'f0', md5: 'a' },
+          { name: 'f1', md5: 'b' },
+        ],
+        () => '',
+        () => [],
+      ),
+    ).rejects.toThrow('engine failed')
+    expect(pool.liveWorkers).toBe(0)
+    for (const compiler of spawned) expect(compiler.dispose).toHaveBeenCalledOnce()
+    pool.dispose()
+  })
+
   it('spreads jobs over workers, caches by md5 and reports failures', async () => {
     const spawned: FakeCompiler[] = []
     const pool = new TikzFigurePool(

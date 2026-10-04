@@ -80,7 +80,8 @@ export class TikzFigurePool {
 
   private scheduleRelease(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer)
-    this.idleTimer = setTimeout(() => this.releaseWorkers(), this.idleMs)
+    if (this.idleMs <= 0) this.releaseWorkers()
+    else this.idleTimer = setTimeout(() => this.releaseWorkers(), this.idleMs)
   }
 
   /** Figures whose cached render is still current for the listed MD5. */
@@ -126,7 +127,13 @@ export class TikzFigurePool {
         this.cache.set(job.name, figure)
       }
     }
-    await Promise.all(this.workers.slice(0, count).map(run))
+    try {
+      await Promise.all(this.workers.slice(0, count).map(run))
+    } catch (error) {
+      // An init/transport failure must not leave engines alive without an idle timer.
+      this.releaseWorkers()
+      throw error
+    }
     this.scheduleRelease()
     return { rendered, failures, elapsedMs: performance.now() - t0 }
   }

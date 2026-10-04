@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Configurable TikZ figure-engine idle lifetime; zero releases engines after each
+  batch while keeping rendered figures. Failed batches also release their workers.
+
 - Host-bounded heap checkpoint retention and automatic TikZ first-pass inline
   recovery, preserving the behavior already adopted by SDK consumers.
 - Host-neutral accessible-PDF preflight and diagnostics, including configurable

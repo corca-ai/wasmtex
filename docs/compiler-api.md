@@ -61,7 +61,7 @@ const result = await compiler.compile()
 | `onLoadProgress` | `(event: LoadProgressEvent) => void` | - | Load progress for a host UI: `{ phase: 'format', percent }` while the precompiled format downloads, `{ phase: 'file', file, count }` for every TeX Live file fetched on demand. Pair with `warmup({ onProgress })` for the prefetch phase. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
 | `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number }` | 4 checkpoints / 320 MiB | Retained browser pdfLaTeX heap checkpoints, bounded by count and sparse-image bytes. Values must be nonnegative safe integers. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
-| `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
+| `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number; idleMs?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
 
@@ -220,6 +220,12 @@ the library itself, so the document's own `\tikzexternalize` (and its `prefix=`,
    worker is a full engine (one more worker heap per figure worker).
 3. The figure PDFs (and `.dpth` baseline files) are written into the main engine and the main
    job runs once more. The pool is created on first use and disposed with the compiler.
+
+Figure engines are released after `idleMs` milliseconds (default 300,000). Set
+`workers: 1, idleMs: 0` to bound concurrent engine heaps and release the sibling
+immediately after each batch. Rendered figures remain cached, so text-only edits
+still reuse them; a changed picture pays engine startup again. An initialization
+or transport failure releases all sibling engines immediately.
 
 `mode: 'auto'` additionally externalizes documents that load `tikz`/`pgfplots` but never call
 `\tikzexternalize`, by activating the library at the end of the preamble (same line as
