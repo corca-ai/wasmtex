@@ -10,7 +10,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 34697091208,
+          "runId": 37180497408,
           "artifacts": [
             "wasm-pdftex",
             "wasm-bibtex"
@@ -32,14 +32,14 @@
         },
         {
           "id": "xetex",
-          "runId": 34692699657,
+          "runId": 37180499923,
           "artifacts": [
             "wasm-xetex"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 34692035159,
+          "runId": 37180502805,
           "artifacts": [
             "wasm-luatex"
           ]
@@ -72,7 +72,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 34697092410,
+          "runId": 37180498587,
           "artifacts": [
             "wasm-pdftex-2026",
             "wasm-bibtex-2026"
@@ -94,14 +94,14 @@
         },
         {
           "id": "xetex",
-          "runId": 34692700740,
+          "runId": 37180501256,
           "artifacts": [
             "wasm-xetex-2026"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 34691815493,
+          "runId": 37180504675,
           "artifacts": [
             "wasm-luatex-2026"
           ]
