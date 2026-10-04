@@ -114,8 +114,14 @@ Module["onAbort"] = function() {
 function dumpHeapMemory() {
     var started = performance.now();
     var src = wasmMemory.buffer;
-    var dst = new Uint8Array(src.byteLength);
-    dst.set(new Uint8Array(src));
+    // Retain only the prefix through the last nonzero 8-byte block. The omitted suffix
+    // is restored as zeros, avoiding a second copy of unused initial capacity.
+    // Object.is distinguishes -0 (nonzero sign bit) from all-zero bytes. Reading
+    // doubles halves the scan iterations; NaNs and other bit patterns are retained.
+    var words = new Float64Array(src);
+    var end = words.length;
+    while (end > 0 && Object.is(words[end - 1], 0)) end--;
+    var dst = new Uint8Array(src, 0, end * 8).slice();
     self._heapSnapshotMs = performance.now() - started;
     return dst;
 }
@@ -128,7 +134,7 @@ function restoreHeapMemory() {
     }
     var dst = new Uint8Array(wasmMemory.buffer);
     dst.set(self.initmem);
-    // Zero out any memory beyond the initial snapshot.
+    // Zero out the omitted initial suffix and any grown memory.
     // memory.grow() during compilation expands the heap but restoreHeapMemory
     // only copies back the initial region — the grown pages retain stale data
     // from the previous compilation (TeX hash entries, macro definitions, input

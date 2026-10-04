@@ -5,6 +5,7 @@
       "wasm-build/bibtex-worker.js",
       "wasm-build/bibtex8-worker.js",
       "wasm-build/dvipdfm-worker.js",
+      "wasm-build/heap-snapshot.js",
       "wasm-build/kpse-resolve.cjs",
       "wasm-build/library.js",
       "wasm-build/luatex-library.js",

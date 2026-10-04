@@ -6,7 +6,12 @@ const PAGE = 65536
 
 /** Run the authored controller through boot and compile messages. The stand-in
  * engine returns the bytes it sees on entry, then dirties them for the next run. */
-function boot(engine: 'xetex' | 'luatex' | 'dvipdfm', initial: Uint8Array, registerIcu = false) {
+function boot(
+  engine: 'pdftex' | 'xetex' | 'luatex' | 'dvipdfm',
+  initial: Uint8Array,
+  registerIcu = false,
+  icuRegistrationFailures = 0,
+) {
   const memory = new WebAssembly.Memory({ initial: initial.length / PAGE, maximum: 8 })
   new Uint8Array(memory.buffer).set(initial)
   const messages: Array<{ cmd?: string; pdf?: ArrayBuffer }> = []
@@ -19,6 +24,7 @@ function boot(engine: 'xetex' | 'luatex' | 'dvipdfm', initial: Uint8Array, regis
   }
   const scope = createContext({
     wasmMemory: memory,
+    performance,
     get HEAPU8() {
       return new Uint8Array(memory.buffer)
     },
@@ -33,12 +39,13 @@ function boot(engine: 'xetex' | 'luatex' | 'dvipdfm', initial: Uint8Array, regis
       writeFile() {},
       unlink() {},
       readFile(path: string) {
-        if (path.endsWith('.xdv') || path.endsWith('.pdf')) return output
+        if (path.endsWith('.xdv') || path.endsWith('.pdf') || path.endsWith('.fmt')) return output
         throw new Error('No auxiliary file in the stand-in engine')
       },
     },
     cwrap: () => () => 0,
     _compileLaTeX: compile,
+    _compileFormat: compile,
     _compilePDF: compile,
     XMLHttpRequest: class {
       status = 404
@@ -50,10 +57,16 @@ function boot(engine: 'xetex' | 'luatex' | 'dvipdfm', initial: Uint8Array, regis
       icuRegistrations++
       // Registration itself also changes C state outside the data buffer.
       new Uint8Array(memory.buffer)[PAGE + 100] = 0x81
-      return 0
+      return icuRegistrations <= icuRegistrationFailures ? 1 : 0
     },
   })
   scope.self = scope
+  if (engine !== 'pdftex') {
+    runInContext(
+      readFileSync(new URL('../../wasm-build/heap-snapshot.js', import.meta.url), 'utf8'),
+      scope,
+    )
+  }
   runInContext(
     readFileSync(new URL(`../../wasm-build/${engine}-worker.js`, import.meta.url), 'utf8'),
     scope,
@@ -66,8 +79,15 @@ function boot(engine: 'xetex' | 'luatex' | 'dvipdfm', initial: Uint8Array, regis
   return {
     memory,
     icuRegistrations: () => icuRegistrations,
+    retainedIcuBytes: () => (scope.icuData as Uint8Array | null)?.byteLength ?? 0,
+    retainedBytes() {
+      if (engine === 'pdftex') return (scope.initmem as Uint8Array).byteLength
+      const snapshot = scope.initmem as { bytes: Uint8Array; ranges: Uint32Array }
+      return snapshot.bytes.byteLength + snapshot.ranges.byteLength
+    },
     compile() {
-      const command = engine === 'dvipdfm' ? 'compilepdf' : 'compilelatex'
+      const command =
+        engine === 'pdftex' ? 'compileformat' : engine === 'dvipdfm' ? 'compilepdf' : 'compilelatex'
       runInContext(`self.onmessage({ data: { cmd: '${command}' } })`, scope)
       const response = messages.filter((message) => message.cmd === 'compile').pop()
       expect(response?.pdf).toBeDefined()
@@ -76,11 +96,13 @@ function boot(engine: 'xetex' | 'luatex' | 'dvipdfm', initial: Uint8Array, regis
   }
 }
 
-describe.each(['xetex', 'luatex', 'dvipdfm'] as const)('%s heap restore', (engine) => {
+describe.each(['pdftex', 'xetex', 'luatex', 'dvipdfm'] as const)('%s heap restore', (engine) => {
   it.each([
     'empty',
     'sparse',
     'dense',
+    'negative-zero',
+    'nan',
   ] as const)('restores every original byte on repeated compiles with a %s initial heap', (kind) => {
     const initial = new Uint8Array(2 * PAGE)
     if (kind === 'dense') initial.fill(0x93)
@@ -88,35 +110,94 @@ describe.each(['xetex', 'luatex', 'dvipdfm'] as const)('%s heap restore', (engin
       initial[0] = 3
       initial[PAGE - 2] = 127 // non-word-aligned end of the retained prefix
     }
+    if (kind === 'negative-zero') new DataView(initial.buffer).setFloat64(PAGE - 8, -0, true)
+    if (kind === 'nan') {
+      const words = new DataView(initial.buffer)
+      words.setUint32(PAGE - 8, 0x12345678, true) // retain the original NaN payload bytes
+      words.setUint32(PAGE - 4, 0x7ff80000, true)
+    }
     const worker = boot(engine, initial)
     new Uint8Array(worker.memory.buffer).fill(0xff)
     expect(worker.compile()).toEqual(initial)
     expect(worker.compile()).toEqual(initial)
   })
 
-  it('preserves the previous restore boundary after WASM memory grows', () => {
+  it('preserves the engine-specific restore boundary after WASM memory grows', () => {
     const initial = new Uint8Array(PAGE)
     initial[23] = 19
     const worker = boot(engine, initial)
     worker.memory.grow(1)
     new Uint8Array(worker.memory.buffer).fill(0x37)
-    const expected = new Uint8Array(2 * PAGE).fill(0x37)
+    const expected = new Uint8Array(2 * PAGE).fill(engine === 'pdftex' ? 0 : 0x37)
     expected.set(initial)
     expect(worker.compile()).toEqual(expected)
-    // The old full-snapshot restore also left the post-snapshot extent alone.
-    expected.fill(0xa5, PAGE)
+    // pdfTeX clears grown pages; Unicode controllers leave that extent alone.
+    if (engine !== 'pdftex') expected.fill(0xa5, PAGE)
     expect(worker.compile()).toEqual(expected)
   })
 })
 
-it('retains ICU data and registration when XeTeX replaces its initial snapshot', () => {
-  const initial = new Uint8Array(2 * PAGE)
+describe.each(['xetex', 'luatex', 'dvipdfm'] as const)('%s sparse snapshot storage', (engine) => {
+  it('omits internal zero gaps and restores separated regions on repeated compiles', () => {
+    const initial = new Uint8Array(6 * PAGE)
+    initial[7] = 13
+    initial[2 * PAGE - 1] = 17
+    initial[2 * PAGE] = 19 // neighboring occupied pages, with an interior zero suffix
+    initial[5 * PAGE + 9] = 23
+    const worker = boot(engine, initial)
+    expect(worker.retainedBytes()).toBeLessThan(2 * PAGE)
+    new Uint8Array(worker.memory.buffer).fill(0xff)
+    expect(worker.compile()).toEqual(initial)
+    expect(worker.compile()).toEqual(initial)
+  })
+
+  it('stores no payload or range metadata for an entirely zero heap', () => {
+    const initial = new Uint8Array(4 * PAGE)
+    const worker = boot(engine, initial)
+    expect(worker.retainedBytes()).toBe(0)
+    expect(worker.compile()).toEqual(initial)
+  })
+})
+
+it('pdfTeX retains only initialized bytes, independently of unused initial capacity', () => {
+  const initial = new Uint8Array(4 * PAGE)
+  initial[PAGE - 2] = 127
+  const worker = boot('pdftex', initial)
+  expect(worker.retainedBytes()).toBe(PAGE)
+  expect(worker.compile()).toEqual(initial)
+  expect(worker.compile()).toEqual(initial)
+})
+
+it.each([
+  false,
+  true,
+])('retains registered ICU state and releases fetched bytes (growth=%s)', (grow) => {
+  const initial = new Uint8Array((grow ? 1 : 2) * PAGE)
   initial[41] = 37
   const worker = boot('xetex', initial, true)
-  const expected = initial.slice()
+  if (grow) {
+    worker.memory.grow(1)
+    new Uint8Array(worker.memory.buffer).fill(0x42, PAGE)
+  }
+  const expected = new Uint8Array(2 * PAGE).fill(grow ? 0x42 : 0)
+  expected.set(initial)
   expected.set([13, 17, 23, 29, 31], PAGE + 7)
   expected[PAGE + 100] = 0x81
   expect(worker.compile()).toEqual(expected)
   expect(worker.compile()).toEqual(expected)
   expect(worker.icuRegistrations()).toBe(1)
+  expect(worker.retainedIcuBytes()).toBe(0)
+})
+
+it('retains fetched ICU bytes on registration failure and releases them after a successful retry', () => {
+  const worker = boot('xetex', new Uint8Array(2 * PAGE), true, 1)
+  const expected = new Uint8Array(2 * PAGE)
+  expected.set([13, 17, 23, 29, 31], PAGE + 7)
+  expected[PAGE + 100] = 0x81
+  expect(worker.compile()).toEqual(expected)
+  expect(worker.retainedIcuBytes()).toBe(5)
+  expect(worker.compile()).toEqual(expected)
+  expect(worker.retainedIcuBytes()).toBe(0)
+  expect(worker.compile()).toEqual(expected)
+  expect(worker.icuRegistrations()).toBe(2)
 })

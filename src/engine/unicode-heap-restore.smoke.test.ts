@@ -35,7 +35,7 @@ function observableOutput(result: CompileResult, aux: string | null) {
   }
 }
 
-async function compileEdits(publicDir: string, engine: 'xelatex' | 'lualatex') {
+async function compileEdits(publicDir: string, engine: 'pdflatex' | 'xelatex' | 'lualatex') {
   const { installNodeWorkerHost } = await import('./node-host')
   const { WasmTexCompiler } = await import('../headless')
   const { CompileWorkerDriver } = await import('./wasmtex-worker')
@@ -45,7 +45,7 @@ async function compileEdits(publicDir: string, engine: 'xelatex' | 'lualatex') {
   // Only temporary test controllers change; WASM/formats and release dirs do not.
   const staged = mkdtempSync(join(tmpdir(), 'wasmtex-heap-smoke-'))
   cpSync(publicDir, staged, { recursive: true })
-  for (const binary of ['xetex', 'dvipdfm', 'luatex']) {
+  for (const binary of ['pdftex', 'xetex', 'dvipdfm', 'luatex']) {
     const controller = resolve(staged, `wasmtex/${PROFILE.version}/wasmtex-${binary}.worker.js`)
     writeFileSync(controller, `Date.now = () => 946684800000;\n${readFileSync(controller, 'utf8')}`)
   }
@@ -64,8 +64,7 @@ Text with mathematics $E=mc^2$ and a reference to Section~\ref{sec:intro}.
     mainFile: 'main.tex',
     files: {
       'main.tex': String.raw`\documentclass{article}
-\usepackage{fontspec}
-\setmainfont{Latin Modern Roman}
+${engine === 'pdflatex' ? String.raw`\usepackage[T1]{fontenc}\usepackage{lmodern}` : String.raw`\usepackage{fontspec}\setmainfont{Latin Modern Roman}`}
 \input{macros.tex}
 \begin{document}
 \input{sections/body.tex}
@@ -92,6 +91,9 @@ Text with mathematics $E=mc^2$ and a reference to Section~\ref{sec:intro}.
         const result = await compiler.compile()
         expect(result.success, result.log).toBe(true)
         expect(result.pdf?.length).toBeGreaterThan(0)
+        // A missing/invalid supplied pdfTeX format is returned after fallback
+        // generation. It must never hide an incompatible baseline format here.
+        expect(result.format).toBeUndefined()
         const aux = await compiler.readOutput('main.aux')
         expect(aux).not.toBeNull()
         outputs.push(observableOutput(result, aux))
@@ -127,13 +129,15 @@ Text with mathematics $E=mc^2$ and a reference to Section~\ref{sec:intro}.
   }
 }
 
-describe.runIf(!!BASELINE && !!CANDIDATE)('Unicode heap representation preservation', () => {
+describe.runIf(!!BASELINE && !!CANDIDATE)('Engine heap representation preservation', () => {
   it.each([
+    'pdflatex',
     'xelatex',
     'lualatex',
   ] as const)('%s preserves outputs across body and preamble edits with the baseline format', async (engine) => {
-    const binary = engine === 'xelatex' ? 'xetex' : 'luatex'
-    for (const suffix of REBUILT_ENGINE ? ['.fmt.gz'] : ['.wasm', '.js', '.fmt.gz']) {
+    const binary = engine === 'pdflatex' ? 'pdftex' : engine === 'xelatex' ? 'xetex' : 'luatex'
+    const formatSuffix = engine === 'pdflatex' ? '.fmt' : '.fmt.gz'
+    for (const suffix of REBUILT_ENGINE ? [formatSuffix] : ['.wasm', '.js', formatSuffix]) {
       const path = `wasmtex/${PROFILE.version}/wasmtex-${binary}${suffix}`
       expect(hash(readFileSync(resolve(CANDIDATE!, path)))).toBe(
         hash(readFileSync(resolve(BASELINE!, path))),

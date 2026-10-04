@@ -35,6 +35,7 @@ if (!variants.length) throw Error('Unknown engine')
 const traceOption = arg('trace', 'true')
 if (!['true', 'false'].includes(traceOption)) throw Error('Trace must be true or false')
 const traceEnabled = traceOption === 'true'
+const heapStatsEnabled = arg('heap-stats', 'false') === 'true'
 const projectPath = arg('project', null)
 const project = projectPath ? JSON.parse(await readFile(resolve(projectPath), 'utf8')) : null
 if (project && (!project.files || typeof project.files[project.mainFile || 'main.tex'] !== 'string')) throw Error('Project must contain its main TeX file')
@@ -118,7 +119,7 @@ const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
   schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions,
-  traceEnabled, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
+  traceEnabled, heapStatsEnabled, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   harnessSha256: hash(await readFile(fileURLToPath(import.meta.url))),
   node: process.version, platform: process.platform, architecture: process.arch,
@@ -241,6 +242,26 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
         }
       }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, project })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
+      if (heapStatsEnabled) {
+        result.heapSnapshots = []
+        for (const worker of page.workers()) {
+          const stats = await worker.evaluate(() => {
+            const snapshot = self.initmem
+            if (!snapshot) return null
+            const buffer = typeof wasmMemory === 'undefined' ? HEAPU8.buffer : wasmMemory.buffer
+            return {
+              linearMemoryBytes: buffer.byteLength,
+              resetExtentBytes: snapshot.bytes ? snapshot.byteLength : buffer.byteLength,
+              retainedSnapshotBytes: snapshot.bytes
+                ? snapshot.bytes.byteLength + (snapshot.ranges?.byteLength || 0)
+                : snapshot.byteLength,
+              ranges: snapshot.ranges ? snapshot.ranges.length / 2 : null,
+              retainedIcuBytes: self.icuData?.byteLength || 0,
+            }
+          })
+          if (stats) result.heapSnapshots.push({ worker: worker.url().split('/').pop(), ...stats })
+        }
+      }
       if (stage === 'init') {
         for (const worker of page.workers()) {
           if (!worker.url().includes('dvipdfm')) continue

@@ -42,6 +42,14 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Changed
 
+- The source pdfTeX controller retains only the initialized heap prefix, reducing
+  its restoration-copy storage while preserving grown-page clearing. Engine
+  asset promotion remains subject to qualification; see the October memory record.
+- Source Unicode controllers share a sparse initialization snapshot that omits
+  internal zero gaps. XeTeX releases fetched ICU bytes after registering and
+  capturing their WASM copy. Published formats and reset boundaries are preserved;
+  engine release qualification remains separate.
+
 - With a loaded compile root, reference diagnostics follow its outgoing include/load
   graph and duplicate markers expose bounded related declaration locations.
 

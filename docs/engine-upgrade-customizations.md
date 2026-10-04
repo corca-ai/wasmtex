@@ -25,6 +25,19 @@ pinned upstream sources. There is no separate source fork to merge wholesale.
 A patch applying cleanly is only a syntax/context check, not proof that its
 ownership or state assumptions remain valid.
 
+### Source memory candidate awaiting promotion
+
+`wasm-build/heap-snapshot.js` packs occupied page prefixes for Unicode
+initialization snapshots and is bundled before each controller by its build
+script. The Dockerfiles copy this shared input and both family workflows
+trigger on changes to it. pdfTeX separately trims its initial zero suffix and
+clears all grown pages. Unicode controllers preserve their original reset
+extent, including the replacement XeTeX extent after ICU registration; fetched
+ICU bytes are released only after that replacement succeeds. Review these
+assumptions and bit-exact restore/growth/failure tests on annual/toolchain
+changes. [The October record](history/heap-memory-2026-10.md) distinguishes
+this source candidate from the adopted releases above.
+
 ### Format-cache invariants
 
 The cache stores one byte-compared compressed source and successful decoded

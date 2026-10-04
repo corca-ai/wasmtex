@@ -2,7 +2,7 @@
  * luatex-worker.js — authored worker controller for the LuaTeX engine
  * =============================================================================
  *
- * Published verbatim as wasmtex-luatex.worker.js. It configures Module, owns the
+ * Bundled after heap-snapshot.js as wasmtex-luatex.worker.js. It configures Module, owns the
  * protocol/cache policy, then imports the generated wasmtex-luatex.js core. The
  * WebAssembly itself is the GPL LuaTeX engine built from texlive-source.
  *
@@ -79,23 +79,11 @@ function runEngine(fn) {
 
 // --- Heap snapshot: restore engine state between compiles in the same worker ---
 function dumpHeapMemory() {
-  const src = wasmMemory.buffer
-  // The initial heap reserves much more space than initialization uses. Keep
-  // only the prefix through the last nonzero word, plus the original extent:
-  // restoring the omitted zero suffix with fill() preserves every byte without
-  // retaining and reading a second copy of hundreds of MiB of zeros.
-  const words = new Uint32Array(src)
-  let end = words.length
-  while (end > 0 && words[end - 1] === 0) end--
-  return { bytes: new Uint8Array(src, 0, end * 4).slice(), byteLength: src.byteLength }
+  return self.wasmtexHeapSnapshot.capture(wasmMemory.buffer)
 }
 function restoreHeapMemory() {
   if (!self.initmem) return
-  const dst = new Uint8Array(wasmMemory.buffer)
-  dst.set(self.initmem.bytes)
-  dst.fill(0, self.initmem.bytes.length, self.initmem.byteLength)
-  // Preserve the existing reset boundary: memory grown after the snapshot is
-  // outside its extent. Do not clear it as part of this representation change.
+  self.wasmtexHeapSnapshot.restore(wasmMemory.buffer, self.initmem)
 }
 function closeFSStreams() {
   for (let i = 0; i < FS.streams.length; i++) {

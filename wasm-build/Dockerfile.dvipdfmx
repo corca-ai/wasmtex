@@ -17,5 +17,6 @@ COPY build-dvipdfm2.sh dvipdfm-entry.c dvipdfm-stubs.c kpse-hook.c \
 COPY dvipdfmx-fixes /src/dvipdfmx-fixes
 COPY fontmap-index /src/fontmap-index
 COPY resolver-evidence.js /src/resolver-evidence.js
+COPY heap-snapshot.js /src/heap-snapshot.js
 WORKDIR /src
 ENTRYPOINT ["bash", "/src/build-dvipdfm2.sh"]

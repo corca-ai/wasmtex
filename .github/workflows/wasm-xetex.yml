@@ -56,6 +56,7 @@ on:
       - 'wasm-build/texlive-source-*.ref'
       - 'wasm-build/dvipdfm-worker.js'
       - 'wasm-build/resolver-evidence.js'
+      - 'wasm-build/heap-snapshot.js'
       - 'wasm-build/xetex-dvipdfm-library.js'
       - 'wasm-build/build-dvipdfm2.sh'
       - 'wasm-build/dvipdfmx-fixes/**'
