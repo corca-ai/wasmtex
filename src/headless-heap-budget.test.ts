@@ -1,9 +1,35 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import * as factory from './engine/compile-engine'
+import { IncrementalCompiler } from './engine/incremental'
 import { WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { WasmTexCompiler } from './headless'
 
 afterEach(() => vi.restoreAllMocks())
+
+it('can retain page-break preparation without admitting heap checkpoints', async () => {
+  const engine = new WasmTexPdftexEngine()
+  const create = vi.spyOn(factory, 'createCompileEngine').mockReturnValue(engine)
+  vi.spyOn(engine, 'init').mockResolvedValue()
+  vi.spyOn(engine, 'mkdir').mockResolvedValue()
+  vi.spyOn(engine, 'writeFile').mockResolvedValue()
+  vi.spyOn(engine, 'setMainFile').mockImplementation(() => {})
+  vi.spyOn(engine, 'terminate').mockImplementation(() => {})
+  vi.spyOn(engine, 'supportsHeapCheckpoints', 'get').mockReturnValue(true)
+  const prepare = vi.spyOn(IncrementalCompiler.prototype, 'prebuildForEdit').mockResolvedValue(true)
+  const compiler = new WasmTexCompiler({
+    incremental: true,
+    heapCheckpoints: false,
+    files: { 'main.tex': '\\documentclass{article}\n\\begin{document}\nBody.\n\\end{document}' },
+  })
+  try {
+    await compiler.init()
+    await expect(compiler.prepareIncrementalCompile()).resolves.toBe(true)
+    expect(prepare).toHaveBeenCalledOnce()
+    expect(create.mock.calls[0]?.[1]).toMatchObject({ heapCheckpoints: false })
+  } finally {
+    compiler.dispose()
+  }
+})
 
 it.each([
   -1,

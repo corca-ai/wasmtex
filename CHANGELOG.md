@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Independent `heapCheckpoints: false` admission for headless compilers: retain
+  page-break incremental compilation with the plain engine on memory-constrained runtimes.
+
 - Configurable TikZ figure-engine idle lifetime; zero releases engines after each
   batch while keeping rendered figures. Failed batches also release their workers.
 
