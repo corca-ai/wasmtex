@@ -1375,7 +1375,12 @@ export class WasmTexCompiler {
       const { TikzFigurePool } = (
         await this.operations.observe(import('./engine/tikz-figure-pool'))
       ).resume()
-      this.tikzPool = new TikzFigurePool(() => this.spawnFigureCompiler(), workers, this.mainFile)
+      this.tikzPool = new TikzFigurePool(
+        () => this.spawnFigureCompiler(),
+        workers,
+        this.mainFile,
+        this.opts.tikzExternalization?.idleMs,
+      )
     }
     return this.tikzPool
   }
