@@ -20,8 +20,13 @@ source (emscripten + the vendored XeTeX engine sources — emscripten's built-in
 freetype/icu/libpng ports plus vendored harfbuzz/graphite2/teckit) and links
 this project's own JS controller and library glue:
 
-- `wasm-build/xetex-worker.js` is copied verbatim to `wasmtex-xetex.worker.js`;
-  it owns the worker protocol and imports the generated `wasmtex-xetex.js` module.
+- `wasm-build/heap-snapshot.js` is concatenated before `xetex-worker.js` to
+  produce `wasmtex-xetex.worker.js`. The controller owns the worker protocol
+  and imports the generated `wasmtex-xetex.js` module. LuaTeX and dvipdfmx
+  bundle the same helper before their controllers; it needs no separate asset
+  download. For test staging, use this same concatenation rather than copying
+  a Unicode controller alone. Existing release controllers predate this source
+  candidate; see [memory qualification](history/heap-memory-2026-10.md).
 - `wasm-build/xetex-library.js` (`--js-library`) connects the generated module to
   controller functions. Together they implement the
   CDN scheme (the `pdftex/<format>/` layout, extension→format-dir routing, request-

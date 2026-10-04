@@ -187,8 +187,8 @@ SYNCTEX_REDEFINE = \
 # EXTRA_EXPORTED_RUNTIME_METHODS: cwrap for calling C functions, FS for
 #   virtual filesystem access.
 
-# The worker keeps an initialization snapshot and copies it before every run, so
-# an oversized initial heap is multiplied in browser memory. pdfTeX grows on
+# The worker retains the initialized prefix and restores it before every run,
+# clearing the unused suffix and grown pages. pdfTeX grows on
 # demand; 64 MiB covers the golden corpus and large-document smoke test while
 # keeping the snapshot bounded. Override this for build experiments/corpus bisects.
 PDFTEX_INITIAL_MEMORY ?= 67108864

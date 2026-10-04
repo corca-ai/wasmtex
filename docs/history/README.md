@@ -8,6 +8,7 @@ level up, starting with the [documentation index](../README.md).
 | Record | Scope | Current guide |
 | --- | --- | --- |
 | [September 2026 compile experiments](compile-performance-2026-09.md) | Memory/warmup, font investigation, dvipdfmx index, build flags, fmt cache and transfer decisions. Later sections supersede earlier holds. | [Compile performance](../compile-performance.md) |
+| [October 2026 heap memory experiment](heap-memory-2026-10.md) | Unpromoted pdfTeX/Unicode snapshot candidates, annual output comparisons, browser timings and Unicode RSS measurements. | [Compile performance](../compile-performance.md) |
 | [pdfTeX AVL experiment](pdftex-fontmap-2026-09.md) | Rejected single-probe optimization and its limited qualification. | [Compile performance](../compile-performance.md) |
 | [HTTP compression experiment](http-compression-2026-09.md) | Point-in-time response sizes and rejected extra wrappers. | [Compression diagnostics](../http-compression.md) |
 | [Early warmup measurements](warmup-legacy.md) | Legacy timings without a complete pinned reproduction record. | [Warmup](../warmup.md) |

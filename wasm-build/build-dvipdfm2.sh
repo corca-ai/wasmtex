@@ -130,7 +130,7 @@ if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-dvipdfm.
   echo "ERROR: forbidden pplib archive or symbol remains in the dvipdfmx link map" >&2
   exit 1
 fi
-cp "$GLUE/dvipdfm-worker.js" "$OUT/wasmtex-dvipdfm.worker.js"
+cat "$GLUE/heap-snapshot.js" "$GLUE/dvipdfm-worker.js" > "$OUT/wasmtex-dvipdfm.worker.js"
 
 echo "=== Output ==="
 ls -lh "$OUT"/wasmtex-dvipdfm.* || { echo "no output"; exit 1; }

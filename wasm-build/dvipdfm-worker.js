@@ -2,7 +2,7 @@
  * dvipdfm-worker.js — authored worker controller for dvipdfmx
  * =============================================================================
  *
- * Published verbatim as wasmtex-dvipdfm.worker.js. It configures Module, owns the
+ * Bundled after heap-snapshot.js as wasmtex-dvipdfm.worker.js. It configures Module, owns the
  * protocol/cache policy, then imports the generated wasmtex-dvipdfm.js core. The
  * WebAssembly itself is the GPL dvipdfmx engine built from texlive-source.
  *
@@ -57,21 +57,14 @@ function _allocate(content) {
 // with "No font selected!" and the 3rd crashes (#82). Snapshot the pristine post-init
 // heap and restore it before every compile. The font/map cache lives in MEMFS (JS
 // side, outside the wasm heap), so it survives the restore — no re-fetch. Mirrors the
-// xetex worker. Retain the nonzero prefix and the original extent, so restoring
-// the omitted zero suffix preserves the full snapshot without retaining it.
+// xetex worker. The bundled helper omits zero ranges while preserving every byte
+// and the original reset extent.
 function dumpHeapMemory() {
-  const src = HEAPU8.buffer
-  const words = new Uint32Array(src)
-  let end = words.length
-  while (end > 0 && words[end - 1] === 0) end--
-  return { bytes: new Uint8Array(src, 0, end * 4).slice(), byteLength: src.byteLength }
+  return self.wasmtexHeapSnapshot.capture(HEAPU8.buffer)
 }
 function restoreHeapMemory() {
   if (!self.initmem) return
-  const dst = new Uint8Array(HEAPU8.buffer)
-  dst.set(self.initmem.bytes)
-  dst.fill(0, self.initmem.bytes.length, self.initmem.byteLength)
-  // Preserve the old reset boundary after growth; the later extent is untouched.
+  self.wasmtexHeapSnapshot.restore(HEAPU8.buffer, self.initmem)
 }
 
 /** Run an engine entry point. The from-texlive-source dvipdfmx ends by calling

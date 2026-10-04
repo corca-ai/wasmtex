@@ -27,6 +27,24 @@ was approximately 17–50 MiB; Lua's gzip-9 JS/WASM size increased 327–383 KB.
 See the [final experiment qualification](history/compile-performance-2026-09.md#costs-and-release-qualification)
 for per-year inputs, memory methodology and exact results.
 
+The source pdfTeX controller now also omits the initialization snapshot's zero
+suffix. The [October memory experiment](history/heap-memory-2026-10.md) measured
+64 MiB → approximately 0.95 MiB retained by that copy, with similar initialization
+and slightly lower repeat/edit times in a small browser probe. WASM capacity is
+unchanged; process RSS was not measured. This is an unpromoted controller
+candidate, rather than an update to the released engines listed below.
+
+The Unicode source candidate uses a shared sparse initialization snapshot,
+omitting internal zero gaps as well. XeTeX also releases the fetched ICU JS
+buffer once its C copy is registered and captured. The same October record
+measured combined XeTeX/converter snapshot storage of 95.60 → 28.58 MiB, plus
+27.24 MiB of released ICU bytes; LuaHBTeX storage was 37.46 → 1.81 MiB.
+Separate browser runs sampled aggregate peak RSS of 1,236 → 1,144 MiB for
+XeLaTeX and 787 → 751 MiB for LuaLaTeX. These are small-corpus observations,
+not private-memory budgets. The record owns annual feature comparisons,
+timing variability and qualification limits. These
+changes preserve memory-growth/reset rules and the published format bytes.
+
 ## Excluded or deferred changes
 
 | Candidate | Decision |

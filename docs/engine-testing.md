@@ -48,6 +48,24 @@ Chromium traces preserve separate worker samples. Counts and sampled deltas are
 diagnostic evidence, not exact CPU timers; Lua interpreter samples do not identify
 individual Lua routines. `--trace false` disables profiling overhead.
 
+For initialization-snapshot storage, add `--heap-stats true`. After each timed
+stage, the report records each worker's current WASM capacity, reset extent,
+snapshot payload plus range-table bytes, and retained raw ICU bytes. These
+counters do not measure process RSS. Measure RSS in a separate run:
+
+```bash
+node scripts/sample-browser-rss.mjs --out /tmp/browser-memory.json -- \
+  node scripts/profile-font-cpu.mjs --assets /path/to/engine-assets \
+  --year 2026 --engine xelatex --trace false --heap-stats true \
+  --repetitions 3 --out /tmp/heap-memory
+```
+
+The Unix sampler sums Chromium descendants of the diagnostic command, excluding
+unrelated browsers and the Node proxy's response cache. Shared pages can be
+counted multiple times and polling can miss brief peaks. Sampling adds overhead;
+use unsampled runs for latency comparisons. The [October memory experiment](history/heap-memory-2026-10.md)
+records paired examples and their qualification limits.
+
 For the narrower Lua names-database loading probe, use `--engine lualatex
 --lua-names-probe true --trace false`. It measures source loading, bytecode
 loading, chunk execution, and bytecode creation separately inside Lua. This
@@ -88,8 +106,15 @@ CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 
 For the Unicode initialization-heap optimization, stage baseline and candidate
 asset trees separately, retaining identical WASM, generated JS, and base formats.
+For the current Unicode source candidate, concatenate `wasm-build/heap-snapshot.js`
+before each of `xetex-worker.js`, `luatex-worker.js` and `dvipdfm-worker.js`,
+writing the corresponding `wasmtex-<engine>.worker.js` in the candidate tree.
+The source build scripts produce the same self-contained controllers.
 `worker-heap-restore.test.ts` exercises authored controllers through compile
-messages, including zero suffixes, memory growth, and ICU re-snapshotting. The
+messages, including zero suffixes, negative-zero/NaN byte patterns, memory
+growth, and ICU re-snapshotting. It includes pdfTeX's distinct grown-page clearing
+rule, internal zero-gap storage budgets, ICU registration failure/retry and
+capture after growth. The
 opt-in real-engine differential checks PDFs, auxiliary files, diagnostics, and
 repeated body/preamble edits, and rejects fallback format generation. It stages
 temporary controller copies with an identical fixed clock on both sides:
@@ -105,6 +130,9 @@ npx vitest run src/engine/unicode-heap-restore.smoke.test.ts
 ```
 
 Repeat with the matching 2025 profile when both annual lines are affected.
+Despite its historical filename, `unicode-heap-restore.smoke.test.ts` also
+compares pdfLaTeX with its baseline `.fmt`; select `-t pdflatex` for a
+pdfTeX-only controller experiment.
 For an engine binary or build-flag change, also set
 `WASMTEX_HEAP_REBUILT_ENGINE=1`. This permits different WASM/generated JS while
 still requiring byte-identical compressed formats and rejecting format
@@ -217,9 +245,9 @@ Do not update goldens or broaden normalization to accept a cleanup regression.
 
 ### Authored Worker static checks
 
-`npm run lint:workers` checks the 13 runtime JavaScript/CJS files directly under
+`npm run lint:workers` checks the 14 runtime JavaScript/CJS files directly under
 `wasm-build/`, including controllers, resolver helpers and Emscripten library
-bridges. `biome.workers.json` is the explicit inventory; the command fails if a
+bridges, including the bundled heap helper. `biome.workers.json` is the explicit inventory; the command fails if a
 new top-level runtime JS file is absent from it. `npm run lint` invokes the same
 command locally, in the pre-commit hook and in CI.
 

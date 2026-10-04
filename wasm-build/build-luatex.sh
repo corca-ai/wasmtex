@@ -226,7 +226,7 @@ if grep -aE 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|
   echo "ERROR: forbidden pplib or legacy pplib marker remains in the LuaHBTeX release bytes" >&2
   exit 1
 fi
-cp "$GLUE/luatex-worker.js" "$OUT/wasmtex-luatex.worker.js"
+cat "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
 cp "$GLUE/resolver-evidence.js" "$OUT/wasmtex-luatex-resolver-evidence.js"
 
 echo ""

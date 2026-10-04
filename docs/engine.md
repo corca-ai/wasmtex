@@ -280,7 +280,7 @@ see the rebuilt-engine differential mode in the [development guide](develop.md).
 An experiment changing only the WASM memory declaration is useful for isolating
 this variable, but does not replace a source rebuild or qualify release assets.
 
-The XeTeX, LuaTeX, and dvipdfmx controllers reset C state between compiles by
+The released XeTeX, LuaTeX, and dvipdfmx controllers reset C state between compiles by
 restoring an initial heap snapshot. They retain the prefix through its last nonzero word and
 the original heap extent; restoration copies that prefix and fills the omitted
 suffix with zeros. This preserves the bytes and reset boundary of the former
@@ -290,6 +290,24 @@ initial snapshot. Memory grown after a snapshot remains outside that snapshot's
 reset boundary, as before.
 The dvipdfmx build retains its 256 MiB initial memory allocation; only its
 snapshot representation changes.
+
+The source candidate also omits internal zero ranges. A shared
+`wasm-build/heap-snapshot.js`, bundled before each Unicode controller, scans
+64 KiB pages and packs their occupied prefixes into one byte array plus an
+offset table. Restore writes each retained range and clears its surrounding
+gaps, preserving the original extent and every byte. XeTeX's ICU re-snapshot
+uses the same representation and releases the fetched JS data after successful
+registration and capture; failures retain it for retry. No additional runtime
+asset or package-cache eviction is needed.
+
+The source pdfTeX controller likewise omits its initial zero suffix, scanning
+8-byte blocks and retaining the original bytes through the last nonzero block.
+It preserves pdfTeX's distinct reset rule: both the omitted suffix and every
+page grown after initialization are cleared before another TeX pass. Its
+`heapSnapshotBytes` timing field reports the retained copy, not WASM capacity.
+These controller candidates have annual output and browser timing evidence
+in the [October memory experiment](history/heap-memory-2026-10.md); they have not
+been promoted as an engine release.
 
 This controller representation changes neither WASM nor `.fmt` bytes. It is
 separate from both preamble formats and resumable execution checkpoints, and
