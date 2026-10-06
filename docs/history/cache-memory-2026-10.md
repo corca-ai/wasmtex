@@ -196,6 +196,33 @@ used alone to establish preserved total latency. Missing required phase records
 must fail the analysis rather than be silently omitted.
 
 
+## Final 2025 composition qualification
+
+The [final-composition BAAB run 37424722127](https://github.com/corca-ai/wasmtex/actions/runs/37424722127)
+passed output, native ownership, growth/recovery, golden, nested, checkpoint
+and cross-host checks with the exact retained baseline Lua assets. Small Xe
+initialization changed −0.97%, first compile +0.58%, repeat −0.54%; small Lua
+initialization changed −0.30%, first compile +0.40%, repeat −0.76%.
+The actual durable-return SDK comparison retained 10,365,881/14,829,704 bytes
+of original Xe/Lua file buffers in the baseline and zero in the candidate.
+Xe return initialization changed −4.66%, Lua +1.42%; first compile changed
+−3.35%/−1.17%. These counts exclude caller-owned warmup, Bloom filters,
+decoded formats, native files and linear-memory/checkpoint buffers.
+
+Image Xe restore initially changed 369.90 → 394.25 ms (+6.58%). Promotion
+was held for independent review and a focused opposite-order repeat. Its
+chronological BAAB series medians were candidate 393.1, baseline 365.3,
+baseline 399.8 and candidate 396.6 ms; baseline itself moved 34.5 ms.
+This variation was evidence of order/environment effects, not a deduction
+from the measured increase or a reason to waive it.
+
+The [final-composition image ABBA repeat 37427251446](https://github.com/corca-ai/wasmtex/actions/runs/37427251446)
+then measured restore 345.90 → 345.70 ms (−0.06%), initialization −2.87%,
+first compile −0.68%, repeat −0.16%, body edit +0.18% and preamble edit +0.06%.
+The restore increase did not repeat. Both image arms use the same SDK; the
+actual Xe/converter candidate bytes match the final composition. These
+independent runs are assessed separately rather than pooled across runners.
+
 ## Final source publication
 
 The final 2025 composition's source workflow
