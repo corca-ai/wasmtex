@@ -32,14 +32,14 @@
         },
         {
           "id": "xetex",
-          "runId": 37180499923,
+          "runId": 37404293394,
           "artifacts": [
             "wasm-xetex"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 37180502805,
+          "runId": 37404298803,
           "artifacts": [
             "wasm-luatex"
           ]
@@ -94,14 +94,14 @@
         },
         {
           "id": "xetex",
-          "runId": 37180501256,
+          "runId": 37404296139,
           "artifacts": [
             "wasm-xetex-2026"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 37180504675,
+          "runId": 37404301927,
           "artifacts": [
             "wasm-luatex-2026"
           ]
