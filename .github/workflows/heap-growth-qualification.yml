@@ -18,6 +18,12 @@ on:
         description: Successful LuaHBTeX source build run
         type: string
         required: true
+  workflow_call:
+    inputs:
+      texlive_year: { type: string, required: true }
+      candidate_source: { type: string, required: true }
+      xetex_run: { type: string, required: true }
+      luatex_run: { type: string, required: true }
 permissions:
   contents: read
   actions: read

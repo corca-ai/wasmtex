@@ -17,11 +17,14 @@ const observables = [
 ]
 const read = path => JSON.parse(readFileSync(path, 'utf8'))
 const references = new Map()
+const environmentFields = ['schemaVersion', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'fixedWorkerClock', 'variants', 'repetitions']
+const anchor = read(paths[0])
+const sideHashes = {}
 for (let pair = 0; pair < paths.length; pair += 2) {
   const baseline = read(paths[pair])
   const candidate = read(paths[pair + 1])
-  for (const field of ['year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'project', 'checkpointProbe', 'fixedWorkerClock']) {
-    assert.deepEqual(candidate[field], baseline[field], `Probe mismatch: ${field}`)
+  for (const report of [baseline, candidate]) {
+    for (const field of environmentFields) assert.deepEqual(report[field], anchor[field], `Probe mismatch: ${field}`)
   }
   assert.equal(baseline.traceEnabled, false, 'Timing must exclude tracing')
   assert.equal(candidate.traceEnabled, false, 'Timing must exclude tracing')
@@ -31,9 +34,20 @@ for (let pair = 0; pair < paths.length; pair += 2) {
     assert.equal(candidate.assetHashes[name], digest, `Unchanged artifact: ${name}`)
   }
   for (const [side, report] of [['baseline', baseline], ['candidate', candidate]]) {
+    assert(!report.error, 'Probe failed')
+    assert(Number.isInteger(report.repetitions) && report.repetitions > 0, 'Invalid repetitions')
+    assert(Array.isArray(report.variants) && report.variants.length > 0 && new Set(report.variants).size === report.variants.length, 'Invalid variants')
+    sideHashes[side] ??= report.assetHashes
+    assert.deepEqual(report.assetHashes, sideHashes[side], `Assets changed across ${side} series`)
     const measured = report.samples.filter(sample => sample.measured)
-    assert(measured.length > 0, 'No measured samples')
+    const expected = []
+    for (let repetition = 0; repetition < report.repetitions; repetition++) {
+      for (const variant of report.variants) expected.push({ variant, repetition })
+    }
+    assert.deepEqual(measured.map(({ variant, repetition }) => ({ variant, repetition })), expected, 'Incomplete or duplicate samples')
+    const stages = ['init', 'first', 'repeat', ...(report.checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit', ...(report.project?.stages?.restore ? ['restore'] : [])]
     for (const sample of measured) {
+      assert.deepEqual(sample.stages.map(stage => stage.stage), stages, 'Incomplete stages')
       for (const stage of sample.stages) {
         const key = `${sample.variant}/${stage.stage}`
         if (stage.stage !== 'init' && stage.stage !== 'prepare-checkpoint') {
@@ -41,7 +55,7 @@ for (let pair = 0; pair < paths.length; pair += 2) {
           if (!references.has(key)) references.set(key, output)
           assert.deepEqual(output, references.get(key), `Output mismatch: ${side} ${key}`)
         }
-        assert(Number.isFinite(stage.ms) && stage.ms >= 0, `Invalid timing: ${key}`)
+        assert(Number.isFinite(stage.ms) && stage.ms > 0, `Invalid timing: ${key}`)
         const timings = groups[side].get(key) ?? []
         timings.push(stage.ms)
         groups[side].set(key, timings)

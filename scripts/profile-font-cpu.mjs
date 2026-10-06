@@ -124,7 +124,7 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions,
+  schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
   traceEnabled, heapStatsEnabled, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   harnessSha256: hash(await readFile(fileURLToPath(import.meta.url))),

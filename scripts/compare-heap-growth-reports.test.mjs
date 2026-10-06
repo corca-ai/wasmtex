@@ -6,18 +6,16 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 const fixture = () => ({
-  year: '2026', mirror: 'https://mirror.test/2026/', browser: 'test-browser',
+  schemaVersion: 1, repetitions: 3, variants: ['xelatex'], sdkRevision: 'same', year: '2026', mirror: 'https://mirror.test/2026/', browser: 'test-browser',
   node: 'v24', platform: 'linux', architecture: 'x64', harnessSha256: 'same',
   project: null, checkpointProbe: false, fixedWorkerClock: true, traceEnabled: false,
   assetHashes: { 'wasmtex-xetex.wasm': 'engine', 'wasmtex-xetex.fmt.gz': 'format', 'wasmtex-pdftex.wasm': 'pdftex' },
-  samples: [10, 20, 30].map(ms => ({ measured: true, variant: 'xelatex', stages: [
-    { stage: 'repeat', ms, success: true, typesetSha256: 'pdf', artifacts: { aux: 'aux', synctex: 'sync' }, log: 'stable', errors: [] },
-  ] })),
+  samples: [10, 20, 30].map((ms, repetition) => ({ measured: true, variant: 'xelatex', repetition, stages: ['init', 'first', 'repeat', 'body-edit', 'preamble-edit'].map(stage => ({ stage, ms, success: true, typesetSha256: 'pdf', artifacts: { aux: 'aux', synctex: 'sync' }, log: 'stable', errors: [] })) })),
 })
-function compare(before, after) {
+function compare(...reports) {
   const root = mkdtempSync(join(tmpdir(), 'heap-report-test-'))
   try {
-    const paths = [before, after].map((value, index) => {
+    const paths = reports.map((value, index) => {
       const path = join(root, `${index}.json`)
       writeFileSync(path, JSON.stringify(value))
       return path
@@ -37,12 +35,17 @@ test('reports median and spread while accepting a rebuilt Unicode core', () => {
   assert.deepEqual(report.comparisons[0].candidateRangeMs, [9, 27])
 })
 for (const [name, mutate] of [
-  ['PDF difference', report => { report.samples[0].stages[0].typesetSha256 = 'changed' }],
-  ['SyncTeX difference', report => { report.samples[0].stages[0].artifacts.synctex = 'changed' }],
+  ['PDF difference', report => { report.samples[0].stages[1].typesetSha256 = 'changed' }],
+  ['SyncTeX difference', report => { report.samples[0].stages[1].artifacts.synctex = 'changed' }],
   ['format replacement', report => { report.assetHashes['wasmtex-xetex.fmt.gz'] = 'changed' }],
   ['unrelated engine replacement', report => { report.assetHashes['wasmtex-pdftex.wasm'] = 'changed' }],
   ['different workload', report => { report.project = { files: { 'main.tex': 'different' } } }],
   ['traced latency', report => { report.traceEnabled = true }],
+  ['failed report', report => { report.error = 'timeout' }],
+  ['zero timing', report => { report.samples[0].stages[0].ms = 0 }],
+  ['missing stage', report => { report.samples[0].stages.pop() }],
+  ['duplicate repetition', report => { report.samples[1].repetition = 0 }],
+  ['partial measurement', report => { report.samples.pop() }],
   ['empty measurement', report => { report.samples = [] }],
 ]) {
   test(`rejects ${name} even with faster candidate timings`, () => {
@@ -50,5 +53,17 @@ for (const [name, mutate] of [
     for (const sample of after.samples) sample.stages[0].ms = 1
     mutate(after)
     assert.throws(() => compare(fixture(), after))
+  })
+}
+
+for (const [name, mutate] of [
+  ['environment', report => { report.browser = 'changed' }],
+  ['candidate assets', report => { report.assetHashes['wasmtex-xetex.wasm'] = 'changed' }],
+]) {
+  test(`rejects ${name} changing between pairs`, () => {
+    const before2 = fixture(), after2 = fixture()
+    if (name === 'environment') mutate(before2)
+    mutate(after2)
+    assert.throws(() => compare(fixture(), fixture(), before2, after2))
   })
 }
