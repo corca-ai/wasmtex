@@ -1,4 +1,5 @@
 import { SynctexData } from '../synctex/synctex-parser.js';
+import { CompilerRetentionStats, PdfPreviewParts } from '../types.js';
 import { WasmTexPdftexEngine } from './wasmtex-engine.js';
 export interface IncrementalResult {
     pdf: Uint8Array | null;
@@ -20,6 +21,9 @@ export interface IncrementalResult {
      *  `incremental` path. */
     synctexData?: SynctexData | null;
 }
+export type PreviewIncrementalResult = Omit<IncrementalResult, 'pdf'> & {
+    pdf: Uint8Array | PdfPreviewParts | null;
+};
 export interface IncrementalOptions {
     /** Max checkpoints kept (LRU). Default 4. */
     maxCheckpoints?: number;
@@ -86,8 +90,10 @@ export declare class IncrementalCompiler {
      *  with \include the main-source prefix is tiny but the included chapters are the real head,
      *  so their bytes count too. */
     private planFast;
+    getRetentionStats(): CompilerRetentionStats;
     /** Attempt the checkpoint fast path; return null to signal "fall back to full". */
     tryIncremental(source: string, files?: FileSet): Promise<IncrementalResult | null>;
+    tryIncremental(source: string, files: FileSet, preview: true): Promise<PreviewIncrementalResult | null>;
     /** Splice the tail's SyncTeX onto the last full compile's head → exact SyncTeX for the spliced
      *  PDF (#99 P2), or null when it can't run safely. Safe only when the ENTIRE head is unchanged
      *  since the last full compile — the main-source prefix AND every file it `\include`s — because

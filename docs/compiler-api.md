@@ -124,6 +124,30 @@ straight to a full compile (no stale-reference flash). The SyncTeX splice covers
 multi-file documents — `\include`/`\input` chapters splice at their own file-relative lines; only a head
 that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
 
+#### Deferred PDF preview parts
+
+`await compiler.compilePreview()` runs the same serialized compile pipeline as
+`compile()`, but returns `PreviewCompileResult`. Its `pdf` is ordinary bytes for
+full/heap-resumed compiles, `null` on failure, or `PdfPreviewParts` for eligible,
+final page-break incremental results. Label-sensitive edits take the full path
+before any tail work. The existing `compile(): Promise<CompileResult>` is unchanged.
+
+A parts result has `kind: 'parts'`, a frozen `parts` array of independent PDFs in
+page order, and `materialize(): Promise<Uint8Array>`. A renderer may open each
+part and reuse an unchanged head by byte-object identity. The SDK has no renderer
+dependency. The byte buffers are shared and immutable by contract: **do not mutate
+or transfer/detach them**. The ordered snapshot remains valid after later edits,
+checkpoint eviction and compiler disposal. Materialization performs the same
+canonical `pdf-lib` splice as `compile()`; it requires the optional peer and can
+reject independently of a successful preview compile. A failed materialization
+can be retried. Cross-part link/outline limitations of page-copy splicing remain.
+SyncTeX uses the same merged coordinates as the ordinary incremental result.
+
+`compiler.getRetentionStats()` reports SDK-owned JavaScript page-break checkpoint
+count, format/PDF bytes and retained raw SyncTeX bytes. It excludes worker-owned
+heap checkpoints, parsed objects, WASM memory, process RSS and caller-held results;
+it is an observation of these specific buffers, not a total memory budget.
+
 #### Heap checkpoints (arbitrary-line incremental compilation)
 
 With `incremental: true` in a browser (unless `heapCheckpoints: false`), the

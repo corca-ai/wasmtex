@@ -21,6 +21,27 @@ export interface HeapCheckpointRecord {
   inputs: string[] | null
 }
 
+/** An immutable snapshot of independent PDFs in page order. No renderer dependency. */
+export interface PdfPreviewParts {
+  readonly kind: 'parts'
+  /** PDF bytes in page order. Callers must not mutate these shared, immutable buffers. */
+  readonly parts: readonly Uint8Array[]
+  /** Canonical PDF page-copy splice, valid even after the compiler is disposed. */
+  materialize(): Promise<Uint8Array>
+}
+
+export type PreviewCompileResult = Omit<CompileResult, 'pdf'> & {
+  pdf: Uint8Array | PdfPreviewParts | null
+}
+
+/** SDK-owned JavaScript buffers only; excludes engine workers, WASM heaps and host results. */
+export interface CompilerRetentionStats {
+  checkpointCount: number
+  checkpointFormatBytes: number
+  checkpointPdfBytes: number
+  synctexBytes: number
+}
+
 export interface CompileResult {
   success: boolean
   pdf: Uint8Array | null

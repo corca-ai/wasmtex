@@ -21,6 +21,7 @@ export {
 export type {
   CompilePhaseTimings,
   CompileResult,
+  CompilerRetentionStats,
   CompletionSnapshot,
   CompletionSnapshotCollection,
   CompletionSnapshotCommand,
@@ -40,6 +41,8 @@ export type {
   DependencyManifestIncompleteReason,
   DependencyManifestSource,
   DependencyManifestStage,
+  PdfPreviewParts,
+  PreviewCompileResult,
   ResolverAttempt,
   ResolverAttemptOutcome,
   ResolverAttemptSource,

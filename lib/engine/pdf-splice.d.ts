@@ -1,3 +1,4 @@
+import { PdfPreviewParts } from '../types.js';
 /**
  * Concatenate PDF parts (head pages, then tail pages) into one document for
  * incremental compilation (#55). The engine emits PDF 1.7 with object/xref streams,
@@ -16,3 +17,7 @@ export declare class PdfLibUnavailableError extends Error {
 export declare function splicePdfs(parts: Uint8Array[]): Promise<Uint8Array>;
 /** Page count of a PDF (via pdf-lib). */
 export declare function pdfPageCount(pdf: Uint8Array): Promise<number>;
+/** Capture the ordered buffers independently of the compiler's checkpoint lifetime.
+ * Bytes follow CompileResult ownership: consumers must not mutate them. Sharing the
+ * unchanged head is deliberate so a host can retain its reader and rendered pages. */
+export declare function createPdfPreviewParts(parts: readonly Uint8Array[]): PdfPreviewParts;

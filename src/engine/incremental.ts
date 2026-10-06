@@ -20,7 +20,7 @@
 
 import { mergeTailSynctex } from '../synctex/synctex-merge'
 import { type SynctexData, SynctexParser } from '../synctex/synctex-parser'
-import type { CompileResult } from '../types'
+import type { CompileResult, CompilerRetentionStats, PdfPreviewParts } from '../types'
 import {
   chooseBoundary,
   findPageBreaks,
@@ -29,7 +29,7 @@ import {
   includePositions,
   splitAtBoundary,
 } from './checkpoint-boundaries'
-import { pdfPageCount, splicePdfs } from './pdf-splice'
+import { createPdfPreviewParts, pdfPageCount, splicePdfs } from './pdf-splice'
 import { extractPreamble } from './preamble-utils'
 import type { WasmTexPdftexEngine } from './wasmtex-engine'
 
@@ -54,11 +54,16 @@ export interface IncrementalResult {
   synctexData?: SynctexData | null
 }
 
+export type PreviewIncrementalResult = Omit<IncrementalResult, 'pdf'> & {
+  pdf: Uint8Array | PdfPreviewParts | null
+}
+
 interface Checkpoint {
   /** Cache key (head text + the content hashes of the files its head includes). */
   key: string
   fmt: Uint8Array
   headPdf: Uint8Array
+  headPageCount?: number
 }
 
 export interface IncrementalOptions {
@@ -259,18 +264,43 @@ export class IncrementalCompiler {
     return { prevMain, headText, tailText }
   }
 
+  getRetentionStats(): CompilerRetentionStats {
+    let checkpointFormatBytes = 0
+    let checkpointPdfBytes = 0
+    for (const checkpoint of this.checkpoints.values()) {
+      checkpointFormatBytes += checkpoint.fmt.byteLength
+      checkpointPdfBytes += checkpoint.headPdf.byteLength
+    }
+    return {
+      checkpointCount: this.checkpoints.size,
+      checkpointFormatBytes,
+      checkpointPdfBytes,
+      synctexBytes: this.lastFullSynctexBytes?.byteLength ?? 0,
+    }
+  }
+
   /** Attempt the checkpoint fast path; return null to signal "fall back to full". */
+  async tryIncremental(source: string, files?: FileSet): Promise<IncrementalResult | null>
+  async tryIncremental(
+    source: string,
+    files: FileSet,
+    preview: true,
+  ): Promise<PreviewIncrementalResult | null>
   async tryIncremental(
     source: string,
     files: FileSet = new Map(),
-  ): Promise<IncrementalResult | null> {
+    preview = false,
+  ): Promise<PreviewIncrementalResult | null> {
     const plan = this.planFast(source, files)
-    if (plan === null) return null
+    if (plan === null || (preview && this.changeTouchesLabels(plan.prevMain, source, files)))
+      return null
     try {
       const { checkpoint, built } = await this.ensureCheckpoint(plan.headText, files)
       const tail = await this.engine.compileFromCheckpoint(checkpoint.fmt, plan.tailText)
       if (!tail.pdf || (tail.status !== 0 && tail.status !== 1)) return null
-      const pdf = await splicePdfs([checkpoint.headPdf, tail.pdf])
+      const pdf = preview
+        ? createPdfPreviewParts([checkpoint.headPdf, tail.pdf])
+        : await splicePdfs([checkpoint.headPdf, tail.pdf])
       const final = !this.changeTouchesLabels(plan.prevMain, source, files)
       const synctexData = await this.spliceTailSynctex(
         checkpoint,
@@ -315,10 +345,11 @@ export class IncrementalCompiler {
     const head = await this.ensureLastFullSynctex()
     if (!head) return null
     const tail = await this.synctexParser.parse(tailSynctex)
+    checkpoint.headPageCount ??= await pdfPageCount(checkpoint.headPdf)
     return mergeTailSynctex({
       head,
       tail,
-      headPageCount: await pdfPageCount(checkpoint.headPdf),
+      headPageCount: checkpoint.headPageCount,
       tailLineOffset: countNewlines(headText),
       mainFile: this.mainFile,
       tailFile: 'tail.tex',

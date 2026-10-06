@@ -1,3 +1,5 @@
+import type { PdfPreviewParts } from '../types'
+
 /**
  * Concatenate PDF parts (head pages, then tail pages) into one document for
  * incremental compilation (#55). The engine emits PDF 1.7 with object/xref streams,
@@ -56,4 +58,16 @@ export async function pdfPageCount(pdf: Uint8Array): Promise<number> {
   const { PDFDocument } = await loadPdfLib()
   const doc = await PDFDocument.load(pdf, { ignoreEncryption: true })
   return doc.getPageCount()
+}
+
+/** Capture the ordered buffers independently of the compiler's checkpoint lifetime.
+ * Bytes follow CompileResult ownership: consumers must not mutate them. Sharing the
+ * unchanged head is deliberate so a host can retain its reader and rendered pages. */
+export function createPdfPreviewParts(parts: readonly Uint8Array[]): PdfPreviewParts {
+  const snapshot = Object.freeze([...parts])
+  return Object.freeze({
+    kind: 'parts' as const,
+    parts: snapshot,
+    materialize: () => splicePdfs([...snapshot]),
+  })
 }
