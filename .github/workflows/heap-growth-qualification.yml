@@ -34,9 +34,9 @@ on:
         type: boolean
         default: false
       probe_workload:
-        description: Latency workloads; small limits a diagnostic control
+        description: Latency workloads; select one for a focused repeat
         type: choice
-        options: [all, small]
+        options: [all, small, image]
         default: all
       candidate_source:
         description: Exact engine source commit
@@ -145,6 +145,7 @@ jobs:
           case "$PROBE_WORKLOAD" in
             all) ;;
             small) workloads=(small) ;;
+            image) workloads=(image) ;;
             *) echo "Invalid probe workload" >&2; exit 1 ;;
           esac
           for workload in "${workloads[@]}"; do
