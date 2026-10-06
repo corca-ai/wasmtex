@@ -11,6 +11,12 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ## [Unreleased]
 
+### Performance
+
+- Release SDK-owned Unicode warmup originals after worker initialization and remove
+  redundant byte copies when exporting Unicode TeX Live caches. Worker caches,
+  caller-owned warmup inputs and published format/mirror behavior are preserved.
+
 ### Added
 
 - Browser bundlers can resolve the optional PDF splicer lazily instead of shipping

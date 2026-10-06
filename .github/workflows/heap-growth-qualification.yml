@@ -67,6 +67,10 @@ jobs:
           git fetch --no-tags --depth=1 -- origin "$BASELINE_REF"
           git rev-parse FETCH_HEAD > baseline-catalog-revision.txt
           git show FETCH_HEAD:scripts/engine-release-components.json > baseline-components.json
+      - name: Extract the exact committed baseline SDK
+        run: |
+          mkdir -p baseline-sdk
+          git archive "$(cat baseline-catalog-revision.txt)" lib | tar -x -C baseline-sdk
       - name: Assemble unchanged baseline release
         uses: ./.github/actions/download-engine-release
         with:
@@ -105,9 +109,10 @@ jobs:
             BAAB) order=(candidate baseline baseline candidate) ;;
             *) echo "Invalid probe order" >&2; exit 1 ;;
           esac
-          for workload in small image; do
+          for workload in small image durable; do
             project=()
             if [ "$workload" = image ]; then project=(--project test/fixtures/heap-growth/project.json); fi
+            if [ "$workload" = durable ]; then project=(--cache-probe true); fi
             baseline_series=0
             candidate_series=0
             for side in "${order[@]}"; do
@@ -118,9 +123,13 @@ jobs:
                 series="$candidate_series"
                 candidate_series=$((candidate_series + 1))
               fi
+              sdk=(--sdk-dir lib --sdk-source-revision "$GITHUB_SHA")
+              if [ "$workload" = durable ] && [ "$side" = baseline ]; then
+                sdk=(--sdk-dir baseline-sdk/lib --sdk-source-revision "$(cat baseline-catalog-revision.txt)")
+              fi
               node scripts/profile-font-cpu.mjs --assets "$side/wasmtex/$YEAR" --year "$YEAR" \
                 --texlive-url "$mirror" --engine "$PROBE_ENGINE" --trace false --heap-stats true --repetitions 5 \
-                --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}"
+                --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}" "${sdk[@]}"
             done
             node scripts/compare-heap-growth-reports.mjs \
               "reports/$workload-baseline-0/report.json" "reports/$workload-candidate-0/report.json" \

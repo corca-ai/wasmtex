@@ -123,6 +123,8 @@ it('keeps warmup available until a slow XeTeX converter is ready and leaves it r
   readyConverter()
   await initializing
   first.terminate()
+  await first.init()
+  first.terminate()
   const second = new WasmTexLuatexEngine(options)
   await second.init()
   second.terminate()

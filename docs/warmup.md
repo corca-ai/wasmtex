@@ -47,6 +47,10 @@ The root `import { warmup } from 'wasmtex'` above remains for the all-in-one edi
 The supplied cache is consumed by pdfLaTeX, XeLaTeX (both TeX and PDF-conversion
 workers), and LuaLaTeX. Unicode workers copy transferred buffers so the caller
 can reuse its cache; supplied positives also avoid duplicate built-in prefetches.
+SDK-owned prepared/durable Unicode sets are released after all workers receive
+them. Caller-provided sets remain reusable across engine initialization and are
+not detached or mutated. This releases duplicate preparation bytes without
+evicting worker files.
 Unicode preloads sharing one basename with conflicting bytes are omitted to
 preserve the normal resolver behavior of their flat cache directories. A partial
 cache remains best-effort: missing files use the normal resolver.

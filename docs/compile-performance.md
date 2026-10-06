@@ -13,6 +13,8 @@ to their source files and requalification requirements.
 | Unicode initial memory | XeTeX and LuaHBTeX start at 128 MiB with growth enabled. | This is initial WASM memory, not browser RSS or a maximum document budget. |
 | Unicode/converter heap growth | XeTeX, LuaHBTeX and dvipdfmx use 5% growth headroom capped at 16 MiB; dvipdfmx starts at 64 MiB. | Stack sizes, growable maximums and TeX capacities are unchanged. Grown memory does not shrink on reset. |
 | Initial heap snapshots | pdfTeX trims the zero suffix; XeTeX, LuaHBTeX and dvipdfmx pack occupied page prefixes and clear omitted gaps. | Preserves the original reset extent; distinct from resumable checkpoints. |
+| Unicode warmup lifetime | SDK-owned prepared/durable sets survive only until all initialized workers receive them; caller-provided sets remain reusable. | Frees duplicate originals while preserving worker caches and reinitialization inputs. |
+| Unicode cache export | Transfer the independent MEMFS read result without a second byte copy. | Reduces transient copy allocation; does not shrink WASM or evict cached files. |
 | Warmup | All three engine families accept supplied warmup data; hosts can merge profile-matched learned dependency sets. | Preparation costs time/network/memory; filesystem preloading must preserve lookup behavior. |
 | Conversion evidence | dvipdfmx reports bounded successful file opens, including native-cache hits. | Adds observations; XeLaTeX dependency completeness remains false. |
 | dvipdfmx font maps | Auxiliary lookup index and cached list tails preserve original ownership and iteration. | Includes the separately qualified missing-SFD lifetime fix; no cross-document font-object cache. |
@@ -54,6 +56,10 @@ capacity after preamble fonts, but its standalone physical peak reduction is
 not established and one image first-compile capacity increases. Opposite-order
 repeats found no reproducible compile slowdown in the measured corpus; this
 does not establish identical initialization latency or a browser memory budget.
+
+The [cache memory record](history/cache-memory-2026-10.md) separates retained warmup
+originals from transient dump allocations and records the rejected delta-save,
+auxiliary-snapshot and checkpoint-sharing implementations.
 
 ## Excluded or deferred changes
 

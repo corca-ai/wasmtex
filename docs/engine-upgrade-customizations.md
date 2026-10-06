@@ -38,6 +38,15 @@ assumptions and bit-exact restore/growth/failure tests on annual/toolchain
 changes. [The October qualification](history/heap-memory-2026-10.md) records
 the source experiment and subsequent annual release qualification.
 
+### Unicode durable-cache transfer ownership
+
+XeTeX, LuaHBTeX and dvipdfmx transfer the binary `FS.readFile` result directly
+when dumping their TeX Live caches. Pinned Emscripten MEMFS returns an independent
+allocation with zero offset and no extra buffer extent. Verify those properties
+and that detachment leaves files readable on toolchain upgrades. Keep exact
+format/name aliases and repeated dump/compile behavior; never transfer the
+MEMFS node's backing storage. See [cache memory evidence](history/cache-memory-2026-10.md).
+
 ### Unicode heap sizing
 
 `build-xetex2.sh`, `build-luatex.sh` and `build-dvipdfm2.sh` use 5% geometric

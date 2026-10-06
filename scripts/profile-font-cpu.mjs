@@ -47,7 +47,7 @@ if (project?.binaryFiles) {
     return [name, (await readFile(resolve(dirname(resolve(projectPath)), file))).toString('base64')]
   })))
 }
-if (cacheProbe && (project || checkpointProbe || selected === 'pdflatex-checkpoint' || luaNamesProbe)) throw Error('Cache probe requires the standard non-checkpoint document')
+if (cacheProbe && (project || checkpointProbe || !['unicode', 'xelatex', 'lualatex'].includes(selected) || luaNamesProbe)) throw Error('Cache probe requires the standard non-checkpoint document')
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 await mkdir(out, { recursive: true })
 await mkdir(cacheDir, { recursive: true })
@@ -127,7 +127,7 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
+  schemaVersion: 2, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
   traceEnabled, heapStatsEnabled, cacheProbe, sdkDir, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkSourceRevision: arg('sdk-source-revision', null),
   sdkHashes: Object.fromEntries(await Promise.all((await readdir(sdkDir, { recursive: true })).filter(name => name.endsWith('.js')).sort().map(async name => [name, hash(await readFile(resolve(sdkDir, name)))]))),
@@ -277,6 +277,23 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
         }
       }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, project })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
+      if (cacheProbe && stage === 'init') {
+        result.cacheReadOwnership = []
+        for (const worker of page.workers()) {
+          result.cacheReadOwnership.push(await worker.evaluate(() => {
+            const cache = typeof texlive200 !== 'undefined' ? texlive200 : texlive200_cache
+            const path = Object.values(cache)[0]
+            if (!path) throw Error('Return visit did not load a persistent file')
+            const owned = FS.readFile(path, { encoding: 'binary' })
+            const expected = owned.slice()
+            if (owned.byteOffset !== 0 || owned.byteLength !== owned.buffer.byteLength) throw Error('MEMFS readFile allocation is not exact')
+            const delivered = structuredClone(owned, { transfer: [owned.buffer] })
+            const retained = FS.readFile(path, { encoding: 'binary' })
+            if (owned.byteLength !== 0 || retained.length !== expected.length || retained.some((byte, index) => byte !== expected[index]) || delivered.some((byte, index) => byte !== expected[index])) throw Error('Transfer damaged MEMFS cache')
+            return { path, bytes: retained.byteLength, independent: true }
+          }))
+        }
+      }
       if (cacheProbe) {
         result.persistence = await page.evaluate(async () => {
           const start = performance.now()
