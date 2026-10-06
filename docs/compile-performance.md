@@ -11,6 +11,7 @@ to their source files and requalification requirements.
 | Area | Current implementation | Boundary / cost |
 | --- | --- | --- |
 | Unicode initial memory | XeTeX and LuaHBTeX start at 128 MiB with growth enabled. | This is initial WASM memory, not browser RSS or a maximum document budget. |
+| Unicode/converter heap growth | XeTeX, LuaHBTeX and dvipdfmx use 5% growth headroom capped at 16 MiB; dvipdfmx starts at 64 MiB. | Stack sizes, growable maximums and TeX capacities are unchanged. Grown memory does not shrink on reset. |
 | Initial heap snapshots | pdfTeX trims the zero suffix; XeTeX, LuaHBTeX and dvipdfmx pack occupied page prefixes and clear omitted gaps. | Preserves the original reset extent; distinct from resumable checkpoints. |
 | Warmup | All three engine families accept supplied warmup data; hosts can merge profile-matched learned dependency sets. | Preparation costs time/network/memory; filesystem preloading must preserve lookup behavior. |
 | Conversion evidence | dvipdfmx reports bounded successful file opens, including native-cache hits. | Adds observations; XeLaTeX dependency completeness remains false. |
@@ -45,10 +46,14 @@ not private-memory budgets. The record owns annual feature comparisons,
 timing variability and qualification limits. These
 changes preserve memory-growth/reset rules and the published format bytes.
 
-The next [Unicode heap-growth experiment](history/heap-growth-2026-10.md)
-qualifies smaller growth headroom and a smaller converter initial allocation.
-Its diagnostic screening is separate from the released snapshot optimization;
-source rebuilds and annual output checks are required before promotion.
+The [Unicode heap-growth qualification](history/heap-growth-2026-10.md)
+reduces combined XeTeX/converter capacity in the small document from 752.25 to
+508.81 MiB on both annual lines. Separate isolated-runner probes sample aggregate
+Unicode browser peak RSS approximately 179–195 MiB lower. Lua retains less
+capacity after preamble fonts, but its standalone physical peak reduction is
+not established and one image first-compile capacity increases. Opposite-order
+repeats found no reproducible compile slowdown in the measured corpus; this
+does not establish identical initialization latency or a browser memory budget.
 
 ## Excluded or deferred changes
 
@@ -75,9 +80,12 @@ archived [font-map record](history/compile-performance-2026-09.md#font-map-index
 
 The previous #140 releases are [2025-6d8b01c3a4570ad1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d8b01c3a4570ad1)
 and [2026-52bd7d6287f2a826](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-52bd7d6287f2a826).
-The current heap-memory releases are
+The previous heap-memory releases are
 [2025-6d7baaeed54984d4](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d7baaeed54984d4)
 and [2026-b614b6f4378863d1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-b614b6f4378863d1).
+The current heap-growth releases are
+[2025-e53a1aea7b7ebc88](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-e53a1aea7b7ebc88)
+and [2026-6d5129f5cbe00164](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-6d5129f5cbe00164).
 They retain the original format-generation provenance and immutable mirrors.
 `scripts/engine-release-components.json` owns the selected workflow runs;
 artifact manifests and receipts own the released file identities. Do not infer

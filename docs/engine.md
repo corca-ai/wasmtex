@@ -289,8 +289,15 @@ gaps, preserving the original extent and every byte. Memory grown after a
 snapshot remains outside its reset boundary, as before.
 XeTeX's ICU re-snapshot uses the same representation and releases fetched JS
 data after successful registration and capture; failures retain it for retry.
-The dvipdfmx build retains its 256 MiB initial memory allocation. No additional
-runtime asset or package-cache eviction is needed.
+The dvipdfmx build starts at 64 MiB, with growth enabled. XeTeX, LuaHBTeX and
+dvipdfmx reserve 5% geometric growth headroom, capped at 16 MiB. Stack sizes,
+maximum capacities and TeX limits remain unchanged. These settings bound resize
+headroom, not document size or browser resident memory. Large raster conversion
+can grow the converter well beyond its initial allocation; grown capacity does
+not shrink on document reset. The
+[heap-growth qualification](history/heap-growth-2026-10.md) records output,
+growth/error recovery and latency checks. No additional runtime asset or
+package-cache eviction is needed.
 
 The released pdfTeX controller omits its initial zero suffix, scanning 8-byte
 blocks and retaining the original bytes through the last nonzero block.
