@@ -205,6 +205,7 @@ em++ -O3 -flto -Wl,-u,htons,-u,ntohs "${LUATEX_DEBUG_FLAGS[@]}" \
   -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
   -sINITIAL_MEMORY=134217728 \
+  -sMEMORY_GROWTH_GEOMETRIC_STEP=0.05 -sMEMORY_GROWTH_GEOMETRIC_CAP=16777216 \
   --js-library "$GLUE/luatex-library.js" \
   -o "$OUT/wasmtex-luatex.js" > "$OUT/wasmtex-luatex.link-inputs"
 [ -s "$OUT/wasmtex-luatex.map" ] || { echo "LuaHBTeX link map was not generated"; exit 1; }

@@ -122,7 +122,8 @@ emcc -O2 "${PROFILE_FLAGS[@]}" \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
   -sEXPORTED_FUNCTIONS='["_compilePDF","_setMainEntry","_main","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
-  -sINITIAL_MEMORY=268435456 \
+  -sINITIAL_MEMORY=67108864 \
+  -sMEMORY_GROWTH_GEOMETRIC_STEP=0.05 -sMEMORY_GROWTH_GEOMETRIC_CAP=16777216 \
   --js-library "$GLUE/xetex-dvipdfm-library.js" \
   -o "$OUT/wasmtex-dvipdfm.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
 [ -s "$OUT/wasmtex-dvipdfm.map" ] || { echo "dvipdfmx link map was not generated"; exit 1; }
