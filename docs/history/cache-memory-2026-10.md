@@ -21,6 +21,12 @@ immutable-mirror HTTP response cache; measured runs reject upstream misses.
 SDK-owned retained bytes count distinct reachable warmup buffers, not process RSS.
 Supplied caller warmup remains reusable for compiler/engine reinitialization.
 
+A host that disables SDK persistence and supplies its own warmup cache does
+not follow this durable-return probe. Its reusable caller buffers remain owned
+by the host and referenced by the compiler. The measured 10–15 MiB reduction
+therefore does not establish the same reduction in that host, and the cache
+export optimization only helps consumers that actually request cache exports.
+
 ## Decisions
 
 | Candidate | Screening evidence | Decision |
