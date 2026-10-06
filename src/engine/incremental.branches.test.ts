@@ -308,3 +308,14 @@ describe('IncrementalCompiler — SyncTeX tail splice, multi-file head', () => {
     expect(r.synctexData ?? null).toBeNull() // head ch2 (B2) != last-full ch2 (B) → bail out
   })
 })
+
+describe('IncrementalCompiler — preview SyncTeX parity', () => {
+  it('merges the same head/tail coordinates as canonical splicing', async () => {
+    enableSynctex()
+    await inc.compile(doc('Tail body.'))
+    const normal = await inc.tryIncremental(doc('Tail body edited.'))
+    const preview = await inc.tryIncremental(doc('Tail body edited again.'), new Map(), true)
+    expect(preview?.synctexData).toEqual(normal?.synctexData)
+    expect(preview?.synctexData).not.toBeNull()
+  })
+})

@@ -32,7 +32,7 @@ import {
   type TexEngine,
 } from './engine/engine-select'
 import type { HeapCheckpointCompiler, HeapCheckpointOptions } from './engine/heap-checkpoints'
-import { IncrementalCompiler, type IncrementalResult } from './engine/incremental'
+import { IncrementalCompiler, type PreviewIncrementalResult } from './engine/incremental'
 import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine/index-backend'
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
@@ -66,10 +66,12 @@ import { parseTraceFile } from './lsp/trace-parser'
 import type {
   AccessibleExportResult,
   CompileResult,
+  CompilerRetentionStats,
   CompletionSnapshotProfile,
   CompletionSnapshotState,
   DependencyManifest,
   LoadProgressEvent,
+  PreviewCompileResult,
   ResolverEvidenceReport,
   TexError,
   TexliveDependencySet,
@@ -93,6 +95,7 @@ export type { EngineDetection } from './engine/engine-select'
 export type {
   AccessibleExportResult,
   CompilePhaseTimings,
+  CompilerRetentionStats,
   CompletionSnapshot,
   CompletionSnapshotCollection,
   CompletionSnapshotCommand,
@@ -112,6 +115,8 @@ export type {
   DependencyManifestIncompleteReason,
   DependencyManifestSource,
   DependencyManifestStage,
+  PdfPreviewParts,
+  PreviewCompileResult,
 } from './types'
 
 /** Picture errors live in the figure logs, so re-surface the cached ones on every compile: a
@@ -609,6 +614,28 @@ export class WasmTexCompiler {
   }
 
   async compile(): Promise<CompileResult> {
+    return this.compileOperation(false)
+  }
+
+  /** Opt in to independent PDF parts for final page-break incremental results. */
+  async compilePreview(): Promise<PreviewCompileResult> {
+    return this.compileOperation(true)
+  }
+
+  getRetentionStats(): CompilerRetentionStats {
+    return (
+      this.incremental?.getRetentionStats() ?? {
+        checkpointCount: 0,
+        checkpointFormatBytes: 0,
+        checkpointPdfBytes: 0,
+        synctexBytes: 0,
+      }
+    )
+  }
+
+  private async compileOperation(preview: false): Promise<CompileResult>
+  private async compileOperation(preview: true): Promise<PreviewCompileResult>
+  private async compileOperation(preview: boolean): Promise<PreviewCompileResult> {
     this.ensureInitialized()
     this.assertNoProjectReplacement()
     if (this.compileInFlight) throw new Error('Compile already in progress')
@@ -618,7 +645,7 @@ export class WasmTexCompiler {
       // Reserve this call before waiting: another compile must not queue behind it.
       if (this.prebuildInFlight) await this.prebuildInFlight
       this.assertRevision(revision)
-      const result = await this.operations.run(() => this.compileIdle())
+      const result = await this.operations.run(() => this.compileIdle(preview))
       this.assertRevision(revision)
       return result
     } finally {
@@ -626,7 +653,7 @@ export class WasmTexCompiler {
     }
   }
 
-  private async compileIdle(): Promise<CompileResult> {
+  private async compileIdle(preview: boolean): Promise<PreviewCompileResult> {
     this.currentAuxiliaryDependencies.clear()
     ;(await this.operations.observe(this.ensureEngine())).resume()
     if (this.unavailable || !this.engine) {
@@ -648,7 +675,7 @@ export class WasmTexCompiler {
 
     const externalization = this.tikzExternalizationKind()
     const fast = (
-      await this.operations.observe(this.tryIncrementalFastPath(externalization))
+      await this.operations.observe(this.tryIncrementalFastPath(externalization, preview))
     ).resume()
     if (fast) return fast
 
@@ -804,8 +831,8 @@ export class WasmTexCompiler {
    *  unchanged for a `final` result, so the last full compile's project index still holds. The raw
    *  `synctex` is null (the tail compiled in isolation), but `synctexData` carries the tail SyncTeX
    *  spliced onto the last full compile's head — exact for the spliced PDF (#99 P2). */
-  private toCompileResult(r: IncrementalResult, compileTime: number): CompileResult {
-    const result: CompileResult = {
+  private toCompileResult(r: PreviewIncrementalResult, compileTime: number): PreviewCompileResult {
+    const result: PreviewCompileResult = {
       success: r.success,
       pdf: r.pdf,
       log: r.log,
@@ -1191,12 +1218,18 @@ export class WasmTexCompiler {
    */
   private async tryIncrementalFastPath(
     externalization: TikzExternalizationKind | null,
-  ): Promise<CompileResult | null> {
+    preview: boolean,
+  ): Promise<PreviewCompileResult | null> {
     if (!this.incremental || externalization) return null
     const t0 = performance.now()
+    const source = this.mainSource()
+    const files = this.projectTexFiles()
+    if (!this.incremental.canFastServe(source, files)) return null
     const fast = (
       await this.operations.observe(
-        this.incremental.tryIncremental(this.mainSource(), this.projectTexFiles()),
+        preview
+          ? this.incremental.tryIncremental(source, files, true)
+          : this.incremental.tryIncremental(source, files),
       )
     ).resume()
     if (fast?.final && fast.pdf) return this.toCompileResult(fast, performance.now() - t0)

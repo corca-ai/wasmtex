@@ -19,6 +19,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Opt-in `compilePreview()` returns immutable, renderer-neutral PDF parts for final
+  page-break incremental results, with deferred canonical materialization and stable
+  head identity. `getRetentionStats()` observes retained JavaScript checkpoint buffers.
+
 - Browser bundlers can resolve the optional PDF splicer lazily instead of shipping
   an unresolvable bare import that silently defeats page-break incremental compilation.
 

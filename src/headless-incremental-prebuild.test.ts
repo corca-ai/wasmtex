@@ -1,4 +1,7 @@
+import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it, vi } from 'vitest'
+import { IncrementalCompiler } from './engine/incremental'
+import type { WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { WasmTexCompiler } from './headless'
 
 type PrebuildForEdit = (
@@ -11,12 +14,10 @@ type PrebuildForEdit = (
 interface CompilerInternals {
   initialized: boolean
   engine: object | null
-  incremental: {
-    prebuildForEdit: PrebuildForEdit
-    tryIncremental(): Promise<null>
-    noteFull(): void
-    reset(): void
-  } | null
+  incremental: Pick<
+    IncrementalCompiler,
+    'prebuildForEdit' | 'canFastServe' | 'tryIncremental' | 'noteFull' | 'reset'
+  > | null
   fs: { markSynced(): void }
 }
 
@@ -48,6 +49,7 @@ function readyCompiler(prebuildForEdit: PrebuildForEdit) {
   }
   internals.incremental = {
     prebuildForEdit,
+    canFastServe: () => false,
     tryIncremental: async () => null,
     noteFull: () => {},
     reset: () => {},
@@ -136,4 +138,61 @@ describe('compile ownership during checkpoint preparation', () => {
     }
     compiler.dispose()
   })
+})
+
+describe('preview compile ownership', () => {
+  it('returns the full result without changing the ordinary compile contract', async () => {
+    const compiler = readyCompiler(async () => false)
+    const ordinary = await compiler.compile()
+    const preview = await compiler.compilePreview()
+    expect(preview).toEqual(ordinary)
+    expect(preview.pdf).toBeInstanceOf(Uint8Array)
+    compiler.dispose()
+  })
+
+  it('shares the reservation with ordinary compiles', async () => {
+    const { compiler, preparation, compile, finish } = compileWaitingForPreparation()
+    await expect(compiler.compilePreview()).rejects.toThrow(/in progress/)
+    finish(true)
+    await preparation
+    await compile
+    compiler.dispose()
+  })
+})
+
+it('public preview results survive edits and compiler disposal with exact diagnostics', async () => {
+  const compiler = readyCompiler(async () => false)
+  const internals = compiler as unknown as CompilerInternals
+  const document = await PDFDocument.create()
+  document.addPage([200, 200])
+  const bytes = await document.save()
+  const engine = Object.assign(internals.engine!, {
+    buildCheckpoint: async () => ({ fmt: new Uint8Array([1]), headPdf: bytes }),
+    compileFromCheckpoint: async () => ({
+      pdf: bytes,
+      status: 0,
+      log: 'tail diagnostics',
+      synctex: null,
+    }),
+  })
+  const incremental = new IncrementalCompiler(engine as unknown as WasmTexPdftexEngine, {
+    minHeadBytes: 0,
+  })
+  internals.incremental = incremental
+  const original =
+    '\\documentclass{article}\n\\begin{document}\nHead.\n\\clearpage\nOriginal.\n\\end{document}'
+  incremental.noteFull(original)
+  compiler.setFile('main.tex', original.replace('Original.', 'Edited.'))
+  const result = await compiler.compilePreview()
+  const parts = result.pdf
+  if (!parts || parts instanceof Uint8Array) throw new Error('expected public parts result')
+  expect(result.success).toBe(true)
+  expect(result.log).toBe('tail diagnostics')
+  expect(result.synctex).toBeNull()
+  expect(result.telemetry?.dependencyManifest).toBeDefined()
+  expect(compiler.getRetentionStats().checkpointCount).toBe(1)
+  compiler.setFile('main.tex', 'another edit')
+  compiler.dispose()
+  expect(compiler.getRetentionStats().checkpointCount).toBe(0)
+  expect((await PDFDocument.load(await parts.materialize())).getPageCount()).toBe(2)
 })

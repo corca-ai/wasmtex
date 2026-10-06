@@ -41,7 +41,7 @@ describe.runIf(RUN)('#99 P2: headless WasmTexCompiler returns spliced synctexDat
   afterEach(() => host?.dispose())
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: linear end-to-end smoke
-  it('an incremental fast paint carries exact synctexData while synctex stays null', async () => {
+  it.each([false, true])('incremental preview=%s carries exact SyncTeX', async (preview) => {
     const parser = new SynctexParser()
     const c = await makeCompiler(buildDoc('BASE'), true)
     try {
@@ -52,7 +52,7 @@ describe.runIf(RUN)('#99 P2: headless WasmTexCompiler returns spliced synctexDat
 
       // Edit the last section (final tail edit) → fast paint.
       c.setFile('main.tex', buildDoc('EDITED'))
-      const fast = await c.compile()
+      const fast = preview ? await c.compilePreview() : await c.compile()
       // The host contract: synctex bytes null on a fast paint, but synctexData is the exact splice.
       expect(fast.success).toBe(true)
       expect(fast.synctex).toBeNull()
