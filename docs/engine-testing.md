@@ -33,7 +33,8 @@ node scripts/profile-font-cpu.mjs --assets /path/to/engine-assets \
 node scripts/summarize-font-profile.mjs /tmp/font-cpu/*.trace.json > /tmp/font-cpu/summary.json
 ```
 
-`--engine` accepts `all` (default), `pdflatex`, `pdflatex-checkpoint`, `xelatex`,
+`--engine` accepts `all` (default), `unicode` (XeLaTeX and LuaLaTeX),
+`pdflatex`, `pdflatex-checkpoint`, `xelatex`,
 or `lualatex`. The default checkpoint variant measures the Asyncify binary on a
 short document, not a prepared heap resume. Add `--checkpoint-probe true` with
 `--engine pdflatex-checkpoint` for a longer naturally paginated document; this
@@ -47,6 +48,19 @@ Worker clocks are fixed after initialization for reproducible metadata. Raw
 Chromium traces preserve separate worker samples. Counts and sampled deltas are
 diagnostic evidence, not exact CPU timers; Lua interpreter samples do not identify
 individual Lua routines. `--trace false` disables profiling overhead.
+
+For large raster conversion, use `--project test/fixtures/heap-growth/project.json`.
+Project `binaryFiles` maps VFS names to local binary paths relative to the project
+JSON; bytes reach the compiler as `Uint8Array`. An optional `stages.restore` runs
+one final small document after the image/edit cases. The
+[fixture](../test/fixtures/heap-growth/README.md) specifies its decoded size and
+hash. `compare-heap-growth-reports.mjs` accepts baseline/candidate report pairs,
+checks unchanged formats/unaffected engines and observable outputs, and reports
+pooled stage medians and ranges. Review latency differences; it does not impose
+a universal performance budget. The manually dispatched **Heap growth
+qualification** workflow runs source-verified annual candidates, growth/error
+recovery and Unicode tests, then serial baseline/candidate/candidate/baseline
+probes and separate RSS runs on its isolated runner.
 
 For initialization-snapshot storage, add `--heap-stats true`. After each timed
 stage, the report records each worker's current WASM capacity, reset extent,

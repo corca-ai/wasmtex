@@ -1,0 +1,107 @@
+name: Heap growth qualification
+on:
+  workflow_dispatch:
+    inputs:
+      texlive_year:
+        type: choice
+        required: true
+        options: ['2025', '2026']
+      candidate_source:
+        description: Exact engine source commit
+        type: string
+        required: true
+      xetex_run:
+        description: Successful XeTeX/converter source build run
+        type: string
+        required: true
+      luatex_run:
+        description: Successful LuaHBTeX source build run
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      YEAR: ${{ inputs.texlive_year }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Assemble unchanged baseline release
+        uses: ./.github/actions/download-engine-release
+        with:
+          texlive-year: ${{ inputs.texlive_year }}
+          destination: baseline/wasmtex/${{ inputs.texlive_year }}
+          github-token: ${{ github.token }}
+      - name: Download and stage verified source candidate
+        env:
+          SOURCE: ${{ inputs.candidate_source }}
+          XETEX_RUN: ${{ inputs.xetex_run }}
+          LUATEX_RUN: ${{ inputs.luatex_run }}
+        run: |
+          suffix=""
+          if [ "$YEAR" = 2026 ]; then suffix="-2026"; fi
+          gh run download "$XETEX_RUN" --name "wasm-xetex$suffix" --dir inputs/xetex
+          gh run download "$LUATEX_RUN" --name "wasm-luatex$suffix" --dir inputs/luahbtex
+          node scripts/stage-unicode-qualification.mjs --year "$YEAR" --source "$SOURCE" \
+            --baseline "baseline/wasmtex/$YEAR" --xetex inputs/xetex --luahbtex inputs/luahbtex \
+            --output-public candidate
+      - name: Real-core growth, failed conversion, edits and Unicode corpus
+        env:
+          WASMTEX_HEAP_BASELINE_DIR: baseline
+          WASMTEX_SMOKE_PUBLIC_DIR: candidate
+          WASMTEX_HEAP_REBUILT_ENGINE: '1'
+          WASMTEX_UNICODE_COMPAT: '1'
+        run: |
+          export WASMTEX_SMOKE_TEXLIVE_VERSION="$YEAR"
+          export WASMTEX_SMOKE_TEXLIVE_URL="$(node -e 'console.log(require("./scripts/engine-release-components.json").years[process.env.YEAR].mirror.url)')"
+          npx vitest run src/engine/unicode-heap-restore.smoke.test.ts src/engine/unicode-compatibility.smoke.test.ts
+      - name: Alternating latency probes on the isolated runner
+        run: |
+          mirror="$(node -e 'console.log(require("./scripts/engine-release-components.json").years[process.env.YEAR].mirror.url)')"
+          for workload in small image; do
+            project=()
+            if [ "$workload" = image ]; then project=(--project test/fixtures/heap-growth/project.json); fi
+            baseline_series=0
+            candidate_series=0
+            for side in baseline candidate candidate baseline; do
+              if [ "$side" = baseline ]; then
+                series="$baseline_series"
+                baseline_series=$((baseline_series + 1))
+              else
+                series="$candidate_series"
+                candidate_series=$((candidate_series + 1))
+              fi
+              node scripts/profile-font-cpu.mjs --assets "$side/wasmtex/$YEAR" --year "$YEAR" \
+                --texlive-url "$mirror" --engine unicode --trace false --heap-stats true --repetitions 5 \
+                --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}"
+            done
+            node scripts/compare-heap-growth-reports.mjs \
+              "reports/$workload-baseline-0/report.json" "reports/$workload-candidate-0/report.json" \
+              "reports/$workload-baseline-1/report.json" "reports/$workload-candidate-1/report.json" \
+              > "reports/$workload-comparison.json"
+            cat "reports/$workload-comparison.json"
+          done
+      - name: Separate process-memory runs
+        run: |
+          mirror="$(node -e 'console.log(require("./scripts/engine-release-components.json").years[process.env.YEAR].mirror.url)')"
+          for side in baseline candidate; do
+            node scripts/sample-browser-rss.mjs --out "reports/$side-rss.json" -- \
+              node scripts/profile-font-cpu.mjs --assets "$side/wasmtex/$YEAR" --year "$YEAR" \
+                --texlive-url "$mirror" --engine unicode --trace false --heap-stats true --repetitions 3 \
+                --cache-dir mirror-cache --out "reports/$side-memory"
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: heap-growth-qualification-${{ inputs.texlive_year }}
+          path: |
+            reports/
+            candidate/wasmtex/*/QUALIFICATION-INPUTS.json

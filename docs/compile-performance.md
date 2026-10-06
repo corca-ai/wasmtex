@@ -45,6 +45,11 @@ not private-memory budgets. The record owns annual feature comparisons,
 timing variability and qualification limits. These
 changes preserve memory-growth/reset rules and the published format bytes.
 
+The next [Unicode heap-growth experiment](history/heap-growth-2026-10.md)
+qualifies smaller growth headroom and a smaller converter initial allocation.
+Its diagnostic screening is separate from the released snapshot optimization;
+source rebuilds and annual output checks are required before promotion.
+
 ## Excluded or deferred changes
 
 | Candidate | Decision |

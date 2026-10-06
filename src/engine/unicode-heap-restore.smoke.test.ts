@@ -35,7 +35,35 @@ function observableOutput(result: CompileResult, aux: string | null) {
   }
 }
 
-async function compileEdits(publicDir: string, engine: 'pdflatex' | 'xelatex' | 'lualatex') {
+function forceConverterGrowth(staged: string): void {
+  const controller = resolve(staged, `wasmtex/${PROFILE.version}/wasmtex-dvipdfm.worker.js`)
+  // Test-only allocator pressure before the first conversion: exceed the current
+  // capacity on BOTH sides, dirty the allocation, release it, then let the real
+  // controller reset and compile. Subsequent edits exercise reuse of grown pages.
+  const probe = `
+const originalConversion = compilePDFRoutine;
+let allocationProbed = false;
+compilePDFRoutine = function () {
+  if (!allocationProbed) {
+    const before = HEAPU8.length;
+    const size = before + 65536;
+    const pointer = _malloc(size);
+    if (!pointer || HEAPU8.length <= before) throw new Error('Converter did not grow');
+    HEAPU8.fill(0xa5, pointer, pointer + size);
+    _free(pointer);
+    allocationProbed = true;
+  }
+  return originalConversion();
+};
+`
+  writeFileSync(controller, `${readFileSync(controller, 'utf8')}\n${probe}`)
+}
+
+async function compileEdits(
+  publicDir: string,
+  engine: 'pdflatex' | 'xelatex' | 'lualatex',
+  growConverter = false,
+) {
   const { installNodeWorkerHost } = await import('./node-host')
   const { WasmTexCompiler } = await import('../headless')
   const { CompileWorkerDriver } = await import('./wasmtex-worker')
@@ -49,6 +77,7 @@ async function compileEdits(publicDir: string, engine: 'pdflatex' | 'xelatex' | 
     const controller = resolve(staged, `wasmtex/${PROFILE.version}/wasmtex-${binary}.worker.js`)
     writeFileSync(controller, `Date.now = () => 946684800000;\n${readFileSync(controller, 'utf8')}`)
   }
+  if (growConverter) forceConverterGrowth(staged)
   const assetBaseUrl = 'http://assets.local/'
   const host = installNodeWorkerHost({ publicDir: staged, assetBaseUrl })
   const body = String.raw`\section{Introduction}\label{sec:intro}
@@ -129,7 +158,90 @@ ${engine === 'pdflatex' ? String.raw`\usepackage[T1]{fontenc}\usepackage{lmodern
   }
 }
 
+/** One blank, font-free DVI page, exercising the real converter without TeX. */
+function blankDvi(): Uint8Array {
+  const bytes: number[] = []
+  const uint32 = (value: number) =>
+    bytes.push((value >>> 24) & 255, (value >>> 16) & 255, (value >>> 8) & 255, value & 255)
+  const units = () => {
+    uint32(25400000)
+    uint32(473628672)
+    uint32(1000)
+  }
+  bytes.push(247, 2)
+  units()
+  bytes.push(0)
+  const bop = bytes.length
+  bytes.push(139, ...Array<number>(40).fill(0))
+  uint32(0xffffffff)
+  bytes.push(140)
+  const post = bytes.length
+  bytes.push(248)
+  uint32(bop)
+  units()
+  uint32(0)
+  uint32(0)
+  bytes.push(0, 0, 0, 1)
+  bytes.push(249)
+  uint32(post)
+  bytes.push(2, 223, 223, 223, 223)
+  while (bytes.length % 4) bytes.push(223)
+  return Uint8Array.from(bytes)
+}
+
+async function failedConverterRecovery(publicDir: string) {
+  const { installNodeWorkerHost } = await import('./node-host')
+  const { createCompileWorker } = await import('./tex-fmt-engine')
+  const staged = mkdtempSync(join(tmpdir(), 'wasmtex-converter-growth-'))
+  cpSync(publicDir, staged, { recursive: true })
+  const file = join(staged, `wasmtex/${PROFILE.version}/wasmtex-dvipdfm.worker.js`)
+  writeFileSync(file, `Date.now = () => 946684800000;\n${readFileSync(file, 'utf8')}`)
+  forceConverterGrowth(staged)
+  const assetBaseUrl = 'http://assets.local/'
+  const host = installNodeWorkerHost({ publicDir: staged, assetBaseUrl })
+  const driver = createCompileWorker('dvipdfm', {
+    assetBaseUrl,
+    texliveVersion: PROFILE.version,
+    texliveUrl: PROFILE.url,
+  })
+  try {
+    await driver.init()
+    driver.setMainFile('main.xdv')
+    const outputs = []
+    for (const input of [new Uint8Array([247, 2]), blankDvi(), blankDvi()]) {
+      await driver.writeFile('main.xdv', input)
+      const result = await driver.run('compilepdf')
+      outputs.push({
+        success: result.success,
+        log: result.log,
+        pdf: result.out ? pdfDigest(result.out) : null,
+      })
+    }
+    expect(outputs[0]?.success).toBe(false)
+    expect(outputs[1]?.success, outputs[1]?.log).toBe(true)
+    expect(outputs[1]?.pdf).not.toBeNull()
+    expect(outputs[2]).toEqual(outputs[1])
+    return outputs
+  } finally {
+    driver.terminate()
+    host.dispose()
+    rmSync(staged, { recursive: true, force: true })
+  }
+}
+
 describe.runIf(!!BASELINE && !!CANDIDATE)('Engine heap representation preservation', () => {
+  it('recovers from converter failure after memory growth', async () => {
+    expect(await failedConverterRecovery(CANDIDATE!)).toEqual(
+      await failedConverterRecovery(BASELINE!),
+    )
+  }, 120_000)
+
+  it('preserves XeLaTeX output and recovery after converter memory growth', async () => {
+    const baseline = await compileEdits(BASELINE!, 'xelatex', true)
+    const candidate = await compileEdits(CANDIDATE!, 'xelatex', true)
+    expect(candidate).toEqual(baseline)
+  }, 240_000)
+
   it.each([
     'pdflatex',
     'xelatex',

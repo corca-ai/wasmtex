@@ -1,0 +1,14 @@
+{
+  "mainFile": "main.tex",
+  "files": {
+    "main.tex": "\\documentclass{article}\\usepackage{fontspec}\\usepackage{graphicx}\\setmainfont{Latin Modern Roman}\\begin{document}Large raster memory probe.\\includegraphics[width=4cm]{large-rgb.png}\\end{document}"
+  },
+  "binaryFiles": {
+    "large-rgb.png": "large-rgb.png"
+  },
+  "stages": {
+    "body-edit": "\\documentclass{article}\\usepackage{fontspec}\\usepackage{graphicx}\\setmainfont{Latin Modern Roman}\\begin{document}Edited raster memory probe.\\includegraphics[width=4cm]{large-rgb.png}\\end{document}",
+    "preamble-edit": "\\documentclass[12pt]{article}\\usepackage{fontspec}\\usepackage{graphicx}\\setmainfont{Latin Modern Roman}\\begin{document}Large raster memory probe.\\includegraphics[width=4cm]{large-rgb.png}\\end{document}",
+    "restore": "\\documentclass{article}\\usepackage{fontspec}\\usepackage{graphicx}\\setmainfont{Latin Modern Roman}\\begin{document}Small document after large image.\\end{document}"
+  }
+}
