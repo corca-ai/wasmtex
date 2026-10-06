@@ -19,6 +19,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const assets = resolve(arg('assets', 'public/wasmtex/2026'))
 const sdkDir = resolve(arg('sdk-dir', resolve(root, 'lib')))
 const cacheProbe = arg('cache-probe', 'false') === 'true'
+const initPhases = arg('init-phases', 'false') === 'true'
 const controlMode = arg('control-mode', 'none')
 if (!['none', 'baseline-assets'].includes(controlMode)) throw Error('Invalid control mode')
 const mirror = new URL(arg('texlive-url', 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'))
@@ -129,7 +130,7 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 2, controlMode, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
+  schemaVersion: 2, controlMode, initPhases, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
   traceEnabled, heapStatsEnabled, cacheProbe, sdkDir, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkSourceRevision: arg('sdk-source-revision', null),
   sdkHashes: Object.fromEntries(await Promise.all((await readdir(sdkDir, { recursive: true })).filter(name => name.endsWith('.js')).sort().map(async name => [name, hash(await readFile(resolve(sdkDir, name)))]))),
@@ -144,6 +145,7 @@ const report = {
     'conversionMs measures the dvipdfmx worker routine, including its heap reset and file I/O; timings exclude post-compile artifact hashing.',
     'C/WASM sampling does not identify interpreted Lua functions. Inspect luaotfload separately before proposing a Lua cache.',
     'Worker clocks are fixed after initialization for reproducible PDF metadata; performance.now remains real.',
+    ...(initPhases ? ['Initialization phase wrappers add diagnostic overhead. Worker boot, format and warmup overlap; do not sum their durations. Completion offsets locate the critical path.'] : []),
     'The small Latin/math corpus is a profiling probe, not release compatibility qualification.',
   ],
 }
@@ -180,7 +182,7 @@ async function runVariant(variant, repetition, measured) {
     await page.evaluate(async () => { globalThis.Compiler = (await import('/lib/headless.js')).WasmTexCompiler })
     for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit', ...(project?.stages?.restore ? ['restore'] : [])]) {
       const networkStart = network.length
-      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, project }) => {
+      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project }) => {
         const font = variant.startsWith('pdflatex')
           ? '\\usepackage[T1]{fontenc}\\usepackage{lmodern}'
           : '\\usepackage{fontspec}\\setmainfont{Latin Modern Roman}'
@@ -211,11 +213,36 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
 }`)
         const start = performance.now()
         if (stage === 'init') {
+          globalThis.initPhaseTimings = []
+          const observeInit = () => {
+            if (!initPhases) return
+            const engine = globalThis.compiler.engine
+            const observe = (owner, method, label) => {
+              if (!owner || typeof owner[method] !== 'function') return
+              const original = owner[method]
+              owner[method] = function (...args) {
+                const started = performance.now()
+                const finish = () => {
+                  const completed = performance.now()
+                  globalThis.initPhaseTimings.push({ phase: label, startedMs: started - start, completedMs: completed - start, ms: completed - started })
+                }
+                try {
+                  const result = original.apply(this, args)
+                  if (result && typeof result.then === 'function') return result.finally(finish)
+                  finish()
+                  return result
+                } catch (error) { finish(); throw error }
+              }
+            }
+            for (const method of ['preloadFormat', 'loadDurable', 'fetchWarmupAssets', 'injectWarmupAssets']) observe(engine, method, method)
+            observe(engine.tex, 'init', 'tex-worker-boot')
+            observe(engine.dvipdfm, 'init', 'converter-worker-boot')
+          }
           globalThis.compiler = new globalThis.Compiler({
             engine: variant === 'pdflatex-checkpoint' ? 'pdflatex' : variant,
             incremental: variant === 'pdflatex-checkpoint',
             texliveVersion: year, texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
-            persistentCache: cacheProbe, files: project ? {
+            persistentCache: cacheProbe, onEngineSelected: observeInit, files: project ? {
               ...project.files,
               ...Object.fromEntries(Object.entries(project.binaryFiles || {}).map(([name, base64]) =>
                 [name, Uint8Array.from(atob(base64), c => c.charCodeAt(0))])),
@@ -236,13 +263,13 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
             globalThis.compiler = new globalThis.Compiler({
               engine: variant, incremental: false, texliveVersion: year,
               texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
-              persistentCache: true, files: { 'main.tex': source }, mainFile: 'main.tex',
+              persistentCache: true, onEngineSelected: observeInit, files: { 'main.tex': source }, mainFile: 'main.tex',
             })
             const returnStart = performance.now()
             await globalThis.compiler.init()
             globalThis.returnInitMs = performance.now() - returnStart
           }
-          return { seedCache: globalThis.seedCache ?? null, returnInitMs: globalThis.returnInitMs ?? null, ms: performance.now() - start }
+          return { seedCache: globalThis.seedCache ?? null, returnInitMs: globalThis.returnInitMs ?? null, initPhaseTimings: initPhases ? globalThis.initPhaseTimings : null, ms: performance.now() - start }
         }
         if (stage === 'prepare-checkpoint') {
           const prepared = await globalThis.compiler.prepareIncrementalCompile('main.tex', source.indexOf('Font CPU probe.'))
@@ -277,7 +304,7 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           log: result.log, phaseTimings: result.phaseTimings ?? null,
           preambleSnapshot: result.preambleSnapshot ?? null, preambleRebuilt: result.preambleRebuilt ?? null,
         }
-      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, project })
+      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
       if (cacheProbe && stage === 'init') {
         result.cacheReadOwnership = []

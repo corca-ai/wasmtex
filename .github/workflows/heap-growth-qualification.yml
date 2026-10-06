@@ -25,6 +25,10 @@ on:
         type: choice
         options: [none, baseline-assets]
         default: none
+      probe_init_phases:
+        description: Diagnostic phase durations and completion offsets (adds overhead)
+        type: boolean
+        default: false
       probe_workload:
         description: Latency workloads; small limits a diagnostic control
         type: choice
@@ -49,6 +53,7 @@ on:
       probe_order: { type: string, default: ABBA }
       probe_control: { type: string, default: none }
       probe_workload: { type: string, default: all }
+      probe_init_phases: { type: boolean, default: false }
       texlive_year: { type: string, required: true }
       candidate_source: { type: string, required: true }
       xetex_run: { type: string, required: true }
@@ -66,6 +71,7 @@ jobs:
       PROBE_ORDER: ${{ inputs.probe_order }}
       PROBE_CONTROL: ${{ inputs.probe_control }}
       PROBE_WORKLOAD: ${{ inputs.probe_workload }}
+      PROBE_INIT_PHASES: ${{ inputs.probe_init_phases }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -158,7 +164,7 @@ jobs:
               fi
               node scripts/profile-font-cpu.mjs --assets "$probe_assets" --year "$YEAR" \
                 --texlive-url "$mirror" --engine "$PROBE_ENGINE" --trace false --heap-stats true --repetitions 5 \
-                --control-mode "$PROBE_CONTROL" --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}" "${sdk[@]}"
+                --init-phases "$PROBE_INIT_PHASES" --control-mode "$PROBE_CONTROL" --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}" "${sdk[@]}"
             done
             node scripts/compare-heap-growth-reports.mjs \
               "reports/$workload-baseline-0/report.json" "reports/$workload-candidate-0/report.json" \

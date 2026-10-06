@@ -17,7 +17,7 @@ const observables = [
 ]
 const read = path => JSON.parse(readFileSync(path, 'utf8'))
 const references = new Map()
-const environmentFields = ['schemaVersion', 'controlMode', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'cacheProbe', 'luaNamesProbe', 'fixedWorkerClock', 'variants', 'repetitions']
+const environmentFields = ['schemaVersion', 'controlMode', 'initPhases', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'cacheProbe', 'luaNamesProbe', 'fixedWorkerClock', 'variants', 'repetitions']
 const anchor = read(paths[0])
 const controlMode = anchor.controlMode ?? 'none'
 assert(['none', 'baseline-assets'].includes(controlMode), 'Invalid control mode')
