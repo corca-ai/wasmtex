@@ -14,6 +14,14 @@ on:
         type: choice
         options: ['2025', '2026']
         default: '2026'
+      heap_growth_engine:
+        type: choice
+        options: [unicode, xelatex, lualatex]
+        default: unicode
+      heap_growth_order:
+        type: choice
+        options: [ABBA, BAAB]
+        default: ABBA
       candidate_source: { type: string }
       xetex_run: { type: string }
       luatex_run: { type: string }
@@ -27,6 +35,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.heap_growth
     uses: ./.github/workflows/heap-growth-qualification.yml
     with:
+      probe_engine: ${{ inputs.heap_growth_engine }}
+      probe_order: ${{ inputs.heap_growth_order }}
       texlive_year: ${{ inputs.texlive_year }}
       candidate_source: ${{ inputs.candidate_source }}
       xetex_run: ${{ inputs.xetex_run }}

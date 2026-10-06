@@ -60,7 +60,14 @@ pooled stage medians and ranges. Review latency differences; it does not impose
 a universal performance budget. The manually dispatched **Heap growth
 qualification** workflow runs source-verified annual candidates, growth/error
 recovery and Unicode tests, then serial baseline/candidate/candidate/baseline
-probes and separate RSS runs on its isolated runner.
+probes and separate RSS runs on its isolated runner. It also runs annual browser
+goldens, nested output, checkpoint and cross-host parity checks. The existing
+**CI** workflow exposes the same qualification with its manual `heap_growth`
+input, useful before a new workflow is registered on the default branch. Pass
+`texlive_year`, the exact `candidate_source`, and successful `xetex_run` and
+`luatex_run` IDs; baseline release pins must still identify the prior release. Optional
+`heap_growth_engine` and `heap_growth_order` select one engine and the opposite
+BAAB order when a stage needs a focused latency repeat.
 
 For initialization-snapshot storage, add `--heap-stats true`. After each timed
 stage, the report records each worker's current WASM capacity, reset extent,
