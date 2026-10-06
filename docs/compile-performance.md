@@ -13,6 +13,8 @@ to their source files and requalification requirements.
 | Unicode initial memory | XeTeX and LuaHBTeX start at 128 MiB with growth enabled. | This is initial WASM memory, not browser RSS or a maximum document budget. |
 | Unicode/converter heap growth | XeTeX, LuaHBTeX and dvipdfmx use 5% growth headroom capped at 16 MiB; dvipdfmx starts at 64 MiB. | Stack sizes, growable maximums and TeX capacities are unchanged. Grown memory does not shrink on reset. |
 | Initial heap snapshots | pdfTeX trims the zero suffix; XeTeX, LuaHBTeX and dvipdfmx pack occupied page prefixes and clear omitted gaps. | Preserves the original reset extent; distinct from resumable checkpoints. |
+| Unicode warmup lifetime | SDK-owned prepared/durable sets survive only until all initialized workers receive them; caller-provided sets remain reusable. | Frees duplicate originals while preserving worker caches and reinitialization inputs. |
+| Unicode cache export | XeTeX/dvipdfmx on both annual lines and 2026 LuaHBTeX transfer the independent MEMFS read result without a second byte copy. | Reduces transient copy allocation; 2025 Lua retains its published controller after repeated initialization increases. Does not shrink WASM or evict cached files. |
 | Warmup | All three engine families accept supplied warmup data; hosts can merge profile-matched learned dependency sets. | Preparation costs time/network/memory; filesystem preloading must preserve lookup behavior. |
 | Conversion evidence | dvipdfmx reports bounded successful file opens, including native-cache hits. | Adds observations; XeLaTeX dependency completeness remains false. |
 | dvipdfmx font maps | Auxiliary lookup index and cached list tails preserve original ownership and iteration. | Includes the separately qualified missing-SFD lifetime fix; no cross-document font-object cache. |
@@ -55,6 +57,10 @@ not established and one image first-compile capacity increases. Opposite-order
 repeats found no reproducible compile slowdown in the measured corpus; this
 does not establish identical initialization latency or a browser memory budget.
 
+The [cache memory record](history/cache-memory-2026-10.md) separates retained warmup
+originals from transient dump allocations and records the rejected delta-save,
+auxiliary-snapshot and checkpoint-sharing implementations.
+
 ## Excluded or deferred changes
 
 | Candidate | Decision |
@@ -83,9 +89,12 @@ and [2026-52bd7d6287f2a826](https://github.com/corca-ai/wasmtex/releases/tag/eng
 The previous heap-memory releases are
 [2025-6d7baaeed54984d4](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d7baaeed54984d4)
 and [2026-b614b6f4378863d1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-b614b6f4378863d1).
-The current heap-growth releases are
+The previous heap-growth releases are
 [2025-e53a1aea7b7ebc88](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-e53a1aea7b7ebc88)
 and [2026-6d5129f5cbe00164](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-6d5129f5cbe00164).
+The current cache-memory releases are
+[2025-18f28ec91eb80496](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-18f28ec91eb80496)
+and [2026-dce598a0b9a42e79](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-dce598a0b9a42e79).
 They retain the original format-generation provenance and immutable mirrors.
 `scripts/engine-release-components.json` owns the selected workflow runs;
 artifact manifests and receipts own the released file identities. Do not infer

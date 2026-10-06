@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { WasmTexLuatexEngine } from './luatex-engine'
+import type { WasmTexEngineOptions } from './wasmtex-engine'
 import { type EngineWorker, setWorkerFactory } from './worker-host'
 import { WasmTexXetexEngine } from './xetex-engine'
 
@@ -85,4 +86,52 @@ it.each([
   } finally {
     engine.terminate()
   }
+})
+
+it('keeps warmup available until a slow XeTeX converter is ready and leaves it reusable', async () => {
+  const received: Message[][] = []
+  let readyConverter!: () => void
+  setWorkerFactory(() => {
+    const messages: Message[] = []
+    received.push(messages)
+    const worker: EngineWorker = {
+      onmessage: null,
+      onerror: null,
+      terminate() {},
+      postMessage(value, transfer) {
+        messages.push(structuredClone(value, { transfer: transfer ?? [] }) as Message)
+      },
+    }
+    const ready = () => worker.onmessage?.({ data: { result: 'ok' } })
+    if (received.length === 2) readyConverter = ready
+    else queueMicrotask(ready)
+    return worker
+  })
+  vi.stubGlobal('fetch', async () => new Response(null, { status: 404 }))
+  const bytes = new Uint8Array([4, 8, 15, 16]).buffer
+  const options = {
+    assetBaseUrl: 'https://assets.invalid/',
+    texliveUrl: 'https://mirror.invalid/2026/',
+    texliveVersion: '2026',
+    persistentCache: false,
+    warmupCache: { files: [{ format: 26, filename: 'test.sty', data: bytes }], notFound: [] },
+  } satisfies WasmTexEngineOptions
+  const first = new WasmTexXetexEngine(options)
+  const initializing = first.init()
+  await vi.waitFor(() => expect(received[0]?.some((m) => m.cmd === 'preloadtexlive')).toBe(true))
+  expect(received[1]?.some((m) => m.cmd === 'preloadtexlive')).toBe(false)
+  readyConverter()
+  await initializing
+  first.terminate()
+  await first.init()
+  first.terminate()
+  const second = new WasmTexLuatexEngine(options)
+  await second.init()
+  second.terminate()
+  for (const messages of received) {
+    expect(new Uint8Array(messages.find((m) => m.filename === 'test.sty')!.data!)).toEqual(
+      new Uint8Array([4, 8, 15, 16]),
+    )
+  }
+  expect(bytes.byteLength).toBe(4)
 })

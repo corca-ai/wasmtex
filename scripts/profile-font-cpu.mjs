@@ -17,6 +17,11 @@ function arg(name, fallback) {
 }
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const assets = resolve(arg('assets', 'public/wasmtex/2026'))
+const sdkDir = resolve(arg('sdk-dir', resolve(root, 'lib')))
+const cacheProbe = arg('cache-probe', 'false') === 'true'
+const initPhases = arg('init-phases', 'false') === 'true'
+const controlMode = arg('control-mode', 'none')
+if (!['none', 'baseline-assets'].includes(controlMode)) throw Error('Invalid control mode')
 const mirror = new URL(arg('texlive-url', 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'))
 if (!mirror.pathname.endsWith('/')) throw Error('Mirror URL must end in /')
 const year = arg('year', '2026')
@@ -45,6 +50,7 @@ if (project?.binaryFiles) {
     return [name, (await readFile(resolve(dirname(resolve(projectPath)), file))).toString('base64')]
   })))
 }
+if (cacheProbe && (project || checkpointProbe || !['unicode', 'xelatex', 'lualatex'].includes(selected) || luaNamesProbe)) throw Error('Cache probe requires the standard non-checkpoint document')
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 await mkdir(out, { recursive: true })
 await mkdir(cacheDir, { recursive: true })
@@ -98,7 +104,7 @@ const server = createServer(async (req, res) => {
     if (pathname === '/') { res.writeHead(200, { 'Content-Type': 'text/html' }).end('<!doctype html><title>WasmTex CPU diagnostic</title>'); return }
     const prefix = pathname.startsWith(`/assets/wasmtex/${year}/`) ? `/assets/wasmtex/${year}/` : pathname.startsWith('/lib/') ? '/lib/' : null
     if (!prefix) { res.writeHead(404).end(); return }
-    const base = prefix.startsWith('/assets/') ? assets : resolve(root, 'lib')
+    const base = prefix.startsWith('/assets/') ? assets : sdkDir
     const file = resolve(base, decodeURIComponent(pathname.slice(prefix.length)))
     if (!file.startsWith(base + sep)) { res.writeHead(403).end(); return }
     const bytes = await readFile(file)
@@ -124,8 +130,10 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
-  traceEnabled, heapStatsEnabled, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
+  schemaVersion: 2, controlMode, initPhases, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
+  traceEnabled, heapStatsEnabled, cacheProbe, sdkDir, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
+  sdkSourceRevision: arg('sdk-source-revision', null),
+  sdkHashes: Object.fromEntries(await Promise.all((await readdir(sdkDir, { recursive: true })).filter(name => name.endsWith('.js')).sort().map(async name => [name, hash(await readFile(resolve(sdkDir, name)))]))),
   sdkRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   harnessSha256: hash(await readFile(fileURLToPath(import.meta.url))),
   node: process.version, platform: process.platform, architecture: process.arch,
@@ -137,6 +145,7 @@ const report = {
     'conversionMs measures the dvipdfmx worker routine, including its heap reset and file I/O; timings exclude post-compile artifact hashing.',
     'C/WASM sampling does not identify interpreted Lua functions. Inspect luaotfload separately before proposing a Lua cache.',
     'Worker clocks are fixed after initialization for reproducible PDF metadata; performance.now remains real.',
+    ...(initPhases ? ['Initialization phase wrappers add diagnostic overhead. Worker boot, format and warmup overlap; do not sum their durations. Completion offsets locate the critical path.'] : []),
     'The small Latin/math corpus is a profiling probe, not release compatibility qualification.',
   ],
 }
@@ -173,7 +182,7 @@ async function runVariant(variant, repetition, measured) {
     await page.evaluate(async () => { globalThis.Compiler = (await import('/lib/headless.js')).WasmTexCompiler })
     for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit', ...(project?.stages?.restore ? ['restore'] : [])]) {
       const networkStart = network.length
-      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, project }) => {
+      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project }) => {
         const font = variant.startsWith('pdflatex')
           ? '\\usepackage[T1]{fontenc}\\usepackage{lmodern}'
           : '\\usepackage{fontspec}\\setmainfont{Latin Modern Roman}'
@@ -204,18 +213,63 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
 }`)
         const start = performance.now()
         if (stage === 'init') {
+          globalThis.initPhaseTimings = []
+          const observeInit = () => {
+            if (!initPhases) return
+            const engine = globalThis.compiler.engine
+            const observe = (owner, method, label) => {
+              if (!owner || typeof owner[method] !== 'function') return
+              const original = owner[method]
+              owner[method] = function (...args) {
+                const started = performance.now()
+                const finish = () => {
+                  const completed = performance.now()
+                  globalThis.initPhaseTimings.push({ phase: label, startedMs: started - start, completedMs: completed - start, ms: completed - started })
+                }
+                try {
+                  const result = original.apply(this, args)
+                  if (result && typeof result.then === 'function') return result.finally(finish)
+                  finish()
+                  return result
+                } catch (error) { finish(); throw error }
+              }
+            }
+            for (const method of ['preloadFormat', 'loadDurable', 'fetchWarmupAssets', 'injectWarmupAssets']) observe(engine, method, method)
+            observe(engine.tex, 'init', 'tex-worker-boot')
+            observe(engine.dvipdfm, 'init', 'converter-worker-boot')
+          }
           globalThis.compiler = new globalThis.Compiler({
             engine: variant === 'pdflatex-checkpoint' ? 'pdflatex' : variant,
             incremental: variant === 'pdflatex-checkpoint',
             texliveVersion: year, texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
-            persistentCache: false, files: project ? {
+            persistentCache: cacheProbe, onEngineSelected: observeInit, files: project ? {
               ...project.files,
               ...Object.fromEntries(Object.entries(project.binaryFiles || {}).map(([name, base64]) =>
                 [name, Uint8Array.from(atob(base64), c => c.charCodeAt(0))])),
             } : { 'main.tex': source }, mainFile: project?.mainFile || 'main.tex',
           })
           await globalThis.compiler.init()
-          return { ms: performance.now() - start }
+          if (cacheProbe) {
+            const seed = await globalThis.compiler.compile()
+            if (!seed.success) throw Error(seed.log)
+            const deadline = performance.now() + 30000
+            while (globalThis.compiler.engine.persist?.inFlight) {
+              if (performance.now() > deadline) throw Error('Seed cache save timed out')
+              await new Promise(resolve => setTimeout(resolve, 5))
+            }
+            globalThis.seedCache = { downloadCount: globalThis.compiler.engine.persist.downloadCount, lastPersisted: globalThis.compiler.engine.persist.lastPersisted }
+            if (globalThis.seedCache.lastPersisted < 0) throw Error('Seed cache save failed')
+            globalThis.compiler.dispose()
+            globalThis.compiler = new globalThis.Compiler({
+              engine: variant, incremental: false, texliveVersion: year,
+              texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
+              persistentCache: true, onEngineSelected: observeInit, files: { 'main.tex': source }, mainFile: 'main.tex',
+            })
+            const returnStart = performance.now()
+            await globalThis.compiler.init()
+            globalThis.returnInitMs = performance.now() - returnStart
+          }
+          return { seedCache: globalThis.seedCache ?? null, returnInitMs: globalThis.returnInitMs ?? null, initPhaseTimings: initPhases ? globalThis.initPhaseTimings : null, ms: performance.now() - start }
         }
         if (stage === 'prepare-checkpoint') {
           const prepared = await globalThis.compiler.prepareIncrementalCompile('main.tex', source.indexOf('Font CPU probe.'))
@@ -250,8 +304,43 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           log: result.log, phaseTimings: result.phaseTimings ?? null,
           preambleSnapshot: result.preambleSnapshot ?? null, preambleRebuilt: result.preambleRebuilt ?? null,
         }
-      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, project })
+      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
+      if (cacheProbe && stage === 'init') {
+        result.cacheReadOwnership = []
+        for (const worker of page.workers()) {
+          result.cacheReadOwnership.push(await worker.evaluate(() => {
+            const cache = typeof texlive200 !== 'undefined' ? texlive200 : texlive200_cache
+            const path = Object.values(cache)[0]
+            if (!path) throw Error('Return visit did not load a persistent file')
+            const owned = FS.readFile(path, { encoding: 'binary' })
+            const expected = owned.slice()
+            if (owned.byteOffset !== 0 || owned.byteLength !== owned.buffer.byteLength) throw Error('MEMFS readFile allocation is not exact')
+            const delivered = structuredClone(owned, { transfer: [owned.buffer] })
+            const retained = FS.readFile(path, { encoding: 'binary' })
+            if (owned.byteLength !== 0 || retained.length !== expected.length || retained.some((byte, index) => byte !== expected[index]) || delivered.some((byte, index) => byte !== expected[index])) throw Error('Transfer damaged MEMFS cache')
+            return { path, bytes: retained.byteLength, independent: true }
+          }))
+        }
+      }
+      if (cacheProbe) {
+        result.persistence = await page.evaluate(async () => {
+          const start = performance.now()
+          const deadline = performance.now() + 30000
+          while (globalThis.compiler.engine.persist?.inFlight) {
+            if (performance.now() > deadline) throw Error('Cache save timed out')
+            await new Promise(resolve => setTimeout(resolve, 5))
+          }
+          const engine = globalThis.compiler.engine
+          const buffers = new Set([
+            ...(engine.lastWarmSets || []).flatMap(set => set.files.map(file => file.data)),
+            ...(engine.suppliedWarmup?.files || []).map(file => file.data),
+          ])
+          return { waitMs: performance.now() - start,
+            retainedWarmupBytes: [...buffers].reduce((sum, buffer) => sum + buffer.byteLength, 0),
+            lastPersisted: engine.persist?.lastPersisted }
+        })
+      }
       if (heapStatsEnabled) {
         result.heapSnapshots = []
         for (const worker of page.workers()) {

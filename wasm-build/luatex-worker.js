@@ -384,9 +384,8 @@ self.onmessage = (ev) => {
       const slash = ck.indexOf('/')
       if (slash < 0) continue
       try {
-        const buf = FS.readFile(texlive200[ck], { encoding: 'binary' })
-        const copy = new Uint8Array(buf.length)
-        copy.set(buf)
+        // MEMFS readFile returns an independently owned copy; transfer it directly.
+        const copy = FS.readFile(texlive200[ck], { encoding: 'binary' })
         files.push({ format: parseInt(ck.slice(0, slash), 10), filename: ck.slice(slash + 1), data: copy.buffer })
         transfer.push(copy.buffer)
       } catch {}

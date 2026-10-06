@@ -17,14 +17,23 @@ const observables = [
 ]
 const read = path => JSON.parse(readFileSync(path, 'utf8'))
 const references = new Map()
-const environmentFields = ['schemaVersion', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'fixedWorkerClock', 'variants', 'repetitions']
+const environmentFields = ['schemaVersion', 'controlMode', 'initPhases', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'cacheProbe', 'luaNamesProbe', 'fixedWorkerClock', 'variants', 'repetitions']
 const anchor = read(paths[0])
+const controlMode = anchor.controlMode ?? 'none'
+assert(['none', 'baseline-assets'].includes(controlMode), 'Invalid control mode')
 const sideHashes = {}
+const sideSdks = {}
 for (let pair = 0; pair < paths.length; pair += 2) {
   const baseline = read(paths[pair])
   const candidate = read(paths[pair + 1])
   for (const report of [baseline, candidate]) {
     for (const field of environmentFields) assert.deepEqual(report[field], anchor[field], `Probe mismatch: ${field}`)
+  }
+  if (controlMode === 'baseline-assets') {
+    assert(baseline.schemaVersion >= 2 && baseline.sdkHashes, 'Control requires actual SDK hashes')
+    assert.deepEqual(candidate.assetHashes, baseline.assetHashes, 'Control assets differ between arms')
+    assert.deepEqual(candidate.sdkHashes, baseline.sdkHashes, 'Control SDK differs between arms')
+    assert.equal(candidate.sdkSourceRevision, baseline.sdkSourceRevision, 'Control SDK revision differs between arms')
   }
   assert.equal(baseline.traceEnabled, false, 'Timing must exclude tracing')
   assert.equal(candidate.traceEnabled, false, 'Timing must exclude tracing')
@@ -35,6 +44,11 @@ for (let pair = 0; pair < paths.length; pair += 2) {
   }
   for (const [side, report] of [['baseline', baseline], ['candidate', candidate]]) {
     assert(!report.error, 'Probe failed')
+    if (report.schemaVersion >= 2) {
+      assert(report.sdkHashes && Object.keys(report.sdkHashes).length > 0, 'Missing actual SDK hashes')
+      sideSdks[side] ??= report.sdkHashes
+      assert.deepEqual(report.sdkHashes, sideSdks[side], `SDK changed across ${side} series`)
+    }
     assert(Number.isInteger(report.repetitions) && report.repetitions > 0, 'Invalid repetitions')
     assert(Array.isArray(report.variants) && report.variants.length > 0 && new Set(report.variants).size === report.variants.length, 'Invalid variants')
     sideHashes[side] ??= report.assetHashes
@@ -50,6 +64,19 @@ for (let pair = 0; pair < paths.length; pair += 2) {
       assert.deepEqual(sample.stages.map(stage => stage.stage), stages, 'Incomplete stages')
       for (const stage of sample.stages) {
         const key = `${sample.variant}/${stage.stage}`
+        if (report.cacheProbe) {
+          assert(Number.isFinite(stage.persistence?.retainedWarmupBytes) && stage.persistence.retainedWarmupBytes >= 0, `Invalid warmup bytes: ${key}`)
+          if (stage.stage === 'init') {
+            assert(Array.isArray(stage.cacheReadOwnership) && stage.cacheReadOwnership.length === (sample.variant === 'xelatex' ? 2 : 1), 'Missing native cache ownership probe')
+            assert(stage.cacheReadOwnership.every(entry => entry.independent === true && Number.isFinite(entry.bytes) && entry.bytes > 0), 'Invalid cache ownership evidence')
+            assert(stage.seedCache?.lastPersisted >= 0 && stage.seedCache.downloadCount === stage.seedCache.lastPersisted, 'Seed cache save incomplete')
+            assert(stage.returnInitMs > 0 && Number.isFinite(stage.returnInitMs), 'Missing return-init timing')
+            const returnKey = `${sample.variant}/return-init`
+            const timings = groups[side].get(returnKey) ?? []
+            timings.push(stage.returnInitMs)
+            groups[side].set(returnKey, timings)
+          }
+        }
         if (stage.stage !== 'init' && stage.stage !== 'prepare-checkpoint') {
           const output = Object.fromEntries(observables.map(field => [field, stage[field]]))
           if (!references.has(key)) references.set(key, output)
@@ -76,4 +103,4 @@ const comparisons = [...groups.baseline].map(([stage, before]) => {
     candidateRangeMs: [Math.min(...after), Math.max(...after)],
   }
 })
-console.log(JSON.stringify({ outputPreserved: true, comparisons }, null, 2))
+console.log(JSON.stringify({ controlMode, outputPreserved: true, comparisons }, null, 2))

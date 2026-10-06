@@ -61,10 +61,10 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     }
     // Both artifacts must load; if either is absent the worker errors and init
     // rejects, which the caller turns into an actionable "engine unavailable".
-    await Promise.all([this.initTex(), this.dvipdfm.init()])
+    const [warmSets] = await Promise.all([this.initTex(), this.dvipdfm.init()])
     // Rehydrate dvipdfmx from the durable set AFTER its init (so its preload queue is live),
     // so a return visit serves the embedded fonts from cache instead of re-fetching the CDN.
-    this.rehydrateExtraDriver(this.dvipdfm)
+    this.rehydrateExtraDriver(this.dvipdfm, warmSets)
   }
 
   /** dvipdfmx fetches+embeds fonts the primary XeTeX worker never caches — persist them too. */

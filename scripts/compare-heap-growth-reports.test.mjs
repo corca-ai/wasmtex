@@ -67,3 +67,66 @@ for (const [name, mutate] of [
     assert.throws(() => compare(fixture(), fixture(), before2, after2))
   })
 }
+
+
+test('pins the actual SDK separately per arm and rejects SDK drift', () => {
+  const before = fixture(), after = fixture()
+  for (const report of [before, after]) report.schemaVersion = 2
+  before.sdkHashes = { 'engine/tex-fmt-engine.js': 'old' }
+  after.sdkHashes = { 'engine/tex-fmt-engine.js': 'new' }
+  assert.equal(compare(before, after).outputPreserved, true)
+  const drift = structuredClone(after)
+  drift.sdkHashes['engine/tex-fmt-engine.js'] = 'changed'
+  assert.throws(() => compare(before, after, before, drift))
+  const absent = structuredClone(after)
+  delete absent.sdkHashes
+  assert.throws(() => compare(before, absent))
+})
+
+test('rejects a cache visit mismatch or a failed seed save', () => {
+  const after = fixture()
+  after.cacheProbe = true
+  assert.throws(() => compare(fixture(), after))
+  const before = structuredClone(after)
+  assert.throws(() => compare(before, after))
+})
+
+
+test('compares a verified cache return visit and rejects absent ownership evidence', () => {
+  const before = fixture(), after = fixture()
+  for (const report of [before, after]) {
+    report.cacheProbe = true
+    for (const sample of report.samples) for (const stage of sample.stages) {
+      stage.persistence = { retainedWarmupBytes: 64 }
+      if (stage.stage === 'init') {
+        stage.seedCache = { downloadCount: 4, lastPersisted: 4 }
+        stage.returnInitMs = 5
+        stage.cacheReadOwnership = [{ independent: true, bytes: 12 }, { independent: true, bytes: 12 }]
+      }
+    }
+  }
+  assert.equal(compare(before, after).outputPreserved, true)
+  after.samples[0].stages[0].cacheReadOwnership = []
+  assert.throws(() => compare(before, after))
+})
+
+
+test('labels identical-input controls and rejects changed assets or SDK in either arm', () => {
+  const before = fixture(), after = fixture()
+  for (const report of [before, after]) {
+    report.schemaVersion = 2
+    report.controlMode = 'baseline-assets'
+    report.sdkHashes = { 'engine/tex-fmt-engine.js': 'baseline' }
+    report.sdkSourceRevision = 'baseline'
+  }
+  assert.equal(compare(before, after).controlMode, 'baseline-assets')
+  const changedAssets = structuredClone(after)
+  changedAssets.assetHashes['wasmtex-xetex.wasm'] = 'candidate'
+  assert.throws(() => compare(before, changedAssets))
+  const changedSdk = structuredClone(after)
+  changedSdk.sdkHashes['engine/tex-fmt-engine.js'] = 'candidate'
+  assert.throws(() => compare(before, changedSdk))
+  const missingSdk = structuredClone(after)
+  delete missingSdk.sdkHashes
+  assert.throws(() => compare(before, missingSdk))
+})
