@@ -6,6 +6,10 @@ on:
         type: choice
         required: true
         options: ['2025', '2026']
+      baseline_ref:
+        description: Exact baseline release catalog commit or ref
+        type: string
+        required: true
       probe_engine:
         description: Engines to measure
         type: choice
@@ -30,6 +34,7 @@ on:
         required: true
   workflow_call:
     inputs:
+      baseline_ref: { type: string, required: true }
       probe_engine: { type: string, default: unicode }
       probe_order: { type: string, default: ABBA }
       texlive_year: { type: string, required: true }
@@ -54,12 +59,21 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Pin baseline catalog independently of candidate branch
+        env:
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+        run: |
+          test -n "$BASELINE_REF"
+          git fetch --no-tags --depth=1 -- origin "$BASELINE_REF"
+          git rev-parse FETCH_HEAD > baseline-catalog-revision.txt
+          git show FETCH_HEAD:scripts/engine-release-components.json > baseline-components.json
       - name: Assemble unchanged baseline release
         uses: ./.github/actions/download-engine-release
         with:
           texlive-year: ${{ inputs.texlive_year }}
           destination: baseline/wasmtex/${{ inputs.texlive_year }}
           github-token: ${{ github.token }}
+          components-file: baseline-components.json
       - name: Download and stage verified source candidate
         env:
           SOURCE: ${{ inputs.candidate_source }}
@@ -142,5 +156,7 @@ jobs:
           name: heap-growth-qualification-${{ inputs.texlive_year }}
           path: |
             reports/
+            baseline-components.json
+            baseline-catalog-revision.txt
             test-results/
             candidate/wasmtex/*/QUALIFICATION-INPUTS.json

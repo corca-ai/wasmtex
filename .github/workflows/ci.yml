@@ -14,6 +14,9 @@ on:
         type: choice
         options: ['2025', '2026']
         default: '2026'
+      heap_growth_baseline_ref:
+        description: Baseline release catalog commit or ref, required for qualification
+        type: string
       heap_growth_engine:
         type: choice
         options: [unicode, xelatex, lualatex]
@@ -35,6 +38,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.heap_growth
     uses: ./.github/workflows/heap-growth-qualification.yml
     with:
+      baseline_ref: ${{ inputs.heap_growth_baseline_ref }}
       probe_engine: ${{ inputs.heap_growth_engine }}
       probe_order: ${{ inputs.heap_growth_order }}
       texlive_year: ${{ inputs.texlive_year }}

@@ -64,8 +64,10 @@ probes and separate RSS runs on its isolated runner. It also runs annual browser
 goldens, nested output, checkpoint and cross-host parity checks. The existing
 **CI** workflow exposes the same qualification with its manual `heap_growth`
 input, useful before a new workflow is registered on the default branch. Pass
-`texlive_year`, the exact `candidate_source`, and successful `xetex_run` and
-`luatex_run` IDs; baseline release pins must still identify the prior release. Optional
+`texlive_year`, the exact `candidate_source`, successful `xetex_run` and
+`luatex_run` IDs, and `heap_growth_baseline_ref` naming the baseline catalog's
+commit or ref. Its resolved commit/catalog are captured separately: updating
+candidate release pins cannot silently replace the baseline. Optional
 `heap_growth_engine` and `heap_growth_order` select one engine and the opposite
 BAAB order when a stage needs a focused latency repeat.
 
