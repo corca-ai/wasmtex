@@ -89,9 +89,12 @@ and [2026-52bd7d6287f2a826](https://github.com/corca-ai/wasmtex/releases/tag/eng
 The previous heap-memory releases are
 [2025-6d7baaeed54984d4](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-6d7baaeed54984d4)
 and [2026-b614b6f4378863d1](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-b614b6f4378863d1).
-The current heap-growth releases are
+The previous heap-growth releases are
 [2025-e53a1aea7b7ebc88](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-e53a1aea7b7ebc88)
 and [2026-6d5129f5cbe00164](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-6d5129f5cbe00164).
+The current cache-memory releases are
+[2025-e98592b5cdb10877](https://github.com/corca-ai/wasmtex/releases/tag/engine-2025-e98592b5cdb10877)
+and [2026-dce598a0b9a42e79](https://github.com/corca-ai/wasmtex/releases/tag/engine-2026-dce598a0b9a42e79).
 They retain the original format-generation provenance and immutable mirrors.
 `scripts/engine-release-components.json` owns the selected workflow runs;
 artifact manifests and receipts own the released file identities. Do not infer

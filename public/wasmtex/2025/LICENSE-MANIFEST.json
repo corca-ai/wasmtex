@@ -11,7 +11,7 @@
   "componentInventoryPath": "../../../scripts/engine-components-2025.json",
   "correspondingSource": {
     "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-e98592b5cdb10877/wasmtex-2025-e98592b5cdb10877-source.tar.xz",
-    "sha256": "38e1736e95599b58e3fd8ce60ce4a7b14f52d12173d4d2e787fba0111f362e3b"
+    "sha256": "038a6c426143fb81a7d23f7e9a5304fd1657179b0ed5649a1036ab3087becdb3"
   },
   "requiredBuildFamilies": [
     "pdftex",

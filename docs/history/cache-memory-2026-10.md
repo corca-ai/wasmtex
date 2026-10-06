@@ -44,6 +44,17 @@ exit. First bibliography calls include loopback resolver cost; initialization
 alone was consistently slower for all five pairs and every auxiliary engine.
 The tested sparse controllers/build changes were discarded, not published.
 
+The final source rebuilds retain every original format and all LuaHBTeX/dvipdfmx
+core/glue bytes. XeTeX's native sources, build flags and pinned toolchain are
+unchanged, but its rebuilt WASM differs in function/data layout (file sizes are
+12 bytes smaller for 2025 and 6 bytes smaller for 2026). These are size deltas,
+not counts of changed bytes. The 2025 generated glue also changes import-wrapper
+order and embedded data addresses. Independent review found no unintended
+native source/build-input change; this is not proof of binary equivalence.
+Annual end-to-end comparisons therefore qualify the actual rebuilt core plus
+controller and SDK, rather than attributing whole-compile results solely to the
+cache-export edit. The isolated controller screen remains allocation evidence.
+
 The first overlapping cache-preparation runs and a later timing run overlapped
 with heavy unit tests are excluded from latency evidence. Independent review
 required actual SDK hashes (including nested engine modules), seed-save success,
@@ -68,3 +79,30 @@ and persistence wait separately from compile latency, hashes the actual SDK and
 engine inputs, and checks native MEMFS copies survive transferable detachment.
 Source qualification and immutable release evidence are appended below when
 complete; local staged controller copies alone are not release provenance.
+
+## Source rebuild and assembly
+
+The retained engine changes were rebuilt from the exact source commit above:
+
+| Year | XeTeX and dvipdfmx | LuaHBTeX | Assembled release |
+| --- | --- | --- | --- |
+| 2025 | [37417681723](https://github.com/corca-ai/wasmtex/actions/runs/37417681723) | [37417687158](https://github.com/corca-ai/wasmtex/actions/runs/37417687158) | `2025-e98592b5cdb10877` |
+| 2026 | [37417684616](https://github.com/corca-ai/wasmtex/actions/runs/37417684616) | [37417690219](https://github.com/corca-ai/wasmtex/actions/runs/37417690219) | `2026-dce598a0b9a42e79` |
+
+Each raw receipt and every artifact hash was verified before composition.
+The original format-generation receipts were downloaded from the existing
+pinned runs and matched the baseline's embedded generation receipts exactly.
+Unchanged pdfTeX, BibTeX, BibTeX8 and makeindex build inputs were reused.
+
+Complete corresponding source was assembled and verified by
+[2025 run 37420415006](https://github.com/corca-ai/wasmtex/actions/runs/37420415006)
+and [2026 run 37420417620](https://github.com/corca-ai/wasmtex/actions/runs/37420417620).
+Downloaded archive SHA-256 values matched their CI checksum files; local source
+checks also passed against the final asset manifests.
+
+- 2025: `038a6c426143fb81a7d23f7e9a5304fd1657179b0ed5649a1036ab3087becdb3`
+- 2026: `a599df2fb44470a89d5416882d0fb040dc8583c1ff5e4e4c9a7997771e071158`
+
+The license manifests and 2026 distribution profile bind those actual archive
+hashes. The release IDs exclude mutable legal metadata and continue to identify
+the exact engine artifacts and generation receipts.
