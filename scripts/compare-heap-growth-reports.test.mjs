@@ -109,3 +109,24 @@ test('compares a verified cache return visit and rejects absent ownership eviden
   after.samples[0].stages[0].cacheReadOwnership = []
   assert.throws(() => compare(before, after))
 })
+
+
+test('labels identical-input controls and rejects changed assets or SDK in either arm', () => {
+  const before = fixture(), after = fixture()
+  for (const report of [before, after]) {
+    report.schemaVersion = 2
+    report.controlMode = 'baseline-assets'
+    report.sdkHashes = { 'engine/tex-fmt-engine.js': 'baseline' }
+    report.sdkSourceRevision = 'baseline'
+  }
+  assert.equal(compare(before, after).controlMode, 'baseline-assets')
+  const changedAssets = structuredClone(after)
+  changedAssets.assetHashes['wasmtex-xetex.wasm'] = 'candidate'
+  assert.throws(() => compare(before, changedAssets))
+  const changedSdk = structuredClone(after)
+  changedSdk.sdkHashes['engine/tex-fmt-engine.js'] = 'candidate'
+  assert.throws(() => compare(before, changedSdk))
+  const missingSdk = structuredClone(after)
+  delete missingSdk.sdkHashes
+  assert.throws(() => compare(before, missingSdk))
+})

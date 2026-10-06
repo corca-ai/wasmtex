@@ -17,8 +17,10 @@ const observables = [
 ]
 const read = path => JSON.parse(readFileSync(path, 'utf8'))
 const references = new Map()
-const environmentFields = ['schemaVersion', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'cacheProbe', 'luaNamesProbe', 'fixedWorkerClock', 'variants', 'repetitions']
+const environmentFields = ['schemaVersion', 'controlMode', 'year', 'mirror', 'browser', 'node', 'platform', 'architecture', 'harnessSha256', 'sdkRevision', 'project', 'checkpointProbe', 'cacheProbe', 'luaNamesProbe', 'fixedWorkerClock', 'variants', 'repetitions']
 const anchor = read(paths[0])
+const controlMode = anchor.controlMode ?? 'none'
+assert(['none', 'baseline-assets'].includes(controlMode), 'Invalid control mode')
 const sideHashes = {}
 const sideSdks = {}
 for (let pair = 0; pair < paths.length; pair += 2) {
@@ -26,6 +28,12 @@ for (let pair = 0; pair < paths.length; pair += 2) {
   const candidate = read(paths[pair + 1])
   for (const report of [baseline, candidate]) {
     for (const field of environmentFields) assert.deepEqual(report[field], anchor[field], `Probe mismatch: ${field}`)
+  }
+  if (controlMode === 'baseline-assets') {
+    assert(baseline.schemaVersion >= 2 && baseline.sdkHashes, 'Control requires actual SDK hashes')
+    assert.deepEqual(candidate.assetHashes, baseline.assetHashes, 'Control assets differ between arms')
+    assert.deepEqual(candidate.sdkHashes, baseline.sdkHashes, 'Control SDK differs between arms')
+    assert.equal(candidate.sdkSourceRevision, baseline.sdkSourceRevision, 'Control SDK revision differs between arms')
   }
   assert.equal(baseline.traceEnabled, false, 'Timing must exclude tracing')
   assert.equal(candidate.traceEnabled, false, 'Timing must exclude tracing')
@@ -95,4 +103,4 @@ const comparisons = [...groups.baseline].map(([stage, before]) => {
     candidateRangeMs: [Math.min(...after), Math.max(...after)],
   }
 })
-console.log(JSON.stringify({ outputPreserved: true, comparisons }, null, 2))
+console.log(JSON.stringify({ controlMode, outputPreserved: true, comparisons }, null, 2))

@@ -19,6 +19,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const assets = resolve(arg('assets', 'public/wasmtex/2026'))
 const sdkDir = resolve(arg('sdk-dir', resolve(root, 'lib')))
 const cacheProbe = arg('cache-probe', 'false') === 'true'
+const controlMode = arg('control-mode', 'none')
+if (!['none', 'baseline-assets'].includes(controlMode)) throw Error('Invalid control mode')
 const mirror = new URL(arg('texlive-url', 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'))
 if (!mirror.pathname.endsWith('/')) throw Error('Mirror URL must end in /')
 const year = arg('year', '2026')
@@ -127,7 +129,7 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 2, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
+  schemaVersion: 2, controlMode, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
   traceEnabled, heapStatsEnabled, cacheProbe, sdkDir, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkSourceRevision: arg('sdk-source-revision', null),
   sdkHashes: Object.fromEntries(await Promise.all((await readdir(sdkDir, { recursive: true })).filter(name => name.endsWith('.js')).sort().map(async name => [name, hash(await readFile(resolve(sdkDir, name)))]))),

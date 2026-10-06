@@ -20,6 +20,16 @@ on:
         type: choice
         options: [ABBA, BAAB]
         default: ABBA
+      probe_control:
+        description: Diagnostic only; baseline-assets compares identical assets and SDK
+        type: choice
+        options: [none, baseline-assets]
+        default: none
+      probe_workload:
+        description: Latency workloads; small limits a diagnostic control
+        type: choice
+        options: [all, small]
+        default: all
       candidate_source:
         description: Exact engine source commit
         type: string
@@ -37,6 +47,8 @@ on:
       baseline_ref: { type: string, required: true }
       probe_engine: { type: string, default: unicode }
       probe_order: { type: string, default: ABBA }
+      probe_control: { type: string, default: none }
+      probe_workload: { type: string, default: all }
       texlive_year: { type: string, required: true }
       candidate_source: { type: string, required: true }
       xetex_run: { type: string, required: true }
@@ -52,6 +64,8 @@ jobs:
       YEAR: ${{ inputs.texlive_year }}
       PROBE_ENGINE: ${{ inputs.probe_engine }}
       PROBE_ORDER: ${{ inputs.probe_order }}
+      PROBE_CONTROL: ${{ inputs.probe_control }}
+      PROBE_WORKLOAD: ${{ inputs.probe_workload }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -109,7 +123,17 @@ jobs:
             BAAB) order=(candidate baseline baseline candidate) ;;
             *) echo "Invalid probe order" >&2; exit 1 ;;
           esac
-          for workload in small image durable; do
+          case "$PROBE_CONTROL" in
+            none|baseline-assets) ;;
+            *) echo "Invalid probe control" >&2; exit 1 ;;
+          esac
+          workloads=(small image durable)
+          case "$PROBE_WORKLOAD" in
+            all) ;;
+            small) workloads=(small) ;;
+            *) echo "Invalid probe workload" >&2; exit 1 ;;
+          esac
+          for workload in "${workloads[@]}"; do
             project=()
             if [ "$workload" = image ]; then project=(--project test/fixtures/heap-growth/project.json); fi
             if [ "$workload" = durable ]; then project=(--cache-probe true); fi
@@ -127,9 +151,14 @@ jobs:
               if [ "$workload" = durable ] && [ "$side" = baseline ]; then
                 sdk=(--sdk-dir baseline-sdk/lib --sdk-source-revision "$(cat baseline-catalog-revision.txt)")
               fi
-              node scripts/profile-font-cpu.mjs --assets "$side/wasmtex/$YEAR" --year "$YEAR" \
+              probe_assets="$side/wasmtex/$YEAR"
+              if [ "$PROBE_CONTROL" = baseline-assets ]; then
+                probe_assets="baseline/wasmtex/$YEAR"
+                sdk=(--sdk-dir baseline-sdk/lib --sdk-source-revision "$(cat baseline-catalog-revision.txt)")
+              fi
+              node scripts/profile-font-cpu.mjs --assets "$probe_assets" --year "$YEAR" \
                 --texlive-url "$mirror" --engine "$PROBE_ENGINE" --trace false --heap-stats true --repetitions 5 \
-                --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}" "${sdk[@]}"
+                --control-mode "$PROBE_CONTROL" --cache-dir mirror-cache --out "reports/$workload-$side-$series" "${project[@]}" "${sdk[@]}"
             done
             node scripts/compare-heap-growth-reports.mjs \
               "reports/$workload-baseline-0/report.json" "reports/$workload-candidate-0/report.json" \
