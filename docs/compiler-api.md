@@ -141,10 +141,16 @@ checkpoint eviction and compiler disposal. Materialization performs the same
 canonical `pdf-lib` splice as `compile()`; it requires the optional peer and can
 reject independently of a successful preview compile. A failed materialization
 can be retried. Cross-part link/outline limitations of page-copy splicing remain.
-SyncTeX uses the same merged coordinates as the ordinary incremental result.
+SyncTeX uses the same merged coordinates as the ordinary incremental result when
+the merge is available; it remains null under the existing missing-base or changed-head
+guards. With raw head/tail SyncTeX available, the first merge for a checkpoint still
+requires `pdf-lib` to count head pages (cached thereafter). If that count fails, the
+preview compile follows the existing fallback to a full compile.
 
 `compiler.getRetentionStats()` reports SDK-owned JavaScript page-break checkpoint
-count, format/PDF bytes and retained raw SyncTeX bytes. It excludes worker-owned
+count, logical format/PDF byte lengths and retained raw SyncTeX byte length. These
+are sums of retained views, not deduplicated backing allocation sizes; shared views
+can overlap and backing buffers can be larger. It excludes worker-owned
 heap checkpoints, parsed objects, WASM memory, process RSS and caller-held results;
 it is an observation of these specific buffers, not a total memory budget.
 

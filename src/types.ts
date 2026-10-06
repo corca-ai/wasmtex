@@ -34,7 +34,8 @@ export type PreviewCompileResult = Omit<CompileResult, 'pdf'> & {
   pdf: Uint8Array | PdfPreviewParts | null
 }
 
-/** SDK-owned JavaScript buffers only; excludes engine workers, WASM heaps and host results. */
+/** Logical byte lengths of retained SDK JavaScript views, not deduplicated backing
+ * allocations. Excludes engine workers, WASM heaps, parsed objects and host results. */
 export interface CompilerRetentionStats {
   checkpointCount: number
   checkpointFormatBytes: number
