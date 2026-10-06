@@ -20,6 +20,10 @@ on:
         type: choice
         options: [ABBA, BAAB]
         default: ABBA
+      keep_baseline_lua:
+        description: Qualify Xe/converter with the exact released Lua assets
+        type: boolean
+        default: false
       probe_control:
         description: Diagnostic only; baseline-assets compares identical assets and SDK
         type: choice
@@ -52,6 +56,7 @@ on:
       probe_engine: { type: string, default: unicode }
       probe_order: { type: string, default: ABBA }
       probe_control: { type: string, default: none }
+      keep_baseline_lua: { type: boolean, default: false }
       probe_workload: { type: string, default: all }
       probe_init_phases: { type: boolean, default: false }
       texlive_year: { type: string, required: true }
@@ -70,6 +75,7 @@ jobs:
       PROBE_ENGINE: ${{ inputs.probe_engine }}
       PROBE_ORDER: ${{ inputs.probe_order }}
       PROBE_CONTROL: ${{ inputs.probe_control }}
+      KEEP_BASELINE_LUA: ${{ inputs.keep_baseline_lua }}
       PROBE_WORKLOAD: ${{ inputs.probe_workload }}
       PROBE_INIT_PHASES: ${{ inputs.probe_init_phases }}
       GH_TOKEN: ${{ github.token }}
@@ -108,8 +114,10 @@ jobs:
           if [ "$YEAR" = 2026 ]; then suffix="-2026"; fi
           gh run download "$XETEX_RUN" --name "wasm-xetex$suffix" --dir inputs/xetex
           gh run download "$LUATEX_RUN" --name "wasm-luatex$suffix" --dir inputs/luahbtex
+          lua=(--luahbtex inputs/luahbtex)
+          if [ "$KEEP_BASELINE_LUA" = true ]; then lua=(); fi
           node scripts/stage-unicode-qualification.mjs --year "$YEAR" --source "$SOURCE" \
-            --baseline "baseline/wasmtex/$YEAR" --xetex inputs/xetex --luahbtex inputs/luahbtex \
+            --baseline "baseline/wasmtex/$YEAR" --xetex inputs/xetex "${lua[@]}" \
             --output-public candidate
       - name: Real-core growth, failed conversion, edits and Unicode corpus
         env:

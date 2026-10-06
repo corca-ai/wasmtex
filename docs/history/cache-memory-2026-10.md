@@ -44,7 +44,7 @@ exit. First bibliography calls include loopback resolver cost; initialization
 alone was consistently slower for all five pairs and every auxiliary engine.
 The tested sparse controllers/build changes were discarded, not published.
 
-The final source rebuilds retain every original format and all LuaHBTeX/dvipdfmx
+The source rebuilds retain every original format and all LuaHBTeX/dvipdfmx
 core/glue bytes. XeTeX's native sources, build flags and pinned toolchain are
 unchanged, but its rebuilt WASM differs in function/data layout (file sizes are
 12 bytes smaller for 2025 and 6 bytes smaller for 2026). These are size deltas,
@@ -86,7 +86,7 @@ The retained engine changes were rebuilt from the exact source commit above:
 
 | Year | XeTeX and dvipdfmx | LuaHBTeX | Assembled release |
 | --- | --- | --- | --- |
-| 2025 | [37417681723](https://github.com/corca-ai/wasmtex/actions/runs/37417681723) | [37417687158](https://github.com/corca-ai/wasmtex/actions/runs/37417687158) | `2025-e98592b5cdb10877` |
+| 2025 | [37417681723](https://github.com/corca-ai/wasmtex/actions/runs/37417681723) | Reused published [37404298803](https://github.com/corca-ai/wasmtex/actions/runs/37404298803); investigated 37417687158 not promoted | `2025-18f28ec91eb80496` |
 | 2026 | [37417684616](https://github.com/corca-ai/wasmtex/actions/runs/37417684616) | [37417690219](https://github.com/corca-ai/wasmtex/actions/runs/37417690219) | `2026-dce598a0b9a42e79` |
 
 Each raw receipt and every artifact hash was verified before composition.
@@ -100,9 +100,93 @@ and [2026 run 37420417620](https://github.com/corca-ai/wasmtex/actions/runs/3742
 Downloaded archive SHA-256 values matched their CI checksum files; local source
 checks also passed against the final asset manifests.
 
-- 2025: `038a6c426143fb81a7d23f7e9a5304fd1657179b0ed5649a1036ab3087becdb3`
+- Investigated 2025 composition, not promoted: `038a6c426143fb81a7d23f7e9a5304fd1657179b0ed5649a1036ab3087becdb3`
 - 2026: `a599df2fb44470a89d5416882d0fb040dc8583c1ff5e4e4c9a7997771e071158`
 
-The license manifests and 2026 distribution profile bind those actual archive
-hashes. The release IDs exclude mutable legal metadata and continue to identify
+The 2026 license manifest and distribution profile bind its actual archive
+hash. The final 2025 source binding is recorded after its separate assembly. The release IDs exclude mutable legal metadata and continue to identify
 the exact engine artifacts and generation receipts.
+
+
+## Annual source qualification
+
+The exact source-built releases passed the annual real-core growth/recovery,
+Unicode corpus, nested output, browser golden, checkpoint and cross-host suites:
+[2025 ABBA, run 37420244709](https://github.com/corca-ai/wasmtex/actions/runs/37420244709)
+and [2026 BAAB, run 37420310910](https://github.com/corca-ai/wasmtex/actions/runs/37420310910).
+The isolated GitHub runners used Linux x64, Node 24.21.0 and Chromium
+145.0.7632.6. Each workload has two five-repetition series per arm, fresh browser
+contexts, a fixed worker clock and no upstream mirror misses during measurement.
+All strict PDF/auxiliary/diagnostic/dependency comparisons passed.
+
+| SDK-owned durable originals | Baseline retained bytes | Candidate retained bytes |
+| --- | ---: | ---: |
+| 2025 XeTeX | 10,365,881 | 0 |
+| 2025 LuaHBTeX | 14,829,704 | 0 |
+| 2026 XeTeX | 10,576,020 | 0 |
+| 2026 LuaHBTeX | 15,370,025 | 0 |
+
+These are distinct reachable ArrayBuffers, not physical RSS. The cache probe
+confirmed seed persistence and checked the actual native MEMFS read copies
+survive transferable detachment in all three affected workers. Caller warmup
+reuse/reinitialization remains covered independently.
+
+The separate ordinary cold-context process runs sampled aggregate Chromium
+peak RSS at 934.76 → 921.36 MiB (2025) and 944.26 → 927.26 MiB (2026).
+Those runs do not exercise the durable-return path or establish its physical
+memory saving; their difference is not attributed to this change. There is no
+new whole-application Safari RSS claim.
+
+### Latency investigation
+
+All latency claims use untraced runs. Small/image arms use the same actual SDK
+to isolate the source-built engine release; durable arms use the exact baseline
+and candidate SDKs. Actual SDK hashes include nested engine modules. Different
+CI runs are assessed independently, not pooled as if they shared one machine.
+
+The first 2026 small XeTeX comparison measured initialization +3.84% and first
+compile +2.93%. The independent opposite-order
+[ABBA repeat 37422221642](https://github.com/corca-ai/wasmtex/actions/runs/37422221642)
+measured initialization 109.30 → 101.90 ms (−6.77%) and first compile
+968.00 → 965.00 ms (−0.31%). First-compile series medians were baseline
+970.7/965.3 ms and candidate 970.6/964.1 ms; the initial increase did not repeat.
+Image first compile changed +0.03%, durable first compile +0.61%.
+
+2025 small LuaHBTeX initialization increased 206.85 → 223.35 ms (+7.98%)
+initially and 154.80 → 164.20 ms (+6.07%) in the independent
+[BAAB repeat 37422041129](https://github.com/corca-ai/wasmtex/actions/runs/37422041129).
+The repeated increase was held for investigation rather than accepted under an
+arbitrary percentage tolerance. Image initialization changed −1.80% and durable
+return initialization +0.09% in that repeat.
+
+Two additional controls used identical baseline engine assets and baseline SDK
+in both arms; the comparator asserts full cross-arm asset/SDK hash equality and
+labels them `baseline-assets`, not candidate latency qualification:
+[BAAB 37423211033](https://github.com/corca-ai/wasmtex/actions/runs/37423211033)
+measured initialization 203.05 → 199.95 ms (−1.53%), while
+[ABBA 37423214082](https://github.com/corca-ai/wasmtex/actions/runs/37423214082)
+measured 197.95 → 211.80 ms (+7.00%). The same-input increase establishes
+initialization order/environment variation, but is not subtracted from the A/B
+results and does not prove that the candidate has zero cost.
+
+The actual phase-diagnostic comparisons
+[BAAB 37423611594](https://github.com/corca-ai/wasmtex/actions/runs/37423611594)
+and [ABBA 37423615070](https://github.com/corca-ai/wasmtex/actions/runs/37423615070)
+again measured initialization increases (+7.93% and +5.57%). All 40 measured
+samples completed warmup loading after worker boot and format loading. Warmup
+loading, whose SDK/mirror inputs were unchanged, increased by 15.25/11.40 ms;
+worker-boot medians changed +3.00/−1.40 ms. This locates the observed delay but
+does not establish that candidate-related scheduling interference is absent.
+Independent measurement review therefore withheld promotion of the 2025 Lua
+controller. The final 2025 assembly reuses exact published Lua assets and
+run 37404298803; candidate 1's SDK lifetime improvement remains enabled.
+The earlier 2025 both-controller reports qualify an investigated composition,
+not this final release. Final-composition qualification is recorded separately.
+The unpublished investigated 2025 composition was `2025-e98592b5cdb10877`;
+its corresponding-source SHA `038a6c426143fb81a7d23f7e9a5304fd1657179b0ed5649a1036ab3087becdb3`
+is not a source binding for the final release.
+The optional wrappers report worker boot, format loading, durable reads,
+warmup loading and injection, including completion offsets. These phases overlap
+and include diagnostic overhead; their durations must not be added together or
+used alone to establish preserved total latency. Missing required phase records
+must fail the analysis rather than be silently omitted.
