@@ -36,6 +36,21 @@ export interface TexFmtWarmupPlan {
     /** Max parallel prefetch requests. Defaults to 8. */
     concurrency?: number;
 }
+/** A resolved warmup set ready to inject: a bloom filter, prefetched files, and
+ *  known-missing entries — sourced from the CDN (cold) or the durable cache. */
+export interface TexFmtWarmSet {
+    bloom: ArrayBuffer | null;
+    files: Array<{
+        format: number;
+        filename: string;
+        data: ArrayBuffer;
+    }>;
+    notFound: ReadonlyArray<{
+        format: number;
+        filename: string;
+    }>;
+    source: 'warmup-cache' | 'persistent-cache';
+}
 export declare abstract class BaseTexFmtEngine implements CompileEngine {
     protected tex: CompileWorkerDriver;
     /** Filename under which the built format is re-injected for `compilelatex`
@@ -55,9 +70,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     private readonly formatUrl;
     /** Built-in warmup plan (bloom filter + parallel prefetch), if any. */
     private readonly warmup;
-    /** The warmup/durable set resolved at init, retained so an auxiliary worker (e.g. xetex's
-     *  dvipdfmx) can be rehydrated from it after *its* own init completes. */
-    private lastWarmSets;
+    /** Retain caller warmup for reinitialization; caller buffers must never be detached. */
     private readonly suppliedWarmup;
     /** Durable IndexedDB cache of fetched assets (when persistentCache is on). */
     private durableCache;
@@ -81,7 +94,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
      *  prebuilt format and warmup assets; then inject the warmup set once the
      *  worker is ready. A populated durable cache (a prior session) is preferred
      *  over a CDN prefetch, so return visits do ~zero network. */
-    protected initTex(): Promise<void>;
+    protected initTex(): Promise<TexFmtWarmSet[]>;
     /** Count a file fetched by an auxiliary worker (e.g. xetex's dvipdfmx) toward the
      *  auto-persist watermark, so a compile whose only new fetches came from that worker still
      *  persists instead of being skipped by maybePersist's "nothing new" guard. */
@@ -93,7 +106,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** Rehydrate an auxiliary worker from the durable/warmup set resolved at init. Call only
      *  AFTER that worker's own init() so its preload queue is live — preloads are fire-and-forget
      *  and a not-yet-ready worker silently drops them. */
-    protected rehydrateExtraDriver(driver: CompileWorkerDriver): void;
+    protected rehydrateExtraDriver(driver: CompileWorkerDriver, warmSets: TexFmtWarmSet[]): void;
     /** Load the durable cache (if enabled) from a prior session. The durable set is
      *  already on disk, so don't re-persist until new files are fetched. */
     private loadDurable;
