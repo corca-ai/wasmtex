@@ -42,6 +42,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Changed
 
+- Unicode engines reduce WASM growth headroom, and dvipdfmx starts at 64 MiB
+  instead of 256 MiB. Stack sizes, maximum capacities, formats and TeX Live
+  mirrors are preserved. Source-built annual output, growth/recovery and
+  alternating latency probes qualify the new engine releases.
+
 - The source pdfTeX controller retains only the initialized heap prefix, reducing
   its restoration-copy storage while preserving grown-page clearing. Engine
   asset promotion remains subject to qualification; see the October memory record.

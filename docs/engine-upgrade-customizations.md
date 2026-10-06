@@ -38,6 +38,18 @@ assumptions and bit-exact restore/growth/failure tests on annual/toolchain
 changes. [The October qualification](history/heap-memory-2026-10.md) records
 the source experiment and subsequent annual release qualification.
 
+### Unicode heap sizing
+
+`build-xetex2.sh`, `build-luatex.sh` and `build-dvipdfm2.sh` use 5% geometric
+headroom capped at 16 MiB. The converter starts at 64 MiB; XeTeX and LuaHBTeX
+retain their 128 MiB starts. Growth stays enabled, the 32 MiB stacks and maximum
+capacities remain unchanged, and existing formats and TeX capacity parameters
+are preserved. Requalify both annual profiles after source/toolchain changes:
+real allocation growth, large raster conversion, failed conversion followed by
+recovery, repeated document edits, baseline output and latency/peak memory.
+[Heap-growth evidence](history/heap-growth-2026-10.md) separates diagnostic
+screening from source-built release qualification.
+
 ### Format-cache invariants
 
 The cache stores one byte-compared compressed source and successful decoded

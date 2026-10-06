@@ -5,12 +5,47 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      heap_growth:
+        description: Qualify source-built Unicode heap sizing
+        type: boolean
+        default: false
+      texlive_year:
+        type: choice
+        options: ['2025', '2026']
+        default: '2026'
+      heap_growth_baseline_ref:
+        description: Baseline release catalog commit or ref, required for qualification
+        type: string
+      heap_growth_engine:
+        type: choice
+        options: [unicode, xelatex, lualatex]
+        default: unicode
+      heap_growth_order:
+        type: choice
+        options: [ABBA, BAAB]
+        default: ABBA
+      candidate_source: { type: string }
+      xetex_run: { type: string }
+      luatex_run: { type: string }
 
 permissions:
   contents: read
   actions: read
 
 jobs:
+  heap-growth-qualification:
+    if: github.event_name == 'workflow_dispatch' && inputs.heap_growth
+    uses: ./.github/workflows/heap-growth-qualification.yml
+    with:
+      baseline_ref: ${{ inputs.heap_growth_baseline_ref }}
+      probe_engine: ${{ inputs.heap_growth_engine }}
+      probe_order: ${{ inputs.heap_growth_order }}
+      texlive_year: ${{ inputs.texlive_year }}
+      candidate_source: ${{ inputs.candidate_source }}
+      xetex_run: ${{ inputs.xetex_run }}
+      luatex_run: ${{ inputs.luatex_run }}
+
   package-consumer:
     runs-on: ubuntu-latest
     timeout-minutes: 10

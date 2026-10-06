@@ -8,6 +8,9 @@ inputs:
   destination:
     description: Directory that receives the composed engine assets
     required: true
+  components-file:
+    description: Receipt-bound annual component catalog
+    default: scripts/engine-release-components.json
   github-token:
     description: Token with Actions read access
     required: true
@@ -21,6 +24,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         TEXLIVE_YEAR: ${{ inputs.texlive-year }}
         DESTINATION: ${{ inputs.destination }}
+        COMPONENTS_FILE: ${{ inputs.components-file }}
       run: |
         while IFS=$'\t' read -r run_id artifact; do
           gh run download "$run_id" \
@@ -30,7 +34,7 @@ runs:
         done < <(
           jq -r --arg year "$TEXLIVE_YEAR" \
             '.years[$year].downloads[] | .runId as $run | .artifacts[] | [$run, .] | @tsv' \
-            scripts/engine-release-components.json
+            "$COMPONENTS_FILE"
         )
     - name: Reuse exact baseline formats with their generation receipts
       shell: bash
@@ -38,6 +42,7 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         TEXLIVE_YEAR: ${{ inputs.texlive-year }}
         DESTINATION: ${{ inputs.destination }}
+        COMPONENTS_FILE: ${{ inputs.components-file }}
       run: |
         while IFS=$'\t' read -r family run_id artifact; do
           format_inputs="$(mktemp -d)"
@@ -49,5 +54,5 @@ runs:
         done < <(
           jq -r --arg year "$TEXLIVE_YEAR" \
             '.years[$year].reusedFormats[]? | [.family, .runId, .artifact] | @tsv' \
-            scripts/engine-release-components.json
+            "$COMPONENTS_FILE"
         )

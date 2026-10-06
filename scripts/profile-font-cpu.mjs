@@ -30,7 +30,7 @@ const checkpointProbe = arg('checkpoint-probe', 'false') === 'true'
 if (checkpointProbe && selected !== 'pdflatex-checkpoint') throw Error('Checkpoint probe requires --engine pdflatex-checkpoint')
 const luaNamesProbe = arg('lua-names-probe', 'false') === 'true'
 if (luaNamesProbe && selected !== 'lualatex') throw Error('Lua names probe requires --engine lualatex')
-const variants = ['pdflatex', 'pdflatex-checkpoint', 'xelatex', 'lualatex'].filter((v) => selected === 'all' || selected === v)
+const variants = ['pdflatex', 'pdflatex-checkpoint', 'xelatex', 'lualatex'].filter((v) => selected === 'all' || selected === v || (selected === 'unicode' && ['xelatex', 'lualatex'].includes(v)))
 if (!variants.length) throw Error('Unknown engine')
 const traceOption = arg('trace', 'true')
 if (!['true', 'false'].includes(traceOption)) throw Error('Trace must be true or false')
@@ -39,6 +39,12 @@ const heapStatsEnabled = arg('heap-stats', 'false') === 'true'
 const projectPath = arg('project', null)
 const project = projectPath ? JSON.parse(await readFile(resolve(projectPath), 'utf8')) : null
 if (project && (!project.files || typeof project.files[project.mainFile || 'main.tex'] !== 'string')) throw Error('Project must contain its main TeX file')
+if (project?.binaryFiles) {
+  project.binaryFiles = Object.fromEntries(await Promise.all(Object.entries(project.binaryFiles).map(async ([name, file]) => {
+    if (typeof file !== 'string') throw Error('Binary project files must name local paths')
+    return [name, (await readFile(resolve(dirname(resolve(projectPath)), file))).toString('base64')]
+  })))
+}
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 await mkdir(out, { recursive: true })
 await mkdir(cacheDir, { recursive: true })
@@ -118,7 +124,7 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions,
+  schemaVersion: 1, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
   traceEnabled, heapStatsEnabled, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   harnessSha256: hash(await readFile(fileURLToPath(import.meta.url))),
@@ -165,7 +171,7 @@ async function runVariant(variant, repetition, measured) {
   try {
     await page.goto(base)
     await page.evaluate(async () => { globalThis.Compiler = (await import('/lib/headless.js')).WasmTexCompiler })
-    for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit']) {
+    for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit', ...(project?.stages?.restore ? ['restore'] : [])]) {
       const networkStart = network.length
       const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, project }) => {
         const font = variant.startsWith('pdflatex')
@@ -202,7 +208,11 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
             engine: variant === 'pdflatex-checkpoint' ? 'pdflatex' : variant,
             incremental: variant === 'pdflatex-checkpoint',
             texliveVersion: year, texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
-            persistentCache: false, files: project?.files || { 'main.tex': source }, mainFile: project?.mainFile || 'main.tex',
+            persistentCache: false, files: project ? {
+              ...project.files,
+              ...Object.fromEntries(Object.entries(project.binaryFiles || {}).map(([name, base64]) =>
+                [name, Uint8Array.from(atob(base64), c => c.charCodeAt(0))])),
+            } : { 'main.tex': source }, mainFile: project?.mainFile || 'main.tex',
           })
           await globalThis.compiler.init()
           return { ms: performance.now() - start }

@@ -266,6 +266,7 @@ em++ -O2 "${PROFILE_FLAGS[@]}" fmt-cache.o \
   -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_compileBibtex","_main","_setMainEntry","_set_icu_common_data","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
   -sINITIAL_MEMORY=134217728 \
+  -sMEMORY_GROWTH_GEOMETRIC_STEP=0.05 -sMEMORY_GROWTH_GEOMETRIC_CAP=16777216 \
   --js-library "$GLUE/xetex-library.js" \
   -o "$OUT/wasmtex-xetex.js" 2>emlink.out || { echo "final link failed"; tail -60 emlink.out; exit 1; }
 

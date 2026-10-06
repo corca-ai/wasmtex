@@ -10,6 +10,12 @@ import { expect, test } from '@playwright/test'
 test.setTimeout(300_000)
 
 const APP_URL = 'http://localhost:6001'
+const texliveVersion = process.env.TEXLIVE_VERSION === '2026' ? ('2026' as const) : ('2025' as const)
+const texliveUrl =
+  process.env.TEXLIVE_URL ??
+  (texliveVersion === '2026'
+    ? 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'
+    : 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/')
 
 const LOREM =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
@@ -23,7 +29,7 @@ test('edits after a heap checkpoint resume the suspended run and match a full co
 }) => {
   await page.goto(APP_URL)
   const out = await page.evaluate(
-    async ({ doc }) => {
+    async ({ doc, profile }) => {
       const { WasmTexCompiler } = await import('/src/headless.ts')
       const strip = (u8: Uint8Array) => {
         let t = ''
@@ -39,13 +45,13 @@ test('edits after a heap checkpoint resume the suspended run and match a full co
         synctex: !!r.synctex,
       })
       const incremental = new WasmTexCompiler({
-        texliveVersion: '2025',
+        ...profile,
         engine: 'pdflatex',
         files: { 'main.tex': doc },
         incremental: true,
       })
       const plain = new WasmTexCompiler({
-        texliveVersion: '2025',
+        ...profile,
         engine: 'pdflatex',
         files: { 'main.tex': doc },
       })
@@ -122,7 +128,7 @@ test('edits after a heap checkpoint resume the suspended run and match a full co
         plain.dispose()
       }
     },
-    { doc: DOC },
+    { doc: DOC, profile: { texliveVersion, texliveUrl } },
   )
 
   expect(out.first.success).toBe(true)
