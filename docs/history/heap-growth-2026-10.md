@@ -33,7 +33,18 @@ browser subprocesses, shared-page double counting and a 100 ms sampling interval
 
 A combined XeTeX/converter screening sampled aggregate Chromium peak RSS of
 1,140.8 → 951.8 MiB. Sampling perturbs timing; latency evidence must use separate,
-quiet alternating runs. This does not establish Safari memory usage or a budget.
+quiet alternating runs. This is not a private-memory measurement or a budget.
+
+Native Safari 26.6.2 screening used a safaridriver-owned engine-only page on the
+same Mac, with identical cached mirror responses and sequential small-document
+edit/repeat stages. macOS `footprint -j` measured retained physical footprint of
+the active WebContent process at 717.2 MiB for the baseline and 546.3 / 502.7 MiB
+for two candidate runs. Safari reused the same WebContent PID; its lifetime peak
+therefore cannot compare these runs. Background activity made their latency
+variable, so these observations support the memory hypothesis only. They do not
+reproduce or attribute the reported 2 GiB CorTeX page, which includes the editor,
+PDF renderer and host lifecycle. Playwright WebKit failed to create a context on
+this machine; no Playwright WebKit qualification is claimed.
 
 ## Reproduction and required checks
 

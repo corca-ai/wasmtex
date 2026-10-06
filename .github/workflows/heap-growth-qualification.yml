@@ -104,10 +104,24 @@ jobs:
                 --texlive-url "$mirror" --engine unicode --trace false --heap-stats true --repetitions 3 \
                 --cache-dir mirror-cache --out "reports/$side-memory"
           done
+      - name: Annual browser goldens, nested output, checkpoint and cross-host parity
+        env:
+          CROSS_HOST_PARITY: '1'
+          NESTED_OUTPUT_SMOKE: '1'
+          WASMTEX_SMOKE_PUBLIC_DIR: candidate
+        run: |
+          export TEXLIVE_VERSION="$YEAR"
+          export TEXLIVE_URL="$(node -e 'console.log(require("./scripts/engine-release-components.json").years[process.env.YEAR].mirror.url)')"
+          export WASMTEX_SMOKE_TEXLIVE_VERSION="$TEXLIVE_VERSION"
+          export WASMTEX_SMOKE_TEXLIVE_URL="$TEXLIVE_URL"
+          cp -R "candidate/wasmtex/$YEAR/." "public/wasmtex/$YEAR/"
+          npx vitest run src/engine/cross-host-parity.smoke.test.ts src/engine/nested-output.smoke.test.ts
+          npx playwright test golden-output nested-output heap-checkpoints --workers=1 --retries=0
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: heap-growth-qualification-${{ inputs.texlive_year }}
           path: |
             reports/
+            test-results/
             candidate/wasmtex/*/QUALIFICATION-INPUTS.json
