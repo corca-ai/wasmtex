@@ -57,6 +57,7 @@ var SEMANTIC_TRACE_TEX = [
 
 self.memlog = "";                // Captured stdout/stderr from pdfTeX
 self.initmem = undefined;        // Snapshot of WASM heap after initialization
+self._extraMemory = 0;           // Grow to the original allowance only after main-memory exhaustion.
 self.mainfile = "main.tex";      // Main .tex file to compile
 self.texlive_endpoint = "";      // TexLive package server URL (set by host)
 
@@ -214,7 +215,7 @@ function snapshotDirectory(dir, entries) {
             entries.push({ path: path, data: null });
             snapshotDirectory(path, entries);
         } else {
-            entries.push({ path: path, data: FS.readFile(path, { encoding: "binary" }).slice() });
+            entries.push({ path: path, data: FS.readFile(path, { encoding: "binary" }) });
         }
     });
     return entries;
@@ -242,7 +243,8 @@ function prepareExecutionContext() {
 // --- DRY helpers -------------------------------------------------------------
 
 // Write texmf.cnf so kpathsea can find fonts/styles and has enough memory.
-function writeTexmfCnf() {
+function writeTexmfCnf(buildingFormat) {
+    var extra = buildingFormat ? 10000000 : self._extraMemory;
     var texmfCnf = [
         "% texmf.cnf for WASM pdfTeX — matches TeX Live 2025 defaults",
         "% Path configuration — kpathsea needs these to find files in CWD",
@@ -257,8 +259,8 @@ function writeTexmfCnf() {
         "TEXPOOL = .;" + TEXCACHEROOT + "//",
         "% Memory parameters (Maximized for TeX Live 2025 Format Building)",
         "main_memory = 12000000",
-        "extra_mem_top = 10000000",
-        "extra_mem_bot = 10000000",
+        "extra_mem_top = " + extra,
+        "extra_mem_bot = " + extra,
         "font_mem_size = 8000000",
         "pool_size = 10000000",
         "buf_size = 5000000",
@@ -751,9 +753,9 @@ function kpse_find_pk_impl(nameptr, dpi) {
 //
 // The .synctex file contains source-to-PDF position mappings that enable
 // click-to-jump between the editor and PDF viewer.
-async function compileLaTeXRoutine(data) {
-    var routineStart = performance.now();
-    var phaseTimings = self._activePhaseTimings = {
+async function compileLaTeXRoutine(data, started, timings) {
+    var routineStart = started === undefined ? performance.now() : started;
+    var phaseTimings = self._activePhaseTimings = timings || {
         formatInstallMs: 0,
         heapSizeBytes: wasmMemory.buffer.byteLength,
         heapRestoreMs: 0,
@@ -765,6 +767,8 @@ async function compileLaTeXRoutine(data) {
         texRunMs: 0,
         workerTotalMs: 0
     };
+    if (hcSupported()) self._extraMemory = 10000000;
+    var compactFiles = self._extraMemory === 0 ? snapshotDirectory(WORKROOT) : null;
     prepareExecutionContext();
 
     // kpathsea does lstat(argv[0]) to find the program directory.
@@ -793,7 +797,7 @@ async function compileLaTeXRoutine(data) {
             ].join("\n");
             try { FS.writeFile(WORKROOT + "/language.dat", minLangDat); } catch(e) {}
 
-            writeTexmfCnf();
+            writeTexmfCnf(true);
 
             // Ensure no stale format file exists in WORKROOT before -ini run.
             // An incompatible stale format would leave 2025 INITEX "stymied".
@@ -984,6 +988,22 @@ async function compileLaTeXRoutine(data) {
             }
         }
         phaseTimings.texRunMs += performance.now() - fallbackStart;
+    }
+
+    // Keep the original supported capacity. A failed compact run is never published;
+    // promote once, retire its derived state, and repeat with the original source.
+    if (status !== 0 && self._extraMemory === 0 &&
+        /TeX capacity exceeded, sorry \[main memory size=/.test(self.memlog)) {
+        closeFSStreams();
+        cleanDir(WORKROOT);
+        restoreDirectory(compactFiles);
+        compactFiles = null;
+        self._extraMemory = 10000000;
+        self._preambleFmtData = null;
+        self._preambleInputFiles = null;
+        self._preambleHash = "";
+        hcDrop();
+        return compileLaTeXRoutine(data, routineStart, phaseTimings);
     }
 
     finishCompile({ routineStart: routineStart, phaseTimings: phaseTimings, usedPreamble: usedPreamble, preambleRebuilt: preambleRebuilt }, status);
@@ -1179,7 +1199,7 @@ function finishCompile(ctx, status) {
 
 function compileFormatRoutine() {
     prepareExecutionContext();
-    writeTexmfCnf();
+    writeTexmfCnf(true);
 
     // kpathsea resolves argv[0] to select the e-TeX-enabled INITEX program.
     try { FS.writeFile(WORKROOT + "/pdfetex", ""); } catch(e) {}
@@ -1243,7 +1263,7 @@ function buildCheckpointRoutine(data) {
     var headText = data["headText"] || "";
     var msgId = data["msgId"];
     prepareExecutionContext();
-    writeTexmfCnf();
+    writeTexmfCnf(true);
     try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
 
     // Base format is required for -ini "&pdflatex".
@@ -1298,7 +1318,7 @@ function compileFromCheckpointRoutine(data) {
         FS.writeFile(WORKROOT + "/tail.aux", aux);
     } catch(e) {}
 
-    writeTexmfCnf();
+    writeTexmfCnf(true);
     var status;
     try {
         status = runMain("pdflatex", ["-interaction=nonstopmode", "-synctex=1", "&pdflatex", "tail.tex"]);

@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 /** Real controller + filesystem; only the expensive generated TeX core is replaced. */
-function boot(failure?: 'initex' | 'missing-output') {
+function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always' | 'stack') {
   const root = mkdtempSync(join(tmpdir(), 'wasmtex-format-controller-'))
   roots.push(root)
   const local = (path: string) => join(root, path)
@@ -30,6 +30,7 @@ function boot(failure?: 'initex' | 'missing-output') {
   const fmt = Uint8Array.of(3, 1, 4, 1, 5)
   let pointer = 32
   let builds = 0
+  const allowances: number[] = []
   let deliver: (message: Record<string, unknown>) => void = () => {}
   const readString = (at: number) => {
     const bytes = new Uint8Array(memory.buffer)
@@ -50,6 +51,22 @@ function boot(failure?: 'initex' | 'missing-output') {
       const bytes = readFileSync(local(path))
       return options?.encoding === 'utf8' ? bytes.toString() : Uint8Array.from(bytes)
     },
+  }
+  const capacityStatus = () => {
+    const cnf = fs.readFile('/work/texmf.cnf', { encoding: 'utf8' }) as string
+    const extra = Number(cnf.match(/extra_mem_top = (\d+)/)?.[1])
+    allowances.push(extra)
+    if (capacity === 'always' || (capacity === 'once' && extra === 0) || capacity === 'stack') {
+      fs.writeFile('/work/nested/data.bin', Uint8Array.of(9))
+      fs.writeFile('/work/partial-output', 'failed attempt')
+      scope.memlog = `! TeX capacity exceeded, sorry [${capacity === 'stack' ? 'input stack size' : 'main memory size'}=12000000].`
+      return 1
+    }
+    if (capacity === 'once' && extra > 0) {
+      expect(fs.readFile('/work/nested/data.bin')).toEqual(Uint8Array.of(0, 255, 128))
+      expect(() => fs.readFile('/work/partial-output')).toThrow()
+    }
+    return 0
   }
   const scope = createContext({
     wasmMemory: memory,
@@ -88,6 +105,8 @@ function boot(failure?: 'initex' | 'missing-output') {
       } catch {
         return 2
       }
+      const exhausted = capacityStatus()
+      if (exhausted) return exhausted
       fs.writeFile('/work/main.pdf', Uint8Array.of(37, 80, 68, 70))
       return 0
     },
@@ -109,6 +128,7 @@ function boot(failure?: 'initex' | 'missing-output') {
     fs,
     fmt,
     builds: () => builds,
+    allowances,
     compile: () =>
       new Promise<Record<string, unknown>>((resolve) => {
         deliver = resolve
@@ -149,5 +169,28 @@ describe('pdfTeX base format fallback', () => {
     expect(worker.fs.readFile('/work/main.tex', { encoding: 'utf8' })).toBe('caller source')
     expect(await worker.compile()).toMatchObject({ result: 'ok' })
     expect(worker.builds()).toBe(2)
+  })
+})
+
+describe('pdfTeX compact working capacity', () => {
+  it('promotes main-memory exhaustion once, preserves source, and stays promoted', async () => {
+    const worker = boot(undefined, 'once')
+    expect(await worker.compile()).toMatchObject({ result: 'ok' })
+    expect(worker.allowances).toEqual([0, 10000000])
+    expect(worker.fs.readFile('/work/main.tex', { encoding: 'utf8' })).toBe('caller source')
+    expect(await worker.compile()).toMatchObject({ result: 'ok' })
+    expect(worker.allowances).toEqual([0, 10000000, 10000000])
+  })
+
+  it('returns exhaustion at the original capacity without an unbounded retry', async () => {
+    const worker = boot(undefined, 'always')
+    expect(await worker.compile()).toMatchObject({ result: 'failed', status: 1 })
+    expect(worker.allowances).toEqual([0, 10000000])
+  })
+
+  it('does not retry an unrelated TeX capacity error', async () => {
+    const worker = boot(undefined, 'stack')
+    expect(await worker.compile()).toMatchObject({ result: 'failed', status: 1 })
+    expect(worker.allowances).toEqual([0])
   })
 })
