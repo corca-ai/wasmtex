@@ -279,7 +279,7 @@ grep -F 'libxpdf.a' "$OUT/wasmtex-xetex.map" >/dev/null || {
   echo "ERROR: XeTeX link map does not contain the required Xpdf backend" >&2
   exit 1
 }
-cat "$GLUE/heap-snapshot.js" "$GLUE/xetex-worker.js" > "$OUT/wasmtex-xetex.worker.js"
+cat "$GLUE/shared-file.js" "$GLUE/heap-snapshot.js" "$GLUE/xetex-worker.js" > "$OUT/wasmtex-xetex.worker.js"
 cp "$GLUE/resolver-evidence.js" "$OUT/wasmtex-xetex-resolver-evidence.js"
 
 echo ""

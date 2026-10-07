@@ -429,9 +429,9 @@ function buildPreambleFormat(preambleText) {
 
     // Base format must be available for -ini "&pdflatex"
     if (self._fmtData) {
-        FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
+        self.wasmtexSharedFiles.write(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
         texlive200_cache["10/pdflatex.fmt"] = TEXCACHEROOT + "/pdflatex.fmt";
-        FS.writeFile(WORKROOT + "/pdflatex.fmt", self._fmtData);
+        self.wasmtexSharedFiles.write(WORKROOT + "/pdflatex.fmt", self._fmtData);
     }
 
     // preamble + \dump (no \begin{document})
@@ -879,15 +879,15 @@ async function compileLaTeXRoutine(data) {
     var fmtToUse = usedPreamble ? self._preambleFmtData : self._fmtData;
     if (fmtToUse) {
         var formatInstallStart = performance.now();
-        FS.writeFile(TEXCACHEROOT + "/wasmtex-pdftex.fmt", fmtToUse);
+        self.wasmtexSharedFiles.write(TEXCACHEROOT + "/wasmtex-pdftex.fmt", fmtToUse);
         texlive200_cache["10/wasmtex-pdftex.fmt"] = TEXCACHEROOT + "/wasmtex-pdftex.fmt";
-        FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", fmtToUse);
+        self.wasmtexSharedFiles.write(TEXCACHEROOT + "/pdflatex.fmt", fmtToUse);
         texlive200_cache["10/pdflatex.fmt"] = TEXCACHEROOT + "/pdflatex.fmt";
         // Also write to WORKROOT — open_fmt_file() tries fopen() in CWD first,
         // before falling back to kpathsea. "&pdflatex" in runMain() args tells
         // pdfTeX to look for pdflatex.fmt. Without this write, a stale base
         // pdflatex.fmt left by buildPreambleFormat() would be loaded instead.
-        FS.writeFile(WORKROOT + "/pdflatex.fmt", fmtToUse);
+        self.wasmtexSharedFiles.write(WORKROOT + "/pdflatex.fmt", fmtToUse);
         phaseTimings.formatInstallMs += performance.now() - formatInstallStart;
     }
 
@@ -959,14 +959,14 @@ async function compileLaTeXRoutine(data) {
         FS.writeFile(WORKROOT + "/" + self.mainfile, texSource);
         if (self._fmtData) {
             var fallbackFormatInstallStart = performance.now();
-            FS.writeFile(TEXCACHEROOT + "/wasmtex-pdftex.fmt", self._fmtData);
+            self.wasmtexSharedFiles.write(TEXCACHEROOT + "/wasmtex-pdftex.fmt", self._fmtData);
             texlive200_cache["10/wasmtex-pdftex.fmt"] = TEXCACHEROOT + "/wasmtex-pdftex.fmt";
-            FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
+            self.wasmtexSharedFiles.write(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
             texlive200_cache["10/pdflatex.fmt"] = TEXCACHEROOT + "/pdflatex.fmt";
             // Must also write to WORKROOT — open_fmt_file() tries fopen() in CWD first.
             // Without this, the stale preamble format left by the normal compile path
             // would be loaded instead of the base format, causing permanent failure.
-            FS.writeFile(WORKROOT + "/pdflatex.fmt", self._fmtData);
+            self.wasmtexSharedFiles.write(WORKROOT + "/pdflatex.fmt", self._fmtData);
             phaseTimings.formatInstallMs += performance.now() - fallbackFormatInstallStart;
         }
 
@@ -1248,9 +1248,9 @@ function buildCheckpointRoutine(data) {
 
     // Base format is required for -ini "&pdflatex".
     if (self._fmtData) {
-        FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
+        self.wasmtexSharedFiles.write(TEXCACHEROOT + "/pdflatex.fmt", self._fmtData);
         texlive200_cache["10/pdflatex.fmt"] = TEXCACHEROOT + "/pdflatex.fmt";
-        FS.writeFile(WORKROOT + "/pdflatex.fmt", self._fmtData);
+        self.wasmtexSharedFiles.write(WORKROOT + "/pdflatex.fmt", self._fmtData);
     }
 
     // Seed the checkpoint jobname's .aux from the last full compile so the head's
@@ -1286,9 +1286,9 @@ function compileFromCheckpointRoutine(data) {
     try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
 
     var fmtU8 = new Uint8Array(data["fmt"]);
-    FS.writeFile(TEXCACHEROOT + "/pdflatex.fmt", fmtU8);
+    self.wasmtexSharedFiles.write(TEXCACHEROOT + "/pdflatex.fmt", fmtU8);
     texlive200_cache["10/pdflatex.fmt"] = TEXCACHEROOT + "/pdflatex.fmt";
-    FS.writeFile(WORKROOT + "/pdflatex.fmt", fmtU8);
+    self.wasmtexSharedFiles.write(WORKROOT + "/pdflatex.fmt", fmtU8);
 
     FS.writeFile(WORKROOT + "/tail.tex", data["tailText"] || "");
     // \end{document} reads tail.aux; provide the prior main.aux so it completes and

@@ -375,11 +375,11 @@ function kpse_find_file_impl(nameptr, format) {
       // name for callers that open the kpse-returned path verbatim.
       const withExt = `${TEXCACHEROOT}/${filename}`
       const bare = `${TEXCACHEROOT}/${reqname}`
-      FS.writeFile(withExt, bytes)
+      self.wasmtexSharedFiles.write(withExt, bytes)
       texliveFileKeys[withExt] = `${dir}/${filename}`
       if (bare !== withExt) {
         try {
-          FS.writeFile(bare, bytes)
+          self.wasmtexSharedFiles.write(bare, bytes)
           texliveFileKeys[bare] = `${dir}/${filename}`
         } catch {}
       }

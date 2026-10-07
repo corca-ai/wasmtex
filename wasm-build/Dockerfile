@@ -138,6 +138,7 @@ RUN test -s /build/native/texk/web2c/pdftex0.c && \
 # =============================================================================
 COPY Makefile /src/Makefile
 COPY build.sh /src/build.sh
+COPY shared-file.js /src/shared-file.js
 COPY pdftex-worker.js /src/pdftex-worker.js
 COPY resolver-evidence.js /src/resolver-evidence.js
 COPY kpse-resolve.cjs /src/kpse-resolve.cjs

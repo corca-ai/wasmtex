@@ -59,6 +59,20 @@ This separation keeps the authored protocol reviewable, makes generated artifact
 reproducible, and leaves each external component replaceable behind its existing
 boundary.
 
+## Shared immutable file storage
+
+pdfTeX and XeTeX format installation and dvipdfmx font aliases borrow one owned byte buffer for
+multiple MEMFS paths. `wasm-build/shared-file.js` copies a file's storage before
+an in-place write, preserving the retained format and other aliases. Existing
+open streams consult the node's current ownership after format replacement;
+WASM heap views are never borrowed. Paths, permissions, format selection and
+cache lifetimes remain unchanged. The build scripts bundle this helper before
+the pdfTeX and XeTeX controllers and the converter. LuaHBTeX retains ordinary
+file writes: its additional format borrowing did not establish a retained-memory
+benefit with stable repeat-compilation latency during Safari qualification.
+
+The annual pdfTeX Worker byte budget is 82,000 bytes. The shared immutable-file helper adds 1,833 source bytes to the previously qualified controller; the released Workers are 81,607 bytes in both years. This bounded transport increase buys a measured reduction from 14,874,665 to 7,512,017 distinct format backing bytes in Safari for the four installed 2026 pdfTeX format files. Other artifact and runtime budgets are unchanged.
+
 ## Multi-engine support (XeLaTeX / LuaLaTeX)
 
 Many documents — anything using `fontspec`, `unicode-math`, system/OpenType fonts,

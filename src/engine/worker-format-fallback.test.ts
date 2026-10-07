@@ -93,6 +93,8 @@ function boot(failure?: 'initex' | 'missing-output') {
     },
   })
   scope.self = scope
+  // This fixture uses the real OS filesystem, not Emscripten MEMFS.
+  scope.wasmtexSharedFiles = { write: fs.writeFile }
   runInContext(
     readFileSync(new URL('../../wasm-build/pdftex-worker.js', import.meta.url), 'utf8'),
     scope,
