@@ -28,3 +28,19 @@ export function engineFormatUrl(
 ): string {
   return `${assetStem(baseUrl, version, binary)}.fmt`
 }
+
+/** Formats can retain their published source while a compatible engine is upgraded. */
+export function formatAssetBase(baseUrl: string, override?: string): string {
+  if (override === undefined) return baseUrl
+  return override.endsWith('/') ? override : `${override}/`
+}
+
+/** Absolute, normalized identity where the host provides a base for relative URLs. */
+export function normalizedFormatUrl(url: string, override?: string): string | undefined {
+  if (override === undefined) return undefined
+  try {
+    return new URL(url, globalThis.document?.baseURI ?? globalThis.location?.href).href
+  } catch {
+    return url
+  }
+}

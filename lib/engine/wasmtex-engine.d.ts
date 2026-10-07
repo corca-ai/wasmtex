@@ -12,6 +12,8 @@ export interface WasmTexEngineOptions {
     engineBinary?: 'pdftex' | 'xetex' | 'luatex';
     /** Base URL for WASM assets. Defaults to `import.meta.env.BASE_URL`. */
     assetBaseUrl?: string;
+    /** Optional base for compatible published .fmt assets; workers keep assetBaseUrl. */
+    formatAssetBaseUrl?: string;
     /** TexLive server endpoint. Defaults to `${location.origin}${BASE_URL}texlive/`. */
     texliveUrl?: string;
     /** Load the Asyncify engine build that can take resumable mid-run checkpoints (#81).
@@ -80,6 +82,7 @@ interface WorkerMessage {
  *  disjoint (the worker resolves a 404 before a preloaded file). */
 export declare function mergeWarmupCaches(base: WarmupCache, override: WarmupCache): WarmupCache;
 export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> implements CompileEngine {
+    private readonly formatCacheIdentity;
     private formatPath;
     private skipFormatPreload;
     private version;

@@ -65,6 +65,7 @@ or a CSS selector string.
 | `files` | `Record<string, string \| Uint8Array>` | bundled sample project | Initial project files (path → content). Pass `{}` to start empty. |
 | `serviceWorker`| `boolean`| `true` | Cache texlive packages via SW |
 | `assetBaseUrl` | `string` | `auto` | Base URL for WASM/Worker assets |
+| `formatAssetBaseUrl` | `string` | `assetBaseUrl` | Optional base for compatible published `.fmt` / `.fmt.gz` assets; workers keep `assetBaseUrl`. |
 | `skipFormatPreload` | `boolean` | `false` | Skip initial `.fmt` preload during engine bootstrap |
 | `disablePreambleSnapshot` | `boolean` | `false` | Disable [precompiled preamble snapshots](engine.md#preamble-snapshots) and always run a full compile. Escape hatch for documents incompatible with preamble precompilation. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](compiler-api.md#incremental-compilation) in the interactive loop (pdfLaTeX only). A body edit after a page break re-typesets only the tail and splices it (PDF **and** SyncTeX) onto the cached head for an immediate, **exact** **fast paint** — no reconcile needed for a single-file `final` edit. The `status` event's `incremental` flag marks a fast paint. Falls back to a full compile for XeLaTeX/LuaLaTeX, preamble/early edits, and label/citation edits, and to a background reconcile when exact SyncTeX cannot be spliced (including a changed head). Opt-in. |

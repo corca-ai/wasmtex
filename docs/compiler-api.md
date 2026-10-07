@@ -52,6 +52,7 @@ const result = await compiler.compile()
 | `texliveVersion` | `'2025' \| '2026'` | `'2025'` | Exact TeX Live engine/assets year; keep it aligned with the selected mirror profile. |
 | `texliveUrl` | `string` | Immutable R2 snapshot for the selected year | TeX Live package endpoint. |
 | `assetBaseUrl` | `string` | `'/'` | Base URL for WasmTex WASM assets (`wasmtex/...`). |
+| `formatAssetBaseUrl` | `string` | `assetBaseUrl` | Optional base for compatible published `.fmt` / `.fmt.gz` assets; engine, converter and bibliography workers keep `assetBaseUrl`. |
 | `skipFormatPreload` | `boolean` | `false` | Skip `.fmt` preload during engine bootstrap. |
 | `disablePreambleSnapshot` | `boolean` | `false` | Disable [precompiled preamble snapshots](engine.md#preamble-snapshots) and always run a full compile. |
 | `persistentCache` | `boolean` | `false` | Enable the [built-in persistent cache](engine.md#persistent-cache) (IndexedDB) of fetched TeX Live assets. No-ops without IndexedDB. |

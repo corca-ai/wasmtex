@@ -25,7 +25,7 @@ import { fetchBloomFilter } from './bloom-filter'
 
 import type { CompileEngine } from './compile-engine'
 import { buildDependencyGraph } from './dependency-graph'
-import { engineFormatUrl, engineWorkerUrl } from './engine-assets'
+import { engineFormatUrl, engineWorkerUrl, formatAssetBase } from './engine-assets'
 import { readResponseWithProgress } from './fetch-gz'
 import { enrichGlyphSuggestions } from './glyph-suggestions'
 import { buildDiagnostics, parseGlyphGaps, parseTexErrors } from './parse-errors'
@@ -65,13 +65,16 @@ export function createCompileWorker(
 /**
  * URL of a prebuilt format asset shipped next to the
  * engine JS/WASM. Resolved like {@link createCompileWorker} so a preloaded format
- * and its engine always come from the same asset dir.
+ * and its engine share an asset dir unless the host supplies a compatible format base.
  */
 export function unicodeFormatUrl(
   binary: 'xetex' | 'luatex',
   options: WasmTexEngineOptions,
 ): string {
-  const base = options.assetBaseUrl ?? import.meta.env.BASE_URL
+  const base = formatAssetBase(
+    options.assetBaseUrl ?? import.meta.env.BASE_URL,
+    options.formatAssetBaseUrl,
+  )
   const version = options.texliveVersion ?? '2025'
   return engineFormatUrl(base, version, binary)
 }

@@ -350,7 +350,12 @@ IndexedDB. It is independent of `persistentCache`, which stores fetched TeX Live
 files rather than the document-specific format.
 
 A snapshot key binds the engine build receipt, TeX Live year and URL, immutable
-mirror revision, and exact preamble bytes. Recorder-observed project files used by
+mirror revision, and exact preamble bytes. An explicit `formatAssetBaseUrl` also
+binds the normalized effective format URL; the default source preserves existing
+keys. Hosts must use immutable format sources and qualify their compatibility
+with the selected engine. The override changes only base-format downloads,
+including their gzip variant: workers, converters, bibliography, and build
+receipts still use `assetBaseUrl`. Headless figure and export siblings inherit it. Recorder-observed project files used by
 the preamble are stored with SHA-256 digests and rechecked before restore. A changed
 style/class file, malformed entry, incompatible schema, missing build receipt, or
 unavailable IndexedDB therefore fails closed to a normal preamble rebuild.
