@@ -121,6 +121,7 @@ RUN echo "=== Phase 1: native xetex (generate C + codegen tools + libkpathsea) =
 COPY pdf-backend /src/pdf-backend
 COPY build-xetex2.sh /src/build-xetex2.sh
 COPY xetex-entry.c /src/xetex-entry.c
+COPY shared-file.js /src/shared-file.js
 COPY xetex-worker.js /src/xetex-worker.js
 COPY heap-snapshot.js /src/heap-snapshot.js
 COPY resolver-evidence.js /src/resolver-evidence.js

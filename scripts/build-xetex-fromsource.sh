@@ -72,7 +72,7 @@ docker run --rm --platform linux/amd64 -e WASMTEX_PROFILE_NAMES --entrypoint bas
   -v "$REPO_ROOT/wasm-build:/glue:ro" -v "$OUT_ABS:/dist" wasmtex-xetex-wasm -c '
     set -euo pipefail
     cp /glue/dvipdfm-entry.c /glue/dvipdfm-stubs.c /glue/kpse-hook.c \
-       /glue/build-dvipdfm2.sh /glue/dvipdfm-worker.js /glue/heap-snapshot.js \
+       /glue/build-dvipdfm2.sh /glue/dvipdfm-worker.js /glue/shared-file.js /glue/heap-snapshot.js \
        /glue/xetex-dvipdfm-library.js /src/
     cp -R /glue/dvipdfmx-fixes /src/dvipdfmx-fixes
     cp -R /glue/fontmap-index /src/fontmap-index

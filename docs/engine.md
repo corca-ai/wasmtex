@@ -59,6 +59,16 @@ This separation keeps the authored protocol reviewable, makes generated artifact
 reproducible, and leaves each external component replaceable behind its existing
 boundary.
 
+## Shared immutable file storage
+
+Format installation and dvipdfmx font aliases borrow one owned byte buffer for
+multiple MEMFS paths. `wasm-build/shared-file.js` copies a file's storage before
+an in-place write, preserving the retained format and other aliases. Existing
+open streams consult the node's current ownership after format replacement;
+WASM heap views are never borrowed. Paths, permissions, format selection and
+cache lifetimes remain unchanged. The build scripts bundle this helper before
+all primary controllers and the converter.
+
 ## Multi-engine support (XeLaTeX / LuaLaTeX)
 
 Many documents — anything using `fontspec`, `unicode-math`, system/OpenType fonts,
