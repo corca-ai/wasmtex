@@ -93,7 +93,7 @@ jobs:
       TEXLIVE_YEAR: ${{ inputs.texlive_year }}
       RELEASE_ID: ${{ needs.source.outputs.release_id }}
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: corresponding-source-${{ inputs.texlive_year }}
           path: source-release/
