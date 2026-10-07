@@ -71,6 +71,8 @@ the pdfTeX and XeTeX controllers and the converter. LuaHBTeX retains ordinary
 file writes: its additional format borrowing did not establish a retained-memory
 benefit with stable repeat-compilation latency during Safari qualification.
 
+The annual pdfTeX Worker byte budget is 82,000 bytes. The shared immutable-file helper adds 1,833 source bytes to the previously qualified controller; the released Workers are 81,607 bytes in both years. This bounded transport increase buys a measured reduction from 14,874,665 to 7,512,017 distinct format backing bytes in Safari for the four installed 2026 pdfTeX format files. Other artifact and runtime budgets are unchanged.
+
 ## Multi-engine support (XeLaTeX / LuaLaTeX)
 
 Many documents — anything using `fontspec`, `unicode-math`, system/OpenType fonts,
