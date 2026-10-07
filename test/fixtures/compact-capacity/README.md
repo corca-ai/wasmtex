@@ -16,13 +16,14 @@ then returns to a small document. Promotion is sticky for the worker lifetime.
 The controller tests separately verify original-capacity exhaustion, unrelated
 capacity errors, heap-checkpoint admission, project replacement and retry timing.
 
-From a repository checkout with explicit flat baseline/candidate engine assets:
+From a repository checkout, output preservation accepts public asset roots
+containing `wasmtex/<year>/`; CPU profiling accepts the flat annual directory:
 
 ```sh
-node scripts/check-output-preservation.mjs --baseline BASELINE --candidate CANDIDATE \
+node scripts/check-output-preservation.mjs --baseline BASELINE_PUBLIC --candidate CANDIDATE_PUBLIC \
   --texlive-version 2026 --engine pdflatex --texlive-url IMMUTABLE_MIRROR \
   --corpus test/fixtures/compact-capacity
-node scripts/profile-font-cpu.mjs --assets CANDIDATE --year 2026 \
+node scripts/profile-font-cpu.mjs --assets CANDIDATE_PUBLIC/wasmtex/2026 --year 2026 \
   --engine pdflatex --texlive-url IMMUTABLE_MIRROR --trace false --heap-stats true \
   --project test/fixtures/compact-capacity/project.json --out test-results/compact-capacity
 ```
