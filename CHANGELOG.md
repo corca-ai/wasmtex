@@ -13,6 +13,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- Reduce the plain pdfTeX controller's initial main-memory allowance, with automatic
+  promotion to the original capacity after a rolled-back failed attempt. Formats
+  and checkpoint paths retain their original capacity; worker artifacts require
+  a new qualified engine release before integrator adoption.
+
 - Release SDK-owned Unicode warmup originals after worker initialization and remove
   redundant byte copies when exporting Unicode TeX Live caches. Worker caches,
   caller-owned warmup inputs and published format/mirror behavior are preserved.

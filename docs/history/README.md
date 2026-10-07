@@ -11,6 +11,7 @@ level up, starting with the [documentation index](../README.md).
 | [October 2026 heap memory experiment](heap-memory-2026-10.md) | Unpromoted pdfTeX/Unicode snapshot candidates, annual output comparisons, browser timings and Unicode RSS measurements. | [Compile performance](../compile-performance.md) |
 | [Unicode heap growth experiment](heap-growth-2026-10.md) | Growth headroom and converter initial-memory screening; source qualification. | [Compile performance](../compile-performance.md) |
 | [Cache memory experiments](cache-memory-2026-10.md) | Warmup lifetime, cache transfers and rejected delta/auxiliary/checkpoint candidates. | [Compile performance](../compile-performance.md) |
+| [Compact pdfTeX capacity screening](compact-capacity-2026-10.md) | Plain-engine working allowance, capacity-preserving promotion and rejected first-restore shortcut. | [Compile performance](../compile-performance.md) |
 | [pdfTeX AVL experiment](pdftex-fontmap-2026-09.md) | Rejected single-probe optimization and its limited qualification. | [Compile performance](../compile-performance.md) |
 | [HTTP compression experiment](http-compression-2026-09.md) | Point-in-time response sizes and rejected extra wrappers. | [Compression diagnostics](../http-compression.md) |
 | [Early warmup measurements](warmup-legacy.md) | Legacy timings without a complete pinned reproduction record. | [Warmup](../warmup.md) |

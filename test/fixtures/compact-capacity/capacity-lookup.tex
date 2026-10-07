@@ -1,0 +1,11 @@
+\documentclass{article}
+\IfFileExists{xcolor.sty}{\usepackage{xcolor}}{}
+\newcount\benchcount
+\newwrite\guard
+\begin{document}
+\IfFileExists{guard.txt}{Previous output exists.}{First run.}
+\IfFileExists{definitely-missing-tiny.sty}{Unexpected package.}{Missing package.}
+\immediate\openout\guard=guard.txt\immediate\write\guard{complete}\immediate\closeout\guard
+\benchcount=0\setbox0=\vbox{\loop\hbox{}\advance\benchcount by1\ifnum\benchcount<1000000\repeat}
+Capacity recovery.
+\end{document}
