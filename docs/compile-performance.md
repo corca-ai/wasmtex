@@ -21,6 +21,7 @@ to their source files and requalification requirements.
 | pdfTeX / XeTeX format loading | Bounded byte-verified decoded-format read cache with original O2 flags and published fmt bytes. | One source, at most 8 MiB compressed / 32 MiB decoded / 65,536 chunks; lifecycle and fallback checks required. |
 | LuaHBTeX build | O3 + LTO on the pinned toolchain. | Larger compressed assets; no decoded-format cache. |
 | pdfTeX incremental path | Preamble formats, optional durable preamble cache and browser heap checkpoints. | Each has a distinct identity/lifetime; see [engine caches](engine.md#preamble-snapshots). |
+| Plain pdfTeX working capacity | The authored controller starts without extra main-memory allowances and promotes once on main-memory exhaustion. | Working-directory rollback preserves inputs/outputs; snapshots add transient copies. INITEX and checkpoint paths retain the original capacity. Immutable release/adoption qualification is separate from the [screening record](history/compact-capacity-2026-10.md). |
 
 The September 2026 controlled corpus measured repeat/body improvements around
 19% for ordinary PDF format reuse, 13–15% for checkpoint PDF, 13% for XeTeX,

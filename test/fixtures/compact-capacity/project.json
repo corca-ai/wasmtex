@@ -1,0 +1,11 @@
+{
+  "mainFile": "main.tex",
+  "files": {
+    "main.tex": "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\section{Small document}\nHello from a tiny document.\nThis file has ten lines.\n\\[x^2+y^2=1\\]\nThere are no images or citations.\n\\par Done.\n\\end{document}"
+  },
+  "stages": {
+    "body-edit": "\\documentclass{article}\n\\IfFileExists{xcolor.sty}{\\usepackage{xcolor}}{}\n\\newcount\\benchcount\n\\newwrite\\guard\n\\begin{document}\n\\IfFileExists{guard.txt}{Previous output exists.}{First run.}\n\\IfFileExists{definitely-missing-tiny.sty}{Unexpected package.}{Missing package.}\n\\immediate\\openout\\guard=guard.txt\\immediate\\write\\guard{complete}\\immediate\\closeout\\guard\n\\benchcount=0\\setbox0=\\vbox{\\loop\\hbox{}\\advance\\benchcount by1\\ifnum\\benchcount<1000000\\repeat}\nCapacity recovery.\n\\end{document}",
+    "preamble-edit": "\\documentclass[12pt]{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\section{Small document}\nHello from a tiny document.\nThis file has ten lines.\n\\[x^2+y^2=1\\]\nThere are no images or citations.\n\\par Done.\n\\end{document}",
+    "restore": "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\section{Small document}\nHello from a tiny document.\nThis file has ten lines.\n\\[x^2+y^2=1\\]\nThere are no images or citations.\n\\par Done.\n\\end{document}"
+  }
+}

@@ -10,8 +10,8 @@
   "requirementsPath": "../../../docs/licensing.md",
   "componentInventoryPath": "../../../scripts/engine-components-2025.json",
   "correspondingSource": {
-    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-f3303ee6575afccb/wasmtex-2025-f3303ee6575afccb-source.tar.xz",
-    "sha256": "d252eae5ef6a2811c6b638b68b9b9a2e65c1992c36ce0931e2656aed08a1cec9"
+    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-4c1c9e827f353ba6/wasmtex-2025-4c1c9e827f353ba6-source.tar.xz",
+    "sha256": "549177ec40d68c12d3cb43b87f3c2ea06ca08d3a309820df68fdbff921e4ea18"
   },
   "requiredBuildFamilies": [
     "pdftex",
