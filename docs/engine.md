@@ -61,13 +61,15 @@ boundary.
 
 ## Shared immutable file storage
 
-Format installation and dvipdfmx font aliases borrow one owned byte buffer for
+pdfTeX and XeTeX format installation and dvipdfmx font aliases borrow one owned byte buffer for
 multiple MEMFS paths. `wasm-build/shared-file.js` copies a file's storage before
 an in-place write, preserving the retained format and other aliases. Existing
 open streams consult the node's current ownership after format replacement;
 WASM heap views are never borrowed. Paths, permissions, format selection and
 cache lifetimes remain unchanged. The build scripts bundle this helper before
-all primary controllers and the converter.
+the pdfTeX and XeTeX controllers and the converter. LuaHBTeX retains ordinary
+file writes: its additional format borrowing did not establish a retained-memory
+benefit with stable repeat-compilation latency during Safari qualification.
 
 ## Multi-engine support (XeLaTeX / LuaLaTeX)
 

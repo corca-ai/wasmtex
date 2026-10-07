@@ -142,7 +142,6 @@ RUN set -eu; \
 # COPY build script + own glue (AFTER native build — won't invalidate Phase 1)
 # =============================================================================
 COPY build-luatex.sh /src/build-luatex.sh
-COPY shared-file.js /src/shared-file.js
 COPY luatex-worker.js /src/luatex-worker.js
 COPY heap-snapshot.js /src/heap-snapshot.js
 COPY resolver-evidence.js /src/resolver-evidence.js

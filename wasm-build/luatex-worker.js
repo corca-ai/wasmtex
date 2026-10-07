@@ -326,9 +326,7 @@ self.onmessage = (ev) => {
     } catch {}
   } else if (cmd === 'writefile') {
     try {
-      if (typeof data.url === 'string' && data.url.endsWith('.fmt')) {
-        self.wasmtexSharedFiles.write(`${WORKROOT}/${data.url}`, data.src)
-      } else FS.writeFile(`${WORKROOT}/${data.url}`, data.src)
+      FS.writeFile(`${WORKROOT}/${data.url}`, data.src)
       self.postMessage({ result: 'ok', cmd: 'writefile' })
     } catch {
       self.postMessage({ result: 'failed', cmd: 'writefile' })

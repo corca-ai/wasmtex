@@ -39,7 +39,6 @@ on:
     paths:
       - 'wasm-build/luatex-worker.js'
       - 'wasm-build/resolver-evidence.js'
-      - 'wasm-build/shared-file.js'
       - 'wasm-build/heap-snapshot.js'
       - 'wasm-build/luatex-library.js'
       - 'wasm-build/luatex-entry.c'
