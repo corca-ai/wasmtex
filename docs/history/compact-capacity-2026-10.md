@@ -5,7 +5,8 @@ Current owner: [compile performance](../compile-performance.md).
 This record covers authored-controller screening through source `21cc1d4`,
 against controller source `cd1a9a9`. Immutable artifact release and integrator
 adoption are separate qualification steps; these measurements alone do not claim
-that production has changed.
+that production has changed. The immutable builds below qualify the registered
+SDK engine releases; integrating applications must qualify their own adoption.
 
 ## Decision and compatibility boundary
 
@@ -83,6 +84,37 @@ measurable, but Safari's hidden page did not paint Monaco. Accordingly these are
 headless compiler measurements, not active-editor or total-workspace RAM claims.
 Whole-workspace qualification must use visible pages and record that limitation.
 The SDK's standalone verification does not depend on the integrating checkout.
+
+## Immutable artifact qualification
+
+Both annual pdfTeX/BibTeX builds used source
+`48988d296e42e7501dd5928b89b056c38d07b45d` and the mirrors above. Compared with
+the published annual baselines, all engine binaries, generated JavaScript,
+original formats and unaffected controllers are byte-identical. Only the
+pdfTeX controller and its build receipts change. Original format-generation
+receipts remain attached to the composed releases.
+
+| Year | Engine release | pdfTeX/BibTeX build run | Verified source qualification run | Source publication run |
+| --- | --- | --- | --- | --- |
+| 2025 | `2025-4c1c9e827f353ba6` | `37635530571` | `37638882893` | `37639791932` |
+| 2026 | `2026-9147f5703951082b` | `37636128446` | `37638888267` | `37639796752` |
+
+The registered 2026 profile is `2026-20260826-9147f57`; its TeX Live snapshot,
+mirror and original format bytes remain those of `2026-20260826-76825fe`.
+Source archives are published on the matching `engine-<release-id>` tags.
+Their SHA-256 values are
+`549177ec40d68c12d3cb43b87f3c2ea06ca08d3a309820df68fdbff921e4ea18` (2025) and
+`abe486385f5a5a606203216420d067c8e57f5d6edc3398c623af98efef14d318` (2026).
+Downloaded qualification archives and GitHub publication digests agree.
+
+On these actual artifacts, the standalone compact-capacity corpus passed both
+root and nested main-file cases in each year, including forced promotion and
+package/user-output lookup. PR qualification run `37638854687` passed both
+annual browser goldens and Node/browser parity; run `37638855499` passed both
+annual nested-output checks, coverage and package-consumer checks. At this
+intermediate pinning commit its build check correctly rejected the still-old
+2026 distribution binding; final release registration updates that binding and
+must pass the full gate before merge.
 
 ## Rejected first-restore shortcut
 
