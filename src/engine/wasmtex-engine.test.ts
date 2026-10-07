@@ -99,6 +99,7 @@ function noop(): void {
 }
 
 describe('WasmTexPdftexEngine persistent preamble cache', () => {
+  afterEach(() => vi.unstubAllGlobals())
   class PreambleTestEngine extends WasmTexPdftexEngine {
     loadCalls = 0
 
@@ -138,6 +139,47 @@ describe('WasmTexPdftexEngine persistent preamble cache', () => {
     await Promise.all([engine.writeFile('main.tex', source), engine.writeFile('local.sty', style)])
     engine.setMainFile('main.tex')
   }
+
+  it('isolates durable preambles by normalized explicit format source', async () => {
+    const store = new MemoryBinaryStore()
+    vi.stubGlobal('document', { baseURI: 'https://formats.test/host/page.html' })
+    const withFormat = (base: string) => ({ ...options(store), formatAssetBaseUrl: base })
+    const first = new PreambleTestEngine(withFormat('https://formats.test/base/'))
+    first.markReady()
+    first.installProtocol({
+      cmd: 'compile',
+      result: 'ok',
+      status: 0,
+      preambleRebuilt: true,
+      preambleFormat: Uint8Array.of(1, 2, 3).buffer,
+      preambleHash: 'worker-hash',
+      preambleInputFiles: ['/work/local.sty'],
+    })
+    await writeProject(first, 'STYLE-A')
+    await first.compile()
+    await first.waitForPreamblePersist()
+
+    for (const [base, expectedLoads] of [
+      ['https://formats.test/other', 0],
+      ['https://formats.test/base', 1],
+      ['https://formats.test/path/../base/', 1],
+      ['../base/', 1],
+      ['../other/', 0],
+    ] as const) {
+      const next = new PreambleTestEngine(withFormat(base))
+      next.markReady()
+      next.installProtocol({ cmd: 'compile', result: 'ok', status: 0 })
+      await writeProject(next, 'STYLE-A')
+      await next.compile()
+      expect(next.loadCalls).toBe(expectedLoads)
+    }
+    const legacy = new PreambleTestEngine(options(store))
+    legacy.markReady()
+    legacy.installProtocol({ cmd: 'compile', result: 'ok', status: 0 })
+    await writeProject(legacy, 'STYLE-A')
+    await legacy.compile()
+    expect(legacy.loadCalls).toBe(0)
+  })
 
   it('restores a snapshot in a new engine only when project dependencies match', async () => {
     const store = new MemoryBinaryStore()

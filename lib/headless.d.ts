@@ -26,6 +26,8 @@ export interface WasmTexCompilerOptions {
     texliveUrl?: string;
     /** Base URL for WASM/static assets. */
     assetBaseUrl?: string;
+    /** Optional base for compatible published .fmt assets; workers keep assetBaseUrl. */
+    formatAssetBaseUrl?: string;
     /** Main TeX file name. Defaults to 'main.tex'. */
     mainFile?: string;
     /** Initial project files. Keys are file paths, values are content. */

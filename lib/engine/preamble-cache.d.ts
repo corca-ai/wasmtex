@@ -2,6 +2,8 @@ import { completionFileDigest } from './completion-snapshot.js';
 import { BinaryStore } from './persistent-cache.js';
 export interface PreambleCacheIdentity {
     engineBuildId: string;
+    /** Present only with an explicit format-source override; absence preserves legacy keys. */
+    formatUrl?: string;
     mirrorRevision: string;
     texliveUrl: string;
     texliveYear: string;

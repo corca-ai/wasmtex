@@ -306,6 +306,8 @@ export interface WasmTexCompilerOptions {
   texliveUrl?: string
   /** Base URL for WASM/static assets. */
   assetBaseUrl?: string
+  /** Optional base for compatible published .fmt assets; workers keep assetBaseUrl. */
+  formatAssetBaseUrl?: string
   /** Main TeX file name. Defaults to 'main.tex'. */
   mainFile?: string
   /** Initial project files. Keys are file paths, values are content. */
@@ -498,6 +500,9 @@ export class WasmTexCompiler {
   private engineBaseOpts(): WasmTexEngineOptions {
     const opts: WasmTexEngineOptions = {
       assetBaseUrl: this.assetBaseUrl,
+      ...(this.opts.formatAssetBaseUrl === undefined
+        ? {}
+        : { formatAssetBaseUrl: this.opts.formatAssetBaseUrl }),
       skipFormatPreload: !!this.opts.skipFormatPreload,
       disablePreambleSnapshot: !!this.opts.disablePreambleSnapshot,
       persistentCache: !!this.opts.persistentCache,

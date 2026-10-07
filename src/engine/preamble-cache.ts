@@ -14,6 +14,8 @@ const MAX_INPUTS = 4096
 
 export interface PreambleCacheIdentity {
   engineBuildId: string
+  /** Present only with an explicit format-source override; absence preserves legacy keys. */
+  formatUrl?: string
   mirrorRevision: string
   texliveUrl: string
   texliveYear: string

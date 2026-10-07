@@ -17,7 +17,12 @@ import {
 } from './completion-snapshot'
 import { buildDependencyGraph } from './dependency-graph'
 import { normalizeProjectDependencyPath } from './dependency-manifest'
-import { engineFormatUrl, engineWorkerUrl } from './engine-assets'
+import {
+  engineFormatUrl,
+  engineWorkerUrl,
+  formatAssetBase,
+  normalizedFormatUrl,
+} from './engine-assets'
 import { readResponseWithProgress } from './fetch-gz'
 import { enrichGlyphSuggestions } from './glyph-suggestions'
 import { buildDiagnostics, parseGlyphGaps, parseTexErrors } from './parse-errors'
@@ -37,6 +42,8 @@ export interface WasmTexEngineOptions {
   engineBinary?: 'pdftex' | 'xetex' | 'luatex'
   /** Base URL for WASM assets. Defaults to `import.meta.env.BASE_URL`. */
   assetBaseUrl?: string
+  /** Optional base for compatible published .fmt assets; workers keep assetBaseUrl. */
+  formatAssetBaseUrl?: string
   /** TexLive server endpoint. Defaults to `${location.origin}${BASE_URL}texlive/`. */
   texliveUrl?: string
   /** Load the Asyncify engine build that can take resumable mid-run checkpoints (#81).
@@ -191,6 +198,7 @@ function applyHeapCheckpoints(result: CompileResult, data: WorkerMessage): void 
 }
 
 export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> implements CompileEngine {
+  private readonly formatCacheIdentity: string | undefined
   private formatPath: string
   private skipFormatPreload: boolean
   private version: TexliveVersion
@@ -235,7 +243,12 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         : engineWorkerUrl(base, version, binary),
       options?.texliveUrl ?? null,
     )
-    this.formatPath = engineFormatUrl(base, version, binary)
+    this.formatPath = engineFormatUrl(
+      formatAssetBase(base, options?.formatAssetBaseUrl),
+      version,
+      binary,
+    )
+    this.formatCacheIdentity = normalizedFormatUrl(this.formatPath, options?.formatAssetBaseUrl)
     this.skipFormatPreload = !!options?.skipFormatPreload
     this.version = version
     this.warmupCache = options?.warmupCache
@@ -898,6 +911,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         mirrorRevision: this.preambleMirrorRevision,
         texliveUrl: this.effectiveTexliveUrl,
         texliveYear: this.version,
+        ...(this.formatCacheIdentity === undefined ? {} : { formatUrl: this.formatCacheIdentity }),
       },
       split.preamble,
     )

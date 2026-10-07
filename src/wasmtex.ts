@@ -275,6 +275,9 @@ export class WasmTex {
 
     const engineOpts: import('./engine/wasmtex-engine').WasmTexEngineOptions = {
       assetBaseUrl: this.assetBaseUrl,
+      ...(this.opts.formatAssetBaseUrl === undefined
+        ? {}
+        : { formatAssetBaseUrl: this.opts.formatAssetBaseUrl }),
       skipFormatPreload: !!this.opts.skipFormatPreload,
       disablePreambleSnapshot: !!this.opts.disablePreambleSnapshot,
       persistentCache: !!this.opts.persistentCache,

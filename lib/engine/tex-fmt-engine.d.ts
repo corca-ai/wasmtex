@@ -11,7 +11,7 @@ export declare function createCompileWorker(binary: 'xetex' | 'dvipdfm' | 'luate
 /**
  * URL of a prebuilt format asset shipped next to the
  * engine JS/WASM. Resolved like {@link createCompileWorker} so a preloaded format
- * and its engine always come from the same asset dir.
+ * and its engine share an asset dir unless the host supplies a compatible format base.
  */
 export declare function unicodeFormatUrl(binary: 'xetex' | 'luatex', options: WasmTexEngineOptions): string;
 /**

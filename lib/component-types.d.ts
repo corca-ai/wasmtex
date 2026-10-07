@@ -26,6 +26,8 @@ export interface WasmTexOptions {
     serviceWorker?: boolean;
     /** Base URL for WASM/static assets. Defaults to `import.meta.env.BASE_URL`. */
     assetBaseUrl?: string;
+    /** Optional base for compatible published .fmt assets; workers keep assetBaseUrl. */
+    formatAssetBaseUrl?: string;
     /** If true, do not attempt to preload the base .fmt file from the server. */
     skipFormatPreload?: boolean;
     /** If true, disable precompiled preamble snapshots and always run a full
