@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,9 +28,11 @@ describe.runIf(process.env.NODE_COMPILE_SMOKE === '1')(
       )
       // Exercise this checkout's controller against the pinned generated core.
       // The staged tree is test-only; published assets and receipts stay untouched.
-      copyFileSync(
-        join(root, 'wasm-build/pdftex-worker.js'),
+      writeFileSync(
         join(assets, 'wasmtex-pdftex.worker.js'),
+        ['shared-file.js', 'pdftex-worker.js']
+          .map((name) => readFileSync(join(root, 'wasm-build', name), 'utf8'))
+          .join('\n'),
       )
     })
     afterAll(() => {
