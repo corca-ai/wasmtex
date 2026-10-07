@@ -425,7 +425,7 @@ function simpleHash(str) {
 // Returns the format binary (Uint8Array) on success, null on failure.
 function buildPreambleFormat(preambleText) {
     prepareExecutionContext();
-    writeTexmfCnf();
+    writeTexmfCnf(true);
     try { FS.writeFile(WORKROOT + "/pdflatex", ""); } catch(e) {}
     self._preambleInputFiles = null;
 

@@ -20,7 +20,11 @@ afterEach(() => {
 })
 
 /** Real controller + filesystem; only the expensive generated TeX core is replaced. */
-function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always' | 'stack') {
+function boot(
+  failure?: 'initex' | 'missing-output',
+  capacity?: 'once' | 'always' | 'stack',
+  checkpoint = false,
+) {
   const root = mkdtempSync(join(tmpdir(), 'wasmtex-format-controller-'))
   roots.push(root)
   const local = (path: string) => join(root, path)
@@ -29,6 +33,7 @@ function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always
   const decoder = new TextDecoder()
   const fmt = Uint8Array.of(3, 1, 4, 1, 5)
   let pointer = 32
+  let clock = 0
   let builds = 0
   const allowances: number[] = []
   let deliver: (message: Record<string, unknown>) => void = () => {}
@@ -72,7 +77,7 @@ function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always
     wasmMemory: memory,
     thisProgram: 'pdftex',
     FS: fs,
-    performance: { now: () => 0 },
+    performance: { now: () => clock },
     console: { error() {}, log() {}, warn() {} },
     importScripts() {},
     postMessage: (message: Record<string, unknown>) => deliver(message),
@@ -89,6 +94,7 @@ function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always
     UTF8ToString: readString,
     _compileBibtex: () => 0,
     _main(argc: number, argv: number) {
+      clock += 100
       const view = new DataView(memory.buffer)
       const args = Array.from({ length: argc }, (_, i) =>
         readString(view.getUint32(argv + i * 4, true)),
@@ -111,6 +117,10 @@ function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always
       return 0
     },
   })
+  if (checkpoint) {
+    scope.Asyncify = { state: 0, State: { Unwinding: 1 } }
+    scope._asyncify_start_rewind = () => {}
+  }
   scope.self = scope
   // This fixture uses the real OS filesystem, not Emscripten MEMFS.
   scope.wasmtexSharedFiles = { write: fs.writeFile }
@@ -129,6 +139,7 @@ function boot(failure?: 'initex' | 'missing-output', capacity?: 'once' | 'always
     fmt,
     builds: () => builds,
     allowances,
+    flush: () => runInContext('self.onmessage({ data: { cmd: "flushcache" } })', scope),
     compile: () =>
       new Promise<Record<string, unknown>>((resolve) => {
         deliver = resolve
@@ -175,11 +186,32 @@ describe('pdfTeX base format fallback', () => {
 describe('pdfTeX compact working capacity', () => {
   it('promotes main-memory exhaustion once, preserves source, and stays promoted', async () => {
     const worker = boot(undefined, 'once')
-    expect(await worker.compile()).toMatchObject({ result: 'ok' })
+    expect(await worker.compile()).toMatchObject({
+      result: 'ok',
+      phaseTimings: { texRunMs: 200, workerTotalMs: 300 },
+    })
     expect(worker.allowances).toEqual([0, 10000000])
     expect(worker.fs.readFile('/work/main.tex', { encoding: 'utf8' })).toBe('caller source')
     expect(await worker.compile()).toMatchObject({ result: 'ok' })
     expect(worker.allowances).toEqual([0, 10000000, 10000000])
+  })
+
+  it('retains the original allowance for heap-checkpoint engines', async () => {
+    const worker = boot(undefined, undefined, true)
+    expect(await worker.compile()).toMatchObject({ result: 'ok' })
+    expect(worker.allowances).toEqual([10000000])
+  })
+
+  it('keeps promotion after replacing the project and clears derived outputs', async () => {
+    const worker = boot(undefined, 'once')
+    expect(await worker.compile()).toMatchObject({ result: 'ok' })
+    worker.flush()
+    worker.fs.mkdir('/work/nested')
+    worker.fs.writeFile('/work/nested/data.bin', Uint8Array.of(0, 255, 128))
+    worker.fs.writeFile('/work/main.tex', 'new project')
+    expect(await worker.compile()).toMatchObject({ result: 'ok' })
+    expect(worker.allowances).toEqual([0, 10000000, 10000000])
+    expect(worker.fs.readFile('/work/main.tex', { encoding: 'utf8' })).toBe('new project')
   })
 
   it('returns exhaustion at the original capacity without an unbounded retry', async () => {
