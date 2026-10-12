@@ -32,6 +32,12 @@ describe('line helpers', () => {
 })
 
 describe('checkpointLineForEdit', () => {
+  it('can retain document-start state for repeated first-paragraph previews', () => {
+    expect(checkpointLineForEdit(DOC, PRE.length, 0)).toBe(3)
+    expect(checkpointLineForEdit(DOC, PRE.length + 5, 0)).toBe(3)
+    expect(checkpointLineForEdit(DOC, PRE.length - 1, 0)).toBeNull()
+    expect(checkpointLineForEdit(DOC, PRE.length + 5)).toBeNull()
+  })
   it('picks the paragraph boundary before the edited paragraph', () => {
     const editAt = DOC.indexOf('Paragraph 8')
     const line = checkpointLineForEdit(DOC, editAt, 0)!
