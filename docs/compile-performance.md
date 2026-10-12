@@ -83,6 +83,26 @@ runtime ceilings are unchanged. Native code is built from the existing upstream
 pins and reuses the exact published formats. Annual release and application
 qualification remain separate from the SDK unit tests.
 
+## Checkpoints in compact source
+
+On capable pdfTeX workers, sources without an earlier blank paragraph separator
+use the previous source line for checkpoint placement. Existing paragraph
+placement and prefix/dependency invalidation remain unchanged. Older workers
+retain the previous policy through an explicit capability handshake.
+
+The Asyncify buffer is reserved before the initial allocator snapshot and its
+free wrapper resolves the generated lazy export first. Both rules are necessary
+for repeated full resets followed by checkpoint reuse. The regression corpus
+covers unfinished macro arguments, repeated previews, full output and prefix
+invalidation. [Engine memory ownership](engine.md#heap-checkpoint-allocation)
+explains the lifetime boundary.
+
+A checkpoint hit alone does not establish a short rerun. Measure its distance
+from the edit and actual engine time. Preparation still costs a compile and a
+snapshot; a later checkpoint can retain more memory. One long source line cannot
+benefit from finer placement, and moving to an unprepared region still requires
+preparation. Hosts own idle scheduling and their checkpoint memory budget.
+
 ## Excluded or deferred changes
 
 | Candidate | Decision |
