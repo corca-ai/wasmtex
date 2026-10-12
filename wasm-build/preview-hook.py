@@ -18,7 +18,7 @@ source = (
     "extern int wasmtex_preview_page_limit;\n"
     + source[:match.start(2)]
     + "if (wasmtex_preview_page_limit > 0 && totalpages >= wasmtex_preview_page_limit)\n"
-    + "  { curchr = 0; goto lab10; }\n"
+    + "  { curchr = 0; return; }\n"
     + source[match.start(2):]
 )
 path.write_text(source)
