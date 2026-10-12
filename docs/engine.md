@@ -561,5 +561,5 @@ in `finally`, including previous auxiliary files and arbitrary project resources
 Package caches remain warm. These transient copies add cost for large projects;
 the operation does not promise a fixed latency or a memory bound. A valid heap
 checkpoint can skip the unchanged prefix. The SDK never publishes partial
-metadata as a full compile and requires a successful baseline; see the
-[preview API contract](compiler-api.md#deferred-pdf-preview-parts).
+metadata as a full compile and requires a successful baseline. The
+[preview API contract](compiler-api.md#deferred-pdf-preview-parts) defines host reconciliation.

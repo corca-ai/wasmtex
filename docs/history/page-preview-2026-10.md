@@ -51,6 +51,21 @@ Source assemblies include every revision named by composed receipts and no
 integrating-application source. Release-mode license checks and all 118
 license-tool tests pass after registration.
 
+Fresh Linux runs `38208278035` (2025) and `38208280524` (2026) independently
+rebuild pdfTeX, the checkpoint variant and BibTeX. All ten non-format runtime
+files per year reproduce byte-for-byte. The rebuild revision `37d1573` has the
+same 69 `wasm-build` files as `fc79d52` in each published source archive; each
+archived file was compared directly with the rebuild checkout. Both runs use
+the digest-pinned Emscripten image and fresh Phase 2 containers. The ordinary
+workflow can reuse its unchanged native Phase 1 Docker layers; this is not a
+claim of a cache-disabled toolchain bootstrap. Formats remain the original
+published artifacts rather than independently regenerated formats.
+
+Both public archives also pass `check-corresponding-source.mjs` against the
+final source-bound manifests. PR head `816b5a6` passes every applicable CI
+check: annual Golden Canary `38208594042`, CI `38208593996`, corresponding
+source `38208593939` and CodeQL `38208593906`.
+
 ## Behavior and performance evidence
 
 `e2e/page-preview.spec.ts` runs four naturally paginated fixtures: prose,
