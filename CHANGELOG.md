@@ -11,7 +11,15 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve ownership of the Asyncify buffer across full heap resets so rebuilding
+  a checkpoint cannot overwrite its suspended execution state.
+
 ### Performance
+
+- Keep heap checkpoints near edits in sources without blank paragraph separators,
+  using the preceding source line while preserving prefix/input validation.
 
 - Add disposable pdfTeX page-prefix previews, including reuse of valid heap
   checkpoints. Preview auxiliary outputs are rolled back and full compilation

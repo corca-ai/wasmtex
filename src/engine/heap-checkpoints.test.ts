@@ -46,6 +46,15 @@ describe('checkpointLineForEdit', () => {
     expect(DOC.slice(start, start + 11)).toBe('Paragraph 7')
   })
 
+  it('keeps unseparated source lines close to the edit with one line of slack', () => {
+    const source = PRE + Array.from({ length: 40 }, (_, i) => `Line ${i}.`).join('\n')
+    const offset = source.indexOf('Line 30.')
+    expect(checkpointLineForEdit(source, offset, 0)).toBe(lineOfOffset(source, offset) - 1)
+    expect(checkpointLineForEdit(source, offset + 4, 0)).toBe(lineOfOffset(source, offset) - 1)
+    expect(checkpointLineForEdit(source, source.indexOf('Line 1.'), 0)).toBe(3)
+    expect(checkpointLineForEdit(source, offset, source.length)).toBeNull()
+  })
+
   it('refuses the preamble and a too-small head', () => {
     expect(checkpointLineForEdit(DOC, 5)).toBeNull()
     expect(checkpointLineForEdit(DOC, DOC.indexOf('Paragraph 2'), 10_000)).toBeNull()

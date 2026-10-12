@@ -89,6 +89,7 @@ Module["preRun"] = function() {
 // After WASM initialization completes, snapshot the heap memory and notify
 // the host that the engine is ready.
 Module["postRun"] = function() {
+    if (hcSupported()) hcEnsureDataBuffer();
     self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
@@ -1684,6 +1685,24 @@ function hcLineOffset(text, line) {
     return new TextEncoder().encode(text.substring(0, at + 1)).length;
 }
 
+function hcEnsureDataBuffer() {
+    if (!self._hc.dataPtr) {
+        // Reserve the buffer before the initialization snapshot captures malloc state.
+        // Otherwise a full reset frees it behind the JS pointer and TeX can reuse it.
+        var ptr = _malloc(12 + Asyncify.StackSize);
+        self._hc.dataPtr = ptr;
+        Asyncify.allocateData = function() {
+            Asyncify.setDataHeader(ptr, ptr + 12, Asyncify.StackSize);
+            Asyncify.setDataRewindFunc(ptr);
+            return ptr;
+        };
+        // Resolve Emscripten's self-replacing lazy export before wrapping it.
+        _free(0);
+        var origFree = _free;
+        _free = function(p) { if (p === ptr) return; return origFree(p); };
+    }
+}
+
 // Arm checkpoints for the run about to start. `checkpoints` is [{id, line}] in the
 // host's line numbering, which every rewrite of the main file preserves.
 function hcArm(checkpoints, transform) {
@@ -1692,19 +1711,7 @@ function hcArm(checkpoints, transform) {
     self._hc.transform = transform || null;
     if (!checkpoints || !checkpoints.length || !hcSupported()) return;
     hcInstallReadHook();
-    if (!self._hc.dataPtr) {
-        // One Asyncify data buffer per worker at a stable address; the runtime's own
-        // malloc/free per unwind would move it around the heap.
-        var ptr = _malloc(12 + Asyncify.StackSize);
-        self._hc.dataPtr = ptr;
-        Asyncify.allocateData = function() {
-            Asyncify.setDataHeader(ptr, ptr + 12, Asyncify.StackSize);
-            Asyncify.setDataRewindFunc(ptr);
-            return ptr;
-        };
-        var origFree = _free;
-        _free = function(p) { if (p === ptr) return; return origFree(p); };
-    }
+    hcEnsureDataBuffer();
     var path = WORKROOT + "/" + self.mainfile;
     var text = FS.readFile(path, { encoding: "utf8" });
     var node = FS.lookupPath(path).node;

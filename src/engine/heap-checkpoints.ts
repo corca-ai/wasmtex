@@ -94,7 +94,8 @@ export function lineOfOffset(text: string, offset: number): number {
 /**
  * The line to checkpoint for an edit at `offset`: the start of the paragraph before the
  * one containing the edit (a blank-line boundary), so that further edits in the same
- * paragraph — and typing just above it — still resume from it. Never inside the preamble.
+ * paragraph — and typing just above it — still resume from it. Without a blank-line
+ * boundary, use the previous source line. Never inside the preamble.
  */
 export function checkpointLineForEdit(
   source: string,
@@ -125,6 +126,13 @@ export function checkpointLineForEdit(
       if (boundaries >= 2) break
     }
     at = nl
+  }
+  // Compact sources often use explicit section/page commands instead of blank lines.
+  // Heap snapshots can suspend at any input line, including inside a paragraph.
+  // Keep one source line of slack when there is no paragraph boundary to reuse.
+  if (boundaries === 0) {
+    const currentLineStart = source.lastIndexOf('\n', Math.min(offset, source.length) - 1) + 1
+    candidate = Math.max(earliest, source.lastIndexOf('\n', currentLineStart - 2) + 1)
   }
   if (candidate < earliest + minHeadBytes) return null
   return lineOfOffset(source, candidate)

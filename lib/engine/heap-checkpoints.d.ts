@@ -41,7 +41,8 @@ export declare function lineOfOffset(text: string, offset: number): number;
 /**
  * The line to checkpoint for an edit at `offset`: the start of the paragraph before the
  * one containing the edit (a blank-line boundary), so that further edits in the same
- * paragraph — and typing just above it — still resume from it. Never inside the preamble.
+ * paragraph — and typing just above it — still resume from it. Without a blank-line
+ * boundary, use the previous source line. Never inside the preamble.
  */
 export declare function checkpointLineForEdit(source: string, offset: number, minHeadBytes?: number): number | null;
 /**
