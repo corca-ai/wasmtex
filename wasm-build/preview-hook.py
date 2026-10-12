@@ -25,11 +25,14 @@ source = (
 # final_cleanup assumes a scanned \end and unwinds those token stacks; that is
 # not valid here. The next request restores the heap and the worker closes all
 # streams. Keep close_files_and_terminate, which finalizes fonts and PDF xref.
-source, count = re.subn(
-    r"(maincontrol\s*\(\s*\)\s*;\s*)(finalcleanup\s*\(\s*\)\s*;)",
-    r"\1if (!(wasmtex_preview_page_limit > 0 && totalpages >= wasmtex_preview_page_limit)) \2",
-    source,
-)
-if count != 1:
+ini_path = path.with_name("pdftexini.c")
+ini = ini_path.read_text()
+pattern = r"\bfinalcleanup\s*\(\s*\)\s*;"
+replacement = "if (!(wasmtex_preview_page_limit > 0 && totalpages >= wasmtex_preview_page_limit)) finalcleanup ();"
+source, count = re.subn(pattern, replacement, source)
+ini, ini_count = re.subn(pattern, replacement, ini)
+if count + ini_count != 1:
     raise SystemExit("pdfTeX final cleanup entry changed: review the preview hook")
 path.write_text(source)
+if ini_count:
+    ini_path.write_text("extern int wasmtex_preview_page_limit;\n" + ini)

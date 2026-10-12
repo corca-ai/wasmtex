@@ -420,8 +420,8 @@ wasm-prep:
 	@echo "  Copied aconf.h from native build"
 	# Copy generated C files
 	cp $(BUILD_NATIVE)/texk/web2c/pdftex0.c     $(BUILD_WASM)/texk/web2c/
-	python3 /src/preview-hook.py $(BUILD_WASM)/texk/web2c/pdftex0.c
 	cp $(BUILD_NATIVE)/texk/web2c/pdftexini.c    $(BUILD_WASM)/texk/web2c/
+	python3 /src/preview-hook.py $(BUILD_WASM)/texk/web2c/pdftex0.c
 	cp $(BUILD_NATIVE)/texk/web2c/pdftex-pool.c  $(BUILD_WASM)/texk/web2c/
 	cp $(BUILD_NATIVE)/texk/web2c/pdftexd.h      $(BUILD_WASM)/texk/web2c/
 	-cp $(BUILD_NATIVE)/texk/web2c/pdftexcoerce.h $(BUILD_WASM)/texk/web2c/ 2>/dev/null

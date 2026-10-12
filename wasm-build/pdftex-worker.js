@@ -977,6 +977,7 @@ async function compileLaTeXRoutine(data, started, timings) {
 
         writeTexmfCnf();
         var fallbackStart = performance.now();
+        if (typeof _setPreviewPageLimit === "function") _setPreviewPageLimit(self._previewPageLimit || 0);
         try {
             status = await runTexMain(["-interaction=nonstopmode", "-synctex=1",
                                        "-recorder", "&pdflatex", self.mainfile]);
