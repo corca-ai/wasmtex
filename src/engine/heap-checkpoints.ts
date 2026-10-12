@@ -108,11 +108,11 @@ export function checkpointLineForEdit(
   const floor = source.indexOf('\n', bodyStart)
   if (floor < 0) return null
   const earliest = floor + 1
-  if (offset <= earliest + minHeadBytes) return null
+  if (offset < earliest + minHeadBytes) return null
   // Walk back over blank-line paragraph boundaries: the edit's paragraph start, then one more.
   let at = Math.min(offset, source.length)
   let boundaries = 0
-  let candidate = -1
+  let candidate = minHeadBytes === 0 ? earliest : -1
   while (at > earliest) {
     const nl = source.lastIndexOf('\n', at - 1)
     if (nl < earliest) break
@@ -126,8 +126,7 @@ export function checkpointLineForEdit(
     }
     at = nl
   }
-  if (candidate < 0) return null
-  if (candidate <= earliest + minHeadBytes) return null
+  if (candidate < earliest + minHeadBytes) return null
   return lineOfOffset(source, candidate)
 }
 
@@ -165,6 +164,12 @@ export class HeapCheckpointCompiler {
   /** Ids and bytes of the checkpoints currently held (for telemetry and tests). */
   get held(): Array<{ id: string; line: number; bytes: number }> {
     return [...this.checkpoints.values()].map((c) => ({ id: c.id, line: c.line, bytes: c.bytes }))
+  }
+
+  /** A preview must not advance the full-result baseline or arm new checkpoints. */
+  previewCheckpoint(source: string, files: SourceSet): string | undefined {
+    if (!this.enabled || this.lastMain === null) return undefined
+    return this.findValid(source, files, firstDifference(this.lastMain, source))?.id
   }
 
   reset(): void {

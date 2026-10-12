@@ -89,7 +89,7 @@ Module["preRun"] = function() {
 // After WASM initialization completes, snapshot the heap memory and notify
 // the host that the engine is ready.
 Module["postRun"] = function() {
-    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported() });
+    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
@@ -913,6 +913,7 @@ async function compileLaTeXRoutine(data, started, timings) {
     // allowing preamble format rebuilds at any point in the session.
     writeTexmfCnf();
     var compileStart = performance.now();
+    if (typeof _setPreviewPageLimit === "function") _setPreviewPageLimit(self._previewPageLimit || 0);
     var status;
     // Heap checkpoints (#81): suspend at the requested lines of the file TeX is about to
     // read and keep a resumable copy of the engine state; the run then continues.
@@ -976,6 +977,7 @@ async function compileLaTeXRoutine(data, started, timings) {
 
         writeTexmfCnf();
         var fallbackStart = performance.now();
+        if (typeof _setPreviewPageLimit === "function") _setPreviewPageLimit(self._previewPageLimit || 0);
         try {
             status = await runTexMain(["-interaction=nonstopmode", "-synctex=1",
                                        "-recorder", "&pdflatex", self.mainfile]);
@@ -1012,6 +1014,10 @@ async function compileLaTeXRoutine(data, started, timings) {
 // Post-run bookkeeping shared by a normal compile and a checkpoint resume: engine
 // command scan, recorder inputs, semantic trace, PDF/SyncTeX read-back and the response.
 function finishCompile(ctx, status) {
+    if (self._previewPageLimit) {
+        finishPagePreview(ctx, status);
+        return;
+    }
     var routineStart = ctx.routineStart;
     var phaseTimings = ctx.phaseTimings;
     var usedPreamble = ctx.usedPreamble;
@@ -1390,7 +1396,9 @@ self["onmessage"] = function(ev) {
     var data = ev["data"];
     var cmd = data["cmd"];
 
-    if (cmd === "compilelatex") {
+    if (cmd === "compilepagepreview") {
+        compilePagePreviewRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
+    } else if (cmd === "compilelatex") {
         compileLaTeXRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
     } else if (cmd === "compileheapcheckpoint") {
         compileFromHeapCheckpointRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
@@ -1573,6 +1581,45 @@ self["onmessage"] = function(ev) {
 
 self.kpse_find_file_impl = kpse_find_file_impl;
 self.kpse_find_pk_impl = kpse_find_pk_impl;
+
+// A bounded page preview is a disposable branch of the current project. Its
+// auxiliary files must never seed a later full compile or an export.
+async function compilePagePreviewRoutine(data) {
+    var limit = data["pageLimit"];
+    if (typeof _setPreviewPageLimit !== "function" || !Number.isSafeInteger(limit) || limit < 1 || limit > 10000) {
+        throw new Error("unsupported page preview");
+    }
+    var saved = snapshotDirectory(WORKROOT);
+    self._previewPageLimit = limit;
+    try {
+        if (data["id"]) await compileFromHeapCheckpointRoutine(data);
+        else await compileLaTeXRoutine(data);
+    } finally {
+        self._previewPageLimit = 0;
+        _setPreviewPageLimit(0);
+        closeFSStreams();
+        cleanDir(WORKROOT);
+        restoreDirectory(saved);
+    }
+}
+
+function finishPagePreview(ctx, status) {
+    var base = WORKROOT + "/" + jobNameForMain(self.mainfile);
+    var pdf = null, synctex = null;
+    if (status === 0 || status === 1) {
+        try { pdf = FS.readFile(base + ".pdf", { encoding: "binary" }); } catch(e) {}
+        try { synctex = FS.readFile(base + ".synctex", { encoding: "binary" }); } catch(e) {
+            try { synctex = FS.readFile(base + ".synctex.gz", { encoding: "binary" }); } catch(e2) {}
+        }
+    }
+    ctx.phaseTimings.workerTotalMs = performance.now() - ctx.routineStart;
+    var response = { cmd: "compile", result: pdf ? "ok" : "failed", status: status,
+        log: self.memlog, phaseTimings: ctx.phaseTimings };
+    var transfer = [];
+    if (pdf) { response.pdf = pdf.buffer; transfer.push(pdf.buffer); }
+    if (synctex) { response.synctex = synctex.buffer; transfer.push(synctex.buffer); }
+    self.postMessage(response, transfer);
+}
 
 // --- Heap checkpoints (#81) ---------------------------------------------------
 //
@@ -1912,6 +1959,7 @@ async function compileFromHeapCheckpointRoutine(data) {
     }
     FS.writeFile(WORKROOT + "/" + self.mainfile, hcTransformMain(hostMain, snap.transform));
     hcRestoreMemory(snap);
+    if (typeof _setPreviewPageLimit === "function") _setPreviewPageLimit(self._previewPageLimit || 0);
     self.memlog = snap.memlog;
     phaseTimings.heapRestoreMs = performance.now() - restoreStart;
     hcArm(data["checkpoints"], snap.transform);

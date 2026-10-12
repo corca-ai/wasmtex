@@ -61,7 +61,7 @@ const result = await compiler.compile()
 | `onEngineSelected` | `(selection: Readonly<EngineDetection>) => void \| Promise<void>` | - | Headless compiler notification before initialization of each newly selected engine, including Auto changes. Contains `engine`, `reason`, and `forced`. Returned promises are not awaited; observer failures are logged without failing compilation. Same-engine edits do not notify again. |
 | `onLoadProgress` | `(event: LoadProgressEvent) => void` | - | Load progress for a host UI: `{ phase: 'format', percent }` while the precompiled format downloads, `{ phase: 'file', file, count }` for every TeX Live file fetched on demand. Pair with `warmup({ onProgress })` for the prefetch phase. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
-| `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number }` | 4 checkpoints / 320 MiB | Retained browser pdfLaTeX heap checkpoints, bounded by count and sparse-image bytes. Values must be nonnegative safe integers. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
+| `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number; minHeadBytes?: number }` | 4 checkpoints / 320 MiB / 512 head bytes | Retained browser pdfLaTeX heap checkpoints, bounded by count and sparse-image bytes. Values must be nonnegative safe integers. `minHeadBytes: 0` permits a checkpoint at the first body line. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number; idleMs?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
@@ -126,6 +126,22 @@ multi-file documents — `\include`/`\input` chapters splice at their own file-r
 that changed since the last full compile falls back to a background full reconcile that refreshes SyncTeX.
 
 #### Deferred PDF preview parts
+
+`await compiler.previewPages(pageLimit)` requests a disposable PDF prefix after
+a successful full compile. Supported pdfTeX assets stop after a complete page
+has shipped and finalize the PDF normally; other engines and older assets return
+`null`. The positive integer limit is capped at 10,000. A changed preamble or
+another project file requires a full compile first. The compiler may resume a
+valid heap checkpoint before the edit.
+
+The returned `PagePreviewResult` contains `pdf`, `synctex`, `compileTime` and
+`pageLimit`. It is a first-pass preview using the preceding full compile's
+references, not an export or proof of settled pagination. Auxiliary files and
+compiler metadata remain unchanged. Hosts must run `compile()` after editing
+settles, keep partial results out of export/cache paths, and bound retained
+preview versions. Preview errors return `null` so the host can fall back to the
+normal diagnostic pipeline. Input mutation, disposal and overlapping calls obey
+the same serialization rules as `compile()`.
 
 `await compiler.compilePreview()` runs the same serialized compile pipeline as
 `compile()`, but returns `PreviewCompileResult`. Its `pdf` is ordinary bytes for

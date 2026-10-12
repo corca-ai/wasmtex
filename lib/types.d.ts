@@ -35,6 +35,15 @@ export interface PdfPreviewParts {
 export type PreviewCompileResult = Omit<CompileResult, 'pdf'> & {
     pdf: Uint8Array | PdfPreviewParts | null;
 };
+/** A disposable first-pass PDF prefix, never a canonical compile/export result.
+ * References use the last full compile's auxiliary state. Diagnostics and
+ * metadata remain owned by compile(); callers must reconcile after editing. */
+export interface PagePreviewResult {
+    pdf: Uint8Array;
+    synctex: Uint8Array | null;
+    compileTime: number;
+    pageLimit: number;
+}
 /** Logical byte lengths of retained SDK JavaScript views, not deduplicated backing
  * allocations. Excludes engine workers, WASM heaps, parsed objects and host results. */
 export interface CompilerRetentionStats {

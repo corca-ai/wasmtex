@@ -143,6 +143,7 @@ COPY pdftex-worker.js /src/pdftex-worker.js
 COPY resolver-evidence.js /src/resolver-evidence.js
 COPY kpse-resolve.cjs /src/kpse-resolve.cjs
 COPY wasm-entry.c /src/wasm-entry.c
+COPY preview-hook.py /src/preview-hook.py
 COPY kpse-hook.c /src/kpse-hook.c
 COPY library.js /src/library.js
 COPY trace-hook.c /src/trace-hook.c

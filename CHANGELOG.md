@@ -13,6 +13,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- Add disposable pdfTeX page-prefix previews, including reuse of valid heap
+  checkpoints. Preview auxiliary outputs are rolled back and full compilation
+  remains the authority for diagnostics, references and export.
+
 - Reduce the plain pdfTeX controller's initial main-memory allowance, with automatic
   promotion to the original capacity after a rolled-back failed attempt. Formats
   and checkpoint paths retain their original capacity; worker artifacts require

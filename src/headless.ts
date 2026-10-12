@@ -36,6 +36,7 @@ import { IncrementalCompiler, type PreviewIncrementalResult } from './engine/inc
 import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine/index-backend'
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
+import { extractPreamble } from './engine/preamble-utils'
 import { RerunController, signatureOf } from './engine/rerun-controller'
 import {
   buildTexliveDependencySet,
@@ -71,6 +72,7 @@ import type {
   CompletionSnapshotState,
   DependencyManifest,
   LoadProgressEvent,
+  PagePreviewResult,
   PreviewCompileResult,
   ResolverEvidenceReport,
   TexError,
@@ -115,6 +117,7 @@ export type {
   DependencyManifestIncompleteReason,
   DependencyManifestSource,
   DependencyManifestStage,
+  PagePreviewResult,
   PdfPreviewParts,
   PreviewCompileResult,
 } from './types'
@@ -352,7 +355,10 @@ export interface WasmTexCompilerOptions {
   /** Retained arbitrary-line checkpoint limits; omitted values keep SDK defaults.
    * Applies to the browser pdfLaTeX heap path, not legacy page-break checkpoints.
    * A checkpoint exceeding the budget is dropped; full compilation still works. */
-  heapCheckpointOptions?: Pick<HeapCheckpointOptions, 'maxCheckpoints' | 'maxBytes'>
+  heapCheckpointOptions?: Pick<
+    HeapCheckpointOptions,
+    'maxCheckpoints' | 'maxBytes' | 'minHeadBytes'
+  >
   /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
    *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
    *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of
@@ -423,6 +429,7 @@ export class WasmTexCompiler {
   /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
   private prebuildInFlight: Promise<boolean> | null = null
   private compileInFlight = false
+  private pagePreviewBaseline: string | null = null
   private readonly operations = new CompilerOperations()
   private initInFlight: Promise<void> | null = null
   private replacingProject = false
@@ -627,6 +634,49 @@ export class WasmTexCompiler {
     return this.compileOperation(true)
   }
 
+  /** Render a PDF prefix using the last full pass's references. This leaves full
+   * compile metadata and auxiliary outputs unchanged. Null means unsupported or
+   * unsafe: run compile() instead. Always reconcile with compile() after edits. */
+  async previewPages(pageLimit: number): Promise<PagePreviewResult | null> {
+    if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 10000)
+      throw new RangeError('Invalid preview page limit')
+    this.ensureInitialized()
+    this.assertNoProjectReplacement()
+    if (this.compileInFlight) throw new Error('Compile already in progress')
+    if (
+      this.pagePreviewBaseline === null ||
+      extractPreamble(this.pagePreviewBaseline)?.preamble !==
+        extractPreamble(this.mainSource())?.preamble ||
+      this.tikzExternalizationKind()
+    )
+      return null
+    this.compileInFlight = true
+    const revision = this.inputRevision
+    try {
+      if (this.prebuildInFlight) await this.prebuildInFlight
+      this.assertRevision(revision)
+      const result = await this.operations.run(() => this.previewPagesIdle(pageLimit))
+      this.assertRevision(revision)
+      return result
+    } finally {
+      this.compileInFlight = false
+    }
+  }
+
+  private async previewPagesIdle(pageLimit: number): Promise<PagePreviewResult | null> {
+    ;(await this.operations.observe(this.ensureEngine())).resume()
+    const engine = this.engine
+    if (!(engine instanceof WasmTexPdftexEngine)) return null
+    ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
+    const checkpoint = this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+    const result = (
+      await this.operations.observe(engine.compilePagePreview(pageLimit, checkpoint))
+    ).resume()
+    if (!result?.success || !result.pdf || result.errors.some((e) => e.severity === 'error'))
+      return null
+    return { pdf: result.pdf, synctex: result.synctex, compileTime: result.compileTime, pageLimit }
+  }
+
   getRetentionStats(): CompilerRetentionStats {
     return (
       this.incremental?.getRetentionStats() ?? {
@@ -652,6 +702,7 @@ export class WasmTexCompiler {
       this.assertRevision(revision)
       const result = await this.operations.run(() => this.compileIdle(preview))
       this.assertRevision(revision)
+      this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
       return result
     } finally {
       this.compileInFlight = false
@@ -856,6 +907,7 @@ export class WasmTexCompiler {
 
   setFile(path: string, content: FileContent): void {
     this.assertNoProjectReplacement()
+    if (path !== this.mainFile) this.pagePreviewBaseline = null
     this.invalidateOperation()
     this.projectIndex.invalidateCompletionSnapshot()
     this.fs.writeFile(path, content)
@@ -901,6 +953,7 @@ export class WasmTexCompiler {
   }
 
   private async replaceProject(files: Record<string, FileContent>): Promise<void> {
+    this.pagePreviewBaseline = null
     this.fs = new VirtualFS({ empty: true })
     this.projectIndex = new ProjectIndex()
     this.generatedFiles.clear()
@@ -949,6 +1002,7 @@ export class WasmTexCompiler {
     this.assertNoProjectReplacement()
     const changed = path !== this.mainFile
     if (!changed) return
+    this.pagePreviewBaseline = null
     this.projectIndex.invalidateCompletionSnapshot()
     if (changed) this.invalidateOperation()
     this.mainFile = path

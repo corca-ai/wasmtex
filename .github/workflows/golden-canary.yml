@@ -95,6 +95,11 @@ jobs:
       - name: Golden output and source navigation regression
         run: npx playwright test golden-output --workers=1 --reporter=line,html
 
+      - name: Disposable page previews and heap checkpoint output
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/page-preview
+        run: npx playwright test page-preview heap-checkpoints --workers=1 --reporter=line,html --output=test-results/page-preview
+
       - name: Cross-host parity (Node host ≡ browser golden) — S4 #111
         if: ${{ !cancelled() }}
         env:
