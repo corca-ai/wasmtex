@@ -42,6 +42,8 @@ describe('WasmTexPdftexEngine persistent cache', () => {
 })
 
 type WorkerReply = {
+  heapCheckpoints?: unknown
+  lineCheckpoints?: unknown
   cmd?: string
   result?: string
   status?: number
@@ -675,5 +677,19 @@ describe('WasmTexPdftexEngine concurrent response routing', () => {
 
     expect(aResolved).toBe(true)
     expect(bResolved).toBe(true)
+  })
+})
+
+describe('heap checkpoint placement capability', () => {
+  it.each([
+    [{ heapCheckpoints: true, lineCheckpoints: true }, true],
+    [{ heapCheckpoints: true }, false],
+    [{ heapCheckpoints: true, lineCheckpoints: 'true' }, false],
+    [{ heapCheckpoints: false, lineCheckpoints: true }, false],
+  ] as const)('requires explicit support from the initialized heap worker: %j', (reply, expected) => {
+    const engine = new TestableEngine({ assetBaseUrl: '/' })
+    expect(engine.supportsLineCheckpoints).toBe(false)
+    engine.deliver({ result: 'ok', ...reply })
+    expect(engine.supportsLineCheckpoints).toBe(expected)
   })
 })

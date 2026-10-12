@@ -3,6 +3,7 @@ import { CompileResult } from '../types.js';
 export type SourceSet = Map<string, string>;
 export interface HeapCheckpointEngine {
     readonly supportsHeapCheckpoints: boolean;
+    readonly supportsLineCheckpoints?: boolean;
     compile(options?: {
         checkpoints?: Array<{
             id: string;
@@ -44,7 +45,7 @@ export declare function lineOfOffset(text: string, offset: number): number;
  * paragraph — and typing just above it — still resume from it. Without a blank-line
  * boundary, use the previous source line. Never inside the preamble.
  */
-export declare function checkpointLineForEdit(source: string, offset: number, minHeadBytes?: number): number | null;
+export declare function checkpointLineForEdit(source: string, offset: number, minHeadBytes?: number, lineFallback?: boolean): number | null;
 /**
  * Bookkeeping for heap checkpoints of one document on one engine. The headless compiler
  * owns the engine and calls in at three points: when it is about to run a full compile

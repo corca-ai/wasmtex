@@ -223,6 +223,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Main file name, tracked for source-based dependency extraction. */
   private mainFileName = 'main.tex'
   private heapCheckpointsSupported = false
+  private lineCheckpointsSupported = false
   private pagePreviewSupported = false
   /** Last-written text sources, so dependency extraction can read the main source
    *  synchronously (no worker round-trip). */
@@ -384,6 +385,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!data.cmd && !data.msgId) {
       if (data.result === 'ok') {
         this.status = 'ready'
+        this.lineCheckpointsSupported =
+          (data as { lineCheckpoints?: unknown }).lineCheckpoints === true
         this.heapCheckpointsSupported =
           (data as { heapCheckpoints?: unknown }).heapCheckpoints === true
         this.pagePreviewSupported = (data as { pagePreview?: unknown }).pagePreview === true
@@ -720,6 +723,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       throw new Error(`Failed to build pdflatex format:\n${data.log || 'unknown engine error'}`)
     }
     return new Uint8Array(data.pdf)
+  }
+
+  /** Dense source placement requires a worker whose Asyncify allocation survives resets. */
+  get supportsLineCheckpoints(): boolean {
+    return this.heapCheckpointsSupported && this.lineCheckpointsSupported
   }
 
   /** True once the worker reported the Asyncify build (see the `heapCheckpoints` option). */

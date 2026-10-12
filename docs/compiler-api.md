@@ -186,7 +186,8 @@ memory copy, so it serves any number of edits after it.
 - **Placement**: every full compile takes a checkpoint at the paragraph boundary before the
   region the last edit touched (edits cluster), and `prepareIncrementalCompile(path, offset)`
   takes one before the cursor's paragraph during idle time. If there is no preceding blank-line
-  boundary, placement uses the previous source line instead of replaying from the body start.
+  boundary, placement uses the previous source line instead of replaying from the body start,
+  when the worker advertises `lineCheckpoints`. Older workers retain paragraph placement.
   This also works inside an unfinished paragraph or macro argument: the snapshot preserves
   execution state, and prefix/input validation still applies. A single long source line cannot
   be checkpointed in the middle. Up to 4 are kept (LRU, ~35–80 MB

@@ -90,7 +90,7 @@ Module["preRun"] = function() {
 // the host that the engine is ready.
 Module["postRun"] = function() {
     if (hcSupported()) hcEnsureDataBuffer();
-    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function" });
+    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
