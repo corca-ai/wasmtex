@@ -73,7 +73,7 @@ state and memory boundary. This is a separate preview feature, not permission
 to export incomplete documents or change published formats.
 
 The pdfTeX controller grows from 82,668 to 84,993 bytes (gzip-9: 22,402 to
-22,866 bytes). The 2025 controller ceiling is 86,000 bytes to accommodate the
+22,866 bytes). Both annual controller ceilings are 86,000 bytes to accommodate the
 new command, filesystem rollback and capability handshake. Other artifact and
 runtime ceilings are unchanged. Native code is built from the existing upstream
 pins and reuses the exact published formats. Annual release and application
