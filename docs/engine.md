@@ -545,3 +545,21 @@ See [Building the Unicode engine from source](engine-build.md#building-the-unico
 
 <a id="checkpoint-engine-build-wasmtex-pdftex-checkpoint"></a>
 See [Checkpoint engine build](engine-build.md#checkpoint-engine-build-wasmtex-pdftex-checkpoint) in its dedicated guide.
+
+## Disposable page-prefix previews
+
+The explicit headless `previewPages()` operation is separate from canonical
+compilation. Its worker capability is advertised only when the native
+`setPreviewPageLimit` export exists. `preview-hook.py` patches generated pdfTeX
+control flow and fails closed on upstream drift; it changes no format layout or
+package input. At the next main-control boundary after the requested page count
+ships, the engine returns to PDF finalization without unwinding unfinished TeX
+token stacks. The next request restores the engine heap as usual.
+
+The worker snapshots its working directory before the attempt and restores it
+in `finally`, including previous auxiliary files and arbitrary project resources.
+Package caches remain warm. These transient copies add cost for large projects;
+the operation does not promise a fixed latency or a memory bound. A valid heap
+checkpoint can skip the unchanged prefix. The SDK never publishes partial
+metadata as a full compile and requires a successful baseline; see the
+[preview API contract](compiler-api.md#deferred-pdf-preview-parts).

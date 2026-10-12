@@ -62,6 +62,23 @@ The [cache memory record](history/cache-memory-2026-10.md) separates retained wa
 originals from transient dump allocations and records the rejected delta-save,
 auxiliary-snapshot and checkpoint-sharing implementations.
 
+## Continuous page-prefix preview
+
+The explicit `previewPages()` API adds a disposable first-pass preview without
+changing ordinary full compilation. It stops after complete page shipment,
+retains PDF/font finalization, restores working files and leaves canonical
+metadata with the last full result. Hosts reconcile after input settles.
+[The engine contract](engine.md#disposable-page-prefix-previews) records the
+state and memory boundary. This is a separate preview feature, not permission
+to export incomplete documents or change published formats.
+
+The pdfTeX controller grows from 82,668 to 84,993 bytes (gzip-9: 22,402 to
+22,866 bytes). The 2025 controller ceiling is 86,000 bytes to accommodate the
+new command, filesystem rollback and capability handshake. Other artifact and
+runtime ceilings are unchanged. Native code is built from the existing upstream
+pins and reuses the exact published formats. Annual release and application
+qualification remain separate from the SDK unit tests.
+
 ## Excluded or deferred changes
 
 | Candidate | Decision |
