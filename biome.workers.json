@@ -186,6 +186,7 @@
           "_main",
           "_malloc",
           "_scanHashTable",
+          "_setPreviewPageLimit",
           "bloomCandidates",
           "fetchCandidates",
           "lengthBytesUTF8",

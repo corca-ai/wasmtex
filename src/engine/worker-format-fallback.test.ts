@@ -35,6 +35,7 @@ function boot(
   let pointer = 32
   let clock = 0
   let builds = 0
+  let previewLimit = 0
   const allowances: number[] = []
   let deliver: (message: Record<string, unknown>) => void = () => {}
   const readString = (at: number) => {
@@ -73,6 +74,11 @@ function boot(
     }
     return 0
   }
+  const writeOutputs = () => {
+    fs.writeFile('/work/main.pdf', Uint8Array.of(37, 80, 68, 70))
+    fs.writeFile('/work/main.aux', previewLimit ? 'partial references' : 'full references')
+    if (previewLimit) fs.writeFile('/work/preview-only.aux', 'partial output')
+  }
   const scope = createContext({
     wasmMemory: memory,
     thisProgram: 'pdftex',
@@ -93,6 +99,9 @@ function boot(
     },
     UTF8ToString: readString,
     _compileBibtex: () => 0,
+    _setPreviewPageLimit: (pages: number) => {
+      previewLimit = pages
+    },
     _main(argc: number, argv: number) {
       clock += 100
       const view = new DataView(memory.buffer)
@@ -113,7 +122,7 @@ function boot(
       }
       const exhausted = capacityStatus()
       if (exhausted) return exhausted
-      fs.writeFile('/work/main.pdf', Uint8Array.of(37, 80, 68, 70))
+      writeOutputs()
       return 0
     },
   })
@@ -139,6 +148,12 @@ function boot(
     fmt,
     builds: () => builds,
     allowances,
+    previewLimit: () => previewLimit,
+    preview: () =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        deliver = resolve
+        runInContext('self.onmessage({ data: { cmd: "compilepagepreview", pageLimit: 2 } })', scope)
+      }),
     flush: () => runInContext('self.onmessage({ data: { cmd: "flushcache" } })', scope),
     compile: () =>
       new Promise<Record<string, unknown>>((resolve) => {
@@ -181,6 +196,19 @@ describe('pdfTeX base format fallback', () => {
     expect(await worker.compile()).toMatchObject({ result: 'ok' })
     expect(worker.builds()).toBe(2)
   })
+})
+
+it('page previews restore all full-compile outputs before accepting the next command', async () => {
+  const worker = boot()
+  await worker.compile()
+  expect(await worker.preview()).toMatchObject({ result: 'ok', cmd: 'compile' })
+  // The response is posted while unwinding the compile's async stack.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(worker.previewLimit()).toBe(0)
+  expect(worker.fs.readFile('/work/main.aux', { encoding: 'utf8' })).toBe('full references')
+  expect(() => worker.fs.readFile('/work/preview-only.aux')).toThrow()
+  expect(worker.fs.readFile('/work/main.tex', { encoding: 'utf8' })).toBe('caller source')
+  expect(await worker.compile()).toMatchObject({ result: 'ok' })
 })
 
 describe('pdfTeX compact working capacity', () => {

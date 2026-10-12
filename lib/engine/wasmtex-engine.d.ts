@@ -107,6 +107,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     /** Main file name, tracked for source-based dependency extraction. */
     private mainFileName;
     private heapCheckpointsSupported;
+    private pagePreviewSupported;
     /** Last-written text sources, so dependency extraction can read the main source
      *  synchronously (no worker round-trip). */
     private readonly sources;
@@ -188,6 +189,8 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
         id: string;
         line: number;
     }>): Promise<CompileResult>;
+    /** Disposable PDF prefix; auxiliary files are restored by the worker. */
+    compilePagePreview(pageLimit: number, checkpointId?: string): Promise<CompileResult | null>;
     /** Free checkpoints in the worker (all when `ids` is omitted). */
     dropHeapCheckpoints(ids?: string[]): Promise<void>;
     private runCompile;

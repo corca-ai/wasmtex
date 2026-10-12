@@ -18,6 +18,18 @@
 /* The main .tex file to compile, set by setMainEntry() */
 static char main_entry[1024] = "main.tex";
 
+/* A preview ends only after a complete page has shipped. main_control then
+ * returns through TeX's ordinary finalization, which writes fonts and the PDF
+ * cross-reference table. Zero keeps the ordinary compilation path unchanged.
+ * The controller sets this AFTER restoring the heap (including a checkpoint).
+ */
+int wasmtex_preview_page_limit = 0;
+
+void setPreviewPageLimit(int pages)
+{
+    wasmtex_preview_page_limit = pages > 0 ? pages : 0;
+}
+
 /* pdfTeX's main function (defined in lib/main.c → lib/texmfmp.c) */
 extern int main(int argc, char **argv);
 

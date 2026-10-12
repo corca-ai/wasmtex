@@ -223,6 +223,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Main file name, tracked for source-based dependency extraction. */
   private mainFileName = 'main.tex'
   private heapCheckpointsSupported = false
+  private pagePreviewSupported = false
   /** Last-written text sources, so dependency extraction can read the main source
    *  synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
@@ -385,6 +386,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         this.status = 'ready'
         this.heapCheckpointsSupported =
           (data as { heapCheckpoints?: unknown }).heapCheckpoints === true
+        this.pagePreviewSupported = (data as { pagePreview?: unknown }).pagePreview === true
         initResolve()
       } else {
         this.status = 'error'
@@ -753,6 +755,15 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       id,
       ...(checkpoints?.length ? { checkpoints } : {}),
     })
+  }
+
+  /** Disposable PDF prefix; auxiliary files are restored by the worker. */
+  async compilePagePreview(
+    pageLimit: number,
+    checkpointId?: string,
+  ): Promise<CompileResult | null> {
+    if (!this.pagePreviewSupported) return null
+    return this.runCompile({ cmd: 'compilepagepreview', pageLimit, id: checkpointId })
   }
 
   /** Free checkpoints in the worker (all when `ids` is omitted). */

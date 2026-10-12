@@ -4,14 +4,14 @@ import { EngineDetection, EngineOption } from './engine/engine-select.js';
 import { HeapCheckpointOptions } from './engine/heap-checkpoints.js';
 import { TikzExternalizationOptions } from './engine/tikz-externalization.js';
 import { ProjectIndex } from './lsp/project-index.js';
-import { AccessibleExportResult, CompileResult, CompilerRetentionStats, CompletionSnapshotState, LoadProgressEvent, PreviewCompileResult, TexliveVersion, WarmupCache } from './types.js';
+import { AccessibleExportResult, CompileResult, CompilerRetentionStats, CompletionSnapshotState, LoadProgressEvent, PagePreviewResult, PreviewCompileResult, TexliveVersion, WarmupCache } from './types.js';
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api.js';
 export * from './backend-api.js';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api.js';
 export type { AccessibleExportOptions } from './engine/accessible-export.js';
 export { COMPLETION_SNAPSHOT_MAX_ESTIMATED_BYTES, COMPLETION_SNAPSHOT_SCHEMA_VERSION, } from './engine/completion-snapshot.js';
 export type { EngineDetection } from './engine/engine-select.js';
-export type { AccessibleExportResult, CompilePhaseTimings, CompilerRetentionStats, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, PdfPreviewParts, PreviewCompileResult, } from './types.js';
+export type { AccessibleExportResult, CompilePhaseTimings, CompilerRetentionStats, CompletionSnapshot, CompletionSnapshotCollection, CompletionSnapshotCommand, CompletionSnapshotEngine, CompletionSnapshotEvidence, CompletionSnapshotFieldName, CompletionSnapshotFields, CompletionSnapshotIdentity, CompletionSnapshotKey, CompletionSnapshotKeyFamily, CompletionSnapshotProfile, CompletionSnapshotResource, CompletionSnapshotState, CompletionSnapshotValue, DependencyManifest, DependencyManifestCoverage, DependencyManifestIncompleteReason, DependencyManifestSource, DependencyManifestStage, PagePreviewResult, PdfPreviewParts, PreviewCompileResult, } from './types.js';
 /**
  * One-shot accessible export without an interactive compiler: builds a compiler from
  * `options` (typically the TeX Live 2026 profile, whatever profile the editor uses), compiles
@@ -110,6 +110,7 @@ export declare class WasmTexCompiler {
     /** Checkpoint preparation shares the one pdfTeX worker with compile(). */
     private prebuildInFlight;
     private compileInFlight;
+    private pagePreviewBaseline;
     private readonly operations;
     private initInFlight;
     private replacingProject;
@@ -168,6 +169,11 @@ export declare class WasmTexCompiler {
     compile(): Promise<CompileResult>;
     /** Opt in to independent PDF parts for final page-break incremental results. */
     compilePreview(): Promise<PreviewCompileResult>;
+    /** Render a PDF prefix using the last full pass's references. This leaves full
+     * compile metadata and auxiliary outputs unchanged. Null means unsupported or
+     * unsafe: run compile() instead. Always reconcile with compile() after edits. */
+    previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
+    private previewPagesIdle;
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
     private compileIdle;

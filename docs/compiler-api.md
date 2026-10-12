@@ -127,6 +127,22 @@ that changed since the last full compile falls back to a background full reconci
 
 #### Deferred PDF preview parts
 
+`await compiler.previewPages(pageLimit)` requests a disposable PDF prefix after
+a successful full compile. Supported pdfTeX assets stop after a complete page
+has shipped and finalize the PDF normally; other engines and older assets return
+`null`. The positive integer limit is capped at 10,000. A changed preamble or
+another project file requires a full compile first. The compiler may resume a
+valid heap checkpoint before the edit.
+
+The returned `PagePreviewResult` contains `pdf`, `synctex`, `compileTime` and
+`pageLimit`. It is a first-pass preview using the preceding full compile's
+references, not an export or proof of settled pagination. Auxiliary files and
+compiler metadata remain unchanged. Hosts must run `compile()` after editing
+settles, keep partial results out of export/cache paths, and bound retained
+preview versions. Preview errors return `null` so the host can fall back to the
+normal diagnostic pipeline. Input mutation, disposal and overlapping calls obey
+the same serialization rules as `compile()`.
+
 `await compiler.compilePreview()` runs the same serialized compile pipeline as
 `compile()`, but returns `PreviewCompileResult`. Its `pdf` is ordinary bytes for
 full/heap-resumed compiles, `null` on failure, or `PdfPreviewParts` for eligible,

@@ -213,7 +213,7 @@ EMCC_FLAGS = \
 	-sEXIT_RUNTIME=0 \
 	-sINVOKE_RUN=0 \
 	-sMODULARIZE=0 \
-	-sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileBibtex","_compileFormat","_main","_setMainEntry","_malloc","_free","_scanHashTable"]' \
+	-sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileBibtex","_compileFormat","_main","_setMainEntry","_setPreviewPageLimit","_malloc","_free","_scanHashTable"]' \
 	-sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","HEAPU8"]' \
 	-sINITIAL_MEMORY=$(PDFTEX_INITIAL_MEMORY) \
 	-sWASM=1 \
@@ -420,6 +420,7 @@ wasm-prep:
 	@echo "  Copied aconf.h from native build"
 	# Copy generated C files
 	cp $(BUILD_NATIVE)/texk/web2c/pdftex0.c     $(BUILD_WASM)/texk/web2c/
+	python3 /src/preview-hook.py $(BUILD_WASM)/texk/web2c/pdftex0.c
 	cp $(BUILD_NATIVE)/texk/web2c/pdftexini.c    $(BUILD_WASM)/texk/web2c/
 	cp $(BUILD_NATIVE)/texk/web2c/pdftex-pool.c  $(BUILD_WASM)/texk/web2c/
 	cp $(BUILD_NATIVE)/texk/web2c/pdftexd.h      $(BUILD_WASM)/texk/web2c/

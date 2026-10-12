@@ -167,6 +167,12 @@ export class HeapCheckpointCompiler {
     return [...this.checkpoints.values()].map((c) => ({ id: c.id, line: c.line, bytes: c.bytes }))
   }
 
+  /** A preview must not advance the full-result baseline or arm new checkpoints. */
+  previewCheckpoint(source: string, files: SourceSet): string | undefined {
+    if (!this.enabled || this.lastMain === null) return undefined
+    return this.findValid(source, files, firstDifference(this.lastMain, source))?.id
+  }
+
   reset(): void {
     this.checkpoints.clear()
     this.last = null
