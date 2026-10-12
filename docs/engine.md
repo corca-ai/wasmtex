@@ -546,6 +546,14 @@ See [Building the Unicode engine from source](engine-build.md#building-the-unico
 <a id="checkpoint-engine-build-wasmtex-pdftex-checkpoint"></a>
 See [Checkpoint engine build](engine-build.md#checkpoint-engine-build-wasmtex-pdftex-checkpoint) in its dedicated guide.
 
+## Heap checkpoint allocation
+
+The checkpoint controller reserves its Asyncify buffer before capturing the
+initial heap. Every full reset therefore retains the allocator's ownership of
+that buffer, and later TeX allocations cannot overwrite a pending unwind.
+Checkpoints stay bound to the same worker and engine release. This allocation
+is separate from the SDK's retained-checkpoint count and byte budgets.
+
 ## Disposable page-prefix previews
 
 The explicit headless `previewPages()` operation is separate from canonical

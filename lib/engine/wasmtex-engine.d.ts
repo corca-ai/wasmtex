@@ -107,6 +107,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     /** Main file name, tracked for source-based dependency extraction. */
     private mainFileName;
     private heapCheckpointsSupported;
+    private lineCheckpointsSupported;
     private pagePreviewSupported;
     /** Last-written text sources, so dependency extraction can read the main source
      *  synchronously (no worker round-trip). */
@@ -170,6 +171,8 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
      *  Release tooling uses this instead of depending on an application-side event
      *  or reaching into the worker protocol directly. */
     buildFormat(): Promise<Uint8Array>;
+    /** Dense source placement requires a worker whose Asyncify allocation survives resets. */
+    get supportsLineCheckpoints(): boolean;
     /** True once the worker reported the Asyncify build (see the `heapCheckpoints` option). */
     get supportsHeapCheckpoints(): boolean;
     /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable

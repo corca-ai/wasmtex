@@ -30,6 +30,7 @@ export type SourceSet = Map<string, string>
 
 export interface HeapCheckpointEngine {
   readonly supportsHeapCheckpoints: boolean
+  readonly supportsLineCheckpoints?: boolean
   compile(options?: { checkpoints?: Array<{ id: string; line: number }> }): Promise<CompileResult>
   compileFromHeapCheckpoint(
     id: string,
@@ -94,12 +95,14 @@ export function lineOfOffset(text: string, offset: number): number {
 /**
  * The line to checkpoint for an edit at `offset`: the start of the paragraph before the
  * one containing the edit (a blank-line boundary), so that further edits in the same
- * paragraph — and typing just above it — still resume from it. Never inside the preamble.
+ * paragraph — and typing just above it — still resume from it. Without a blank-line
+ * boundary, use the previous source line. Never inside the preamble.
  */
 export function checkpointLineForEdit(
   source: string,
   offset: number,
   minHeadBytes = 512,
+  lineFallback = false,
 ): number | null {
   const split = extractPreamble(source)
   const bodyStart = split ? source.indexOf('\\begin{document}') : -1
@@ -109,25 +112,33 @@ export function checkpointLineForEdit(
   if (floor < 0) return null
   const earliest = floor + 1
   if (offset < earliest + minHeadBytes) return null
-  // Walk back over blank-line paragraph boundaries: the edit's paragraph start, then one more.
+  const currentLineStart = source.lastIndexOf('\n', Math.min(offset, source.length) - 1) + 1
+  const fallback = lineFallback
+    ? Math.max(earliest, source.lastIndexOf('\n', currentLineStart - 2) + 1)
+    : minHeadBytes === 0
+      ? earliest
+      : -1
+  const candidate = previousParagraphStart(source, offset, earliest) ?? fallback
+  if (candidate < earliest + minHeadBytes) return null
+  return lineOfOffset(source, candidate)
+}
+
+/** Prefer one paragraph of slack; compact sources may have no blank separator. */
+function previousParagraphStart(source: string, offset: number, earliest: number): number | null {
   let at = Math.min(offset, source.length)
   let boundaries = 0
-  let candidate = minHeadBytes === 0 ? earliest : -1
+  let candidate: number | null = null
   while (at > earliest) {
     const nl = source.lastIndexOf('\n', at - 1)
     if (nl < earliest) break
-    // A blank line: "\n\n" or "\n<spaces>\n"
     const prevNl = source.lastIndexOf('\n', nl - 1)
-    const between = source.slice(prevNl + 1, nl)
-    if (between.trim() === '') {
+    if (source.slice(prevNl + 1, nl).trim() === '') {
       candidate = nl + 1
-      boundaries++
-      if (boundaries >= 2) break
+      if (++boundaries >= 2) break
     }
     at = nl
   }
-  if (candidate < earliest + minHeadBytes) return null
-  return lineOfOffset(source, candidate)
+  return candidate
 }
 
 /**
@@ -197,7 +208,12 @@ export class HeapCheckpointCompiler {
     const arms: HeapCheckpointArm[] = []
     const seenLines = new Set<number>()
     for (const offset of offsets) {
-      const line = checkpointLineForEdit(source, offset, this.minHeadBytes)
+      const line = checkpointLineForEdit(
+        source,
+        offset,
+        this.minHeadBytes,
+        this.engine.supportsLineCheckpoints,
+      )
       if (line === null || seenLines.has(line)) continue
       seenLines.add(line)
       if (this.findValid(source, files, lineStartOffset(source, line) + 1, line)) continue

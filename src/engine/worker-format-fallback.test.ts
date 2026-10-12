@@ -127,7 +127,7 @@ function boot(
     },
   })
   if (checkpoint) {
-    scope.Asyncify = { state: 0, State: { Unwinding: 1 } }
+    scope.Asyncify = { StackSize: 1024, state: 0, State: { Unwinding: 1 } }
     scope._asyncify_start_rewind = () => {}
   }
   scope.self = scope

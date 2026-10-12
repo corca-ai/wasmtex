@@ -146,3 +146,63 @@ test('edits after a heap checkpoint resume the suspended run and match a full co
   // Informational: how much faster the resumes were.
   console.log(JSON.stringify({ full1: out.full1.ms, fast2: out.fast2.ms, fast3: out.fast3.ms }))
 })
+
+test('compact source resumes within an unfinished paragraph and preserves full output', async ({ page }) => {
+  await page.goto(APP_URL)
+  const out = await page.evaluate(async (profile) => {
+    const { WasmTexCompiler } = await import('/src/headless.ts')
+    const strip = (bytes: Uint8Array) => new TextDecoder('latin1').decode(bytes)
+      .replace(/\/(?:CreationDate|ModDate) ?\([^)]*\)/g, '')
+      .replace(/\/ID ?\[[^\]]*\]/g, '')
+    const source = '\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n' +
+      Array.from({ length: 12 }, (_, i) =>
+        `\\section{Section ${i}}\\label{s${i}}\n` +
+        'Some ordinary words for this section. '.repeat(25) + '\n' +
+        '\\begin{equation} E=mc^2 \\end{equation}\n').join('') +
+      '\\textbf{An unfinished\nparagraph spanning\nseveral lines with Editable text.}\n' +
+      'See section \\ref{s5}.\n\\end{document}\n'
+    const options = { ...profile, engine: 'pdflatex' as const, files: { 'main.tex': source } }
+    const compiler = new WasmTexCompiler({ ...options, incremental: true,
+      heapCheckpointOptions: { minHeadBytes: 0, maxCheckpoints: 1, maxBytes: 64 * 2 ** 20 } })
+    const plain = new WasmTexCompiler(options)
+    const rows = []
+    try {
+      await compiler.init()
+      await plain.init()
+      await compiler.compile()
+      const prepared = await compiler.prepareIncrementalCompile('main.tex', source.indexOf('Editable'))
+      for (const replacement of ['Edited once', 'Edited twice', 'Edited three times']) {
+        const edited = source.replace('Editable', replacement)
+        compiler.setFile('main.tex', edited)
+        plain.setFile('main.tex', edited)
+        const preview = await compiler.previewPages(1000)
+        const full = await compiler.compile()
+        const expected = await plain.compile()
+        if (!full.pdf || !expected.pdf) throw new Error(JSON.stringify({full:full.log,expected:expected.log}))
+        rows.push({
+          success: full.success && expected.success,
+          preview: !!preview?.synctex,
+          previewIdentical: !!preview && strip(preview.pdf) === strip(expected.pdf!),
+          resumed: full.phaseTimings?.checkpointResume === true,
+          identical: strip(full.pdf!) === strip(expected.pdf!),
+          auxIdentical: await compiler.readOutput('main.aux') === await plain.readOutput('main.aux'),
+          synctex: !!full.synctex,
+        })
+      }
+      // Editing the captured prefix must invalidate it, including macro/group state.
+      const changed = source.replace('An unfinished', 'A changed unfinished')
+      compiler.setFile('main.tex', changed)
+      plain.setFile('main.tex', changed)
+      const fallback = await compiler.compile()
+      const expected = await plain.compile()
+      return { rows, prepared, fallbackResumed: fallback.phaseTimings?.checkpointResume === true,
+        fallbackIdentical: strip(fallback.pdf!) === strip(expected.pdf!) }
+    } finally { compiler.dispose(); plain.dispose() }
+  }, { texliveVersion, texliveUrl })
+  expect(out.prepared).toBe(true)
+  expect(out.rows).toHaveLength(3)
+  for (const row of out.rows) expect(row).toEqual({ success: true, preview: true, resumed: true,
+    identical: true, previewIdentical: true, auxIdentical: true, synctex: true })
+  expect(out.fallbackResumed).toBe(false)
+  expect(out.fallbackIdentical).toBe(true)
+})

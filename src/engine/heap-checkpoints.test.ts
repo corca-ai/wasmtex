@@ -46,6 +46,18 @@ describe('checkpointLineForEdit', () => {
     expect(DOC.slice(start, start + 11)).toBe('Paragraph 7')
   })
 
+  it('keeps unseparated source lines close to the edit with one line of slack', () => {
+    const source = PRE + Array.from({ length: 40 }, (_, i) => `Line ${i}.`).join('\n')
+    const offset = source.indexOf('Line 30.')
+    expect(checkpointLineForEdit(source, offset, 0, true)).toBe(lineOfOffset(source, offset) - 1)
+    expect(checkpointLineForEdit(source, offset + 4, 0, true)).toBe(
+      lineOfOffset(source, offset) - 1,
+    )
+    expect(checkpointLineForEdit(source, source.indexOf('Line 1.'), 0, true)).toBe(3)
+    expect(checkpointLineForEdit(source, offset, source.length)).toBeNull()
+    expect(checkpointLineForEdit(source, offset, 0)).toBe(3)
+  })
+
   it('refuses the preamble and a too-small head', () => {
     expect(checkpointLineForEdit(DOC, 5)).toBeNull()
     expect(checkpointLineForEdit(DOC, DOC.indexOf('Paragraph 2'), 10_000)).toBeNull()
@@ -55,6 +67,7 @@ describe('checkpointLineForEdit', () => {
 
 class FakeEngine implements HeapCheckpointEngine {
   supportsHeapCheckpoints = true
+  supportsLineCheckpoints = true
   compiles: Array<{
     kind: 'full' | 'resume'
     id?: string
@@ -97,6 +110,16 @@ class FakeEngine implements HeapCheckpointEngine {
 
 describe('HeapCheckpointCompiler', () => {
   const files = () => new Map([['chapter.tex', 'chapter']])
+
+  it('retains paragraph placement on workers without line-placement capability', () => {
+    const engine = new FakeEngine()
+    const source = PRE + Array.from({ length: 30 }, (_, i) => `Line ${i}.`).join('\n')
+    const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0 })
+    engine.supportsLineCheckpoints = false
+    expect(hc.armsForFullCompile(source, files())[0]?.line).toBe(3)
+    engine.supportsLineCheckpoints = true
+    expect(hc.armsForFullCompile(source, files())[0]?.line).toBe(31)
+  })
 
   it('arms before the end on the first compile, then resumes edits after the checkpoint', async () => {
     const engine = new FakeEngine()
