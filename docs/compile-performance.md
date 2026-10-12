@@ -64,6 +64,10 @@ auxiliary-snapshot and checkpoint-sharing implementations.
 
 ## Continuous page-prefix preview
 
+The [October qualification record](history/page-preview-2026-10.md) records
+the annual releases, preserved outputs, Chromium/WebKit checks and measured
+costs of this path.
+
 The explicit `previewPages()` API adds a disposable first-pass preview without
 changing ordinary full compilation. It stops after complete page shipment,
 retains PDF/font finalization, restores working files and leaves canonical
