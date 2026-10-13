@@ -557,6 +557,8 @@ export class WasmTexCompiler {
     if (this.engine && this.detection.engine === this.engineKind) return
 
     this.engine?.terminate()
+    this.tikzPool?.dispose()
+    this.tikzPool = null
     this.engineKind = this.detection.engine
     this.engine = createCompileEngine(this.detection.engine, this.engineBaseOpts())
     this.attachLoadProgress(this.engine)
@@ -874,12 +876,41 @@ export class WasmTexCompiler {
   private async tryHeapResume(
     externalization: TikzExternalizationKind | null,
   ): Promise<CompileResult | null> {
-    if (!this.heap?.enabled || externalization) return null
+    if (!this.heap?.enabled) return null
     const resume = (
-      await this.operations.observe(this.heap.tryResume(this.mainSource(), this.projectTexFiles()))
+      await this.operations.observe(
+        this.heap.tryResume(
+          this.mainSource(),
+          this.projectTexFiles(),
+          externalization ? (paths) => this.acceptTikzCheckpointInputs(paths) : undefined,
+        ),
+      )
     ).resume()
     if (!resume || !resume.final || !resume.result.pdf) return null
     return resume.result
+  }
+
+  /** A discovery resume must not replay a prefix that already included a figure or an
+   * untracked project resource. TeX sources are checked by the checkpoint manager;
+   * ordinary generated aux files keep its existing reference/reconciliation contract. */
+  private acceptTikzCheckpointInputs(paths: readonly string[]): boolean {
+    const sources = this.projectTexFiles()
+    return (
+      paths.length > 0 &&
+      paths.every((raw) => {
+        if (raw.startsWith('/tex/')) return true
+        const path = raw.replace(/^(?:\/work\/|\.\/)/, '')
+        if (path === this.mainFile) return true
+        if (path.startsWith('__')) return path === '__strace.tex' && !this.fs.getFile(path)
+        // Match the checkpoint manager's projectPath() hashing eligibility.
+        if (path.startsWith('.') || path.startsWith('/')) return false
+        return (
+          sources.has(path) ||
+          (!this.fs.getFile(path) &&
+            (path === 'texmf.cnf' || path === 'pdflatex.fmt' || path.endsWith('.aux')))
+        )
+      })
+    )
   }
 
   /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
@@ -927,6 +958,9 @@ export class WasmTexCompiler {
       this.dropGeneratedFile(`${base}.bbl`)
       this.dropGeneratedFile(`${base}.ind`)
     }
+    // Preamble-format recorder inputs are absent from heap snapshot inputs.
+    // A secondary TeX edit can therefore change a prefix without a recorded hash.
+    if (path !== this.mainFile) this.heap?.reset()
     if (!path.endsWith('.tex')) {
       // A non-.tex file (image/data asset, .bib, .bst) can be baked into a checkpoint head
       // (e.g. \includegraphics{logo.png} on a title page) yet isn't tracked by the .tex-only
@@ -1341,7 +1375,12 @@ export class WasmTexCompiler {
     const jobs = (
       await this.operations.observe(this.runTikzFigureJobs(result, kind, snapshot))
     ).resume()
-    if (!jobs) return result
+    if (!jobs) {
+      if (!result.phaseTimings?.checkpointResume) return result
+      const full = (await this.operations.observe(engine.compile())).resume()
+      resolverReports.push(full.telemetry?.resolver)
+      return full
+    }
     const { telemetry, errors, failureLog } = jobs
     // Auto mode promised "no worse than inline": a failed figure job means this document is
     // outside what the library handles (and too few pictures are not worth a worker), so
@@ -1355,7 +1394,9 @@ export class WasmTexCompiler {
       return withTikzTelemetry(inline, telemetry)
     }
     const next =
-      telemetry.compiled > 0 ? (await this.operations.observe(engine.compile())).resume() : result
+      telemetry.compiled > 0 || result.phaseTimings?.checkpointResume
+        ? (await this.operations.observe(engine.compile())).resume()
+        : result
     if (next !== result) resolverReports.push(next.telemetry?.resolver)
     telemetry.pictureErrors = mergePictureErrors(next, errors)
     if (failureLog) next.log += failureLog
@@ -1416,6 +1457,7 @@ export class WasmTexCompiler {
       reused: names.length - jobs.length,
       workers: Math.min(workers, Math.max(1, jobs.length)),
     }
+    telemetry.discoveryCheckpointResume = result.phaseTimings?.checkpointResume === true
     result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
     result.telemetry.tikzExternalization = telemetry
     if (jobs.length === 0)

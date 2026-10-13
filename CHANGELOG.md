@@ -18,6 +18,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- Resume eligible TikZ discovery passes from browser heap checkpoints, retaining
+  a full canonical main pass and rejecting prefixes that already read figure resources.
+- Retire sibling figure pools on engine transitions, preserving engine and idle-policy ownership.
+
 - Keep heap checkpoints near edits in sources without blank paragraph separators,
   using the preceding source line while preserving prefix/input validation.
 

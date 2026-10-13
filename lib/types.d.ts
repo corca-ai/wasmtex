@@ -186,6 +186,8 @@ export interface TikzExternalizationTelemetry {
     failed: string[];
     workers: number;
     figureTimeMs: number;
+    /** The discovery pass resumed before any generated figure inputs. Final output is full. */
+    discoveryCheckpointResume?: boolean;
     /** Errors TeX reported inside figure jobs (merged into `errors`); the job still ships
      *  a PDF, so this is the only signal that a picture is broken. */
     pictureErrors: number;

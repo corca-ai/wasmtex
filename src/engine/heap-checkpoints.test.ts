@@ -166,6 +166,27 @@ describe('HeapCheckpointCompiler', () => {
     expect(await hc.tryResume(tail, files())).not.toBeNull()
   })
 
+  it('lets callers refuse untracked prefix inputs before resuming a discovery pass', async () => {
+    const engine = new FakeEngine()
+    const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0 })
+    const result = await engine.compile({ checkpoints: hc.armsForFullCompile(DOC, files()) })
+    result.heapCheckpoints![0]!.inputs!.push('/work/figure.pdf', '/tex/article.cls')
+    hc.noteFull(DOC, files(), result)
+    const edited = DOC.replace('Second line of 12.', 'Second line of 12!')
+    const observed: string[][] = []
+    const rejectFigure = (paths: readonly string[]) => {
+      observed.push([...paths])
+      return !paths.some((path) => path.endsWith('/figure.pdf'))
+    }
+    expect(await hc.tryResume(edited, files(), rejectFigure)).toBeNull()
+    expect(observed).toEqual([
+      ['/work/main.tex', '/work/chapter.tex', '/work/figure.pdf', '/tex/article.cls'],
+    ])
+    expect(engine.compiles.every((call) => call.kind === 'full')).toBe(true)
+    // Refusal preserves the checkpoint for a caller able to validate those inputs.
+    expect(await hc.tryResume(edited, files())).not.toBeNull()
+  })
+
   it('reports label-touching edits as not final', async () => {
     const engine = new FakeEngine()
     const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0 })

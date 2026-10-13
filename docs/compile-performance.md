@@ -103,6 +103,24 @@ snapshot; a later checkpoint can retain more memory. One long source line cannot
 benefit from finer placement, and moving to an unprepared region still requires
 preparation. Hosts own idle scheduling and their checkpoint memory budget.
 
+## TikZ discovery checkpoints
+
+Externalized documents can reuse a browser heap checkpoint for the figure-list
+and MD5 discovery pass when its prefix has not read a figure PDF, baseline or
+other untracked project resource. The last successful TeX-source prefix and its
+recorded text inputs must still match. Generated auxiliary files retain the
+existing reference reconciliation contract; project-owned auxiliary and format
+inputs and dot-prefixed project sources refuse this path. Secondary project
+file edits retire discovery checkpoints because preamble-format inputs may be
+absent from the snapshot recorder. A full main pass always follows a discovery resume,
+even for text-only edits, preserving complete dependency and canonical output
+state. Page-prefix previews and head/tail splicing remain excluded for TikZ.
+
+Figure caches and idle worker policies belong to one selected engine. A switch
+disposes the old sibling pool. Worker retention itself is a host policy: short
+retention avoids repeating initialization and preamble work during picture edits,
+while immediate release minimizes idle engine memory.
+
 ## Excluded or deferred changes
 
 | Candidate | Decision |
