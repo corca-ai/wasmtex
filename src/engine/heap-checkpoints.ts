@@ -62,6 +62,8 @@ interface Checkpoint {
   prefixHash: string
   /** Content hashes of the project text files TeX had opened when it was taken. */
   inputs: Map<string, string>
+  /** Raw recorder reads; absent evidence cannot admit resource-sensitive resumes. */
+  inputPaths: string[] | null
   bytes: number
   lastUsed: number
 }
@@ -236,11 +238,15 @@ export class HeapCheckpointCompiler {
    * unchanged), taking new checkpoints for the edited region on the way. Null when no
    * checkpoint applies, when there is no baseline yet, or when the preamble changed.
    */
-  async tryResume(source: string, files: SourceSet): Promise<HeapResumeResult | null> {
+  async tryResume(
+    source: string,
+    files: SourceSet,
+    acceptInputs?: (paths: readonly string[]) => boolean,
+  ): Promise<HeapResumeResult | null> {
     if (!this.enabled || this.lastMain == null) return null
     if (extractPreamble(this.lastMain)?.preamble !== extractPreamble(source)?.preamble) return null
     const diff = firstDifference(this.lastMain, source)
-    const checkpoint = this.findValid(source, files, diff)
+    const checkpoint = this.findValid(source, files, diff, undefined, acceptInputs)
     if (!checkpoint) return null
     checkpoint.lastUsed = ++this.tick
     const arms = this.armsForFullCompile(source, files)
@@ -264,11 +270,13 @@ export class HeapCheckpointCompiler {
     files: SourceSet,
     editOffset: number,
     atLine?: number,
+    acceptInputs?: (paths: readonly string[]) => boolean,
   ): Checkpoint | null {
     let best: Checkpoint | null = null
     for (const cp of this.checkpoints.values()) {
       if (atLine !== undefined && cp.line !== atLine) continue
       if (!this.covers(cp, source, files, editOffset)) continue
+      if (acceptInputs && (!cp.inputPaths || !acceptInputs(cp.inputPaths))) continue
       if (!best || cp.line > best.line) best = cp
     }
     return best
@@ -317,6 +325,7 @@ export class HeapCheckpointCompiler {
       prefixLength: start,
       prefixHash: hashString(source.slice(0, start)),
       inputs,
+      inputPaths: record.inputs ? [...record.inputs] : null,
       bytes: record.bytes,
       lastUsed: ++this.tick,
     })

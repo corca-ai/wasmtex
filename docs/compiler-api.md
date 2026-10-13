@@ -282,6 +282,15 @@ the library itself, so the document's own `\tikzexternalize` (and its `prefix=`,
 3. The figure PDFs (and `.dpth` baseline files) are written into the main engine and the main
    job runs once more. The pool is created on first use and disposed with the compiler.
 
+With browser heap checkpoints enabled, the discovery pass may resume before
+any external figure or untracked project resource was read. Recorded TeX inputs
+must still match. `telemetry.tikzExternalization.discoveryCheckpointResume`
+reports this optimization. Even when every figure is reused, a resumed discovery
+pass finishes with a full main pass for canonical PDF, references, SyncTeX and
+dependency evidence. Disposable page-prefix previews and head/tail splicing remain
+disabled for externalized documents. Engine changes dispose the figure pool as
+well as the main engine, so its engine and idle policy cannot cross selections.
+
 Figure engines are released after `idleMs` milliseconds (default 300,000). Set
 `workers: 1, idleMs: 0` to bound concurrent engine heaps and release the sibling
 immediately after each batch. Rendered figures remain cached, so text-only edits

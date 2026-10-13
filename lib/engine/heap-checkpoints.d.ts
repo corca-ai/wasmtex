@@ -88,7 +88,7 @@ export declare class HeapCheckpointCompiler {
      * unchanged), taking new checkpoints for the edited region on the way. Null when no
      * checkpoint applies, when there is no baseline yet, or when the preamble changed.
      */
-    tryResume(source: string, files: SourceSet): Promise<HeapResumeResult | null>;
+    tryResume(source: string, files: SourceSet, acceptInputs?: (paths: readonly string[]) => boolean): Promise<HeapResumeResult | null>;
     /**
      * Latest held checkpoint whose line starts at or before `editOffset` and whose prefix and
      * inputs still match `source`/`files`. With `atLine`, only that line qualifies.

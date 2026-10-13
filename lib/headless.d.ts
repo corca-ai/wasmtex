@@ -195,6 +195,10 @@ export declare class WasmTexCompiler {
     private heapArms;
     /** Resume from a heap checkpoint when the edit allows an exact result; null otherwise. */
     private tryHeapResume;
+    /** A discovery resume must not replay a prefix that already included a figure or an
+     * untracked project resource. TeX sources are checked by the checkpoint manager;
+     * ordinary generated aux files keep its existing reference/reconciliation contract. */
+    private acceptTikzCheckpointInputs;
     /** Map an incremental (checkpoint) result to a CompileResult. The tail log carries this pass's
      *  diagnostics; head errors can't recur (the head is unchanged), and metadata/cross-refs are
      *  unchanged for a `final` result, so the last full compile's project index still holds. The raw
