@@ -98,7 +98,7 @@ jobs:
       - name: Disposable page previews and heap checkpoint output
         env:
           PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/page-preview
-        run: npx playwright test page-preview heap-checkpoints tikz-discovery-checkpoint tikz-multifile-checkpoint --workers=1 --reporter=line,html --output=test-results/page-preview
+        run: npx playwright test reference-convergence page-preview heap-checkpoints tikz-discovery-checkpoint tikz-multifile-checkpoint --workers=1 --reporter=line,html --output=test-results/page-preview
 
       - name: Cross-host parity (Node host ≡ browser golden) — S4 #111
         if: ${{ !cancelled() }}

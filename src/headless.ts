@@ -302,6 +302,10 @@ function emptyTikzTelemetry(mode: 'document' | 'auto'): TikzExternalizationTelem
   }
 }
 
+function canonicalReferencesSettled(result: CompileResult, finished: boolean): boolean {
+  return finished && result.success && !!result.pdf && result.errors.length === 0
+}
+
 /** Best-effort placement for a heap checkpoint during an already-needed full pass. */
 export interface CompileOptions {
   incrementalPreparation?: { path: string; offset: number }
@@ -786,12 +790,16 @@ export class WasmTexCompiler {
     // engine reads it — a `\printindex`-only document emits no rerun marker (unlike
     // `\cite`), and the injection guards make that force one-shot, so it still terminates.
     const controller = new RerunController()
+    let referencesSettled = false
     while (result.success || result.pdf) {
       const decision = controller.decide(
         result.log,
         signatureOf(result.semanticTrace ?? result.log),
       )
-      if (!decision.rerun && !auxInjected) break
+      if (!decision.rerun && !auxInjected) {
+        referencesSettled = !decision.stopped
+        break
+      }
       ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
       result = (
         await this.operations.observe(
@@ -810,6 +818,8 @@ export class WasmTexCompiler {
     }
     attachConversionInputs(result, conversionInputs)
     this.attachTexliveDependencies(result, resolverReports)
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+    result.telemetry.referencesSettled = canonicalReferencesSettled(result, referencesSettled)
 
     // Parse metadata (aux/trace) once on the final, stabilized result — intermediate
     // rerun passes only feed the rerun decision (log signature), not the project index,

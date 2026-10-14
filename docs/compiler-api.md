@@ -97,6 +97,16 @@ content-addressed cache.
 > registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
 > See the [execution model](execution-model.md#pluggable-stages-available-today).
 
+#### Reference convergence
+
+Canonical results may report `telemetry.referencesSettled: true` when the SDK
+finished its rerun/auxiliary loop without a remaining rerun request, injected
+artifact, or diagnostic. A host may omit its additional bibliography settle
+pass only with this explicit evidence and a contract-valid complete dependency
+manifest. Missing/false evidence, incomplete manifests and older SDKs retain
+the host's fallback. This is not a promise that unsupported bibliography tools
+succeed; errors and bounded/non-progressing reruns never qualify.
+
 #### Incremental compilation
 
 `compile({ incrementalPreparation: { path, offset } })` and `compilePreview()`

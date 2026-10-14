@@ -5,7 +5,7 @@ const mirror = process.env.TEXLIVE_URL ?? `https://texlive.corca.ai/snapshots/${
 
 test('a full pass prepares the cursor without another compile and preserves canonical output', async ({ page }) => {
   test.setTimeout(180_000)
-  await page.goto('http://localhost:6001')
+  await page.goto('/')
   const rows = await page.evaluate(async ({ year, mirror }) => {
     const { WasmTexCompiler } = await import('/src/headless.ts')
     const { SynctexParser } = await import('/src/synctex.ts')
