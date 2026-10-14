@@ -435,6 +435,7 @@ export class WasmTexCompiler {
   private prebuildInFlight: Promise<boolean> | null = null
   private compileInFlight = false
   private pagePreviewBaseline: string | null = null
+  private pagePreviewRequiresCheckpoint = false
   private readonly operations = new CompilerOperations()
   private initInFlight: Promise<void> | null = null
   private replacingProject = false
@@ -676,6 +677,7 @@ export class WasmTexCompiler {
     if (!(engine instanceof WasmTexPdftexEngine)) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
     const checkpoint = this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+    if (this.pagePreviewRequiresCheckpoint && !checkpoint) return null
     const result = (
       await this.operations.observe(engine.compilePagePreview(pageLimit, checkpoint))
     ).resume()
@@ -716,6 +718,7 @@ export class WasmTexCompiler {
       const result = await this.operations.run(() => this.compileIdle(preview, options))
       this.assertRevision(revision)
       this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
+      this.pagePreviewRequiresCheckpoint = false
       return result
     } finally {
       this.compileInFlight = false
@@ -978,6 +981,7 @@ export class WasmTexCompiler {
 
   setFile(path: string, content: FileContent): void {
     this.assertNoProjectReplacement()
+    const previewBaseline = this.pagePreviewBaseline
     if (path !== this.mainFile) this.pagePreviewBaseline = null
     this.invalidateOperation()
     this.projectIndex.invalidateCompletionSnapshot()
@@ -1004,6 +1008,16 @@ export class WasmTexCompiler {
     if (path !== this.mainFile && path.endsWith('.tex')) {
       if (existed) this.heap?.invalidateFile(path)
       else this.heap?.reset() // A new file can change an earlier negative lookup.
+      // Only a retained checkpoint with complete unread-input proof can carry a
+      // secondary-source preview. Never fall back to the unchecked full prefix.
+      if (
+        existed &&
+        previewBaseline !== null &&
+        this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+      ) {
+        this.pagePreviewBaseline = previewBaseline
+        this.pagePreviewRequiresCheckpoint = true
+      }
     }
     if (!path.endsWith('.tex')) {
       // A non-.tex file (image/data asset, .bib, .bst) can be baked into a checkpoint head

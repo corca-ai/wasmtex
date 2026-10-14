@@ -139,8 +139,11 @@ that changed since the last full compile falls back to a background full reconci
 a successful full compile. Supported pdfTeX assets stop after a complete page
 has shipped and finalize the PDF normally; other engines and older assets return
 `null`. The positive integer limit is capped at 10,000. A changed preamble or
-another project file requires a full compile first. The compiler may resume a
-valid heap checkpoint before the edit.
+non-TeX resource requires a full compile first. Existing secondary `.tex` edits
+can preview only from a retained heap checkpoint proving that the changed file
+had not been read, including during preamble preparation. Missing/incomplete
+proof, new files, or a subsequently unavailable checkpoint require a full
+compile. Other edits may resume a valid heap checkpoint before the edit.
 
 The returned `PagePreviewResult` contains `pdf`, `synctex`, `compileTime` and
 `pageLimit`. It is a first-pass preview using the preceding full compile's

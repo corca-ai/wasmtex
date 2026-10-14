@@ -118,6 +118,7 @@ export declare class WasmTexCompiler {
     private prebuildInFlight;
     private compileInFlight;
     private pagePreviewBaseline;
+    private pagePreviewRequiresCheckpoint;
     private readonly operations;
     private initInFlight;
     private replacingProject;
