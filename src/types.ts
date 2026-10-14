@@ -19,6 +19,8 @@ export interface HeapCheckpointRecord {
   /** Files TeX had opened by then (recorder), so a host can tell which project edits
    *  invalidate it; null when the recorder file was unavailable. */
   inputs: string[] | null
+  /** True only when recorder evidence includes every preamble-format input. */
+  inputsComplete?: boolean
 }
 
 /** An immutable snapshot of independent PDFs in page order. No renderer dependency. */

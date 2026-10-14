@@ -105,3 +105,9 @@ the actual assertions and workflow steps, and run `awiki lint -root docs`.
 Do not replace gaps with a coverage percentage or label a manual test as a gate
 because it happens to have run once. Keep dated run logs and exact artifact
 identities in the associated issue/PR or governed history, not in this living map.
+
+Multi-file TikZ checkpoint admission is covered by `src/headless-tikz-checkpoint.test.ts`
+and `src/engine/worker-checkpoint-inputs.test.ts`. The authored controller browser
+comparison in `e2e/tikz-multifile-checkpoint.spec.ts` checks unread secondary edits,
+preamble invalidation, additions after negative lookups, canonical PDF, SyncTeX
+and complete dependency evidence against full compilation on both annual lines.

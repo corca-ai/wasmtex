@@ -187,12 +187,18 @@ function applyHeapCheckpoints(result: CompileResult, data: WorkerMessage): void 
   if (!Array.isArray(raw)) return
   result.heapCheckpoints = raw.map((c) => {
     const r = c as Record<string, unknown>
+    const inputs =
+      Array.isArray(r.inputs) &&
+      r.inputs.every((path): path is string => typeof path === 'string' && path.length > 0)
+        ? r.inputs
+        : null
     return {
       id: String(r.id),
       line: Number(r.line),
       bytes: Number(r.bytes) || 0,
       ms: Number(r.ms) || 0,
-      inputs: Array.isArray(r.inputs) ? r.inputs.map(String) : null,
+      inputs,
+      inputsComplete: r.inputsComplete === true && inputs !== null && inputs.length > 0,
     }
   })
 }
