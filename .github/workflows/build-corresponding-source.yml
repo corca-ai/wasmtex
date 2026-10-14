@@ -9,6 +9,7 @@ on:
       - 'public/wasmtex/2025/LICENSE-MANIFEST.json'
       - 'public/wasmtex/2026/LICENSE-MANIFEST.json'
       - 'scripts/build-corresponding-source.mjs'
+      - 'scripts/prepare-engine-source-candidate*'
       - 'scripts/check-corresponding-source.mjs'
       - 'scripts/check-license-compliance.mjs'
       - 'scripts/corresponding-source-2025.json'
@@ -26,6 +27,10 @@ on:
         type: choice
         options: ['2025', '2026']
         default: '2026'
+      pdftex_run:
+        description: Optional paired pdftex/bibtex run for an uncleared source candidate; leaves other families and original formats pinned
+        required: false
+        type: string
       publish:
         description: >-
           Attach the verified archive to its engine release. Off by default:
@@ -50,6 +55,11 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: npm }
       - run: npm ci
+      - name: Prepare uncleared source candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.pdftex_run != ''
+        env:
+          PDFTEX_RUN: ${{ inputs.pdftex_run }}
+        run: node scripts/prepare-engine-source-candidate.mjs
       - name: Download pinned annual engine release
         uses: ./.github/actions/download-engine-release
         with:

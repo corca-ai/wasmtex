@@ -73,6 +73,17 @@ a tag already carries, because a published release is immutable.
 The release ID and the archive hash come from the build and the archive; the
 commands above only record them consistently.
 
+For a newly built pdfTeX/controller candidate, dispatch *Build corresponding
+source* with `texlive_year` and `pdftex_run` before registration. This changes
+only the paired pdfTeX/BibTeX download in the ephemeral workflow checkout;
+unaffected families, mirrors and original format origins remain pinned. The
+candidate is marked `development-only`, with a promotion blocker and no stale
+corresponding-source binding. `publish` may attach the verified source-only
+archive; it does not clear or distribute the candidate engines. Download the
+verified archive and its real SHA-256, complete annual qualification, then
+register those facts in a reviewed release PR. Do not commit the ephemeral
+candidate metadata or replace the immutable archive after registration.
+
 ## Create and verify an archive
 
 Use a Linux environment with GNU tar for deterministic ownership, ordering, and
