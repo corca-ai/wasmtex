@@ -7,7 +7,7 @@ const controller = readFileSync(
 )
 
 function recorderReader(): (jobName: string) => string[] | null {
-  const start = controller.indexOf('function readRecorderInputs(jobName)')
+  const start = controller.indexOf('function readRecorderInputs(')
   const end = controller.indexOf('\nfunction mergeRecorderInputs', start)
   if (start < 0 || end < 0) throw new Error('readRecorderInputs helper not found')
   const source = controller.slice(start, end)

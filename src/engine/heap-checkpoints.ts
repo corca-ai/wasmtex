@@ -22,6 +22,7 @@
  */
 import type { CompileResult, HeapCheckpointRecord } from '../types'
 import { firstDifference, hashString } from './checkpoint-boundaries'
+import { normalizeProjectDependencyPath } from './dependency-manifest'
 import { editTouchesLabels } from './incremental'
 import { extractPreamble } from './preamble-utils'
 
@@ -64,6 +65,7 @@ interface Checkpoint {
   inputs: Map<string, string>
   /** Raw recorder reads; absent evidence cannot admit resource-sensitive resumes. */
   inputPaths: string[] | null
+  inputsComplete: boolean
   bytes: number
   lastUsed: number
 }
@@ -190,6 +192,34 @@ export class HeapCheckpointCompiler {
     this.last = null
     this.lastMain = null
     void this.engine.dropHeapCheckpoints()
+  }
+
+  /** Keep a secondary-source edit only when the checkpoint proves it had not
+   * read that file, including through a precompiled preamble. Older workers
+   * lack this proof and retain their conservative reset behavior. */
+  invalidateFile(path: string): void {
+    if (projectPath(path) !== path) {
+      this.reset()
+      return
+    }
+    const drop: string[] = []
+    for (const [id, checkpoint] of this.checkpoints) {
+      if (
+        !checkpoint.inputsComplete ||
+        !checkpoint.inputPaths ||
+        !checkpoint.inputPaths.some((raw) => projectPath(raw) === this.mainFile) ||
+        checkpoint.inputPaths.some(
+          (raw) =>
+            raw.replaceAll('\\', '/').split('/').includes('..') &&
+            !normalizeProjectDependencyPath(raw.trim()),
+        ) ||
+        checkpoint.inputPaths.some((raw) => projectPath(raw) === path)
+      ) {
+        this.checkpoints.delete(id)
+        drop.push(id)
+      }
+    }
+    if (drop.length) void this.engine.dropHeapCheckpoints(drop)
   }
 
   /**
@@ -326,6 +356,7 @@ export class HeapCheckpointCompiler {
       prefixHash: hashString(source.slice(0, start)),
       inputs,
       inputPaths: record.inputs ? [...record.inputs] : null,
+      inputsComplete: record.inputsComplete === true,
       bytes: record.bytes,
       lastUsed: ++this.tick,
     })
@@ -349,10 +380,7 @@ export class HeapCheckpointCompiler {
 /** Project-relative path of a recorder input (`/work/chapters/a.tex` → `chapters/a.tex`),
  *  or null for TeX Live / system files. */
 export function projectPath(raw: string): string | null {
-  let p = raw.trim()
-  if (p.startsWith('/work/')) p = p.slice('/work/'.length)
-  else if (p.startsWith('./')) p = p.slice(2)
-  else if (p.startsWith('/')) return null
-  if (!p || p.startsWith('__') || p.startsWith('.')) return null
-  return p
+  const path = normalizeProjectDependencyPath(raw.trim())
+  if (!path || path.startsWith('__') || path.startsWith('.')) return null
+  return path
 }

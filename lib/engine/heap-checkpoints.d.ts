@@ -75,6 +75,10 @@ export declare class HeapCheckpointCompiler {
     /** A preview must not advance the full-result baseline or arm new checkpoints. */
     previewCheckpoint(source: string, files: SourceSet): string | undefined;
     reset(): void;
+    /** Keep a secondary-source edit only when the checkpoint proves it had not
+     * read that file, including through a precompiled preamble. Older workers
+     * lack this proof and retain their conservative reset behavior. */
+    invalidateFile(path: string): void;
     /**
      * Checkpoints to arm on the full compile about to run for `source`: the paragraph before
      * the region the last edit touched (or, with no baseline, before the end of the document),

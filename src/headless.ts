@@ -901,6 +901,7 @@ export class WasmTexCompiler {
         if (raw.startsWith('/tex/')) return true
         const path = raw.replace(/^(?:\/work\/|\.\/)/, '')
         if (path === this.mainFile) return true
+        if (path === '_preamble.tex') return !this.fs.getFile(path)
         if (path.startsWith('__')) return path === '__strace.tex' && !this.fs.getFile(path)
         // Match the checkpoint manager's projectPath() hashing eligibility.
         if (path.startsWith('.') || path.startsWith('/')) return false
@@ -941,6 +942,7 @@ export class WasmTexCompiler {
     if (path !== this.mainFile) this.pagePreviewBaseline = null
     this.invalidateOperation()
     this.projectIndex.invalidateCompletionSnapshot()
+    const existed = !!this.fs.getFile(path)
     this.fs.writeFile(path, content)
     // A host write replaces any same-named generated artifact with a real project file.
     const dependencyPath = normalizeProjectDependencyPath(path) ?? path
@@ -958,9 +960,12 @@ export class WasmTexCompiler {
       this.dropGeneratedFile(`${base}.bbl`)
       this.dropGeneratedFile(`${base}.ind`)
     }
-    // Preamble-format recorder inputs are absent from heap snapshot inputs.
-    // A secondary TeX edit can therefore change a prefix without a recorded hash.
-    if (path !== this.mainFile) this.heap?.reset()
+    // New workers include preamble reads in checkpoint evidence. Retain only
+    // checkpoints that prove this secondary source had not been read yet.
+    if (path !== this.mainFile && path.endsWith('.tex')) {
+      if (existed) this.heap?.invalidateFile(path)
+      else this.heap?.reset() // A new file can change an earlier negative lookup.
+    }
     if (!path.endsWith('.tex')) {
       // A non-.tex file (image/data asset, .bib, .bst) can be baked into a checkpoint head
       // (e.g. \includegraphics{logo.png} on a title page) yet isn't tracked by the .tex-only

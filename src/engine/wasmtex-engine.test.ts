@@ -693,3 +693,31 @@ describe('heap checkpoint placement capability', () => {
     expect(engine.supportsLineCheckpoints).toBe(expected)
   })
 })
+
+it.each([
+  { inputs: ['/work/main.tex'], complete: true, expected: true },
+  { inputs: ['/work/main.tex'], complete: undefined, expected: false },
+  { inputs: ['/work/main.tex'], complete: 'true', expected: false },
+  { inputs: ['/work/main.tex', {}], complete: true, expected: false },
+  { inputs: [], complete: true, expected: false },
+])('accepts only explicit, well-formed checkpoint input evidence: %j', async (sample) => {
+  const engine = new TestableEngine({ assetBaseUrl: '/' })
+  engine.markReady()
+  engine.installWorker(() => ({
+    cmd: 'compile',
+    result: 'ok',
+    status: 0,
+    heapCheckpoints: [
+      {
+        id: 'cp',
+        line: 5,
+        bytes: 1,
+        ms: 1,
+        inputs: sample.inputs,
+        inputsComplete: sample.complete,
+      },
+    ],
+  }))
+  const result = await engine.compile()
+  expect(result.heapCheckpoints?.[0]?.inputsComplete).toBe(sample.expected)
+})

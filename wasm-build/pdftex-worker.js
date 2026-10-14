@@ -337,7 +337,7 @@ function jobNameForMain(mainFile) {
   return name.replace(/\.[^.]+$/, '')
 }
 
-function readRecorderInputs(jobName) {
+function readRecorderInputs(jobName, keepFile) {
     var flsPath = WORKROOT + "/" + jobName + ".fls";
     var inputs = null;
     try {
@@ -349,7 +349,7 @@ function readRecorderInputs(jobName) {
             inputs = Array.from(new Set(inputs));
         }
     } catch(e) {}
-    try { FS.unlink(flsPath); } catch(e) {}
+    if (!keepFile) { try { FS.unlink(flsPath); } catch(e) {} }
     return inputs;
 }
 
@@ -1845,12 +1845,15 @@ function hcTakeSnapshot(cp) {
     var t0 = performance.now();
     var image = hcSparseImage();
     var inputs = null;
-    try { inputs = readRecorderInputs(jobNameForMain(self.mainfile)); } catch(e) {}
+    try { inputs = readRecorderInputs(jobNameForMain(self.mainfile), true); } catch(e) {}
+    if (self._hc.transform && self._hc.transform.usedPreamble) {
+        inputs = mergeRecorderInputs(self._preambleInputFiles, inputs);
+    }
     var snap = {
         id: cp.id, line: cp.line, offset: cp.offset,
         image: image, currData: Asyncify.currData, sp: stackSave(),
         fs: hcSnapshotFS(), memlog: self.memlog,
-        transform: self._hc.transform, inputs: inputs,
+        transform: self._hc.transform, inputs: inputs, inputsComplete: inputs !== null,
         bytes: image.bytes, ms: 0
     };
     snap.ms = performance.now() - t0;
@@ -1911,7 +1914,7 @@ async function hcContinueWhileSuspended(status) {
         self._hc.pending = null;
         var snap = hcTakeSnapshot(pending.cp);
         self._hc.checkpoints[snap.id] = snap;
-        self._hc.taken.push({ id: snap.id, line: snap.line, bytes: snap.bytes, ms: Math.round(snap.ms), inputs: snap.inputs });
+        self._hc.taken.push({ id: snap.id, line: snap.line, bytes: snap.bytes, ms: Math.round(snap.ms), inputs: snap.inputs, inputsComplete: snap.inputsComplete });
         var done = Asyncify.whenDone();
         try {
             pending.wakeUp(0);

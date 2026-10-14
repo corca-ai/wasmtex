@@ -26,6 +26,10 @@ describe('line helpers', () => {
   it('normalizes recorder paths to project paths', () => {
     expect(projectPath('/work/chapters/a.tex')).toBe('chapters/a.tex')
     expect(projectPath('./main.tex')).toBe('main.tex')
+    expect(projectPath('/work/sub/../config.tex')).toBe('config.tex')
+    expect(projectPath('./sub/../config.tex')).toBe('config.tex')
+    expect(projectPath('../config.tex')).toBeNull()
+    expect(projectPath('/work/sub/../.config.tex')).toBeNull()
     expect(projectPath('/tex/article.cls')).toBeNull()
     expect(projectPath('/work/__strace.tex')).toBeNull()
   })
@@ -213,4 +217,36 @@ describe('HeapCheckpointCompiler', () => {
     expect(hc.held.length).toBeLessThanOrEqual(2)
     expect(engine.dropped.length).toBeGreaterThan(0)
   })
+})
+
+it.each([
+  './sub/../config.tex',
+  '/work/sub/../config.tex',
+  '../work/config.tex',
+  '/tex/../work/config.tex',
+])('invalidates an already read secondary path alias: %s', async (alias) => {
+  const engine = new FakeEngine()
+  const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0 })
+  const source = DOC
+  hc.noteFull(source, new Map([['config.tex', 'ORIGINAL']]), {
+    success: true,
+    pdf: new Uint8Array([1]),
+    synctex: null,
+    log: '',
+    errors: [],
+    compileTime: 1,
+    heapCheckpoints: [
+      {
+        id: 'alias',
+        line: 10,
+        bytes: 1024,
+        ms: 1,
+        inputs: ['/work/main.tex', alias],
+        inputsComplete: true,
+      },
+    ],
+  })
+  hc.invalidateFile('config.tex')
+  expect(hc.held).toEqual([])
+  expect(await hc.tryResume(source, new Map([['config.tex', 'CHANGED']]))).toBeNull()
 })

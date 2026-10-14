@@ -110,9 +110,12 @@ and MD5 discovery pass when its prefix has not read a figure PDF, baseline or
 other untracked project resource. The last successful TeX-source prefix and its
 recorded text inputs must still match. Generated auxiliary files retain the
 existing reference reconciliation contract; project-owned auxiliary and format
-inputs and dot-prefixed project sources refuse this path. Secondary project
-file edits retire discovery checkpoints because preamble-format inputs may be
-absent from the snapshot recorder. A full main pass always follows a discovery resume,
+inputs and dot-prefixed project sources refuse this path. Workers that explicitly
+report complete checkpoint inputs include preamble-format recorder reads and keep
+the live recorder for finalization. An existing secondary `.tex` edit retains only
+checkpoints taken before that file was read; additions and other resources retire
+them. Older workers without this evidence retain conservative invalidation.
+A full main pass always follows a discovery resume,
 even for text-only edits, preserving complete dependency and canonical output
 state. Page-prefix previews and head/tail splicing remain excluded for TikZ.
 

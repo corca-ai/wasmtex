@@ -60,6 +60,8 @@ describe('TikZ discovery checkpoint admission', () => {
     { input: 'main.aux', owned: false, changed: false, resumed: true },
     { input: 'texmf.cnf', owned: false, changed: false, resumed: true },
     { input: 'pdflatex.fmt', owned: false, changed: false, resumed: true },
+    { input: '_preamble.tex', owned: false, changed: false, resumed: true },
+    { input: '_preamble.tex', owned: true, changed: false, resumed: false },
     { input: 'pdflatex.fmt', owned: true, changed: false, resumed: false },
     { input: 'chapter.tex', owned: true, changed: false, resumed: true },
     { input: 'chapter.tex', owned: true, changed: true, resumed: false },
@@ -155,4 +157,40 @@ describe('TikZ discovery checkpoint admission', () => {
       compiler.dispose()
     }
   })
+})
+
+it.each([
+  { complete: true, read: false, path: 'figure.tex', added: false, resumed: true },
+  { complete: true, read: false, path: 'figure.tex', added: true, resumed: false },
+  { complete: false, read: false, path: 'figure.tex', resumed: false },
+  { complete: true, read: true, path: 'figure.tex', resumed: false },
+  { complete: true, read: false, path: '.figure.tex', resumed: false },
+])('secondary edits retain only proven unread prefixes: %j', async (sample) => {
+  const e = engine()
+  vi.spyOn(factory, 'createCompileEngine').mockReturnValue(e)
+  const files = { 'main.tex': source, ...(!sample.added ? { [sample.path]: 'original' } : {}) }
+  const compiler = new WasmTexCompiler({ files, tikzExternalization: { mode: 'auto' } })
+  await compiler.init()
+  const heap = new HeapCheckpointCompiler(e, { minHeadBytes: 0 })
+  heap.noteFull(source, new Map(Object.entries(files)), {
+    ...result(),
+    heapCheckpoints: [
+      {
+        id: 'prefix',
+        line: 4,
+        bytes: 1024,
+        ms: 1,
+        inputs: ['/work/main.tex', ...(sample.read ? [`/work/${sample.path}`] : [])],
+        inputsComplete: sample.complete,
+      },
+    ],
+  })
+  ;(compiler as unknown as { heap: HeapCheckpointCompiler }).heap = heap
+  compiler.setFile(sample.path, 'changed')
+  try {
+    await compiler.compile()
+    expect(e.compileFromHeapCheckpoint).toHaveBeenCalledTimes(sample.resumed ? 1 : 0)
+  } finally {
+    compiler.dispose()
+  }
 })
