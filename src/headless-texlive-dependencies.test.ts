@@ -137,3 +137,39 @@ describe('headless texliveDependencies telemetry', () => {
     compiler.dispose()
   })
 })
+
+describe('canonical reference convergence evidence', () => {
+  it.each([
+    { mode: 'settled', expected: true },
+    { mode: 'stalled', expected: false },
+    { mode: 'limit', expected: false },
+    { mode: 'warning', expected: false },
+    { mode: 'failed', expected: false },
+  ])('reports $mode conservatively', async ({ mode, expected }) => {
+    class Engine extends TwoPassEngine {
+      override async compile(): Promise<CompileResult> {
+        const result = await super.compile()
+        if (mode === 'stalled' || mode === 'limit') result.log = 'Rerun LaTeX'
+        if (mode === 'limit') result.semanticTrace = String(this.compileCount)
+        if (mode === 'warning')
+          result.errors = [{ line: 1, message: 'Citation undefined', severity: 'warning' }]
+        if (mode === 'failed') {
+          result.success = false
+          result.pdf = null
+        }
+        return result
+      }
+    }
+    const compiler = new WasmTexCompiler({ files: { 'main.tex': 'body' } })
+    const engine = new Engine()
+    ;(compiler as unknown as { engine: Engine }).engine = engine
+    ;(compiler as unknown as { initialized: boolean }).initialized = true
+    try {
+      const result = await compiler.compile()
+      expect(result.telemetry?.referencesSettled).toBe(expected)
+      expect(engine.compileCount).toBeLessThanOrEqual(6)
+    } finally {
+      compiler.dispose()
+    }
+  })
+})

@@ -97,7 +97,25 @@ content-addressed cache.
 > registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
 > See the [execution model](execution-model.md#pluggable-stages-available-today).
 
+#### Reference convergence
+
+Canonical results may report `telemetry.referencesSettled: true` when the SDK
+finished its rerun/auxiliary loop without a remaining rerun request, injected
+artifact, or diagnostic. A host may omit its additional bibliography settle
+pass only with this explicit evidence and a contract-valid complete dependency
+manifest. Missing/false evidence, incomplete manifests and older SDKs retain
+the host's fallback. This is not a promise that unsupported bibliography tools
+succeed; errors and bounded/non-progressing reruns never qualify.
+
 #### Incremental compilation
+
+`compile({ incrementalPreparation: { path, offset } })` and `compilePreview()`
+with the same option can prepare the expected cursor region during an
+already-needed heap compile or resume. The hint replaces default placement,
+so a one-checkpoint budget retains the requested region. It does not force a
+full pass or change output; invalid hints and unsupported engines keep their
+ordinary path. `offset` is a UTF-16 position in the named TeX file. Included-file
+hints retain the existing boundary-before-input mapping described below.
 
 With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\newpage`) re-typesets only the *tail* of the document — booting the engine from a cached checkpoint at the latest page break before the change and splicing the new tail pages onto a cached head PDF. Latency depends on the document and checkpoint state; measure preparation and full/resumed compiles separately.
 
@@ -131,8 +149,11 @@ that changed since the last full compile falls back to a background full reconci
 a successful full compile. Supported pdfTeX assets stop after a complete page
 has shipped and finalize the PDF normally; other engines and older assets return
 `null`. The positive integer limit is capped at 10,000. A changed preamble or
-another project file requires a full compile first. The compiler may resume a
-valid heap checkpoint before the edit.
+non-TeX resource requires a full compile first. Existing secondary `.tex` edits
+can preview only from a retained heap checkpoint proving that the changed file
+had not been read, including during preamble preparation. Missing/incomplete
+proof, new files, or a subsequently unavailable checkpoint require a full
+compile. Other edits may resume a valid heap checkpoint before the edit.
 
 The returned `PagePreviewResult` contains `pdf`, `synctex`, `compileTime` and
 `pageLimit`. It is a first-pass preview using the preceding full compile's

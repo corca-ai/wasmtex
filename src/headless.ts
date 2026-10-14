@@ -302,6 +302,15 @@ function emptyTikzTelemetry(mode: 'document' | 'auto'): TikzExternalizationTelem
   }
 }
 
+function canonicalReferencesSettled(result: CompileResult, finished: boolean): boolean {
+  return finished && result.success && !!result.pdf && result.errors.length === 0
+}
+
+/** Best-effort placement for a heap checkpoint during an already-needed full pass. */
+export interface CompileOptions {
+  incrementalPreparation?: { path: string; offset: number }
+}
+
 export interface WasmTexCompilerOptions {
   /** TeX Live version to use. Defaults to '2025'. */
   texliveVersion?: TexliveVersion
@@ -430,6 +439,7 @@ export class WasmTexCompiler {
   private prebuildInFlight: Promise<boolean> | null = null
   private compileInFlight = false
   private pagePreviewBaseline: string | null = null
+  private pagePreviewRequiresCheckpoint = false
   private readonly operations = new CompilerOperations()
   private initInFlight: Promise<void> | null = null
   private replacingProject = false
@@ -627,13 +637,13 @@ export class WasmTexCompiler {
     }
   }
 
-  async compile(): Promise<CompileResult> {
-    return this.compileOperation(false)
+  async compile(options?: CompileOptions): Promise<CompileResult> {
+    return this.compileOperation(false, options)
   }
 
   /** Opt in to independent PDF parts for final page-break incremental results. */
-  async compilePreview(): Promise<PreviewCompileResult> {
-    return this.compileOperation(true)
+  async compilePreview(options?: CompileOptions): Promise<PreviewCompileResult> {
+    return this.compileOperation(true, options)
   }
 
   /** Render a PDF prefix using the last full pass's references. This leaves full
@@ -671,6 +681,7 @@ export class WasmTexCompiler {
     if (!(engine instanceof WasmTexPdftexEngine)) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
     const checkpoint = this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+    if (this.pagePreviewRequiresCheckpoint && !checkpoint) return null
     const result = (
       await this.operations.observe(engine.compilePagePreview(pageLimit, checkpoint))
     ).resume()
@@ -690,9 +701,15 @@ export class WasmTexCompiler {
     )
   }
 
-  private async compileOperation(preview: false): Promise<CompileResult>
-  private async compileOperation(preview: true): Promise<PreviewCompileResult>
-  private async compileOperation(preview: boolean): Promise<PreviewCompileResult> {
+  private async compileOperation(preview: false, options?: CompileOptions): Promise<CompileResult>
+  private async compileOperation(
+    preview: true,
+    options?: CompileOptions,
+  ): Promise<PreviewCompileResult>
+  private async compileOperation(
+    preview: boolean,
+    options?: CompileOptions,
+  ): Promise<PreviewCompileResult> {
     this.ensureInitialized()
     this.assertNoProjectReplacement()
     if (this.compileInFlight) throw new Error('Compile already in progress')
@@ -702,16 +719,20 @@ export class WasmTexCompiler {
       // Reserve this call before waiting: another compile must not queue behind it.
       if (this.prebuildInFlight) await this.prebuildInFlight
       this.assertRevision(revision)
-      const result = await this.operations.run(() => this.compileIdle(preview))
+      const result = await this.operations.run(() => this.compileIdle(preview, options))
       this.assertRevision(revision)
       this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
+      this.pagePreviewRequiresCheckpoint = false
       return result
     } finally {
       this.compileInFlight = false
     }
   }
 
-  private async compileIdle(preview: boolean): Promise<PreviewCompileResult> {
+  private async compileIdle(
+    preview: boolean,
+    options?: CompileOptions,
+  ): Promise<PreviewCompileResult> {
     this.currentAuxiliaryDependencies.clear()
     ;(await this.operations.observe(this.ensureEngine())).resume()
     if (this.unavailable || !this.engine) {
@@ -741,8 +762,16 @@ export class WasmTexCompiler {
     // a valid checkpoint (a complete compile comes out of it), else a full compile that arms
     // checkpoints for the edited region.
     let result =
-      (await this.operations.observe(this.tryHeapResume(externalization))).resume() ??
-      (await this.operations.observe(engine.compile(this.heapArms()))).resume()
+      (
+        await this.operations.observe(
+          this.tryHeapResume(externalization, options?.incrementalPreparation),
+        )
+      ).resume() ??
+      (
+        await this.operations.observe(
+          engine.compile(this.heapArms(options?.incrementalPreparation)),
+        )
+      ).resume()
     // Resolver evidence is per pass; the prefetch manifest is their union (#80).
     const conversionInputs = new Set(result.pdfConversionInputs ?? [])
     const resolverReports = [result.telemetry?.resolver]
@@ -761,14 +790,22 @@ export class WasmTexCompiler {
     // engine reads it — a `\printindex`-only document emits no rerun marker (unlike
     // `\cite`), and the injection guards make that force one-shot, so it still terminates.
     const controller = new RerunController()
+    let referencesSettled = false
     while (result.success || result.pdf) {
       const decision = controller.decide(
         result.log,
         signatureOf(result.semanticTrace ?? result.log),
       )
-      if (!decision.rerun && !auxInjected) break
+      if (!decision.rerun && !auxInjected) {
+        referencesSettled = !decision.stopped
+        break
+      }
       ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
-      result = (await this.operations.observe(engine.compile(this.heapArms()))).resume()
+      result = (
+        await this.operations.observe(
+          engine.compile(this.heapArms(options?.incrementalPreparation)),
+        )
+      ).resume()
       resolverReports.push(result.telemetry?.resolver)
       collectConversionInputs(conversionInputs, result)
       auxInjected = (await this.operations.observe(this.runAuxStages(result))).resume()
@@ -781,6 +818,8 @@ export class WasmTexCompiler {
     }
     attachConversionInputs(result, conversionInputs)
     this.attachTexliveDependencies(result, resolverReports)
+    result.telemetry ??= { diagnostics: buildDiagnostics(result.log) }
+    result.telemetry.referencesSettled = canonicalReferencesSettled(result, referencesSettled)
 
     // Parse metadata (aux/trace) once on the final, stabilized result — intermediate
     // rerun passes only feed the rerun decision (log signature), not the project index,
@@ -852,12 +891,8 @@ export class WasmTexCompiler {
     const heap = this.heap
     const engine = this.engine
     if (!heap || !engine || !(engine instanceof WasmTexPdftexEngine)) return false
-    let mainOffset = offset
-    if (path !== this.mainFile) {
-      const at = source.indexOf(`{${path.replace(/\.tex$/, '')}}`)
-      if (at < 0) return false
-      mainOffset = at
-    }
+    const mainOffset = this.heapPreparationOffset(path, offset)
+    if (mainOffset === undefined) return false
     const arms = heap.armsForFullCompile(source, files, mainOffset)
     if (arms.length === 0) return false
     const result = (await this.operations.observe(engine.compile({ checkpoints: arms }))).resume()
@@ -865,16 +900,32 @@ export class WasmTexCompiler {
     return (result.heapCheckpoints?.length ?? 0) > 0
   }
 
+  private heapPreparationOffset(path: string, offset: number): number | undefined {
+    const content = this.fs.readFile(path)
+    if (typeof content !== 'string' || !path.toLowerCase().endsWith('.tex')) return undefined
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > content.length) return undefined
+    if (path === this.mainFile) return offset
+    const at = this.mainSource().indexOf(`{${path.replace(/\.tex$/, '')}}`)
+    return at < 0 ? undefined : at
+  }
+
   /** Checkpoint arms for the full compile about to run (none without the heap engine). */
-  private heapArms(): { checkpoints?: Array<{ id: string; line: number }> } | undefined {
+  private heapArms(
+    hint?: CompileOptions['incrementalPreparation'],
+  ): { checkpoints?: Array<{ id: string; line: number }> } | undefined {
     if (!this.heap?.enabled) return undefined
-    const arms = this.heap.armsForFullCompile(this.mainSource(), this.projectTexFiles())
+    const arms = this.heap.armsForFullCompile(
+      this.mainSource(),
+      this.projectTexFiles(),
+      hint ? this.heapPreparationOffset(hint.path, hint.offset) : undefined,
+    )
     return arms.length ? { checkpoints: arms } : undefined
   }
 
   /** Resume from a heap checkpoint when the edit allows an exact result; null otherwise. */
   private async tryHeapResume(
     externalization: TikzExternalizationKind | null,
+    hint?: CompileOptions['incrementalPreparation'],
   ): Promise<CompileResult | null> {
     if (!this.heap?.enabled) return null
     const resume = (
@@ -883,6 +934,7 @@ export class WasmTexCompiler {
           this.mainSource(),
           this.projectTexFiles(),
           externalization ? (paths) => this.acceptTikzCheckpointInputs(paths) : undefined,
+          hint ? this.heapPreparationOffset(hint.path, hint.offset) : undefined,
         ),
       )
     ).resume()
@@ -939,6 +991,7 @@ export class WasmTexCompiler {
 
   setFile(path: string, content: FileContent): void {
     this.assertNoProjectReplacement()
+    const previewBaseline = this.pagePreviewBaseline
     if (path !== this.mainFile) this.pagePreviewBaseline = null
     this.invalidateOperation()
     this.projectIndex.invalidateCompletionSnapshot()
@@ -965,6 +1018,16 @@ export class WasmTexCompiler {
     if (path !== this.mainFile && path.endsWith('.tex')) {
       if (existed) this.heap?.invalidateFile(path)
       else this.heap?.reset() // A new file can change an earlier negative lookup.
+      // Only a retained checkpoint with complete unread-input proof can carry a
+      // secondary-source preview. Never fall back to the unchecked full prefix.
+      if (
+        existed &&
+        previewBaseline !== null &&
+        this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+      ) {
+        this.pagePreviewBaseline = previewBaseline
+        this.pagePreviewRequiresCheckpoint = true
+      }
     }
     if (!path.endsWith('.tex')) {
       // A non-.tex file (image/data asset, .bib, .bst) can be baked into a checkpoint head

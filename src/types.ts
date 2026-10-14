@@ -244,6 +244,11 @@ export interface EngineTelemetry {
    *  profile/root/topology are unchanged). Produced by the headless orchestrator,
    *  which can combine engine recorder data with auxiliary-stage requests. */
   dependencyManifest?: DependencyManifest
+  /** This canonical pipeline finished without a rerun request, pending auxiliary
+   * injection, or diagnostics. Missing/false is not evidence of convergence.
+   * Hosts must also validate complete project-input evidence before eliding
+   * their own settle pass. Disposable/fast-spliced previews do not report it. */
+  referencesSettled?: boolean
   /** Revision-bound runtime completion evidence collected only as a by-product of
    *  this normal compile. It never causes a compile and is replaced atomically. */
   completionSnapshot?: CompletionSnapshot

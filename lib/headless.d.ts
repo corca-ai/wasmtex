@@ -19,6 +19,13 @@ export type { AccessibleExportResult, CompilePhaseTimings, CompilerRetentionStat
  * whose preview profile predates the tagging kernel.
  */
 export declare function compileAccessiblePdf(options: WasmTexCompilerOptions, exportOptions?: AccessibleExportOptions): Promise<AccessibleExportResult>;
+/** Best-effort placement for a heap checkpoint during an already-needed full pass. */
+export interface CompileOptions {
+    incrementalPreparation?: {
+        path: string;
+        offset: number;
+    };
+}
 export interface WasmTexCompilerOptions {
     /** TeX Live version to use. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -111,6 +118,7 @@ export declare class WasmTexCompiler {
     private prebuildInFlight;
     private compileInFlight;
     private pagePreviewBaseline;
+    private pagePreviewRequiresCheckpoint;
     private readonly operations;
     private initInFlight;
     private replacingProject;
@@ -166,9 +174,9 @@ export declare class WasmTexCompiler {
      */
     private ensureEngine;
     init(): Promise<void>;
-    compile(): Promise<CompileResult>;
+    compile(options?: CompileOptions): Promise<CompileResult>;
     /** Opt in to independent PDF parts for final page-break incremental results. */
-    compilePreview(): Promise<PreviewCompileResult>;
+    compilePreview(options?: CompileOptions): Promise<PreviewCompileResult>;
     /** Render a PDF prefix using the last full pass's references. This leaves full
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */
@@ -191,6 +199,7 @@ export declare class WasmTexCompiler {
     /** Arm a heap checkpoint before the cursor's paragraph with one idle full compile, unless
      *  one already covers it. Included files map to their `\input` position like #55. */
     private prepareHeapCheckpoint;
+    private heapPreparationOffset;
     /** Checkpoint arms for the full compile about to run (none without the heap engine). */
     private heapArms;
     /** Resume from a heap checkpoint when the edit allows an exact result; null otherwise. */

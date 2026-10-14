@@ -17,15 +17,15 @@ const fixtures = [
     extra: '\\begin{figure}[t]\\centering\\rule{20mm}{12mm}\\caption{A floating figure}\\end{figure}\n' },
 ]
 
-for (const fixture of fixtures.flatMap(f => [true, false].map(heapCheckpoints => ({ ...f, heapCheckpoints })))) {
-  test(`page preview matches canonical pixels: ${fixture.name} (${fixture.heapCheckpoints ? 'heap' : 'plain'})`, async ({ page }) => {
+for (const fixture of fixtures.flatMap(f => [{heapCheckpoints:true,secondary:false},{heapCheckpoints:false,secondary:false},{heapCheckpoints:true,secondary:true}].map(mode => ({ ...f, ...mode })))) {
+  test(`page preview matches canonical pixels: ${fixture.name} (${fixture.secondary ? 'secondary' : fixture.heapCheckpoints ? 'heap' : 'plain'})`, async ({ page }) => {
     test.setTimeout(300_000)
     await page.route('**/page-preview-test', route => route.fulfill({
       contentType: 'text/html', body: '<!doctype html><title>Page preview qualification</title>',
     }))
     await page.goto('/page-preview-test')
     const source = `${fixture.preamble}\n\\begin{document}\n${fixture.extra}${body}\\end{document}\n`
-    const evidence = await page.evaluate(async ({ source, year, mirror, heapCheckpoints }) => {
+    const evidence = await page.evaluate(async ({ source, year, mirror, heapCheckpoints, secondary }) => {
       const { WasmTexCompiler } = await import('/src/headless.ts')
       const { WasmTexPdftexEngine } = await import('/src/engine/wasmtex-engine.ts')
       const { SynctexParser } = await import('/src/synctex.ts')
@@ -39,8 +39,12 @@ for (const fixture of fixtures.flatMap(f => [true, false].map(heapCheckpoints =>
       const pdfjs = await import('/node_modules/pdfjs-dist/build/pdf.mjs')
       pdfjs.GlobalWorkerOptions.workerSrc = '/node_modules/pdfjs-dist/build/pdf.worker.mjs'
       const mainFile = heapCheckpoints ? 'main.tex' : 'nested/main.tex'
+      const bodyStart = source.indexOf('\\begin{document}') + '\\begin{document}'.length + 1
+      const editFile = secondary ? 'chapter.tex' : mainFile
+      const editingSource = secondary ? source.slice(bodyStart, source.lastIndexOf('\\end{document}')) : source
+      const main = secondary ? source.slice(0, bodyStart).replace('\\begin{document}', '\\input{config}\n\\begin{document}') + '\\input{chapter}\n\\end{document}' : source
       const compiler = new WasmTexCompiler({
-        mainFile, engine: 'pdflatex', files: { [mainFile]: source },
+        mainFile, engine: 'pdflatex', files: secondary ? { [mainFile]: main, 'chapter.tex': editingSource, 'config.tex': '\\newcommand{\\configvalue}{original}' } : { [mainFile]: source },
         texliveVersion: year, texliveUrl: mirror,
         incremental: true,
         heapCheckpoints,
@@ -71,13 +75,13 @@ for (const fixture of fixtures.flatMap(f => [true, false].map(heapCheckpoints =>
         await compiler.init()
         const baseline = await compiler.compile()
         if (!baseline.success) throw new Error(baseline.log)
-        const prepared = await compiler.prepareIncrementalCompile(mainFile, source.indexOf('original'))
-        if (heapCheckpoints && !prepared) throw new Error('Heap checkpoint was not prepared')
+        const prepared = await compiler.prepareIncrementalCompile(editFile, editingSource.indexOf('original'))
+        if (heapCheckpoints && !secondary && !prepared) throw new Error('Heap checkpoint was not prepared')
         const samples = []
-        let edited = source
+        let edited = editingSource
         for (const suffix of [' edited', ' continuously edited', ' edited once more']) {
-          edited = source.replace('original', `original${suffix}`)
-          compiler.setFile(mainFile, edited)
+          edited = editingSource.replace('original', `original${suffix}`)
+          compiler.setFile(editFile, edited)
           const aux = await compiler.readOutput('main.aux')
           const t = performance.now()
           const preview = await compiler.previewPages(2)
@@ -97,18 +101,22 @@ for (const fixture of fixtures.flatMap(f => [true, false].map(heapCheckpoints =>
         if (heapCheckpoints && !samples[0]?.phases?.checkpointResume)
           throw new Error('Preview did not resume the prepared checkpoint')
         const beforeError = await compiler.readOutput('main.aux')
-        compiler.setFile(mainFile, source.replace('original', '\\undefinedPreviewCommand original'))
+        compiler.setFile(editFile, editingSource.replace('original', '\\undefinedPreviewCommand original'))
         if (await compiler.previewPages(2)) throw new Error('Erroneous preview was accepted')
         if (await compiler.readOutput('main.aux') !== beforeError) throw new Error('Failed preview changed auxiliary state')
         const invalid = await compiler.compile()
         if (!invalid.errors.some(error => error.severity === 'error'))
           throw new Error('Invalid fixture lost its diagnostics')
-        compiler.setFile(mainFile, edited)
+        compiler.setFile(editFile, edited)
         if (!(await compiler.compile()).success) throw new Error('Full compile did not recover')
         if (!(await compiler.previewPages(2))) throw new Error('Preview did not recover')
+        if (secondary) {
+          compiler.setFile('config.tex', '\\newcommand{\\configvalue}{changed}')
+          if (await compiler.previewPages(2)) throw new Error('Preamble dependency edit admitted a preview')
+        }
         return samples
       } finally { compiler.dispose() }
-    }, { source, year, mirror, heapCheckpoints: fixture.heapCheckpoints })
+    }, { source, year, mirror, heapCheckpoints: fixture.heapCheckpoints, secondary: fixture.secondary })
     expect(evidence).toHaveLength(3)
     console.log(JSON.stringify({ fixture: fixture.name, heapCheckpoints: fixture.heapCheckpoints, year, samples: evidence }))
   })

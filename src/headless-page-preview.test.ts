@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import * as factory from './engine/compile-engine'
 import { WasmTexPdftexEngine } from './engine/wasmtex-engine'
-import { WasmTexCompiler } from './headless'
+import { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
 import type { CompileResult } from './types'
 
 const source = '\\documentclass{article}\n\\begin{document}\nA paragraph.\n\\end{document}'
@@ -14,7 +14,10 @@ const result: CompileResult = {
   compileTime: 12,
 }
 
-async function fixture(preview = async (): Promise<CompileResult | null> => result) {
+async function fixture(
+  preview = async (): Promise<CompileResult | null> => result,
+  options: WasmTexCompilerOptions = {},
+) {
   const engine = new WasmTexPdftexEngine()
   vi.spyOn(engine, 'init').mockResolvedValue()
   vi.spyOn(engine, 'writeFile').mockResolvedValue()
@@ -25,7 +28,7 @@ async function fixture(preview = async (): Promise<CompileResult | null> => resu
   vi.spyOn(engine, 'compile').mockResolvedValue(result)
   const pages = vi.spyOn(engine, 'compilePagePreview').mockImplementation(preview)
   vi.spyOn(factory, 'createCompileEngine').mockReturnValue(engine)
-  const compiler = new WasmTexCompiler({ files: { 'main.tex': source } })
+  const compiler = new WasmTexCompiler({ files: { 'main.tex': source }, ...options })
   await compiler.init()
   return { compiler, engine, pages }
 }
@@ -46,6 +49,48 @@ it('requires a complete baseline and keeps page previews out of compile metadata
   expect(await compiler.previewPages(3)).not.toBeNull()
   expect(pages.mock.calls.map((call) => call[0])).toEqual([2, 3])
   compiler.dispose()
+})
+
+it.each([
+  { complete: true, read: false, added: false, allowed: true },
+  { complete: false, read: false, added: false, allowed: false },
+  { complete: true, read: true, added: false, allowed: false },
+  { complete: true, read: false, added: true, allowed: false },
+])('admits secondary previews only with retained unread-input proof: %j', async ({
+  complete,
+  read,
+  added,
+  allowed,
+}) => {
+  const { compiler, engine, pages } = await fixture(undefined, {
+    incremental: true,
+    heapCheckpointOptions: { minHeadBytes: 0 },
+    files: { 'main.tex': source, ...(added ? {} : { 'chapter.tex': 'body' }) },
+  })
+  vi.spyOn(engine, 'supportsHeapCheckpoints', 'get').mockReturnValue(true)
+  vi.spyOn(engine, 'dropHeapCheckpoints').mockResolvedValue()
+  vi.mocked(engine.compile).mockResolvedValue({
+    ...result,
+    heapCheckpoints: [
+      {
+        id: 'before-chapter',
+        line: 3,
+        bytes: 1000,
+        ms: 1,
+        inputs: ['/work/main.tex', ...(read ? ['/work/chapter.tex'] : [])],
+        inputsComplete: complete,
+      },
+    ],
+  })
+  try {
+    await compiler.compile()
+    compiler.setFile('chapter.tex', 'edited body')
+    expect(!!(await compiler.previewPages(2))).toBe(allowed)
+    if (allowed) expect(pages).toHaveBeenCalledWith(2, 'before-chapter')
+    else expect(pages).not.toHaveBeenCalled()
+  } finally {
+    compiler.dispose()
+  }
 })
 
 it('rejects invalid limits and requires full compilation after structural invalidation', async () => {

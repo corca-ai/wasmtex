@@ -115,6 +115,19 @@ class FakeEngine implements HeapCheckpointEngine {
 describe('HeapCheckpointCompiler', () => {
   const files = () => new Map([['chapter.tex', 'chapter']])
 
+  it('prepares only the requested cursor region within a one-checkpoint budget', async () => {
+    const engine = new FakeEngine()
+    const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0, maxCheckpoints: 1 })
+    const offset = DOC.indexOf('Paragraph 3')
+    const arms = hc.armsForFullCompile(DOC, files(), offset)
+    expect(arms).toHaveLength(1)
+    hc.noteFull(DOC, files(), await engine.compile({ checkpoints: arms }))
+    expect(hc.armsForFullCompile(DOC, files(), offset)).toEqual([])
+    expect(hc.previewCheckpoint(DOC.replace('Paragraph 3', 'Edited paragraph 3'), files())).toBe(
+      arms[0]?.id,
+    )
+  })
+
   it('retains paragraph placement on workers without line-placement capability', () => {
     const engine = new FakeEngine()
     const source = PRE + Array.from({ length: 30 }, (_, i) => `Line ${i}.`).join('\n')

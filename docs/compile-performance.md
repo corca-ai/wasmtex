@@ -69,7 +69,9 @@ the annual releases, preserved outputs, Chromium/WebKit checks and measured
 costs of this path.
 
 The explicit `previewPages()` API adds a disposable first-pass preview without
-changing ordinary full compilation. It stops after complete page shipment,
+changing ordinary full compilation. Existing secondary TeX sources can use it
+only when a retained checkpoint proves the changed file was unread. Preamble
+reads participate in that proof; new files and unsupported workers fall back. It stops after complete page shipment,
 retains PDF/font finalization, restores working files and leaves canonical
 metadata with the last full result. Hosts reconcile after input settles.
 [The engine contract](engine.md#disposable-page-prefix-previews) records the
