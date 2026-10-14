@@ -230,13 +230,14 @@ export class HeapCheckpointCompiler {
   armsForFullCompile(source: string, files: SourceSet, extraOffset?: number): HeapCheckpointArm[] {
     if (!this.enabled) return []
     const offsets: number[] = []
-    if (this.lastMain != null) {
+    if (extraOffset !== undefined) {
+      offsets.push(extraOffset)
+    } else if (this.lastMain != null) {
       const diff = firstDifference(this.lastMain, source)
       if (diff < source.length || this.lastMain !== source) offsets.push(diff)
     } else {
       offsets.push(source.length)
     }
-    if (extraOffset !== undefined) offsets.push(extraOffset)
     const arms: HeapCheckpointArm[] = []
     const seenLines = new Set<number>()
     for (const offset of offsets) {
@@ -272,6 +273,7 @@ export class HeapCheckpointCompiler {
     source: string,
     files: SourceSet,
     acceptInputs?: (paths: readonly string[]) => boolean,
+    extraOffset?: number,
   ): Promise<HeapResumeResult | null> {
     if (!this.enabled || this.lastMain == null) return null
     if (extractPreamble(this.lastMain)?.preamble !== extractPreamble(source)?.preamble) return null
@@ -279,7 +281,7 @@ export class HeapCheckpointCompiler {
     const checkpoint = this.findValid(source, files, diff, undefined, acceptInputs)
     if (!checkpoint) return null
     checkpoint.lastUsed = ++this.tick
-    const arms = this.armsForFullCompile(source, files)
+    const arms = this.armsForFullCompile(source, files, extraOffset)
     const result = await this.engine.compileFromHeapCheckpoint(checkpoint.id, arms)
     if (!result.pdf) {
       // The worker could not resume (crashed state, evicted): forget it, let the caller go full.

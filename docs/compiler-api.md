@@ -99,6 +99,14 @@ content-addressed cache.
 
 #### Incremental compilation
 
+`compile({ incrementalPreparation: { path, offset } })` and `compilePreview()`
+with the same option can prepare the expected cursor region during an
+already-needed heap compile or resume. The hint replaces default placement,
+so a one-checkpoint budget retains the requested region. It does not force a
+full pass or change output; invalid hints and unsupported engines keep their
+ordinary path. `offset` is a UTF-16 position in the named TeX file. Included-file
+hints retain the existing boundary-before-input mapping described below.
+
 With `incremental: true`, a body edit **after a page break** (`\clearpage`/`\newpage`) re-typesets only the *tail* of the document — booting the engine from a cached checkpoint at the latest page break before the change and splicing the new tail pages onto a cached head PDF. Latency depends on the document and checkpoint state; measure preparation and full/resumed compiles separately.
 
 Headless hosts that know the active cursor can move the first checkpoint-build cost to idle
