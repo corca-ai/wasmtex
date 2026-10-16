@@ -37,6 +37,46 @@ The built-in viewer paints all returned regions.
 | `SynctexData` / `SynctexNode` / `PdfLocation` / `SourceLocation` | Result/coordinate types. |
 | `TextMapperPage` / `TextMapperItem` | Minimal text extraction and coordinate conversion contract for any PDF renderer; no PDF.js dependency. |
 
+## Detailed queries and source filtering
+
+`inverseLookupDetailed(data, page, x, y, options?)` returns a plain record or
+`null`. `source` includes the normalized input file, 1-based line, and an optional
+positive engine column. `region` is the selected node's geometry; `container` is
+the local search box, or `null` for a page-wide fallback. `nodeType` identifies
+boxes, kerns and markers. `method` records the search route (`bracket`,
+`container`, `nearest-child` or `nearest-node`). The result contains no tree
+references and can be serialized.
+
+`distance` is the geometric L1 distance to `region`, in scale-one PDF points.
+`match` is `contains` when that distance is zero, otherwise `nearby`. These fields
+are not confidence scores. SyncTeX boxes can include whitespace, and glue/math
+markers have zero width. Hosts should combine these results with their renderer's
+text hit testing before treating a click as visible text. Signed kern regions span
+from the recorded after-move position back across the kern; parentless markers
+remain points.
+
+`forwardLookupDetailed(data, file, line, options?)` returns `source` with the actual
+matched file/line, `requestedLine`, `match` (`exact` or `nearby`), and `regions`.
+It preserves the earliest-page and disjoint-region behavior of `forwardLookupAll`,
+including the existing search within three lines of the request. This lets a host
+distinguish an exact source match from a neighboring-line approximation.
+
+Both detailed methods accept an optional pure `acceptSource(source)` predicate:
+
+```ts
+const match = parser.inverseLookupDetailed(data, page, x, y, {
+  acceptSource: ({ file, line }) => projectSources.has(file) && line > 0,
+})
+```
+
+Rejected sources are never returned. A filter can cause inverse search to choose
+a more distant accepted source, or return `null` if none is available. Forward
+filtering evaluates the actual candidate line during the existing nearby-line
+search. Hosts remain responsible for matching engine paths to project files and
+checking source bounds against the compiled source snapshot. Without a filter,
+the selected results are unchanged. The legacy methods retain their return shapes;
+`inverseLookup` continues to return only `{ file, line }`.
+
 ## Text matching fallback
 
 `TextMapper` takes no constructor arguments and does not consume `SynctexData`.

@@ -20,6 +20,13 @@
 // Re-export SourceLocation so consumers can import from either module
 export type { PdfLocation, SourceLocation } from './text-mapper'
 
+import {
+  describeSynctexInverseMatch,
+  type SynctexForwardMatch,
+  type SynctexInverseMatch,
+  type SynctexLookupOptions,
+  synctexSourceLocation,
+} from './synctex-query-result'
 import type { PdfLocation, SourceLocation } from './text-mapper'
 
 export interface SynctexNode {
@@ -508,10 +515,24 @@ export class SynctexParser {
    * 4. Pick the best based on line number and distance
    * 5. Fallback: closest deep child using L1 distance
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: faithful port of reference algorithm
   inverseLookup(data: SynctexData, page: number, x: number, y: number): SourceLocation | null {
+    const match = this.inverseLookupDetailed(data, page, x, y)
+    return match ? { file: match.source.file, line: match.source.line } : null
+  }
+
+  /** Reference lookup with the selected node, geometry and search provenance. */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: faithful port of reference algorithm
+  inverseLookupDetailed(
+    data: SynctexData,
+    page: number,
+    x: number,
+    y: number,
+    options?: SynctexLookupOptions,
+  ): SynctexInverseMatch | null {
     const nodes = data.pages.get(page)
     if (!nodes || nodes.length === 0) return null
+    const accepts = (node: SynctexNode) =>
+      options?.acceptSource?.(synctexSourceLocation(data, node)) ?? true
 
     // Step 1: Find smallest containing hbox (scan ALL hboxes on page via flat list)
     // Reference: browse next_hbox linked list
@@ -548,16 +569,19 @@ export class SynctexParser {
       // Step 4: Pick best result (reference lines 7338-7377). Guard line:0 like Steps 5/6 —
       // L/R children are often glue/kern leaves tagged line 0 (not a real source location).
       const target = this.pickBestLR(l, r, x, y)
-      if (target && target.line > 0) {
-        const filename = data.inputs.get(target.input) ?? ''
-        return { file: filename, line: target.line }
+      // With a host filter, consider the other bracket before falling back to
+      // the containing box. Without one, preserve the reference choice exactly.
+      const bracket = options?.acceptSource ? new Set([target, l, r]) : [target]
+      for (const candidate of bracket) {
+        if (candidate && candidate.line > 0 && accepts(candidate)) {
+          return describeSynctexInverseMatch(data, candidate, x, y, 'bracket', container)
+        }
       }
 
       // Container itself as fallback (only if it maps to a real source line). If neither the
       // L/R pick nor the container has line>0, fall through to Steps 5/6, which skip line 0.
-      if (container.line > 0) {
-        const filename = data.inputs.get(container.input) ?? ''
-        return { file: filename, line: container.line }
+      if (container.line > 0 && accepts(container)) {
+        return describeSynctexInverseMatch(data, container, x, y, 'container', container)
       }
     }
 
@@ -573,7 +597,7 @@ export class SynctexParser {
         if (!cand) continue
         // A line-0 candidate is not a real source location (Step 6 and the friend
         // index both exclude it); skip so we fall through to Step 6 instead.
-        if (cand.line === 0) continue
+        if (cand.line === 0 || !accepts(cand)) continue
         const d = pointNodeDistance(x, y, cand)
         if (d < bestDist) {
           bestDist = d
@@ -581,8 +605,7 @@ export class SynctexParser {
         }
       }
       if (best) {
-        const filename = data.inputs.get(best.input) ?? ''
-        return { file: filename, line: best.line }
+        return describeSynctexInverseMatch(data, best, x, y, 'nearest-child')
       }
     }
 
@@ -590,7 +613,7 @@ export class SynctexParser {
     let bestNode: SynctexNode | null = null
     let bestDist = Infinity
     for (const node of nodes) {
-      if (node.line === 0) continue
+      if (node.line === 0 || !accepts(node)) continue
       const dist = pointNodeDistance(x, y, node)
       if (dist < bestDist) {
         bestDist = dist
@@ -598,8 +621,7 @@ export class SynctexParser {
       }
     }
     if (!bestNode) return null
-    const filename = data.inputs.get(bestNode.input) ?? ''
-    return { file: filename, line: bestNode.line }
+    return describeSynctexInverseMatch(data, bestNode, x, y, 'nearest-node')
   }
 
   /**
@@ -625,8 +647,18 @@ export class SynctexParser {
    * 4. For each line: non-box nodes first (reference: exclude_box=YES),
    *    then include boxes as fallback
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: nearest-line zigzag with two-pass search
   forwardLookupAll(data: SynctexData, file: string, line: number): PdfLocation[] {
+    return this.forwardLookupDetailed(data, file, line)?.regions ?? []
+  }
+
+  /** Reports the actual matched line while preserving the display query's regions. */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: nearest-line zigzag with two-pass search
+  forwardLookupDetailed(
+    data: SynctexData,
+    file: string,
+    line: number,
+    options?: SynctexLookupOptions,
+  ): SynctexForwardMatch | null {
     // Find input tag for this file. Prefer an EXACT name match over a basename/suffix
     // match: with two files sharing a basename (chapters/intro.tex, intro.tex), a bare
     // `intro.tex` query must bind to the exact input, not whichever suffix-matches first.
@@ -645,7 +677,8 @@ export class SynctexParser {
         }
       }
     }
-    if (inputTag === -1) return []
+    if (inputTag === -1) return null
+    const sourceFile = data.inputs.get(inputTag) ?? file
 
     // Nearest-line zigzag (reference: synctex_iterator_new_display lines 7510-7572)
     // Tries: line, line+1, line-1, line+2, line-2, ...
@@ -657,8 +690,18 @@ export class SynctexParser {
     for (let tries = 0; tries < 100; tries++) {
       if (Math.abs(currentLine - line) > MAX_ZIGZAG_DISTANCE) break
       if (currentLine > 0) {
-        const results = this.forwardForLine(data, inputTag, currentLine)
-        if (results.length > 0) return results
+        const source = { file: sourceFile, line: currentLine }
+        if (options?.acceptSource?.(source) ?? true) {
+          const regions = this.forwardForLine(data, inputTag, currentLine)
+          if (regions.length > 0) {
+            return {
+              source,
+              requestedLine: line,
+              match: currentLine === line ? 'exact' : 'nearby',
+              regions,
+            }
+          }
+        }
       }
       currentLine += lineOffset
       lineOffset = lineOffset < 0 ? -(lineOffset - 1) : -(lineOffset + 1)
@@ -668,7 +711,7 @@ export class SynctexParser {
         lineOffset = lineOffset < 0 ? -(lineOffset - 1) : -(lineOffset + 1)
       }
     }
-    return []
+    return null
   }
 
   /** Forward search for a specific line. Two-pass: non-box first, then all. */

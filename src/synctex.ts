@@ -6,6 +6,12 @@
 export type { SynctexData, SynctexNode } from './synctex/synctex-parser'
 export { normalizeSynctexInputName, SynctexParser } from './synctex/synctex-parser'
 export type {
+  SynctexForwardMatch,
+  SynctexInverseMatch,
+  SynctexLookupOptions,
+  SynctexSourceLocation,
+} from './synctex/synctex-query-result'
+export type {
   PdfLocation,
   SourceLocation,
   TextMapperItem,

@@ -1,3 +1,4 @@
+import { SynctexForwardMatch, SynctexInverseMatch, SynctexLookupOptions } from './synctex-query-result.js';
 import { PdfLocation, SourceLocation } from './text-mapper.js';
 /**
  * SyncTeX file parser for PDF↔source bidirectional navigation.
@@ -83,6 +84,8 @@ export declare class SynctexParser {
      * 5. Fallback: closest deep child using L1 distance
      */
     inverseLookup(data: SynctexData, page: number, x: number, y: number): SourceLocation | null;
+    /** Reference lookup with the selected node, geometry and search provenance. */
+    inverseLookupDetailed(data: SynctexData, page: number, x: number, y: number, options?: SynctexLookupOptions): SynctexInverseMatch | null;
     /**
      * Forward search: source line → primary PDF region.
      *
@@ -104,6 +107,8 @@ export declare class SynctexParser {
      *    then include boxes as fallback
      */
     forwardLookupAll(data: SynctexData, file: string, line: number): PdfLocation[];
+    /** Reports the actual matched line while preserving the display query's regions. */
+    forwardLookupDetailed(data: SynctexData, file: string, line: number, options?: SynctexLookupOptions): SynctexForwardMatch | null;
     /** Forward search for a specific line. Two-pass: non-box first, then all. */
     private forwardForLine;
     /**
