@@ -234,3 +234,20 @@ A second visible paragraph.
   ])
   expect(blocks.map(({ text }) => text).join('|')).toContain('the first visible paragraph.')
 })
+
+it('confines opaque drawing commands to their environment before a float caption', () => {
+  const content = String.raw`\begin{document}
+\begin{figure}
+\begin{tikzpicture}
+\draw[->] (0,0) -- (2,0);
+\end{tikzpicture}
+\caption{A \textbf{distinct} caption.}
+\end{figure}
+\end{document}`
+  expect(project(content).blocks).toContainEqual(
+    expect.objectContaining({
+      kind: 'caption',
+      text: 'a distinct caption.',
+    }),
+  )
+})

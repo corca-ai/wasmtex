@@ -158,6 +158,16 @@ function extraKind(name: string): ProseDomain['kind'] | null {
   return name === 'caption' ? 'caption' : null
 }
 
+function knownProseCommand(name: string) {
+  return (
+    extraKind(name) ||
+    PROSE_WRAPPERS.has(name) ||
+    PROSE_SWITCHES.has(name) ||
+    SPACES.has(name) ||
+    SYMBOLS.has(name)
+  )
+}
+
 function trailingGroupsEnd(source: string, offset: number) {
   let end = offset
   for (let count = 0; count < 8; count++) {
@@ -171,32 +181,51 @@ function trailingGroupsEnd(source: string, offset: number) {
   return end
 }
 
+function environmentEnds(tokens: readonly Token[], syntax: LatexFileSyntax) {
+  const scopes = syntax.scopes
+    .filter(({ kind }) => kind === 'environment')
+    .sort(
+      (a, b) => a.range.startOffset - b.range.startOffset || b.range.endOffset - a.range.endOffset,
+    )
+  const stack: typeof scopes = []
+  const ends = new Map<number, number>()
+  let index = 0
+  for (const token of tokens) {
+    while (index < scopes.length && scopes[index]!.range.startOffset <= token.start) {
+      const scope = scopes[index++]!
+      while (stack.length && stack.at(-1)!.range.endOffset <= scope.range.startOffset) stack.pop()
+      stack.push(scope)
+    }
+    while (stack.length && stack.at(-1)!.range.endOffset <= token.start) stack.pop()
+    if (token.type === 'command' && stack.length)
+      ends.set(token.start, stack.at(-1)!.range.endOffset)
+  }
+  return ends
+}
+
 function opaqueArguments(
   source: string,
   tokens: readonly Token[],
   overridden: ReadonlySet<string>,
   masked: VisibleSourceRanges,
+  syntax: LatexFileSyntax,
 ) {
   const ranges: LatexSyntaxRange[] = []
   const parents = enclosingEnds(tokens)
+  const environments = environmentEnds(tokens, syntax)
   for (const token of tokens) {
     if (token.type !== 'command' || masked.intersects(token.start, token.end)) continue
-    if (
-      !overridden.has(token.value) &&
-      (extraKind(token.value) ||
-        PROSE_WRAPPERS.has(token.value) ||
-        PROSE_SWITCHES.has(token.value) ||
-        SPACES.has(token.value) ||
-        SYMBOLS.has(token.value))
-    )
-      continue
+    if (!overridden.has(token.value) && knownProseCommand(token.value)) continue
     const value = firstRequired(source, token)
     const paragraphEnd = source.indexOf('\n\n', token.end)
     const end =
       value && HIDDEN_ARGUMENTS.has(token.value) && !overridden.has(token.value)
         ? trailingGroupsEnd(source, value.invocationEnd)
         : (parents.get(token.start) ?? (paragraphEnd === -1 ? source.length : paragraphEnd))
-    ranges.push({ startOffset: token.end, endOffset: end })
+    ranges.push({
+      startOffset: token.end,
+      endOffset: Math.min(end, environments.get(token.start) ?? end),
+    })
   }
   return new VisibleSourceRanges(ranges)
 }
@@ -208,7 +237,7 @@ function extraDomains(
   overridden: ReadonlySet<string>,
   masked: VisibleSourceRanges,
 ) {
-  const opaque = opaqueArguments(source, tokens, overridden, masked)
+  const opaque = opaqueArguments(source, tokens, overridden, masked, syntax)
   const annotations = new Map(
     syntax.proseAnnotations
       .filter((item) => item.kind === 'document-field' && item.state === 'complete')
