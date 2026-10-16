@@ -18,3 +18,17 @@ export type {
   TextMapperPage,
 } from './synctex/text-mapper'
 export { TextMapper } from './synctex/text-mapper'
+export type { VisibleTextQueryOptions } from './synctex/visible-text-catalog'
+export type {
+  VisibleTextIndexResult,
+  VisibleTextPdfMatch,
+  VisibleTextPdfPage,
+  VisibleTextSourceMatch,
+} from './synctex/visible-text-index'
+export { VisibleTextIndex } from './synctex/visible-text-index'
+export type { NormalizedVisibleText } from './synctex/visible-text-normalize'
+export type {
+  VisibleTextSourceBlock,
+  VisibleTextSourceProjection,
+} from './synctex/visible-text-source'
+export { projectVisibleTextSource } from './synctex/visible-text-source'

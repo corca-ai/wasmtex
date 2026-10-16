@@ -96,3 +96,63 @@ Pages and source lines are 1-based. Lookup coordinates are at scale one with a
 top-left origin; undo viewer zoom before passing a click. Text matching is
 approximate and does not reliably locate math, tables or figures. Replace sources
 with `setSources()` after file removal/rename to avoid matching stale paths.
+
+## Source-preserving text candidates
+
+`VisibleTextIndex` is an opt-in alternative to `TextMapper`. Build a projection
+from the exact source and its existing schema-8 syntax snapshot, then register
+renderer text with original UTF-16 extraction offsets:
+
+```ts
+import { projectVisibleTextSource, VisibleTextIndex } from 'wasmtex/synctex'
+
+const index = new VisibleTextIndex()
+index.setSources([projectVisibleTextSource(compiledSource, compiledSyntax)])
+index.setPage({
+  page: 1,
+  text: extractedText,
+  rangeRects: (start, end) => rendererRangeRects(start, end),
+})
+const sources = index.findSources('Introduction to Linear Algebra')
+const fragments = index.sourceFragments(compiledSyntax.fileId, compiledCaretOffset)
+const regions = fragments.flatMap(({ text }) => index.findPdf(text).candidates)
+```
+
+The host owns compilation identity, source/SyncTeX validation and candidate
+selection. Replacing sources retires old paths; clear pages when the displayed
+compile changes. PDF coordinates use the same scale-one, top-left convention as
+`TextMapper`. The adapter returns separate line/run rectangles rather than a
+single bounding rectangle spanning columns. A callback must remain usable while
+its page is indexed; release renderer leases after clearing/replacing that page.
+
+Source candidates carry file identity/path/version, original UTF-16 range,
+1-based line/column, neutral structural range and block kind. Projection retains
+common formatting arguments, metadata, headings, captions and footnotes, plus
+Unicode compatibility/ligature and whitespace normalization. Unknown grammars,
+math and verbatim stay opaque. Arbitrary TeX macros are never executed. A
+projection describes potential visible source text; it does not prove that a
+metadata declaration or conditional branch was printed.
+
+Both directions return all admitted matches, including repeated occurrences.
+A substring is a partial-block match; the index does not choose the first
+occurrence. Optional `contextBefore`/`contextAfter` expose matching character
+counts (up to 128), not probabilities. Queries shorter than four normalized
+UTF-16 units return no candidates. Hosts should additionally require sufficient
+phrase length, uniqueness or structural/SyncTeX evidence before navigating.
+
+PDF line-end hyphens are retained while joining the following line. Optional
+`findPdf(text, { dehyphenate: true })` tries removing them only when there is no
+literal match; candidates label this route `dehyphenated`. Source and PDF offsets
+always address the original strings, including removed hyphens and style braces.
+
+Preparation is bounded: source projection defaults to one million source units,
+100,000 tokens, 4,096 syntax blocks and 2,048 special fields. The index retains at
+most eight recently registered PDF pages, 250,000 extraction units per page and
+2 million normalized units / 8,192 entries per catalog. Trigram dictionaries and
+postings are capped at 32,768 and 200,000. Queries use a prebuilt trigram bucket,
+inspect at most 256 entries and return at most 32 matches by default (configurable
+up to 64). `truncated` means admission/search was incomplete; never interpret a
+single returned candidate as proof of uniqueness then. Page eviction bounds the
+search to registered pages, so even a complete result does not establish
+uniqueness across an unindexed PDF. Preparation belongs at snapshot/page changes,
+not in every caret callback; query text is capped at 512 normalized units.

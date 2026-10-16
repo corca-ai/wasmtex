@@ -3,3 +3,9 @@ export { normalizeSynctexInputName, SynctexParser } from './synctex/synctex-pars
 export type { SynctexForwardMatch, SynctexInverseMatch, SynctexLookupOptions, SynctexSourceLocation, } from './synctex/synctex-query-result.js';
 export type { PdfLocation, SourceLocation, TextMapperItem, TextMapperPage, } from './synctex/text-mapper.js';
 export { TextMapper } from './synctex/text-mapper.js';
+export type { VisibleTextQueryOptions } from './synctex/visible-text-catalog.js';
+export type { VisibleTextIndexResult, VisibleTextPdfMatch, VisibleTextPdfPage, VisibleTextSourceMatch, } from './synctex/visible-text-index.js';
+export { VisibleTextIndex } from './synctex/visible-text-index.js';
+export type { NormalizedVisibleText } from './synctex/visible-text-normalize.js';
+export type { VisibleTextSourceBlock, VisibleTextSourceProjection, } from './synctex/visible-text-source.js';
+export { projectVisibleTextSource } from './synctex/visible-text-source.js';
