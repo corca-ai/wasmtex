@@ -214,3 +214,23 @@ it('consumes grammar-permitted spaces before linebreak stars and optional spacin
     expect(content.slice(block.starts[offset], block.ends[offset + 3])).toBe('Beta')
   }
 })
+
+it('retains headings and prose after standard title/page output commands', () => {
+  const content = String.raw`\documentclass{article}
+\title{Document title}
+\begin{document}
+\maketitle
+\section{A \emph{structured} introduction}
+The first visible paragraph.
+
+\newpage
+\section{A separate page}
+A second visible paragraph.
+\end{document}`
+  const blocks = project(content).blocks
+  expect(blocks.filter(({ kind }) => kind === 'heading').map(({ text }) => text)).toEqual([
+    'a structured introduction',
+    'a separate page',
+  ])
+  expect(blocks.map(({ text }) => text).join('|')).toContain('the first visible paragraph.')
+})
