@@ -15,7 +15,7 @@ registerHooks({
 
 const { WasmTexCompiler, BackendRegistry } = await import('wasmtex/headless')
 const { installNodeWorkerHost } = await import('wasmtex/node')
-const { SynctexParser, normalizeSynctexInputName } = await import('wasmtex/synctex')
+const { SynctexParser, normalizeSynctexInputName, VisibleTextIndex, projectVisibleTextSource } = await import('wasmtex/synctex')
 const { warmup } = await import('wasmtex/warmup')
 const { createLatexLanguageService } = await import('wasmtex/lsp')
 const { LatexLspServer } = await import('wasmtex/lsp/server')
@@ -41,3 +41,9 @@ await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })
 assert.equal(replies[0].id, 1)
 assert.equal(replies[0].result.capabilities.textDocumentSync, 1)
 console.log('consumer runtime: seven neutral entry points import without UI/PDF peers')
+
+const text = String.raw`\title{An \emph{Introduction} to Algebra}`
+const syntax = createLatexSyntaxService().upsert({fileId: 'main', path: 'main.tex', content: text, documentVersion: 1})
+const navigation = new VisibleTextIndex()
+navigation.setSources([projectVisibleTextSource(text, syntax)])
+assert.equal(navigation.findSources('Introduction to Algebra').candidates[0]?.column, 17)

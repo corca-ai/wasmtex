@@ -1,7 +1,7 @@
 import { WasmTex, type WasmTexOptions, type CompileResult } from 'wasmtex'
 import { WasmTexCompiler, BackendRegistry, type WasmTexCompilerOptions } from 'wasmtex/headless'
 import { installNodeWorkerHost, type NodeWorkerHostOptions } from 'wasmtex/node'
-import { SynctexParser, type SynctexData } from 'wasmtex/synctex'
+import { SynctexParser, VisibleTextIndex, projectVisibleTextSource, type SynctexData, type VisibleTextSourceProjection, type VisibleTextSourceMatch, type VisibleTextPdfPage } from 'wasmtex/synctex'
 import { warmup, type WarmupOptions } from 'wasmtex/warmup'
 import { createLatexLanguageService, type LatexLanguageServiceOptions } from 'wasmtex/lsp'
 import { registerLatexMonacoProviders, type LatexMonacoProviderOptions } from 'wasmtex/lsp/monaco'
@@ -14,6 +14,8 @@ export const publicValues = {
   BackendRegistry,
   installNodeWorkerHost,
   SynctexParser,
+  VisibleTextIndex,
+  projectVisibleTextSource,
   warmup,
   createLatexLanguageService,
   registerLatexMonacoProviders,
@@ -26,6 +28,9 @@ export type PublicTypes = [
   WasmTexCompilerOptions,
   NodeWorkerHostOptions,
   SynctexData,
+  VisibleTextSourceProjection,
+  VisibleTextSourceMatch,
+  VisibleTextPdfPage,
   WarmupOptions,
   LatexLanguageServiceOptions,
   LatexMonacoProviderOptions,
@@ -41,3 +46,9 @@ export const options: WasmTexCompilerOptions = {
 // A declaration graph that degenerates to `any` must not pass this consumer.
 // @ts-expect-error only supported engine names are accepted
 export const invalid: WasmTexCompilerOptions = { engine: 'unsupported-engine' }
+
+const navigation = new VisibleTextIndex()
+navigation.setPage({ page: 1, text: 'Linear Algebra', rangeRects: () => [] })
+export const sourceCandidates: readonly VisibleTextSourceMatch[] = navigation.findSources('Linear Algebra').candidates
+// @ts-expect-error renderer adapters must provide geometry as separate typed regions
+navigation.setPage({ page: 1, text: 'Linear Algebra', rangeRects: () => 'invalid' })
