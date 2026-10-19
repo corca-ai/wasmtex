@@ -6,7 +6,7 @@ XeLaTeX and LuaLaTeX in browser workers or on Node. The built-in `WasmTex` compo
 provides a pdfLaTeX editor and PDF.js preview. TeX Live packages load on demand;
 engine assets are [hosted separately](docs/assets.md).
 
-**[Live Demo](https://corca-ai.github.io/wasmtex/)**
+**[Live Demo](https://cortex.corca.ai/try)**
 
 ## Quick Start
 
