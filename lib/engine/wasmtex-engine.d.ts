@@ -110,6 +110,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private bloomFilter;
     /** Main file name, tracked for source-based dependency extraction. */
     private mainFileName;
+    private fileCheckpointsSupported;
     private heapCheckpointsSupported;
     private lineCheckpointsSupported;
     private pagePreviewSupported;
@@ -184,6 +185,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     get supportsLineCheckpoints(): boolean;
     /** True once the worker reported the Asyncify build (see the `heapCheckpoints` option). */
     get supportsHeapCheckpoints(): boolean;
+    get supportsFileCheckpoints(): boolean;
     get supportsSharedCheckpoints(): boolean;
     setCheckpointBudget(maxCount: number, maxBytes: number): void;
     /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
@@ -192,6 +194,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
         checkpoints?: Array<{
             id: string;
             line: number;
+            path?: string;
         }>;
     }): Promise<CompileResult>;
     /** Resume a compile from a checkpoint taken earlier (#81): the worker restores that
@@ -202,6 +205,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     compileFromHeapCheckpoint(id: string, checkpoints?: Array<{
         id: string;
         line: number;
+        path?: string;
     }>): Promise<CompileResult>;
     /** Disposable PDF prefix; auxiliary files are restored by the worker. */
     compilePagePreview(pageLimit: number, checkpointId?: string): Promise<CompileResult | null>;

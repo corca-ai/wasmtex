@@ -291,3 +291,72 @@ it.each([
   expect(hc.held).toEqual([])
   expect(await hc.tryResume(source, new Map([['config.tex', 'CHANGED']]))).toBeNull()
 })
+
+it('retains a chapter-local checkpoint only while its consumed prefix and other inputs match', () => {
+  const engine = new FakeEngine()
+  const hc = new HeapCheckpointCompiler(engine, { mainFile: 'main.tex', minHeadBytes: 0 })
+  const main = '\\documentclass{book}\n\\begin{document}\n\\input{chapter}\n\\end{document}\n'
+  const chapter = 'First paragraph.\n\nSecond paragraph.\n'
+  const files = new Map([
+    ['main.tex', main],
+    ['chapter.tex', chapter],
+  ])
+  hc.noteFull(main, files, {
+    success: true,
+    pdf: new Uint8Array([1]),
+    log: '',
+    errors: [],
+    compileTime: 1,
+    synctex: null,
+    heapCheckpoints: [
+      {
+        id: 'inside',
+        path: 'chapter.tex',
+        line: 3,
+        bytes: 100,
+        ms: 1,
+        inputs: ['/work/main.tex', '/work/chapter.tex'],
+        inputsComplete: true,
+        prefixSafe: true,
+      },
+    ],
+  })
+  files.set('chapter.tex', chapter.replace('Second', 'Edited'))
+  hc.invalidateFile('chapter.tex', files.get('chapter.tex'))
+  expect(hc.previewCheckpoint(main, files)).toBe('inside')
+  expect(hc.previewCheckpointForEdit(main, files, 'main.tex', 0)).toBeUndefined()
+  expect(hc.previewCheckpointForEdit(main, files, 'main.tex', main.length)).toBeUndefined()
+  expect(hc.previewCheckpointForEdit(main, files, 'chapter.tex', 1)).toBeUndefined()
+  expect(hc.previewCheckpoint(main.replace('book', 'memoir'), files)).toBeUndefined()
+  files.set('chapter.tex', chapter.replace('First', 'Other'))
+  hc.invalidateFile('chapter.tex', files.get('chapter.tex'))
+  expect(hc.previewCheckpoint(main, files)).toBeUndefined()
+})
+
+it('arms a secondary paragraph only on capable workers and keeps main-line arms separate', () => {
+  const engine = new FakeEngine()
+  const main = '\\documentclass{book}\n\\begin{document}\n\\input{chapter}\n\\end{document}\n'
+  const chapter = 'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n'
+  const files = new Map([
+    ['main.tex', main],
+    ['chapter.tex', chapter],
+  ])
+  const hint = { path: 'chapter.tex', offset: chapter.indexOf('Third') }
+  const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0 })
+  expect(
+    hc.armsForFullCompile(main, files, main.indexOf('input'), hint).some((cp) => cp.path),
+  ).toBe(false)
+  const capable = Object.assign(engine, { supportsFileCheckpoints: true })
+  expect(
+    new HeapCheckpointCompiler(capable, { maxCheckpoints: 0 }).armsForFullCompile(
+      main,
+      files,
+      main.indexOf('input'),
+      hint,
+    ),
+  ).toEqual([])
+  const next = new HeapCheckpointCompiler(capable, { minHeadBytes: 0 })
+  const arms = next.armsForFullCompile(main, files, main.indexOf('input'), hint)
+  expect(arms.some((cp) => cp.path === 'chapter.tex' && cp.line === 3)).toBe(true)
+  expect(arms.some((cp) => cp.path === undefined)).toBe(true)
+})

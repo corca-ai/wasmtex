@@ -90,7 +90,7 @@ Module["preRun"] = function() {
 // the host that the engine is ready.
 Module["postRun"] = function() {
     if (hcSupported()) hcEnsureDataBuffer();
-    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
+    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
@@ -1817,21 +1817,28 @@ function hcArm(checkpoints, transform) {
     self._hc.taken = [];
     self._hc.transform = transform || null;
     self._hc.readInputs = {};
+    self._hc.readExtents = {};
     if (!checkpoints || !checkpoints.length || !hcSupported()) return;
     hcInstallReadHook();
     hcEnsureDataBuffer();
-    var path = WORKROOT + "/" + self.mainfile;
-    var text = FS.readFile(path, { encoding: "utf8" });
-    var node = FS.lookupPath(path).node;
-    var seen = {};
+    var seen = {}, armed = [], sources = {};
     for (var i = 0; i < checkpoints.length; i++) {
         var cp = checkpoints[i];
+        var relative = cp.path === undefined ? self.mainfile : cp.path;
+        if (typeof relative !== "string" || relative[0] === "/" || relative.split("/").some(function(p) { return !p || p === "." || p === ".."; })) continue;
+        var path = WORKROOT + "/" + relative;
+        var text, node;
+        try {
+            if (!sources[path]) sources[path] = { text: FS.readFile(path, { encoding: "utf8" }), node: FS.lookupPath(path).node };
+            text = sources[path].text; node = sources[path].node;
+        } catch(e) { continue; }
         var offset = hcLineOffset(text, cp.line);
-        if (offset < 0 || seen[offset]) continue;
-        seen[offset] = true;
-        self._hc.armed.push({ id: cp.id, line: cp.line, offset: offset, node: node });
+        var key = path + ":" + offset;
+        if (offset < 0 || seen[key]) continue;
+        seen[key] = true;
+        armed.push({ id: cp.id, line: cp.line, path: relative, offset: offset, node: node });
     }
-    self._hc.armed.sort(function(a, b) { return a.offset - b.offset; });
+    self._hc.armed = armed.sort(function(a, b) { return a.offset - b.offset; });
 }
 
 function hcDisarm() {
@@ -1857,8 +1864,9 @@ function hcInstallReadHook() {
         }
         var armed = self._hc.armed;
         var pos = (typeof position === "undefined") ? stream.position : position;
-        while (armed.length && stream.node === armed[0].node) {
-            var cp = armed[0];
+        var armIndex;
+        while ((armIndex = armed.findIndex(function(cp) { return cp.node === stream.node; })) >= 0) {
+            var cp = armed[armIndex];
             if (pos < cp.offset && pos + length > cp.offset) {
                 length = cp.offset - pos;              // stop exactly at the checkpoint
                 break;
@@ -1869,16 +1877,21 @@ function hcInstallReadHook() {
                 }
                 if (Asyncify.state === Asyncify.State.Rewinding) {
                     Asyncify.handleSleep(function() {}); // completes the rewind
-                    armed.shift();                       // this checkpoint is done
+                    armed.splice(armIndex, 1);            // this checkpoint is done
                     continue;                           // also bound this read by the next one
                 }
             } else if (pos > cp.offset) {
-                armed.shift();                           // already past it; cannot stop there
+                armed.splice(armIndex, 1);                // already past it; cannot stop there
                 continue;
             }
             break;
         }
-        return origRead.call(FS, stream, buffer, offset, length, position);
+        var count = origRead.call(FS, stream, buffer, offset, length, position);
+        if (self._hc.trackingInputs && self._hc.readExtents && count > 0) {
+            var path = FS.getPath(stream.node);
+            self._hc.readExtents[path] = Math.max(self._hc.readExtents[path] || 0, pos + count);
+        }
+        return count;
     };
 }
 
@@ -1976,6 +1989,18 @@ function hcRestoreFS(snap) {
     for (var k = 0; k < placeholders.length; k++) { try { FS.close(placeholders[k]); } catch(e) {} }
 }
 
+// A secondary source can be resumed only before bytes any earlier read consumed.
+// Resolve preamble aliases through MEMFS too: recorder spelling is not identity.
+function hcPrefixSafe(cp) {
+    if (!self._hc.readExtents || (self._hc.readExtents[WORKROOT + "/" + cp.path] || 0) > cp.offset) return false;
+    if (!self._hc.transform || !self._hc.transform.usedPreamble) return true;
+    if (!self._preambleInputFiles) return false;
+    return !self._preambleInputFiles.some(function(path) {
+        if (path === WORKROOT + "/" + cp.path) return true;
+        try { return FS.lookupPath(path).node === cp.node; } catch(e) { return true; }
+    });
+}
+
 function hcTakeSnapshot(cp) {
     var t0 = performance.now();
     var image = hcSparseImage();
@@ -1986,7 +2011,9 @@ function hcTakeSnapshot(cp) {
         inputs = mergeRecorderInputs(self._preambleInputFiles, inputs);
     }
     var snap = {
-        id: cp.id, line: cp.line, offset: cp.offset,
+        id: cp.id, line: cp.line, offset: cp.offset, path: cp.path,
+        readExtents: Object.assign({}, self._hc.readExtents),
+        prefixSafe: hcPrefixSafe(cp),
         image: image, currData: Asyncify.currData, sp: stackSave(),
         fs: hcSnapshotFS(), memlog: self.memlog,
         transform: self._hc.transform, inputs: inputs, inputsComplete: inputs !== null,
@@ -2056,7 +2083,7 @@ async function hcContinueWhileSuspended(status) {
         self._hc.checkpoints[snap.id] = snap;
         self._hc.lastCheckpointId = snap.id;
         hcEnforceBudget();
-        self._hc.taken.push({ id: snap.id, line: snap.line, bytes: snap.bytes, ms: Math.round(snap.ms), inputs: snap.inputs, inputsComplete: snap.inputsComplete });
+        self._hc.taken.push({ id: snap.id, line: snap.line, path: snap.path === self.mainfile ? undefined : snap.path, prefixSafe: snap.prefixSafe, bytes: snap.bytes, ms: Math.round(snap.ms), inputs: snap.inputs, inputsComplete: snap.inputsComplete });
         if (!done) done = Asyncify.whenDone();
         try {
             pending.wakeUp(0);
@@ -2120,8 +2147,10 @@ async function compileFromHeapCheckpointRoutine(data) {
     hcArm(data["checkpoints"], snap.transform);
     (snap.inputs || []).forEach(function(path) { self._hc.readInputs[path] = true; });
     // Arms at or before the resume point can never be reached again.
-    while (self._hc.armed.length && self._hc.armed[0].offset <= snap.offset) self._hc.armed.shift();
-    self._hc.resuming = { node: FS.lookupPath(WORKROOT + "/" + self.mainfile).node };
+    var resumePath = snap.path || self.mainfile;
+    self._hc.readExtents = Object.assign({}, snap.readExtents);
+    self._hc.armed = self._hc.armed.filter(function(cp) { return cp.path !== resumePath || cp.offset > snap.offset; });
+    self._hc.resuming = { node: FS.lookupPath(WORKROOT + "/" + resumePath).node };
     var texStart = performance.now();
     var status;
     self._hc.trackingInputs = true;

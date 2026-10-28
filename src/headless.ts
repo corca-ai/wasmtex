@@ -1035,12 +1035,13 @@ export class WasmTexCompiler {
   /** Checkpoint arms for the full compile about to run (none without the heap engine). */
   private heapArms(
     hint?: CompileOptions['incrementalPreparation'],
-  ): { checkpoints?: Array<{ id: string; line: number }> } | undefined {
+  ): { checkpoints?: Array<{ id: string; line: number; path?: string }> } | undefined {
     if (!this.heap?.enabled) return undefined
     const arms = this.heap.armsForFullCompile(
       this.mainSource(),
       this.projectTexFiles(),
       hint ? this.heapPreparationOffset(hint.path, hint.offset) : undefined,
+      hint,
     )
     return arms.length ? { checkpoints: arms } : undefined
   }
@@ -1058,6 +1059,7 @@ export class WasmTexCompiler {
           this.projectTexFiles(),
           externalization ? (paths) => this.acceptTikzCheckpointInputs(paths) : undefined,
           hint ? this.heapPreparationOffset(hint.path, hint.offset) : undefined,
+          hint,
         ),
       )
     ).resume()
@@ -1139,7 +1141,7 @@ export class WasmTexCompiler {
     // New workers include preamble reads in checkpoint evidence. Retain only
     // checkpoints that prove this secondary source had not been read yet.
     if (path !== this.mainFile && path.endsWith('.tex')) {
-      if (existed) this.heap?.invalidateFile(path)
+      if (existed) this.heap?.invalidateFile(path, content)
       else this.heap?.reset() // A new file can change an earlier negative lookup.
       // Only a retained checkpoint with complete unread-input proof can carry a
       // secondary-source preview. Never fall back to the unchecked full prefix.

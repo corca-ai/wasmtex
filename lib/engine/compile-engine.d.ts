@@ -11,6 +11,7 @@ export interface CompileEngine {
         checkpoints?: Array<{
             id: string;
             line: number;
+            path?: string;
         }>;
     }): Promise<CompileResult>;
     writeFile(path: string, content: string | Uint8Array): Promise<void>;

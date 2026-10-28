@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 
 // Execute authored checkpoint capture against observed filesystem reads. Memory/stream
 // capture is independent of the dependency evidence tested here.
-function capture(usedPreamble: boolean, preamble: string[] | null, body: string | null) {
+function capture(
+  usedPreamble: boolean,
+  preamble: string[] | null,
+  body: string | null,
+  consumed?: number,
+) {
   let removed = false
   const scope = createContext({
     performance,
@@ -41,8 +46,12 @@ function capture(usedPreamble: boolean, preamble: string[] | null, body: string 
               .map((line) => [line.slice(6), true]),
           ),
   }
+  if (consumed !== undefined) scope._hc.readExtents = { '/work/chapter.tex': consumed }
   scope._preambleInputFiles = preamble
-  const snapshot = runInContext('hcTakeSnapshot({id: "cp", line: 5, offset: 100})', scope)
+  const snapshot = runInContext(
+    'hcTakeSnapshot({id: "cp", path: "chapter.tex", line: 5, offset: 100})',
+    scope,
+  )
   expect(removed).toBe(false) // The live recorder must remain available to finalization.
   return snapshot
 }
@@ -70,4 +79,15 @@ describe('checkpoint prefix dependency evidence', () => {
     expect(snapshot.inputs).toEqual(['/work/main.tex', '/work/config.tex'])
     expect(snapshot.inputsComplete).toBe(true)
   })
+})
+
+it('refuses a secondary prefix when any stream or preamble already consumed its suffix', () => {
+  expect(
+    capture(false, null, 'INPUT /work/main.tex\nINPUT /work/chapter.tex\n', 100).prefixSafe,
+  ).toBe(true)
+  expect(
+    capture(false, null, 'INPUT /work/main.tex\nINPUT /work/chapter.tex\n', 101).prefixSafe,
+  ).toBe(false)
+  expect(capture(true, ['/work/chapter.tex'], 'INPUT /work/main.tex\n', 0).prefixSafe).toBe(false)
+  expect(capture(false, null, 'INPUT /work/main.tex\n').prefixSafe).toBe(false)
 })

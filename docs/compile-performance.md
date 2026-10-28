@@ -90,6 +90,24 @@ runtime ceilings are unchanged. Native code is built from the existing upstream
 pins and reuses the exact published formats. Annual release and application
 qualification remain separate from the SDK unit tests.
 
+## Checkpoints inside included sources
+
+File-capable pdfTeX controllers can prepare a checkpoint near the edit hint within
+an existing secondary `.tex` file. The host's existing `incrementalPreparation`
+path and offset drive placement; no source rewrite or include syntax change is
+required. A canonical pass prepares the region, so the first edit in an
+unprepared chapter can still use its chapter boundary.
+
+The checkpoint freezes all other consumed project sources and verifies the exact
+prefix of the target file. Filesystem reads track their highest consumed byte;
+a preceding read through the suffix, including an alias or preamble-format input,
+refuses reuse. Editing the prefix, root, or another consumed file invalidates the
+state. The same bounded snapshot budget and disposable-preview lifetime apply.
+The controller is 95,122 bytes (gzip-9: 25,498); both annual controller ceilings are 97,000 bytes. Native WASM and format bytes are unchanged.
+Older controllers advertise no file-checkpoint capability and retain main-file
+placement. Full PDF, auxiliary files, diagnostics and SyncTeX keep their existing
+contracts.
+
 ## Checkpoints in compact source
 
 Capable pdfTeX workers place a hinted standalone `\include`, `\input` or

@@ -141,3 +141,52 @@ it('records native reads before the recorder flushes, including a chapter read b
   expect(snapshot.inputs).toEqual(['/work/earlier.tex'])
   expect(snapshot.inputsComplete).toBe(true)
 })
+
+it('reaches the next boundary in the file being read even when another file has an earlier offset', () => {
+  const scope = controller()
+  const chapter = {},
+    main = {}
+  scope.FS = { read: (_s: unknown, _b: unknown, _o: number, length: number) => length }
+  scope.Asyncify = {
+    state: 0,
+    State: { Normal: 0, Unwinding: 1, Rewinding: 2 },
+    handleSleep: (start: (wake: () => void) => void) => {
+      start(() => {})
+      scope.Asyncify.state = 1
+    },
+  }
+  scope._hc.armed = [
+    { id: 'main', offset: 4, node: main },
+    { id: 'chapter', offset: 20, node: chapter },
+  ]
+  runInContext('hcInstallReadHook()', scope)
+  expect(scope.FS.read({ node: chapter, position: 0 }, new Uint8Array(100), 0, 100)).toBe(20)
+  expect(scope.FS.read({ node: chapter, position: 20 }, new Uint8Array(100), 0, 100)).toBe(0)
+  expect(scope._hc.pending.cp.id).toBe('chapter')
+  expect(scope._hc.armed[0].id).toBe('main')
+})
+
+it('reads arm source metadata before enabling suspension hooks and only once per file', () => {
+  const scope = controller()
+  const reads: string[] = []
+  scope.hcSupported = () => true
+  scope.hcEnsureDataBuffer = () => {}
+  scope.mainfile = 'main.tex'
+  scope.TextEncoder = TextEncoder
+  const nodes = { '/work/main.tex': {}, '/work/chapter.tex': {} }
+  scope.FS = {
+    read: () => 0,
+    readFile: (path: string) => {
+      expect(scope._hc.armed).toHaveLength(0)
+      reads.push(path)
+      return 'first\nsecond\nthird\n'
+    },
+    lookupPath: (path: keyof typeof nodes) => ({ node: nodes[path] }),
+  }
+  runInContext(
+    'hcArm([{id:"m1",line:2},{id:"c1",line:2,path:"chapter.tex"},{id:"m2",line:3}],null)',
+    scope,
+  )
+  expect(reads).toEqual(['/work/main.tex', '/work/chapter.tex'])
+  expect(scope._hc.armed).toHaveLength(3)
+})
