@@ -103,7 +103,7 @@ prefix of the target file. Filesystem reads track their highest consumed byte;
 a preceding read through the suffix, including an alias or preamble-format input,
 refuses reuse. Editing the prefix, root, or another consumed file invalidates the
 state. The same bounded snapshot budget and disposable-preview lifetime apply.
-The controller is 95,122 bytes (gzip-9: 25,498); both annual controller ceilings are 97,000 bytes. Native WASM and format bytes are unchanged.
+The controller is 95,121 bytes (gzip-9: 25,498); both annual controller ceilings are 97,000 bytes. Native WASM and format bytes are unchanged.
 Older controllers advertise no file-checkpoint capability and retain main-file
 placement. Full PDF, auxiliary files, diagnostics and SyncTeX keep their existing
 contracts.
