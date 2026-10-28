@@ -1,10 +1,10 @@
 {
   "schemaVersion": 3,
   "texliveYear": "2026",
-  "distributionProfileId": "2026-20260826-ba0b219",
+  "distributionProfileId": "2026-20260826-e688469",
   "discovery": {
     "name": "2026-latest",
-    "profileId": "2026-20260826-ba0b219",
+    "profileId": "2026-20260826-e688469",
     "frozenAtFinal": false
   },
   "profiles": [
@@ -535,6 +535,46 @@
         "correspondingSourceSha256": "4d6f7893fb89f9282904c8f39d4527aab26f3ee9f0b7e50f1a761a9f25235de3",
         "buildRuns": {
           "pdftex-bibtex": 38495599467,
+          "bibtex8": 33163172428,
+          "makeindex": 33163174571,
+          "xetex": 37566487009,
+          "luahbtex": 37417690219
+        }
+      },
+      "qualification": {
+        "browserGoldens": 7,
+        "nodeBrowserParity": 7,
+        "representativeEngines": [
+          "pdflatex",
+          "xelatex",
+          "lualatex"
+        ]
+      }
+    },
+    {
+      "id": "2026-20260826-e688469",
+      "label": "TeX Live 2026 latest (2026-08-26, engine e688469)",
+      "snapshot": "2026-08-26",
+      "snapshotDate": "2026-08-26",
+      "mirror": {
+        "revision": "2026-ba38749b8714505a",
+        "url": "https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/",
+        "provenanceSha256": "7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00",
+        "objects": 168942
+      },
+      "engine": {
+        "releaseId": "2026-e688469e7df7782d",
+        "tag": "engine-2026-e688469e7df7782d",
+        "sourceRevisions": [
+          "06f1937c502188fe04f0931fed702d06c2b78ab3",
+          "0dddc924cc6e69bd2a4b4630e02efe414f84515e",
+          "16302aaf6e2e2a741210992805401c74cbf5f06b",
+          "7f074299d01a2f8b2c0107c8ff27d12adcda6b06",
+          "b23d0d2b54486bdea989c150091794679ce3cfe4"
+        ],
+        "correspondingSourceSha256": "2532f8885f3816b6216946223cc52fbdf63a2ab99c15f8eca9618a6dfe113408",
+        "buildRuns": {
+          "pdftex-bibtex": 40722140958,
           "bibtex8": 33163172428,
           "makeindex": 33163174571,
           "xetex": 37566487009,
