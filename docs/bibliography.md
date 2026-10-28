@@ -18,6 +18,17 @@ For biblatex, `detectBiblatexBackend(source)` reads the `backend=` option
 
 All of these are exported from both `wasmtex` and `wasmtex/headless`.
 
+## Class-generated BibTeX databases
+
+Classic BibTeX receives project `.bib` files and project-relative databases named
+by `\bibdata` in the main auxiliary file that the TeX engine generated during
+compilation. This includes REVTeX notes and ACS control records. Project files
+retain precedence; generated databases remain engine-owned and are not added to
+the host project. Both the headless compiler (client or remote BibTeX) and editor
+use this collection rule. Generated bibliography outputs conservatively depend
+on the project's TeX sources as well as its bibliography and custom style inputs.
+Paths outside the virtual project root are never read for this transfer.
+
 ## Design
 
 biblatex's default engine is **Biber** (a Perl program); the classic BibTeX

@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Forward class-generated BibTeX databases (REVTeX notes and ACS controls) from
+  the TeX engine to client and remote bibliography stages.
+
 - Preserve ownership of the Asyncify buffer across full heap resets so rebuilding
   a checkpoint cannot overwrite its suspended execution state.
 
