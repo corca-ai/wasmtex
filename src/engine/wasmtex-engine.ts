@@ -212,6 +212,7 @@ function applyHeapCheckpoints(result: CompileResult, data: WorkerMessage): void 
         ? r.inputs
         : null
     return {
+      ...(typeof r.path === 'string' ? { path: r.path, prefixSafe: r.prefixSafe === true } : {}),
       id: String(r.id),
       line: Number(r.line),
       bytes: Number(r.bytes) || 0,
@@ -247,6 +248,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private bloomFilter: ArrayBuffer | undefined
   /** Main file name, tracked for source-based dependency extraction. */
   private mainFileName = 'main.tex'
+  private fileCheckpointsSupported = false
   private heapCheckpointsSupported = false
   private lineCheckpointsSupported = false
   private pagePreviewSupported = false
@@ -430,6 +432,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         this.pagePreviewSupported = (data as { pagePreview?: unknown }).pagePreview === true
         this.pagePreviewForkSupported = data.pagePreviewFork === true
         this.sharedCheckpointsSupported = data.sharedCheckpoints === true
+        this.fileCheckpointsSupported =
+          (data as { fileCheckpoints?: unknown }).fileCheckpoints === true
         initResolve()
       } else {
         this.status = 'error'
@@ -775,6 +779,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     return this.heapCheckpointsSupported
   }
 
+  get supportsFileCheckpoints(): boolean {
+    return this.fileCheckpointsSupported
+  }
+
   get supportsSharedCheckpoints(): boolean {
     return this.sharedCheckpointsSupported
   }
@@ -786,7 +794,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
    *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
   async compile(options?: {
-    checkpoints?: Array<{ id: string; line: number }>
+    checkpoints?: Array<{ id: string; line: number; path?: string }>
   }): Promise<CompileResult> {
     const checkpoints = options?.checkpoints?.length ? options.checkpoints : undefined
     return this.runCompile(
@@ -801,7 +809,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
    *  inputs). Further `checkpoints` after the resume line can be taken on the way. */
   async compileFromHeapCheckpoint(
     id: string,
-    checkpoints?: Array<{ id: string; line: number }>,
+    checkpoints?: Array<{ id: string; line: number; path?: string }>,
   ): Promise<CompileResult> {
     if (!this.heapCheckpointsSupported) {
       throw new Error('heap checkpoints are not supported by this engine')

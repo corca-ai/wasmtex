@@ -38,7 +38,7 @@ separates setup, preview-to-bytes and canonical time and records the actual
 controller hash and retained checkpoint allocation. Select a page limit that
 includes the edited page; a prefix ending before it is not evidence of a visible
 edit. This still does not measure application input-to-paint or process memory.
-`e2e/page-preview-fork.spec.ts` covers include/subfile books, bounded sharing,
+`e2e/page-preview-fork.spec.ts` covers include/subfile books at chapter boundaries and within chapters, bounded sharing,
 independent preview changes/reversion and canonical PDF, auxiliary and SyncTeX
 preservation against the authored controller on both annual native engines.
 

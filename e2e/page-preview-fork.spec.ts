@@ -12,12 +12,13 @@ const controller = ['shared-file.js', 'pdftex-worker.js'].map((name) =>
 
 test.setTimeout(300_000)
 for (const command of ['include', 'subfile'] as const) {
-  test(`bounded ${command} book forks previews without changing canonical outputs`, async ({ page }) => {
+ for (const inside of [false,true]) {
+  test(`bounded ${command} book forks ${inside ? "chapter-local" : "chapter-boundary"} previews without changing canonical outputs`, async ({ page }) => {
     await page.route('**/wasmtex-pdftex.worker.js*', (route) => route.fulfill({
       body: controller, contentType: 'application/javascript',
     }))
     await page.goto('http://localhost:6001')
-    const out = await page.evaluate(async ({ year, texliveUrl, command }) => {
+    const out = await page.evaluate(async ({ year, texliveUrl, command, inside }) => {
       const { WasmTexCompiler } = await import('/src/headless.ts')
       const strip = (pdf: Uint8Array) => {
         let text = ''
@@ -41,14 +42,18 @@ for (const command of ['include', 'subfile'] as const) {
       let sibling: Awaited<ReturnType<typeof compiler.createPagePreviewSession>> = null
       try {
         await compiler.init()
-        const baseline = await compiler.compile()
+        const offset = inside ? files['ch12.tex'].lastIndexOf('Every') : files['ch12.tex'].indexOf('Every')
+        const hint = {path:'ch12.tex',offset}
+        const baseline = await compiler.compile({incrementalPreparation:hint})
+        if (inside && !baseline.heapCheckpoints?.some(cp => cp.path === 'ch12.tex' && cp.prefixSafe))
+          throw new Error('Chapter-local checkpoint was not captured')
         const auxiliary = async () => Object.fromEntries(await Promise.all(
           ['main.aux', 'main.toc', 'main.ind', ...Array.from({ length: 22 }, (_, i) => `ch${i + 1}.aux`)]
             .map(async (path) => [path, await compiler.getFile(path)])))
         const baselineAux = await auxiliary()
-        sibling = await compiler.createPagePreviewSession({ path: 'ch12.tex', offset: files['ch12.tex'].indexOf('Every') })
+        sibling = await compiler.createPagePreviewSession(hint)
         if (!sibling) throw new Error('Capable checkpoint worker did not create a preview session')
-        const original = files['ch12.tex'], changed = original.replace('Every function', 'Each  function')
+        const original = files['ch12.tex'], changed = original.slice(0,offset) + original.slice(offset).replace('Every function', 'Each  function')
         compiler.setFile('ch12.tex', changed)
         const canonical = compiler.compile()
         sibling.setFile('ch12.tex', changed)
@@ -59,7 +64,7 @@ for (const command of ['include', 'subfile'] as const) {
         const repeatedPreview = await sibling.previewPages(30)
         const full = await canonical
         const changedAux = await auxiliary()
-        const verification = await compiler.createPagePreviewSession({ path: 'ch12.tex', offset: files['ch12.tex'].indexOf('Every') })
+        const verification = await compiler.createPagePreviewSession(hint)
         const sameWorkerPreview = await verification?.previewPages(30)
         verification?.dispose()
         compiler.setFile('ch12.tex', original)
@@ -86,7 +91,7 @@ for (const command of ['include', 'subfile'] as const) {
             index: typeof changedAux['main.ind'] === 'string' && changedAux['main.ind'].includes('composition') }
         } finally { fresh.dispose() }
       } finally { sibling?.dispose(); compiler.dispose() }
-    }, { year, texliveUrl, command })
+    }, { year, texliveUrl, command, inside })
     console.log(JSON.stringify(out))
     expect(out.held?.ids.length).toBeGreaterThanOrEqual(22)
     expect(out.held!.bytes).toBeLessThanOrEqual(256 * 2 ** 20)
@@ -104,4 +109,5 @@ for (const command of ['include', 'subfile'] as const) {
     expect(out.index).toBe(true)
     expect(out.auxiliaryReverted).toBe(true)
   })
+}
 }

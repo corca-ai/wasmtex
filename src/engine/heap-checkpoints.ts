@@ -20,7 +20,7 @@
  *   loaded, so an edit that touches labels/numbering is reported `final: false` and the host
  *   follows up with a full compile, exactly as for #55.
  */
-import type { CompileResult, HeapCheckpointRecord } from '../types'
+import type { CompileResult, HeapCheckpointArm, HeapCheckpointRecord } from '../types'
 import { firstDifference, hashString, includePositions } from './checkpoint-boundaries'
 import { normalizeProjectDependencyPath } from './dependency-manifest'
 import { editTouchesLabels } from './incremental'
@@ -33,11 +33,14 @@ export interface HeapCheckpointEngine {
   readonly supportsHeapCheckpoints: boolean
   readonly supportsLineCheckpoints?: boolean
   readonly supportsSharedCheckpoints?: boolean
+  readonly supportsFileCheckpoints?: boolean
   setCheckpointBudget?(maxCount: number, maxBytes: number): void
-  compile(options?: { checkpoints?: Array<{ id: string; line: number }> }): Promise<CompileResult>
+  compile(options?: {
+    checkpoints?: Array<{ id: string; line: number; path?: string }>
+  }): Promise<CompileResult>
   compileFromHeapCheckpoint(
     id: string,
-    checkpoints?: Array<{ id: string; line: number }>,
+    checkpoints?: Array<{ id: string; line: number; path?: string }>,
   ): Promise<CompileResult>
   dropHeapCheckpoints(ids?: string[]): Promise<void>
 }
@@ -52,12 +55,10 @@ export interface HeapCheckpointOptions {
   minHeadBytes?: number
 }
 
-export interface HeapCheckpointArm {
-  id: string
-  line: number
-}
+export type { HeapCheckpointArm } from '../types'
 
 interface Checkpoint {
+  path?: string
   id: string
   line: number
   /** Length and hash of the main-file prefix (up to the start of `line`) it was taken on. */
@@ -241,7 +242,17 @@ export class HeapCheckpointCompiler {
       offset > content.length
     )
       return undefined
-    if (path === this.mainFile) return this.findValid(source, files, offset)?.id
+    if (path === this.mainFile)
+      return this.findValid(source, files, offset, undefined, undefined, true)?.id
+    const local = [...this.checkpoints.values()]
+      .filter(
+        (cp) =>
+          cp.path === path &&
+          this.covers(cp, source, files, source.length) &&
+          cp.prefixLength <= offset,
+      )
+      .sort((a, b) => b.prefixLength - a.prefixLength)[0]
+    if (local) return local.id
     const checkpoint = this.findValid(
       source,
       files,
@@ -262,13 +273,20 @@ export class HeapCheckpointCompiler {
   /** Keep a secondary-source edit only when the checkpoint proves it had not
    * read that file, including through a precompiled preamble. Older workers
    * lack this proof and retain their conservative reset behavior. */
-  invalidateFile(path: string): void {
+  invalidateFile(path: string, content?: string | Uint8Array): void {
     if (projectPath(path) !== path) {
       this.reset()
       return
     }
     const drop: string[] = []
     for (const [id, checkpoint] of this.checkpoints) {
+      if (
+        checkpoint.path === path &&
+        typeof content === 'string' &&
+        hashString(content.slice(0, checkpoint.prefixLength)) === checkpoint.prefixHash &&
+        content.length >= checkpoint.prefixLength
+      )
+        continue
       if (
         !checkpoint.inputsComplete ||
         !checkpoint.inputPaths ||
@@ -292,10 +310,17 @@ export class HeapCheckpointCompiler {
    * the region the last edit touched (or, with no baseline, before the end of the document),
    * unless a held checkpoint already covers it. `extraOffset` lets a host add the cursor location.
    */
-  armsForFullCompile(source: string, files: SourceSet, extraOffset?: number): HeapCheckpointArm[] {
-    if (!this.enabled) return []
+  armsForFullCompile(
+    source: string,
+    files: SourceSet,
+    extraOffset?: number,
+    hint?: { path: string; offset: number },
+  ): HeapCheckpointArm[] {
+    if (!this.enabled || this.maxCheckpoints < 1) return []
     const offsets = this.fullCompileOffsets(source, extraOffset)
     const arms: HeapCheckpointArm[] = []
+    const local = this.armForSecondarySource(source, files, hint)
+    if (local) arms.push(local)
     const seenLines = new Set<number>()
     for (const offset of offsets) {
       if (arms.length >= Math.min(this.maxCheckpoints, 64)) break
@@ -313,6 +338,41 @@ export class HeapCheckpointCompiler {
       arms.push({ id: `hc${++this.seq}`, line })
     }
     return arms
+  }
+
+  private armForSecondarySource(
+    source: string,
+    files: SourceSet,
+    hint?: { path: string; offset: number },
+  ): HeapCheckpointArm | null {
+    if (
+      this.engine.supportsFileCheckpoints &&
+      hint &&
+      hint.path !== this.mainFile &&
+      projectPath(hint.path) === hint.path &&
+      hint.path.endsWith('.tex')
+    ) {
+      const text = files.get(hint.path)
+      if (
+        text !== undefined &&
+        Number.isSafeInteger(hint.offset) &&
+        hint.offset > 0 &&
+        hint.offset <= text.length
+      ) {
+        const at =
+          previousParagraphStart(text, hint.offset, 0) ??
+          Math.max(0, text.lastIndexOf('\n', text.lastIndexOf('\n', hint.offset - 1) - 1) + 1)
+        const line = lineOfOffset(text, at)
+        const held = [...this.checkpoints.values()].some(
+          (cp) =>
+            cp.path === hint.path &&
+            cp.line === line &&
+            this.covers(cp, source, files, source.length),
+        )
+        if (!held && at > 0) return { id: `hc${++this.seq}`, path: hint.path, line }
+      }
+    }
+    return null
   }
 
   private fullCompileOffsets(source: string, extraOffset?: number): number[] {
@@ -379,6 +439,7 @@ export class HeapCheckpointCompiler {
     files: SourceSet,
     acceptInputs?: (paths: readonly string[]) => boolean,
     extraOffset?: number,
+    hint?: { path: string; offset: number },
   ): Promise<HeapResumeResult | null> {
     if (!this.enabled || this.lastMain == null) return null
     if (extractPreamble(this.lastMain)?.preamble !== extractPreamble(source)?.preamble) return null
@@ -386,7 +447,7 @@ export class HeapCheckpointCompiler {
     const checkpoint = this.findValid(source, files, diff, undefined, acceptInputs)
     if (!checkpoint) return null
     checkpoint.lastUsed = ++this.tick
-    const arms = this.armsForFullCompile(source, files, extraOffset)
+    const arms = this.armsForFullCompile(source, files, extraOffset, hint)
     const result = await this.engine.compileFromHeapCheckpoint(checkpoint.id, arms)
     if (!result.pdf) {
       // The worker could not resume (crashed state, evicted): forget it, let the caller go full.
@@ -408,22 +469,28 @@ export class HeapCheckpointCompiler {
     editOffset: number,
     atLine?: number,
     acceptInputs?: (paths: readonly string[]) => boolean,
+    mainOnly = false,
   ): Checkpoint | null {
     let best: Checkpoint | null = null
+    const localChanged = (candidate: Checkpoint) =>
+      !!candidate.path && files.get(candidate.path) !== this.last?.get(candidate.path)
     for (const cp of this.checkpoints.values()) {
-      if (atLine !== undefined && cp.line !== atLine) continue
+      if (!checkpointLocationMatches(cp, atLine, mainOnly)) continue
       if (!this.covers(cp, source, files, editOffset)) continue
       if (acceptInputs && (!cp.inputPaths || !acceptInputs(cp.inputPaths))) continue
-      if (!best || cp.line > best.line) best = cp
+      if (laterCheckpoint(cp, best, localChanged)) best = cp
     }
     return best
   }
 
   /** True when `cp` sits at or before `editOffset` and its prefix and inputs still match. */
   private covers(cp: Checkpoint, source: string, files: SourceSet, editOffset: number): boolean {
-    const start = lineStartOffset(source, cp.line)
-    if (start < 0 || start > editOffset || start !== cp.prefixLength) return false
-    if (hashString(source.slice(0, start)) !== cp.prefixHash) return false
+    const target = cp.path ? files.get(cp.path) : source
+    if (target === undefined) return false
+    const start = lineStartOffset(target, cp.line)
+    if (start < 0 || (!cp.path && start > editOffset) || start !== cp.prefixLength) return false
+    if (hashString(target.slice(0, start)) !== cp.prefixHash) return false
+    if (cp.path && cp.inputs.get(this.mainFile) !== hashString(source)) return false
     return this.inputsMatch(cp, files)
   }
 
@@ -447,20 +514,25 @@ export class HeapCheckpointCompiler {
   }
 
   private remember(source: string, files: SourceSet, record: HeapCheckpointRecord): void {
-    const start = lineStartOffset(source, record.line)
+    const path = record.path
+    if (!validSecondaryRecord(record, this.mainFile)) return
+    const target = path ? files.get(path) : source
+    if (target === undefined) return
+    const start = lineStartOffset(target, record.line)
     if (start < 0) return
     const inputs = new Map<string, string>()
     for (const raw of record.inputs ?? []) {
       const path = projectPath(raw)
-      if (!path || path === this.mainFile) continue
+      if (!path || path === (record.path ?? this.mainFile)) continue
       const content = files.get(path)
       if (content !== undefined) inputs.set(path, hashString(content))
     }
     this.checkpoints.set(record.id, {
       id: record.id,
+      ...(path ? { path } : {}),
       line: record.line,
       prefixLength: start,
-      prefixHash: hashString(source.slice(0, start)),
+      prefixHash: hashString(target.slice(0, start)),
       inputs,
       inputPaths: record.inputs ? [...record.inputs] : null,
       inputsComplete: record.inputsComplete === true,
@@ -490,4 +562,33 @@ export function projectPath(raw: string): string | null {
   const path = normalizeProjectDependencyPath(raw.trim())
   if (!path || path.startsWith('__') || path.startsWith('.')) return null
   return path
+}
+
+function laterCheckpoint(
+  cp: Checkpoint,
+  best: Checkpoint | null,
+  changed: (cp: Checkpoint) => boolean,
+): boolean {
+  if (!best) return true
+  if (changed(cp) !== changed(best)) return changed(cp)
+  if (!!cp.path !== !!best.path) return !cp.path
+  return cp.path === best.path && cp.line > best.line
+}
+function validSecondaryRecord(record: HeapCheckpointRecord, main: string): boolean {
+  if (record.path === undefined) return true
+  return (
+    projectPath(record.path) === record.path &&
+    record.path !== main &&
+    record.prefixSafe === true &&
+    record.inputsComplete === true
+  )
+}
+
+function checkpointLocationMatches(
+  cp: Checkpoint,
+  line: number | undefined,
+  mainOnly: boolean,
+): boolean {
+  if (mainOnly && cp.path) return false
+  return line === undefined || (!cp.path && cp.line === line)
 }

@@ -1,20 +1,23 @@
-import { CompileResult } from '../types.js';
+import { CompileResult, HeapCheckpointArm } from '../types.js';
 /** Project text files (path → content), including the main file. */
 export type SourceSet = Map<string, string>;
 export interface HeapCheckpointEngine {
     readonly supportsHeapCheckpoints: boolean;
     readonly supportsLineCheckpoints?: boolean;
     readonly supportsSharedCheckpoints?: boolean;
+    readonly supportsFileCheckpoints?: boolean;
     setCheckpointBudget?(maxCount: number, maxBytes: number): void;
     compile(options?: {
         checkpoints?: Array<{
             id: string;
             line: number;
+            path?: string;
         }>;
     }): Promise<CompileResult>;
     compileFromHeapCheckpoint(id: string, checkpoints?: Array<{
         id: string;
         line: number;
+        path?: string;
     }>): Promise<CompileResult>;
     dropHeapCheckpoints(ids?: string[]): Promise<void>;
 }
@@ -27,10 +30,7 @@ export interface HeapCheckpointOptions {
     /** Minimum effective head text, including earlier included files. Default 512. */
     minHeadBytes?: number;
 }
-export interface HeapCheckpointArm {
-    id: string;
-    line: number;
-}
+export type { HeapCheckpointArm } from '../types.js';
 export interface HeapResumeResult {
     result: CompileResult;
     /** False when the edit touched labels/numbering and a full reconcile pass should follow. */
@@ -84,13 +84,17 @@ export declare class HeapCheckpointCompiler {
     /** Keep a secondary-source edit only when the checkpoint proves it had not
      * read that file, including through a precompiled preamble. Older workers
      * lack this proof and retain their conservative reset behavior. */
-    invalidateFile(path: string): void;
+    invalidateFile(path: string, content?: string | Uint8Array): void;
     /**
      * Checkpoints to arm on the full compile about to run for `source`: the paragraph before
      * the region the last edit touched (or, with no baseline, before the end of the document),
      * unless a held checkpoint already covers it. `extraOffset` lets a host add the cursor location.
      */
-    armsForFullCompile(source: string, files: SourceSet, extraOffset?: number): HeapCheckpointArm[];
+    armsForFullCompile(source: string, files: SourceSet, extraOffset?: number, hint?: {
+        path: string;
+        offset: number;
+    }): HeapCheckpointArm[];
+    private armForSecondarySource;
     private fullCompileOffsets;
     private effectiveHeadFloor;
     /** Record a finished full compile (or resume) and the checkpoints it took. */
@@ -100,7 +104,10 @@ export declare class HeapCheckpointCompiler {
      * unchanged), taking new checkpoints for the edited region on the way. Null when no
      * checkpoint applies, when there is no baseline yet, or when the preamble changed.
      */
-    tryResume(source: string, files: SourceSet, acceptInputs?: (paths: readonly string[]) => boolean, extraOffset?: number): Promise<HeapResumeResult | null>;
+    tryResume(source: string, files: SourceSet, acceptInputs?: (paths: readonly string[]) => boolean, extraOffset?: number, hint?: {
+        path: string;
+        offset: number;
+    }): Promise<HeapResumeResult | null>;
     /**
      * Latest held checkpoint whose line starts at or before `editOffset` and whose prefix and
      * inputs still match `source`/`files`. With `atLine`, only that line qualifies.

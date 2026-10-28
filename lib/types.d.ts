@@ -12,10 +12,19 @@ export type LoadProgressEvent = {
     file: string;
     count: number;
 };
+export interface HeapCheckpointArm {
+    id: string;
+    line: number;
+    /** Project-relative source; omitted means the main file. */
+    path?: string;
+}
 export interface HeapCheckpointRecord {
     id: string;
-    /** 1-based line of the main file at which the run was suspended (the line is unread). */
+    /** 1-based unread line in `path`, or the main file when `path` is absent. */
     line: number;
+    /** Secondary source checkpoint, with a verified unread suffix. */
+    path?: string;
+    prefixSafe?: boolean;
     /** Bytes the sparse memory image occupies in the worker. */
     bytes: number;
     /** Milliseconds the snapshot took. */

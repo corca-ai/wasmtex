@@ -20,7 +20,9 @@ export interface CompileEngine {
   init(): Promise<void>
   /** Compile the project. Engines that take heap checkpoints (#81) honour `options`;
    *  others ignore it. */
-  compile(options?: { checkpoints?: Array<{ id: string; line: number }> }): Promise<CompileResult>
+  compile(options?: {
+    checkpoints?: Array<{ id: string; line: number; path?: string }>
+  }): Promise<CompileResult>
   writeFile(path: string, content: string | Uint8Array): Promise<void>
   mkdir(path: string): Promise<void>
   setMainFile(path: string): void

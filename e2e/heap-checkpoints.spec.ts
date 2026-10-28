@@ -245,7 +245,13 @@ for (const command of ['include', 'subfile'] as const) {
         const initial = await candidate.compile(hint)
         await full.compile()
         const settled = await full.compile()
-        const wantedLine = main.slice(0, main.indexOf('{chapter4}')).split('\n').length
+        const rootLine = main.slice(0, main.indexOf('{chapter4}')).split('\n').length
+        // A subfile's wrapper gives the capable controller a safe local prefix;
+        // the include fixture starts at byte zero and keeps the root boundary.
+        const expectedCheckpoint = command === 'subfile'
+          ? { path: 'chapter4.tex', line: 3 }
+          : { path: 'main.tex', line: rootLine }
+        const retained = initial.heapCheckpoints?.[0]
         const rows = []
         for (const replacement of ['Every mapping', 'Every morphism']) {
           const edited = files['chapter4.tex']!.replace('Every function', replacement)
@@ -268,14 +274,14 @@ for (const command of ['include', 'subfile'] as const) {
         full.setFile('chapter1.tex', early)
         const fallback = await candidate.compile(hint)
         const truth = await full.compile()
-        return { rows, wantedLine, line: initial.heapCheckpoints?.[0]?.line,
+        return { rows, expectedCheckpoint, checkpoint: { path: retained?.path ?? 'main.tex', line: retained?.line },
           coldEqual: normalize(initial.pdf) === normalize(settled.pdf), coldErrors: initial.errors,
           fallback: { resumed: fallback.phaseTimings?.checkpointResume === true, equal: normalize(fallback.pdf) === normalize(truth.pdf) } }
       } finally { candidate.dispose(); full.dispose() }
     }, { command, texliveVersion, texliveUrl })
     expect(out.coldErrors).toEqual([])
     expect(out.coldEqual).toBe(true)
-    expect(out.line).toBe(out.wantedLine)
+    expect(out.checkpoint).toEqual(out.expectedCheckpoint)
     expect(out.rows).toHaveLength(2)
     for (const row of out.rows) expect(row).toEqual({ success: true, resumed: true, pdf: true, outputs: true, errors: [], synctex: true })
     expect(out.fallback).toEqual({ resumed: false, equal: true })
