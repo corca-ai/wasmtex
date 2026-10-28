@@ -141,3 +141,106 @@ it('serializes previews and fences source mutation while one is in flight', asyn
   await expect(preview).rejects.toThrow()
   compiler.dispose()
 })
+
+async function forkFixture() {
+  const f = await fixture(undefined, {
+    incremental: true,
+    heapCheckpointOptions: { minHeadBytes: 0 },
+    files: { 'main.tex': source, 'chapter.tex': 'body' },
+  })
+  vi.spyOn(f.engine, 'supportsHeapCheckpoints', 'get').mockReturnValue(true)
+  vi.spyOn(f.engine, 'dropHeapCheckpoints').mockResolvedValue()
+  vi.mocked(f.engine.compile).mockResolvedValue({
+    ...result,
+    heapCheckpoints: [
+      {
+        id: 'before-chapter',
+        line: 3,
+        bytes: 1000,
+        ms: 1,
+        inputs: ['/work/main.tex'],
+        inputsComplete: true,
+      },
+    ],
+  })
+  vi.spyOn(f.engine, 'compileFromHeapCheckpoint').mockResolvedValue(result)
+  await f.compiler.compile()
+  const fork = new WasmTexPdftexEngine()
+  vi.spyOn(fork, 'supportsHeapCheckpoints', 'get').mockReturnValue(true)
+  vi.spyOn(fork, 'writeFile').mockResolvedValue()
+  vi.spyOn(fork, 'mkdir').mockResolvedValue()
+  vi.spyOn(fork, 'setMainFile').mockImplementation(() => {})
+  vi.spyOn(fork, 'dropHeapCheckpoints').mockResolvedValue()
+  const preview = vi.spyOn(fork, 'compilePagePreview').mockResolvedValue(result)
+  const terminate = vi.spyOn(fork, 'terminate').mockImplementation(() => {})
+  const create = vi.spyOn(f.engine, 'forkForPagePreview').mockResolvedValue(fork)
+  return { ...f, fork, preview, terminate, create }
+}
+
+it('a fork renders edited secondary inputs while its canonical owner is compiling', async () => {
+  const { compiler, engine, fork, preview, create } = await forkFixture()
+  const session = await compiler.createPagePreviewSession({ path: 'chapter.tex', offset: 0 })
+  expect(session).not.toBeNull()
+  expect(create).toHaveBeenCalledWith('before-chapter', undefined)
+  expect('compile' in session!).toBe(false)
+  let complete!: (value: CompileResult) => void
+  vi.mocked(engine.compile).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve
+      }),
+  )
+  // Change the prefix to force a full canonical pass, independent of the fork.
+  compiler.setFile('main.tex', source.replace('article', 'report'))
+  const canonical = compiler.compile()
+  await vi.waitFor(() => expect(complete).toBeTypeOf('function'))
+  session!.setFile('chapter.tex', 'edited body')
+  expect(await session!.previewPages(2)).toMatchObject({ pdf: result.pdf, pageLimit: 2 })
+  expect(preview).toHaveBeenCalledWith(2, 'before-chapter')
+  expect(fork.writeFile).toHaveBeenCalledWith('chapter.tex', 'edited body')
+  expect(await compiler.createPagePreviewSession()).toBeNull()
+  complete(result)
+  await canonical
+  session!.dispose()
+  compiler.dispose()
+})
+
+it('retires a late fork after parent disposal and refuses dirty or unsupported baselines', async () => {
+  const { compiler, create, fork, terminate } = await forkFixture()
+  compiler.setFile('chapter.tex', 'dirty')
+  expect(await compiler.createPagePreviewSession()).toBeNull()
+  compiler.setFile('chapter.tex', 'body')
+  await compiler.compile()
+  create.mockResolvedValueOnce(null)
+  expect(await compiler.createPagePreviewSession()).toBeNull()
+  let finish!: (engine: WasmTexPdftexEngine) => void
+  create.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const pending = compiler.createPagePreviewSession()
+  compiler.dispose()
+  finish(fork)
+  expect(await pending).toBeNull()
+  expect(terminate).toHaveBeenCalledTimes(1)
+})
+
+it('a project replacement fences a fork created from the preceding project', async () => {
+  const { compiler, engine, create, fork, terminate } = await forkFixture()
+  vi.spyOn(engine, 'flushCache').mockResolvedValue()
+  let finish!: (engine: WasmTexPdftexEngine) => void
+  create.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const pending = compiler.createPagePreviewSession()
+  await compiler.loadProject({ 'main.tex': source, 'other.tex': 'different project' })
+  finish(fork)
+  expect(await pending).toBeNull()
+  expect(terminate).toHaveBeenCalledTimes(1)
+  compiler.dispose()
+})

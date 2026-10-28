@@ -47,6 +47,10 @@ export interface WasmTexEngineOptions {
 }
 /** Incoming response message from the WASM worker. */
 interface WorkerMessage {
+    sharedCheckpoints?: boolean;
+    heapCheckpointRetention?: unknown;
+    pagePreviewFork?: boolean;
+    previewState?: unknown;
     result?: string;
     status?: number;
     cmd?: string;
@@ -109,6 +113,11 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private heapCheckpointsSupported;
     private lineCheckpointsSupported;
     private pagePreviewSupported;
+    private pagePreviewForkSupported;
+    private readonly forkOptions;
+    private sharedCheckpointsSupported;
+    private checkpointBudget;
+    private previewForkInitializing;
     /** Last-written text sources, so dependency extraction can read the main source
      *  synchronously (no worker round-trip). */
     private readonly sources;
@@ -175,6 +184,8 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     get supportsLineCheckpoints(): boolean;
     /** True once the worker reported the Asyncify build (see the `heapCheckpoints` option). */
     get supportsHeapCheckpoints(): boolean;
+    get supportsSharedCheckpoints(): boolean;
+    setCheckpointBudget(maxCount: number, maxBytes: number): void;
     /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
      *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
     compile(options?: {
@@ -194,6 +205,10 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     }>): Promise<CompileResult>;
     /** Disposable PDF prefix; auxiliary files are restored by the worker. */
     compilePagePreview(pageLimit: number, checkpointId?: string): Promise<CompileResult | null>;
+    /** @internal Same-build, host-local fork for disposable page previews only.
+     * The opaque state never escapes this method or enables canonical compilation.
+     */
+    forkForPagePreview(id: string, signal?: AbortSignal): Promise<WasmTexPdftexEngine | null>;
     /** Free checkpoints in the worker (all when `ids` is omitted). */
     dropHeapCheckpoints(ids?: string[]): Promise<void>;
     private runCompile;

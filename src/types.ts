@@ -62,6 +62,9 @@ export interface CompileResult {
   errors: TexError[]
   /** Checkpoints taken during this compile, when any were requested (#81). */
   heapCheckpoints?: HeapCheckpointRecord[]
+  /** Actual shared checkpoint backing bytes and retained IDs in a capable worker.
+   * Includes checkpoint file snapshots; excludes the live WASM heap and JS metadata. */
+  heapCheckpointRetention?: { ids: string[]; bytes: number }
   /** Time in milliseconds */
   compileTime: number
   /** Raw synctex data (uncompressed or gzipped) from pdfTeX -synctex=1 */

@@ -31,6 +31,17 @@ sample PDFs and outputs, and separately test pagination/index changes. Initial
 network/format work is separate from repeat costs. These are compile-to-bytes
 measurements, not application edit-to-paint or total browser memory measurements.
 
+Add `--page-limit 168 --checkpoints 32 --checkpoint-mib 256` to measure a
+same-build preview session alongside each canonical edit. Each warm sample
+alternates three foreground edits and saves their prefix PDFs. The report
+separates setup, preview-to-bytes and canonical time and records the actual
+controller hash and retained checkpoint allocation. Select a page limit that
+includes the edited page; a prefix ending before it is not evidence of a visible
+edit. This still does not measure application input-to-paint or process memory.
+`e2e/page-preview-fork.spec.ts` covers include/subfile books, bounded sharing,
+independent preview changes/reversion and canonical PDF, auxiliary and SyncTeX
+preservation against the authored controller on both annual native engines.
+
 For contributors qualifying engine/controller changes. Complete the [development setup](develop.md) first and follow the [optimization policy](engine-optimization-policy.md).
 [Engine builds](engine-build.md) produce candidate assets; these procedures compare
 them with explicit baselines. For SDK integration, use [headless compilation](headless.md).

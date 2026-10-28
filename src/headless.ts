@@ -42,6 +42,7 @@ import {
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
 import { extractPreamble } from './engine/preamble-utils'
+import { previewErrorsCovered } from './engine/preview-diagnostics'
 import { RerunController, signatureOf } from './engine/rerun-controller'
 import {
   buildTexliveDependencySet,
@@ -422,6 +423,13 @@ const GENERATED_AUX_EXTENSIONS = [
   'xdy',
 ] as const
 
+/** A bounded, disposable sibling with no diagnostics, metadata or export authority. */
+export interface PagePreviewSession {
+  setFile(path: string, content: string | Uint8Array): void
+  previewPages(pageLimit: number): Promise<PagePreviewResult | null>
+  dispose(): void
+}
+
 export class WasmTexCompiler {
   private engine: CompileEngine | null = null
   private engineKind: TexEngine = 'pdflatex'
@@ -451,6 +459,7 @@ export class WasmTexCompiler {
   private prebuildInFlight: Promise<boolean> | null = null
   private compileInFlight = false
   private pagePreviewBaseline: string | null = null
+  private pagePreviewErrors: CompileResult['errors'] = []
   private pagePreviewRequiresCheckpoint = false
   private readonly operations = new CompilerOperations()
   private initInFlight: Promise<void> | null = null
@@ -658,6 +667,87 @@ export class WasmTexCompiler {
     return this.compileOperation(true, options)
   }
 
+  /** Keep foreground page previews independent of a long canonical compile.
+   * Captures one same-build checkpoint; unsupported engines return null. The
+   * caller owns and disposes the sibling, including after project transitions.
+   */
+  async createPagePreviewSession(
+    hint?: CompileOptions['incrementalPreparation'],
+    signal?: AbortSignal,
+  ): Promise<PagePreviewSession | null> {
+    this.ensureInitialized()
+    this.assertNoProjectReplacement()
+    const engine = this.engine
+    if (
+      !(engine instanceof WasmTexPdftexEngine) ||
+      !this.heap ||
+      this.compileInFlight ||
+      this.prebuildInFlight ||
+      this.operations.busy ||
+      this.pagePreviewBaseline === null ||
+      this.fs.getModifiedFiles().length ||
+      this.tikzExternalizationKind()
+    )
+      return null
+    const checkpoint = hint
+      ? this.heap.previewCheckpointForEdit(
+          this.mainSource(),
+          this.projectTexFiles(),
+          hint.path,
+          hint.offset,
+        )
+      : this.heap.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+    if (!checkpoint) return null
+    const proof = this.heap.cloneForEngine(engine, checkpoint)
+    const baseline = this.pagePreviewBaseline
+    const errors = this.pagePreviewErrors.map((error) => ({ ...error }))
+    const mainFile = this.mainFile
+    const disposal = this.disposalRevision
+    const filesystem = this.fs
+    const detection = { ...this.detection }
+    const options = { ...this.opts }
+    delete options.onLoadProgress
+    delete options.onEngineSelected
+    const files: Record<string, string | Uint8Array> = {}
+    for (const path of this.fs.listFiles()) {
+      const value = this.fs.readFile(path)
+      if (value !== null) files[path] = typeof value === 'string' ? value : value.slice()
+    }
+    const fork = await engine.forkForPagePreview(checkpoint, signal)
+    if (!fork) return null
+    if (
+      this.disposalRevision !== disposal ||
+      this.fs !== filesystem ||
+      this.engine !== engine ||
+      signal?.aborted
+    ) {
+      fork.terminate()
+      signal?.throwIfAborted()
+      return null
+    }
+    // The parent's retained state was proven inline above. A fork must not
+    // restart an automatic figure experiment the parent has already declined.
+    const child = new WasmTexCompiler({
+      ...options,
+      files,
+      mainFile,
+      tikzExternalization: { mode: 'off' },
+    })
+    child.engine = fork
+    child.engineKind = 'pdflatex'
+    child.detection = detection
+    child.initialized = true
+    child.fs.markSynced()
+    child.heap = proof.cloneForEngine(fork)
+    child.pagePreviewBaseline = baseline
+    child.pagePreviewErrors = errors
+    return {
+      setFile: (path, content) => child.setFile(path, content),
+      previewPages: (limit) => child.previewPages(limit),
+      dispose: () => child.dispose(),
+    }
+  }
+
   /** Render a PDF prefix using the last full pass's references. This leaves full
    * compile metadata and auxiliary outputs unchanged. Null means unsupported or
    * unsafe: run compile() instead. Always reconcile with compile() after edits. */
@@ -697,7 +787,11 @@ export class WasmTexCompiler {
     const result = (
       await this.operations.observe(engine.compilePagePreview(pageLimit, checkpoint))
     ).resume()
-    if (!result?.success || !result.pdf || result.errors.some((e) => e.severity === 'error'))
+    if (
+      !result?.success ||
+      !result.pdf ||
+      !previewErrorsCovered(this.pagePreviewErrors, result.errors)
+    )
       return null
     return { pdf: result.pdf, synctex: result.synctex, compileTime: result.compileTime, pageLimit }
   }
@@ -734,6 +828,8 @@ export class WasmTexCompiler {
       const result = await this.operations.run(() => this.compileIdle(preview, options))
       this.assertRevision(revision)
       this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
+      this.pagePreviewErrors =
+        this.pagePreviewBaseline === null ? [] : result.errors.map((error) => ({ ...error }))
       this.pagePreviewRequiresCheckpoint = false
       return result
     } finally {

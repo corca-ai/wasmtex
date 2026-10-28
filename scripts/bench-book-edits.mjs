@@ -19,6 +19,12 @@ if (!mirror || !/\/snapshots\/[^/]+\/(2025|2026)\/$/.test(mirror))
   throw new Error('--texlive-url must identify an immutable annual snapshot')
 const year = new URL(mirror).pathname.split('/').at(-2)
 const repetitions = Number(arg('repetitions', '3'))
+const pageLimit = Number(arg('page-limit', '0'))
+const checkpointCount = Number(arg('checkpoints', '1'))
+const checkpointMiB = Number(arg('checkpoint-mib', '64'))
+if (![pageLimit, checkpointCount, checkpointMiB].every(Number.isSafeInteger) ||
+    pageLimit < 0 || pageLimit > 10000 || checkpointCount < 1 || checkpointCount > 64 ||
+    checkpointMiB < 1 || checkpointMiB > 512) throw new Error('Invalid preview/checkpoint bounds')
 if (!Number.isSafeInteger(repetitions) || repetitions < 1 || repetitions > 20)
   throw new Error('--repetitions must be 1..20')
 const out = resolve(arg('out', 'report/book-edits'))
@@ -154,6 +160,8 @@ const report = {
   sdkHead: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   sdkDiffHash: hash(execFileSync('git', ['diff', 'HEAD'], { cwd: root })),
   assetManifestHash: hash(manifest),
+  workerHash: hash(await readFile(join(assets, 'wasmtex', year, 'wasmtex-pdftex.worker.js'))),
+  pageLimit, checkpointCount, checkpointMiB,
   sdkEntry: arg('sdk-entry', '/src/headless.ts'),
   heap: arg('heap', 'true') !== 'false',
   repetitions,
@@ -196,6 +204,9 @@ try {
       }),
     )
   })
+  await page.exposeFunction('saveBookPreview', async ({ index, revision, base64 }) => {
+    await writeFile(join(out, `preview-${index}-${revision}.pdf`), Buffer.from(base64, 'base64'))
+  })
   await page.goto(`http://localhost:${server.httpServer.address().port}/book-lab`)
   await page.evaluate(
     async (input) => {
@@ -209,11 +220,13 @@ try {
         texliveUrl: `${location.origin}/mirror/`,
         incremental: true,
         heapCheckpoints: input.heap,
-        heapCheckpointOptions: { maxCheckpoints: 1, maxBytes: 64 * 2 ** 20 },
+        heapCheckpointOptions: { maxCheckpoints: input.checkpointCount, maxBytes: input.checkpointMiB * 2 ** 20, minHeadBytes: 0 },
         tikzExternalization: { mode: 'auto', workers: 1, idleMs: 0 },
         persistentCache: false,
       })
       let timer
+      let session
+      let forkSetup
       try {
         await compiler.init()
         // Observe actual engine passes, including heap resumes, without changing results.
@@ -245,7 +258,7 @@ try {
           }
           passes = []
           const start = performance.now()
-          const result = await Promise.race([
+          const canonical = Promise.race([
             compiler.compile({
               incrementalPreparation: {
                 path: input.editPath,
@@ -256,8 +269,34 @@ try {
               timer = setTimeout(() => reject(new Error('Compile exceeded 10 minutes')), 600_000)
             }),
           ])
+          const previews = []
+          if (session && index > 0) {
+            for (let revision = 0; revision < 3; revision++) {
+              const current = input.files[input.editPath]
+              const alternate = current.includes(input.to)
+                ? current.replace(input.to, input.from) : current.replace(input.from, input.to)
+              session.setFile(input.editPath, revision % 2 ? alternate : current)
+              const began = performance.now()
+              const preview = await session.previewPages(input.pageLimit)
+              previews.push({ wallMs: performance.now() - began, accepted: !!preview, bytes: preview?.pdf.length })
+              if (preview) {
+                let text = ''
+                for (let at = 0; at < preview.pdf.length; at += 32768)
+                  text += String.fromCharCode(...preview.pdf.subarray(at, at + 32768))
+                await globalThis.saveBookPreview({ index, revision, base64: btoa(text) })
+              }
+            }
+          }
+          const result = await canonical
           clearTimeout(timer)
           const wallMs = performance.now() - start
+          if (index === 0 && input.pageLimit) {
+            const began = performance.now()
+            session = await compiler.createPagePreviewSession({ path: input.editPath,
+              offset: input.files[input.editPath].indexOf(input.from) })
+            forkSetup = { wallMs: performance.now() - began, ready: !!session }
+            if (!session) throw new Error('Requested preview fork unavailable')
+          }
           if (!result.success || !result.pdf) throw new Error(result.log)
           const outputs = {}
           for (const extension of ['aux', 'toc', 'ind'])
@@ -273,6 +312,7 @@ try {
             index,
             cold: index === 0,
             wallMs,
+            forkSetup, previews, retention: result.heapCheckpointRetention,
             passes,
             outputs,
             errors: result.errors,
@@ -282,6 +322,7 @@ try {
         }
       } finally {
         clearTimeout(timer)
+        session?.dispose()
         compiler.dispose()
       }
     },
@@ -295,6 +336,7 @@ try {
       year,
       heap: arg('heap', 'true') !== 'false',
       entry: arg('sdk-entry', '/src/headless.ts'),
+      pageLimit, checkpointCount, checkpointMiB,
     },
   )
 } finally {

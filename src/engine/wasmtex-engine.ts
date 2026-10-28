@@ -79,6 +79,10 @@ let nextMsgId = 1
 
 /** Incoming response message from the WASM worker. */
 interface WorkerMessage {
+  sharedCheckpoints?: boolean
+  heapCheckpointRetention?: unknown
+  pagePreviewFork?: boolean
+  previewState?: unknown
   result?: string
   status?: number
   cmd?: string
@@ -183,6 +187,21 @@ export function mergeWarmupCaches(base: WarmupCache, override: WarmupCache): War
 
 /** Checkpoints the worker took during this run (#81), as reported in the response. */
 function applyHeapCheckpoints(result: CompileResult, data: WorkerMessage): void {
+  const retained = data.heapCheckpointRetention
+  if (
+    typeof retained === 'object' &&
+    retained !== null &&
+    'ids' in retained &&
+    'bytes' in retained &&
+    Array.isArray(retained.ids) &&
+    retained.ids.every((id): id is string => typeof id === 'string' && id.length > 0) &&
+    new Set(retained.ids).size === retained.ids.length &&
+    typeof retained.bytes === 'number' &&
+    Number.isSafeInteger(retained.bytes) &&
+    retained.bytes >= 0
+  ) {
+    result.heapCheckpointRetention = { ids: [...retained.ids], bytes: retained.bytes }
+  }
   const raw = (data as { heapCheckpoints?: unknown }).heapCheckpoints
   if (!Array.isArray(raw)) return
   result.heapCheckpoints = raw.map((c) => {
@@ -231,6 +250,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private heapCheckpointsSupported = false
   private lineCheckpointsSupported = false
   private pagePreviewSupported = false
+  private pagePreviewForkSupported = false
+  private readonly forkOptions: WasmTexEngineOptions
+  private sharedCheckpointsSupported = false
+  private checkpointBudget: { maxCount: number; maxBytes: number } | undefined
+  private previewForkInitializing = false
   /** Last-written text sources, so dependency extraction can read the main source
    *  synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
@@ -251,6 +275,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         : engineWorkerUrl(base, version, binary),
       options?.texliveUrl ?? null,
     )
+    this.forkOptions = { ...options }
     this.formatPath = engineFormatUrl(
       formatAssetBase(base, options?.formatAssetBaseUrl),
       version,
@@ -322,6 +347,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!this.preambleSnapshotEnabled) {
       this.worker!.postMessage({ cmd: 'setpreamblesnapshot', enabled: false })
     }
+    if (this.previewForkInitializing) {
+      await this.loadEngineBuildId()
+      return
+    }
 
     // Build the effective warmup set: the durable cache (if enabled) rehydrated
     // from a previous session, merged with any caller-provided warmup cache.
@@ -350,7 +379,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!this.skipFormatPreload) {
       preloads.push(this.preloadFormat())
     }
-    const receipt = this.preambleCache ? this.loadEngineBuildId() : Promise.resolve()
+    const receipt =
+      this.preambleCache || this.pagePreviewForkSupported
+        ? this.loadEngineBuildId()
+        : Promise.resolve()
     await Promise.all([...preloads, receipt])
   }
 
@@ -396,6 +428,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         this.heapCheckpointsSupported =
           (data as { heapCheckpoints?: unknown }).heapCheckpoints === true
         this.pagePreviewSupported = (data as { pagePreview?: unknown }).pagePreview === true
+        this.pagePreviewForkSupported = data.pagePreviewFork === true
+        this.sharedCheckpointsSupported = data.sharedCheckpoints === true
         initResolve()
       } else {
         this.status = 'error'
@@ -741,6 +775,14 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     return this.heapCheckpointsSupported
   }
 
+  get supportsSharedCheckpoints(): boolean {
+    return this.sharedCheckpointsSupported
+  }
+
+  setCheckpointBudget(maxCount: number, maxBytes: number): void {
+    this.checkpointBudget = { maxCount: Math.min(maxCount, 64), maxBytes }
+  }
+
   /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
    *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
   async compile(options?: {
@@ -780,6 +822,60 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     return this.runCompile({ cmd: 'compilepagepreview', pageLimit, id: checkpointId })
   }
 
+  /** @internal Same-build, host-local fork for disposable page previews only.
+   * The opaque state never escapes this method or enables canonical compilation.
+   */
+  async forkForPagePreview(id: string, signal?: AbortSignal): Promise<WasmTexPdftexEngine | null> {
+    if (!this.pagePreviewForkSupported || !this.engineBuildId || this.status !== 'ready')
+      return null
+    signal?.throwIfAborted()
+    const mainFileName = this.mainFileName
+    const sources = new Map(this.sources)
+    const projectFiles = new Map(this.projectFiles)
+    const state = await abortablePreviewSetup(
+      this.postMessageWithResponse({ cmd: 'exportpagepreview', id }, 'cmd:exportpagepreview'),
+      signal,
+    )
+    signal?.throwIfAborted()
+    if (state.result !== 'ok' || !state.previewState) return null
+    const forkOptions = { ...this.forkOptions }
+    delete forkOptions.warmupCache
+    const fork = new WasmTexPdftexEngine({
+      ...forkOptions,
+      skipFormatPreload: true,
+      persistentCache: false,
+      persistentPreambleCache: false,
+    })
+    fork.previewForkInitializing = true
+    const abort = () => fork.terminate()
+    signal?.addEventListener('abort', abort, { once: true })
+    try {
+      await abortablePreviewSetup(fork.init(), signal)
+      if (fork.engineBuildId !== this.engineBuildId) {
+        fork.terminate()
+        return null
+      }
+      const imported = await fork.postMessageWithResponse(
+        { cmd: 'importpagepreview', previewState: state.previewState },
+        'cmd:importpagepreview',
+      )
+      if (imported.result !== 'ok') {
+        fork.terminate()
+        return null
+      }
+      signal?.throwIfAborted()
+      fork.mainFileName = mainFileName
+      for (const [path, source] of sources) fork.sources.set(path, source)
+      for (const [path, content] of projectFiles) fork.projectFiles.set(path, content)
+      return fork
+    } catch (error) {
+      fork.terminate()
+      throw error
+    } finally {
+      signal?.removeEventListener('abort', abort)
+    }
+  }
+
   /** Free checkpoints in the worker (all when `ids` is omitted). */
   async dropHeapCheckpoints(ids?: string[]): Promise<void> {
     if (!this.worker || !this.heapCheckpointsSupported) return
@@ -795,7 +891,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     this.status = 'compiling'
     const start = performance.now()
     this.resolver.begin()
-    const data = await this.postMessageWithResponse(command, 'cmd:compile')
+    const data = await this.postMessageWithResponse(
+      { ...command, ...(this.checkpointBudget ? { checkpointBudget: this.checkpointBudget } : {}) },
+      'cmd:compile',
+    )
     const resolver = this.resolver.finish()
     this.completionObservation = Array.isArray(data.completionObservations)
       ? parseEngineCompletionObservation(data.completionObservations)
@@ -1093,5 +1192,22 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!this.worker || this.status === 'unloaded' || this.status === 'loading') {
       throw new Error(`Engine not initialized (status: ${this.status})`)
     }
+  }
+}
+
+/** Cancel the caller's wait without killing the canonical worker. Its ordered
+ * export response still drains normally, preserving subsequent RPC replies. */
+async function abortablePreviewSetup<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation
+  signal.throwIfAborted()
+  let abort!: () => void
+  const cancelled = new Promise<never>((_, reject) => {
+    abort = () => reject(signal.reason)
+    signal.addEventListener('abort', abort, { once: true })
+  })
+  try {
+    return await Promise.race([operation, cancelled])
+  } finally {
+    signal.removeEventListener('abort', abort)
   }
 }

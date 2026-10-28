@@ -100,6 +100,12 @@ export interface WasmTexCompilerOptions {
     };
 }
 type FileContent = string | Uint8Array;
+/** A bounded, disposable sibling with no diagnostics, metadata or export authority. */
+export interface PagePreviewSession {
+    setFile(path: string, content: string | Uint8Array): void;
+    previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
+    dispose(): void;
+}
 export declare class WasmTexCompiler {
     private engine;
     private engineKind;
@@ -120,6 +126,7 @@ export declare class WasmTexCompiler {
     private prebuildInFlight;
     private compileInFlight;
     private pagePreviewBaseline;
+    private pagePreviewErrors;
     private pagePreviewRequiresCheckpoint;
     private readonly operations;
     private initInFlight;
@@ -179,6 +186,11 @@ export declare class WasmTexCompiler {
     compile(options?: CompileOptions): Promise<CompileResult>;
     /** Opt in to independent PDF parts for final page-break incremental results. */
     compilePreview(options?: CompileOptions): Promise<PreviewCompileResult>;
+    /** Keep foreground page previews independent of a long canonical compile.
+     * Captures one same-build checkpoint; unsupported engines return null. The
+     * caller owns and disposes the sibling, including after project transitions.
+     */
+    createPagePreviewSession(hint?: CompileOptions['incrementalPreparation'], signal?: AbortSignal): Promise<PagePreviewSession | null>;
     /** Render a PDF prefix using the last full pass's references. This leaves full
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */

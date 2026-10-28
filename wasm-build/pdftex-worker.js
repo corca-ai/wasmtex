@@ -90,7 +90,7 @@ Module["preRun"] = function() {
 // the host that the engine is ready.
 Module["postRun"] = function() {
     if (hcSupported()) hcEnsureDataBuffer();
-    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function" });
+    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
@@ -1148,7 +1148,8 @@ function finishCompile(ctx, status) {
             "inputFiles": inputFiles,
             "inputFilesComplete": inputFilesComplete,
             "semanticTrace": semanticTrace,
-            "heapCheckpoints": hcTaken()
+            "heapCheckpoints": hcTaken(),
+            "heapCheckpointRetention": hcRetention()
         };
 
         var transferables = [pdfArrayBuffer.buffer];
@@ -1396,8 +1397,19 @@ function setTexliveEndpoint(url) {
 self["onmessage"] = function(ev) {
     var data = ev["data"];
     var cmd = data["cmd"];
+    if (data.checkpointBudget && Number.isSafeInteger(data.checkpointBudget.maxBytes) &&
+        data.checkpointBudget.maxBytes >= 0 && Number.isSafeInteger(data.checkpointBudget.maxCount) &&
+        data.checkpointBudget.maxCount >= 0 && data.checkpointBudget.maxCount <= 64) {
+        self._hc.budget = data.checkpointBudget;
+    }
 
-    if (cmd === "compilepagepreview") {
+    if (cmd === "exportpagepreview") {
+        exportPagePreviewRoutine(data);
+    } else if (cmd === "importpagepreview") {
+        importPagePreviewRoutine(data);
+    } else if (self._pagePreviewOnly && (cmd === "compilelatex" || cmd === "compileheapcheckpoint" || cmd === "compileformat")) {
+        self.postMessage({ "result": "failed", "cmd": "compile", "log": "A page-preview fork cannot compile a canonical document" });
+    } else if (cmd === "compilepagepreview") {
         compilePagePreviewRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
     } else if (cmd === "compilelatex") {
         compileLaTeXRoutine(data).catch(function(e) { hcReportCrash("compile", e); });
@@ -1622,6 +1634,75 @@ function finishPagePreview(ctx, status) {
     self.postMessage(response, transfer);
 }
 
+// A preview fork is a host-local copy of one checkpoint under this exact worker
+// URL/build. It cannot become a canonical compiler or accept portable heap files.
+// Keep the original buffers: the owning compiler continues using its checkpoint.
+function exportPagePreviewRoutine(data) {
+    var snap = self._hc.checkpoints[data["id"]];
+    if (!hcSupported() || !snap || self._pagePreviewOnly || snap.image.length > 512 * 1024 * 1024) {
+        self.postMessage({ result: "failed", cmd: "exportpagepreview" });
+        return;
+    }
+    var bytes = snap.image.bytes;
+    Object.keys(snap.fs.files).forEach(function(path) { bytes += snap.fs.files[path].byteLength; });
+    (function count(dir) {
+        FS.readdir(dir).forEach(function(name) {
+            if (name === "." || name === "..") return;
+            var path = dir + "/" + name, stat = FS.stat(path);
+            if (FS.isDir(stat.mode)) count(path); else bytes += stat.size;
+        });
+    })(TEXCACHEROOT);
+    if (bytes > 192 * 1024 * 1024) {
+        self.postMessage({ result: "failed", cmd: "exportpagepreview" });
+        return;
+    }
+    self.postMessage({ result: "ok", cmd: "exportpagepreview", previewState: {
+        version: 1, worker: self.location.href, endpoint: self.texlive_endpoint,
+        dataPtr: self._hc.dataPtr, snapshot: snap, mainfile: self.mainfile,
+        hostWrites: self._hc.hostWrites, cacheFiles: snapshotDirectory(TEXCACHEROOT),
+        positive: texlive200_cache, negative: texlive404_cache,
+        positiveSources: texlive200_source, negativeSources: texlive404_source,
+        pkPositive: pk200_cache, pkNegative: pk404_cache,
+        bloom: { bits: bloom_bits, k: bloom_k, m: bloom_m }
+    } });
+}
+
+function importPagePreviewRoutine(data) {
+    var state = data["previewState"];
+    try {
+        if (!state || state.version !== 1 || state.worker !== self.location.href ||
+            state.endpoint !== self.texlive_endpoint || state.dataPtr !== self._hc.dataPtr ||
+            !hcSupported() || !state.snapshot || !state.snapshot.image ||
+            !Number.isSafeInteger(state.snapshot.image.length) || state.snapshot.image.length < HC_PAGE ||
+            state.snapshot.image.length > 512 * 1024 * 1024) {
+            throw new Error("incompatible page-preview checkpoint");
+        }
+        // Packages and cached misses are part of lookup semantics, not a new
+        // preload set. Copy the parent's actual filesystem and lookup state.
+        cleanDir(TEXCACHEROOT);
+        restoreDirectory(state.cacheFiles);
+        texlive200_cache = state.positive;
+        texlive404_cache = state.negative;
+        texlive200_source = state.positiveSources;
+        texlive404_source = state.negativeSources;
+        pk200_cache = state.pkPositive;
+        pk404_cache = state.pkNegative;
+        bloom_bits = state.bloom.bits;
+        bloom_k = state.bloom.k;
+        bloom_m = state.bloom.m;
+        self.mainfile = state.mainfile;
+        self._hc.hostWrites = state.hostWrites;
+        self._hc.checkpoints = {};
+        self._hc.checkpoints[state.snapshot.id] = state.snapshot;
+        hcInstallReadHook();
+        FS.chdir(WORKROOT);
+        self._pagePreviewOnly = true;
+        self.postMessage({ result: "ok", cmd: "importpagepreview" });
+    } catch (error) {
+        self.postMessage({ result: "failed", cmd: "importpagepreview", log: String(error) });
+    }
+}
+
 // --- Heap checkpoints (#81) ---------------------------------------------------
 //
 // Only on the Asyncify engine build. TeX's read of the main file is cut short at a
@@ -1645,7 +1726,9 @@ self._hc = {
     hookInstalled: false,
     dataPtr: 0,           // preallocated Asyncify data buffer
     hostWrites: {},       // path -> latest content the host wrote (re-applied after a restore)
-    transform: null       // how the main file was rewritten for the run in progress
+    transform: null,      // how the main file was rewritten for the run in progress
+    budget: { maxCount: 4, maxBytes: 320 * 1024 * 1024 },
+    tick: 0
 };
 
 function hcSupported() {
@@ -1667,7 +1750,31 @@ function hcReportCrash(cmd, e) {
 }
 
 function hcTaken() {
-    return self._hc.taken.slice();
+    return self._hc.taken.filter(function(record) { return !!self._hc.checkpoints[record.id]; });
+}
+
+// The worker owns actual backing allocations. The SDK owns source validity;
+// summing individual sparse-image lengths there would double-count shared data.
+function hcRetention() {
+    var buffers = new Set(), bytes = 0;
+    var ids = Object.keys(self._hc.checkpoints);
+    ids.forEach(function(id) {
+        var checkpoint = self._hc.checkpoints[id];
+        checkpoint.image.pages.forEach(function(page) { buffers.add(page.data); });
+        Object.keys(checkpoint.fs.files).forEach(function(path) { buffers.add(checkpoint.fs.files[path]); });
+    });
+    buffers.forEach(function(data) { bytes += data.byteLength; });
+    return { ids: ids, bytes: bytes };
+}
+
+function hcEnforceBudget() {
+    var budget = self._hc.budget;
+    var held = hcRetention();
+    while (held.ids.length > budget.maxCount || held.bytes > budget.maxBytes) {
+        held.ids.sort(function(a, b) { return self._hc.checkpoints[a].used - self._hc.checkpoints[b].used; });
+        delete self._hc.checkpoints[held.ids[0]];
+        held = hcRetention();
+    }
 }
 
 function hcDrop(ids) {
@@ -1709,6 +1816,7 @@ function hcArm(checkpoints, transform) {
     self._hc.armed = [];
     self._hc.taken = [];
     self._hc.transform = transform || null;
+    self._hc.readInputs = {};
     if (!checkpoints || !checkpoints.length || !hcSupported()) return;
     hcInstallReadHook();
     hcEnsureDataBuffer();
@@ -1740,19 +1848,20 @@ function hcInstallReadHook() {
         // reading and advance the stream past the checkpoint.
         if (Asyncify.state === Asyncify.State.Unwinding) return 0;
         if (length === 0) return origRead.call(FS, stream, buffer, offset, length, position);
+        if (self._hc.trackingInputs && stream.path) self._hc.readInputs[stream.path] = true;
         // A resumed fork: the rewound import call must stop the rewind before it reads.
         var rs = self._hc.resuming;
         if (rs && Asyncify.state === Asyncify.State.Rewinding && stream.node === rs.node) {
             Asyncify.handleSleep(function() {});
             self._hc.resuming = null;
-            return origRead.call(FS, stream, buffer, offset, length, position);
         }
         var armed = self._hc.armed;
-        if (armed.length && stream.node === armed[0].node) {
-            var pos = (typeof position === "undefined") ? stream.position : position;
+        var pos = (typeof position === "undefined") ? stream.position : position;
+        while (armed.length && stream.node === armed[0].node) {
             var cp = armed[0];
             if (pos < cp.offset && pos + length > cp.offset) {
                 length = cp.offset - pos;              // stop exactly at the checkpoint
+                break;
             } else if (pos === cp.offset) {
                 if (Asyncify.state === Asyncify.State.Normal) {
                     Asyncify.handleSleep(function(wakeUp) { self._hc.pending = { wakeUp: wakeUp, cp: cp }; });
@@ -1761,34 +1870,53 @@ function hcInstallReadHook() {
                 if (Asyncify.state === Asyncify.State.Rewinding) {
                     Asyncify.handleSleep(function() {}); // completes the rewind
                     armed.shift();                       // this checkpoint is done
+                    continue;                           // also bound this read by the next one
                 }
             } else if (pos > cp.offset) {
                 armed.shift();                           // already past it; cannot stop there
+                continue;
             }
+            break;
         }
         return origRead.call(FS, stream, buffer, offset, length, position);
     };
 }
 
-// Sparse memory image: only 64 KiB pages with a non-zero byte are kept (a grown heap
-// is mostly pages TeX never touched).
+// Sparse memory image: immutable nonzero 4 KiB blocks share exact bytes with
+// retained snapshots at the same offset. A grown heap is mostly untouched.
 function hcSparseImage() {
-    var src = new Uint8Array(wasmMemory.buffer);
-    var pages = Math.ceil(src.length / HC_PAGE), kept = [], bytes = 0;
-    for (var pi = 0; pi < pages; pi++) {
-        var a = pi * HC_PAGE, b = Math.min(src.length, a + HC_PAGE);
-        var words = new Int32Array(src.buffer, a, (b - a) >> 2);
-        var zero = true;
-        for (var k = 0; k < words.length; k++) { if (words[k]) { zero = false; break; } }
-        if (zero) continue;
-        kept.push({ at: a, data: src.slice(a, b) });
-        bytes += b - a;
+    var held = Object.values(self._hc.checkpoints);
+    var candidates = {};
+    var last = self._hc.checkpoints[self._hc.lastCheckpointId];
+    if (last) held = [last].concat(held.filter(function(cp) { return cp !== last; }));
+    held.forEach(function(cp) { cp.image.pages.forEach(function(page) {
+        var values = candidates[page.at] || (candidates[page.at] = []);
+        if (values.indexOf(page.data) < 0) values.push(page.data);
+    }); });
+    var src = new Uint8Array(wasmMemory.buffer), kept = [], bytes = 0;
+    for (var at = 0; at < src.length; at += 4096) {
+        var end = Math.min(src.length, at + 4096);
+        var words = new Int32Array(src.buffer, at, (end-at) >> 2);
+        var nonzero = false;
+        for (var j = 0; j < words.length; j++) if (words[j]) { nonzero = true; break; }
+        if (!nonzero) continue;
+        var data = null, values = candidates[at] || [];
+        for (var c = 0; c < values.length; c++) {
+            if (values[c].length !== end-at) continue;
+            var prior = new Int32Array(values[c].buffer, values[c].byteOffset, words.length);
+            var equal = true;
+            for (var k = 0; k < words.length; k++) if (prior[k] !== words[k]) { equal = false; break; }
+            if (equal) { data = values[c]; break; }
+        }
+        kept.push({at:at,data:data || src.slice(at,end)});
+        bytes += end-at;
     }
-    return { length: src.length, pages: kept, bytes: bytes };
+    return {length:src.length,pages:kept,bytes:bytes};
 }
-
 function hcSnapshotFS() {
     var files = {};
+    var prior = self._hc.checkpoints[self._hc.lastCheckpointId];
+    var previousFiles = prior ? prior.fs.files : {};
     (function walk(dir) {
         var names = FS.readdir(dir);
         for (var i = 0; i < names.length; i++) {
@@ -1799,7 +1927,14 @@ function hcSnapshotFS() {
             if (FS.isDir(st.mode)) { walk(p); continue; }
             if (/\.fmt$/.test(n)) continue;   // read before any checkpoint; multi-MB
             var node = FS.lookupPath(p).node;
-            files[p] = node.contents ? node.contents.slice(0, node.usedBytes) : new Uint8Array(0);
+            var previous = previousFiles[p];
+            var same = !!previous && previous.length === node.usedBytes;
+            if (same) {
+                for (var k = 0; k < node.usedBytes; k++) {
+                    if (previous[k] !== node.contents[k]) { same = false; break; }
+                }
+            }
+            files[p] = same ? previous : node.contents ? node.contents.slice(0, node.usedBytes) : new Uint8Array(0);
         }
     })(WORKROOT);
     var streams = [];
@@ -1844,8 +1979,9 @@ function hcRestoreFS(snap) {
 function hcTakeSnapshot(cp) {
     var t0 = performance.now();
     var image = hcSparseImage();
-    var inputs = null;
-    try { inputs = readRecorderInputs(jobNameForMain(self.mainfile), true); } catch(e) {}
+    // The native recorder's stdio buffer may not have reached MEMFS yet. Reads
+    // intercepted at the filesystem boundary prove the actual consumed prefix.
+    var inputs = self._hc.readInputs ? Object.keys(self._hc.readInputs) : null;
     if (self._hc.transform && self._hc.transform.usedPreamble) {
         inputs = mergeRecorderInputs(self._preambleInputFiles, inputs);
     }
@@ -1892,6 +2028,7 @@ async function runMainAsync(programName, args) {
     var dv = new DataView(wasmMemory.buffer);
     for (var i = 0; i < argPtrs.length; i++) dv.setUint32(argv + i * 4, argPtrs[i], true);
     var status;
+    self._hc.trackingInputs = true;
     try {
         try {
             status = _main(fullArgs.length, argv);
@@ -1900,6 +2037,7 @@ async function runMainAsync(programName, args) {
         }
         status = await hcContinueWhileSuspended(status);
     } finally {
+        self._hc.trackingInputs = false;
         _free(argv);
         thisProgram = savedProgram;
     }
@@ -1909,16 +2047,22 @@ async function runMainAsync(programName, args) {
 // After main() returned: if a checkpoint suspended it, snapshot and resume; repeat
 // for every armed checkpoint the run reaches.
 async function hcContinueWhileSuspended(status) {
+    var done = null;
     while (Asyncify.currData && self._hc.pending) {
         var pending = self._hc.pending;
         self._hc.pending = null;
         var snap = hcTakeSnapshot(pending.cp);
+        snap.used = ++self._hc.tick;
         self._hc.checkpoints[snap.id] = snap;
+        self._hc.lastCheckpointId = snap.id;
+        hcEnforceBudget();
         self._hc.taken.push({ id: snap.id, line: snap.line, bytes: snap.bytes, ms: Math.round(snap.ms), inputs: snap.inputs, inputsComplete: snap.inputsComplete });
-        var done = Asyncify.whenDone();
+        if (!done) done = Asyncify.whenDone();
         try {
             pending.wakeUp(0);
-            status = await done;
+            // wakeUp runs synchronously until the next suspension or completion.
+            // Waiting for completion at every checkpoint deadlocks the second one.
+            if (!self._hc.pending) status = await done;
         } catch(e) {
             if (e instanceof ExitStatus) status = e.status; else throw e;
         }
@@ -1961,6 +2105,7 @@ async function compileFromHeapCheckpointRoutine(data) {
         self.postMessage({ "result": "failed", "status": -1, "log": "no such heap checkpoint", "cmd": "compile" });
         return;
     }
+    snap.used = ++self._hc.tick;
     var restoreStart = performance.now();
     hcRestoreFS(snap.fs);
     var hostMain = self._hc.hostWrites[self.mainfile];
@@ -1973,11 +2118,13 @@ async function compileFromHeapCheckpointRoutine(data) {
     self.memlog = snap.memlog;
     phaseTimings.heapRestoreMs = performance.now() - restoreStart;
     hcArm(data["checkpoints"], snap.transform);
+    (snap.inputs || []).forEach(function(path) { self._hc.readInputs[path] = true; });
     // Arms at or before the resume point can never be reached again.
     while (self._hc.armed.length && self._hc.armed[0].offset <= snap.offset) self._hc.armed.shift();
     self._hc.resuming = { node: FS.lookupPath(WORKROOT + "/" + self.mainfile).node };
     var texStart = performance.now();
     var status;
+    self._hc.trackingInputs = true;
     try {
         Asyncify.state = Asyncify.State.Rewinding;
         Asyncify.currData = snap.currData;
@@ -1991,6 +2138,8 @@ async function compileFromHeapCheckpointRoutine(data) {
     } catch(e) {
         console.error("[heap-checkpoint] resume crashed: " + e);
         status = -254;
+    } finally {
+        self._hc.trackingInputs = false;
     }
     hcDisarm();
     phaseTimings.texRunMs = performance.now() - texStart;
