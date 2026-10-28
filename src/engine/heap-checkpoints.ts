@@ -21,7 +21,7 @@
  *   follows up with a full compile, exactly as for #55.
  */
 import type { CompileResult, HeapCheckpointRecord } from '../types'
-import { firstDifference, hashString } from './checkpoint-boundaries'
+import { firstDifference, hashString, includePositions } from './checkpoint-boundaries'
 import { normalizeProjectDependencyPath } from './dependency-manifest'
 import { editTouchesLabels } from './incremental'
 import { extractPreamble } from './preamble-utils'
@@ -46,7 +46,7 @@ export interface HeapCheckpointOptions {
   maxCheckpoints?: number
   /** Total sparse-image bytes kept across checkpoints. Default 320 MiB. */
   maxBytes?: number
-  /** Never checkpoint within this many bytes of the start of the body. Default 512. */
+  /** Minimum effective head text, including earlier included files. Default 512. */
   minHeadBytes?: number
 }
 
@@ -117,6 +117,11 @@ export function checkpointLineForEdit(
   const earliest = floor + 1
   if (offset < earliest + minHeadBytes) return null
   const currentLineStart = source.lastIndexOf('\n', Math.min(offset, source.length) - 1) + 1
+  // A chapter list often has no blank lines. Paragraph slack there would put
+  // every chapter's checkpoint before the entire list. Capable workers can
+  // suspend before reading the actual standalone input command instead.
+  if (lineFallback && standaloneInputLine(source, currentLineStart))
+    return lineOfOffset(source, currentLineStart)
   const fallback = lineFallback
     ? Math.max(earliest, source.lastIndexOf('\n', currentLineStart - 2) + 1)
     : minHeadBytes === 0
@@ -125,6 +130,12 @@ export function checkpointLineForEdit(
   const candidate = previousParagraphStart(source, offset, earliest) ?? fallback
   if (candidate < earliest + minHeadBytes) return null
   return lineOfOffset(source, candidate)
+}
+
+function standaloneInputLine(source: string, start: number): boolean {
+  const end = source.indexOf('\n', start)
+  const line = source.slice(start, end < 0 ? undefined : end)
+  return /^\s*\\(?:include|input|subfile)\s*\{[^}\n]+\}\s*(?:%[^\n]*)?$/.test(line)
 }
 
 /** Prefer one paragraph of slack; compact sources may have no blank separator. */
@@ -244,7 +255,9 @@ export class HeapCheckpointCompiler {
       const line = checkpointLineForEdit(
         source,
         offset,
-        this.minHeadBytes,
+        this.engine.supportsLineCheckpoints
+          ? this.effectiveHeadFloor(source, files, offset)
+          : this.minHeadBytes,
         this.engine.supportsLineCheckpoints,
       )
       if (line === null || seenLines.has(line)) continue
@@ -253,6 +266,18 @@ export class HeapCheckpointCompiler {
       arms.push({ id: `hc${++this.seq}`, line })
     }
     return arms
+  }
+
+  private effectiveHeadFloor(source: string, files: SourceSet, offset: number): number {
+    let remaining = this.minHeadBytes
+    const directory = this.mainFile.slice(0, this.mainFile.lastIndexOf('/') + 1)
+    for (const name of includePositions(source.slice(0, offset)).keys()) {
+      const path = normalizeProjectDependencyPath(`${directory}${name}.tex`)
+      const text = files.get(`${name}.tex`) ?? (path ? files.get(path) : undefined)
+      remaining -= text?.length ?? 0
+      if (remaining <= 0) return 0
+    }
+    return remaining
   }
 
   /** Record a finished full compile (or resume) and the checkpoints it took. */

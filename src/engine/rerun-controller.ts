@@ -5,6 +5,7 @@ export function needsRerun(log: string): boolean {
   return (
     log.includes('Rerun to get cross-references right') ||
     log.includes('Rerun to get citations correct') ||
+    log.includes('Rerun to get outlines right') ||
     log.includes('Rerun LaTeX') ||
     log.includes('Label(s) may have changed. Rerun') ||
     log.includes('Please (re)run Biber') ||
@@ -42,8 +43,8 @@ export class RerunController {
    * @param signature  a hash of the cross-reference state (aux / trace); use
    *                   {@link signatureOf} if you only have the raw content
    */
-  decide(log: string, signature: string): RerunDecision {
-    if (!needsRerun(log)) {
+  decide(log: string, signature: string, auxiliaryChanged = false): RerunDecision {
+    if (!needsRerun(log) && !auxiliaryChanged) {
       // Converged: clear the no-progress baseline. The signature of a pass that did NOT
       // ask for a rerun must not seed it, or a later genuine rerun whose signature happens
       // to match this converged one would be wrongly declined as "no-progress".
@@ -52,7 +53,7 @@ export class RerunController {
       return { rerun: false }
     }
     if (this.count >= this.maxReruns) return { rerun: false, stopped: 'limit' }
-    if (this.lastSignature !== null && signature === this.lastSignature) {
+    if (!auxiliaryChanged && this.lastSignature !== null && signature === this.lastSignature) {
       return { rerun: false, stopped: 'no-progress' }
     }
     this.count++

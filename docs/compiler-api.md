@@ -97,6 +97,29 @@ content-addressed cache.
 > registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
 > See the [execution model](execution-model.md#pluggable-stages-available-today).
 
+Generated indexes validate the actual `.idx` after each TeX pass. Ordinary prose
+edits retain the previous `.ind`; identical requests skip makeindex, and changed
+requests force another TeX pass only when their output changes. Page-number and
+entry changes rebuild automatically, including removal of the final entry.
+Authored `.ind` files remain authoritative. Replacing a project, retiring its
+engine or switching roots retires request reuse. Changed output also retires
+checkpoints that may contain an old index. Auxiliary-only reruns share the
+reference loop's termination bound; exhausted convergence never reports settled
+references. [The book-edit lab](engine-testing.md#book-edit-lab) measures this path.
+
+PDF-outline rerun requests also participate in convergence, with `.out` content
+in their progress signature. A required settling pass replaces checkpoints that
+may have read old auxiliary state. This can add an initial pass where the old
+compiler stopped before creating the final index bookmark; subsequent edits
+reuse the settled state.
+
+`TexError.line` is one-based, or zero when no source line was found. File context
+for a zero-line diagnostic is inferred from the log's parentheses; it is not
+verified source evidence and can differ between full and resumed logs. Preserve
+these messages in Problems, but require a positive line and a file for editor
+markers or source navigation. Unsupported tools such as minted can produce
+many such unlocated errors even when the engine returns a PDF.
+
 #### Reference convergence
 
 Canonical results may report `telemetry.referencesSettled: true` when the SDK

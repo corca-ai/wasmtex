@@ -22,7 +22,7 @@ export interface HeapCheckpointOptions {
     maxCheckpoints?: number;
     /** Total sparse-image bytes kept across checkpoints. Default 320 MiB. */
     maxBytes?: number;
-    /** Never checkpoint within this many bytes of the start of the body. Default 512. */
+    /** Minimum effective head text, including earlier included files. Default 512. */
     minHeadBytes?: number;
 }
 export interface HeapCheckpointArm {
@@ -85,6 +85,7 @@ export declare class HeapCheckpointCompiler {
      * unless a held checkpoint already covers it. `extraLine` lets a host add the cursor line.
      */
     armsForFullCompile(source: string, files: SourceSet, extraOffset?: number): HeapCheckpointArm[];
+    private effectiveHeadFloor;
     /** Record a finished full compile (or resume) and the checkpoints it took. */
     noteFull(source: string, files: SourceSet, result: CompileResult): void;
     /**

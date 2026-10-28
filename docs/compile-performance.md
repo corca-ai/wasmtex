@@ -87,6 +87,14 @@ qualification remain separate from the SDK unit tests.
 
 ## Checkpoints in compact source
 
+Capable pdfTeX workers place a hinted standalone `\include`, `\input` or
+`\subfile` checkpoint immediately before that command's source line. A compact
+chapter list therefore resumes at the edited chapter rather than at the blank
+paragraph before the entire list. Earlier included source bodies count toward
+the minimum useful head, so a short main file can still qualify. Older workers
+keep paragraph placement. Input proof, invalidation and memory budgets remain
+authoritative; a chapter-loading line is not a portable chapter cache.
+
 On capable pdfTeX workers, sources without an earlier blank paragraph separator
 use the previous source line for checkpoint placement. Existing paragraph
 placement and prefix/dependency invalidation remain unchanged. Older workers

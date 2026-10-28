@@ -1,5 +1,5 @@
 import type { AccessibleExportOptions, DocumentMetadataInjection } from './engine/accessible-export'
-import type { BackendRegistry } from './engine/backend-registry'
+import type { BackendRegistry, ToolBackend } from './engine/backend-registry'
 import { runRemoteBiber } from './engine/biber-backend'
 import {
   type BibliographyStageRequest,
@@ -33,7 +33,12 @@ import {
 } from './engine/engine-select'
 import type { HeapCheckpointCompiler, HeapCheckpointOptions } from './engine/heap-checkpoints'
 import { IncrementalCompiler, type PreviewIncrementalResult } from './engine/incremental'
-import { detectIndexUse, type IndexStageRequest, runRemoteIndex } from './engine/index-backend'
+import {
+  detectIndexUse,
+  INDEX_STAGE,
+  type IndexStageRequest,
+  runRemoteIndex,
+} from './engine/index-backend'
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
 import { extractPreamble } from './engine/preamble-utils'
@@ -429,6 +434,13 @@ export class WasmTexCompiler {
   private unavailable: EngineDetection | null = null
   private bibtexEngine: BibtexEngine | null = null
   private makeindexEngine: MakeindexEngine | null = null
+  /** Last successful index request; one root, bounded by the current .idx size. */
+  private indexInput: {
+    path: string
+    idx: string
+    backend: ToolBackend<IndexStageRequest, string> | null
+    version: string | undefined
+  } | null = null
   /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
    *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
   private incremental: IncrementalCompiler | null = null
@@ -792,14 +804,17 @@ export class WasmTexCompiler {
     const controller = new RerunController()
     let referencesSettled = false
     while (result.success || result.pdf) {
-      const decision = controller.decide(
-        result.log,
-        signatureOf(result.semanticTrace ?? result.log),
-      )
-      if (!decision.rerun && !auxInjected) {
+      const signature = (await this.operations.observe(this.rerunSignature(result))).resume()
+      const decision = controller.decide(result.log, signature, auxInjected)
+      if (!decision.rerun) {
         referencesSettled = !decision.stopped
         break
       }
+      // A checkpoint may have consumed the old aux/outline state before its
+      // source boundary. Capture the settling pass afresh instead of keeping
+      // that prefix merely because the project sources are unchanged.
+      this.incremental?.reset()
+      this.heap?.reset()
       ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
       result = (
         await this.operations.observe(
@@ -832,6 +847,17 @@ export class WasmTexCompiler {
     ;(await this.operations.observe(this.attachCompletionSnapshot(result))).resume()
     this.incremental?.noteFull(this.mainSource(), this.projectTexFiles(), result.synctex)
     return result
+  }
+
+  private async rerunSignature(result: CompileResult): Promise<string> {
+    const trace = result.semanticTrace ?? result.log
+    if (!result.log.includes('Rerun to get outlines right')) return signatureOf(trace)
+    // Label/ref command names do not describe PDF bookmarks. Include the
+    // actual outline state before declaring an outline rerun to be stuck.
+    const out = (
+      await this.operations.observe(this.engine?.readFile(this.mainFile.replace(/\.tex$/, '.out')))
+    ).resume()
+    return signatureOf(`${trace}\n${out ?? ''}`)
   }
 
   /**
@@ -1001,17 +1027,17 @@ export class WasmTexCompiler {
     const dependencyPath = normalizeProjectDependencyPath(path) ?? path
     this.generatedFiles.delete(dependencyPath)
     this.generatedDependencyObservations.delete(dependencyPath)
+    if (this.indexInput?.path === path) this.indexInput = null
     this.currentAuxiliaryDependencies.clear()
     if (
       (path.endsWith('.tex') || path.endsWith('.bib') || path.endsWith('.bst')) &&
       !path.endsWith('.bbl')
     ) {
       const base = this.mainFile.replace(/\.tex$/, '')
-      // Drop generated stage artifacts so an edit re-runs bibtex / makeindex instead of
-      // serving a stale `.bbl` / `.ind` (their guards skip when the artifact still exists).
+      // Bibliography stages still invalidate on source changes. The index instead
+      // validates its actual .idx after every TeX pass, retaining an unchanged .ind.
       // `.bst` is included: a custom style is just as much a bibliography input as `.bib`.
       this.dropGeneratedFile(`${base}.bbl`)
-      this.dropGeneratedFile(`${base}.ind`)
     }
     // New workers include preamble reads in checkpoint evidence. Retain only
     // checkpoints that prove this secondary source had not been read yet.
@@ -1059,6 +1085,7 @@ export class WasmTexCompiler {
     this.fs = new VirtualFS({ empty: true })
     this.projectIndex = new ProjectIndex()
     this.generatedFiles.clear()
+    this.indexInput = null
     this.generatedDependencyObservations.clear()
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
@@ -1111,6 +1138,7 @@ export class WasmTexCompiler {
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
     if (changed) {
+      this.indexInput = null
       // Re-point (not just reset) the incremental compiler: its mainFile is wired into the
       // diff baseline / snapshot bookkeeping, so a bare reset() would leave it diffing the
       // wrong file after the active main changes. Hosts that re-assert the same main file
@@ -1207,6 +1235,7 @@ export class WasmTexCompiler {
   }
 
   private dropGeneratedFile(path: string): void {
+    if (this.indexInput?.path === path) this.indexInput = null
     this.fs.deleteFile(path)
     const dependencyPath = normalizeProjectDependencyPath(path) ?? path
     this.generatedFiles.delete(dependencyPath)
@@ -1897,12 +1926,14 @@ export class WasmTexCompiler {
 
   /**
    * Auto-run the index stage for `\printindex` (analogous to {@link maybeRunBibtex}): when
-   * the LaTeX pass emitted a non-empty `.idx` and no `.ind` exists yet, turn it into `.ind`
+   * the LaTeX pass emitted a changed `.idx`, turn it into `.ind`
    * — via a registered **server** backend for the `index` stage (makeindex/xindy), else the
    * bundled makeindex WASM (client-first, fully on-device) — and inject it so `\printindex`
    * resolves on the next pass. Gated on the source actually using `\makeindex`+`\printindex`
    * so a stale `.idx` in a reused engine can't add a phantom index.
-   * @returns whether a fresh `.ind` was injected this pass (forces one more LaTeX pass).
+   * An unchanged request keeps the prior artifact; changed requests need another TeX
+   * pass only when the generated .ind differs. Authored .ind inputs stay authoritative.
+   * @returns whether a changed `.ind` was injected (forces one more LaTeX pass).
    */
   private async maybeRunMakeindex(result: CompileResult): Promise<boolean> {
     const mainEngine = this.engine
@@ -1911,29 +1942,62 @@ export class WasmTexCompiler {
     if (!detectIndexUse(this.mainSource())) return false
 
     const mainBase = this.mainFile.replace(/\.tex$/, '')
-    if (this.fs.readFile(`${mainBase}.ind`)) return false
+    const outputPath = `${mainBase}.ind`
+    const dependencyPath = normalizeProjectDependencyPath(outputPath) ?? outputPath
+    const previous = this.fs.readFile(outputPath)
+    if (previous !== null && !this.generatedFiles.has(dependencyPath)) return false
     const idx = (await this.operations.observe(mainEngine.readFile(`${mainBase}.idx`))).resume()
-    if (!idx?.trim()) return false
+    if (idx === null) return false
+    const registered = this.opts.backends?.resolve(INDEX_STAGE)
+    const backend = registered?.location === 'server' ? registered : null
+    if (this.matchesIndexInput(outputPath, idx, backend)) return false
+    if (!idx.trim() && previous === null) return false
 
-    const request: IndexStageRequest = { idx }
-    const ind =
-      (await this.operations.observe(runRemoteIndex(this.opts.backends, request))).resume() ??
-      (await this.operations.observe(this.runClientMakeindex(mainBase, idx))).resume()
+    // Removing the last entry must also remove the formerly generated index.
+    const ind = idx.trim() ? await this.buildIndex(mainBase, idx) : ''
     const observation: AuxiliaryDependencyObservation = {
       stage: 'index',
       projectInputs: [],
-      complete: !!ind,
+      complete: ind !== null,
     }
     this.currentAuxiliaryDependencies.set('index', observation)
-    if (!ind) return false
+    if (ind === null) return false
 
-    const outputPath = `${mainBase}.ind`
-    const dependencyPath = normalizeProjectDependencyPath(outputPath) ?? outputPath
-    this.fs.writeFile(outputPath, ind)
+    this.indexInput = { path: outputPath, idx, backend, version: backend?.version }
     this.generatedFiles.add(dependencyPath)
     this.generatedDependencyObservations.set(dependencyPath, observation)
+    if (previous === ind) return false
+    // A retained prefix may already have typeset the old index (some books put
+    // it before later chapters). It cannot prove the new generated input.
+    this.incremental?.reset()
+    this.heap?.reset()
+    this.fs.writeFile(outputPath, ind)
     ;(await this.operations.observe(mainEngine.writeFile(outputPath, ind))).resume()
     return true
+  }
+
+  private matchesIndexInput(
+    path: string,
+    idx: string,
+    backend: ToolBackend<IndexStageRequest, string> | null,
+  ): boolean {
+    const cached = this.indexInput
+    return (
+      this.fs.readFile(path) !== null &&
+      !!cached &&
+      cached.path === path &&
+      cached.idx === idx &&
+      cached.backend === backend &&
+      cached.version === backend?.version
+    )
+  }
+
+  private async buildIndex(mainBase: string, idx: string): Promise<string | null> {
+    const request: IndexStageRequest = { idx }
+    return (
+      (await this.operations.observe(runRemoteIndex(this.opts.backends, request))).resume() ??
+      (await this.operations.observe(this.runClientMakeindex(mainBase, idx))).resume()
+    )
   }
 
   /** Resolve the project-local custom `.bst` named by `\bibliographystyle` (read from the

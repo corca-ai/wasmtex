@@ -24,7 +24,7 @@ export declare class RerunController {
      * @param signature  a hash of the cross-reference state (aux / trace); use
      *                   {@link signatureOf} if you only have the raw content
      */
-    decide(log: string, signature: string): RerunDecision;
+    decide(log: string, signature: string, auxiliaryChanged?: boolean): RerunDecision;
 }
 /** Hash the cross-reference content (semantic trace or `.aux`) into a signature. */
 export declare function signatureOf(content: string | undefined): string;

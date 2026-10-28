@@ -542,9 +542,11 @@ export interface GlyphCoverageReport {
 }
 
 export interface TexError {
+  /** One-based source line, or 0 when the log supplies no source location. */
   line: number
   message: string
   severity: 'error' | 'warning'
+  /** Log-inferred context when line is 0; not a verified source location. */
   file?: string
   /** Machine-readable classification for select errors so a host can branch
    *  (rather than regex the message). Currently: `'missing-package'` — a `.sty`/
