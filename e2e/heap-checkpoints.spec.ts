@@ -206,3 +206,78 @@ test('compact source resumes within an unfinished paragraph and preserves full o
   expect(out.fallbackResumed).toBe(false)
   expect(out.fallbackIdentical).toBe(true)
 })
+
+for (const command of ['include', 'subfile'] as const) {
+  test(`indexed ${command} books reuse the edited chapter and preserve settled output`, async ({ page }) => {
+    await page.route('**/*.worker.js*', async (route) => {
+      const response = await route.fetch()
+      const clock = `var NativeDate = Date; Date = class extends NativeDate { constructor(...args) { super(...(args.length ? args : ['2026-10-13T00:00:00Z'])); } static now() { return 1791849600000; } };\n`
+      await route.fulfill({ response, body: (await response.text()).replace('Module["postRun"] = function() {', 'Module["postRun"] = function() {' + clock) })
+    })
+    await page.route('**/book-probe.html', (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Book qualification</title>' }))
+    await page.goto(`${APP_URL}/book-probe.html`)
+    const out = await page.evaluate(async ({ command, texliveVersion, texliveUrl }) => {
+      const { WasmTexCompiler } = await import('/src/headless.ts')
+      const main = '\\documentclass{book}\n\\usepackage{subfiles,makeidx,hyperref}\n\\makeindex\n\\begin{document}\n\\frontmatter\n\\tableofcontents\n\\mainmatter\n' +
+        Array.from({ length: 6 }, (_, i) => `\\${command}{chapter${i + 1}}`).join('\n') + '\n\\printindex\n\\end{document}\n'
+      const files: Record<string, string> = { 'main.tex': main }
+      for (let i = 1; i <= 6; i++) {
+        const body = `\\chapter{Chapter ${i}}\n` +
+          'Every function preserves its structure.\\index{structure}\n\n' +
+          'Composition respects identity and associativity. '.repeat(20) + '\n'
+        files[`chapter${i}.tex`] = command === 'subfile'
+          ? `\\documentclass[main]{subfiles}\n\\begin{document}\n${body}\\end{document}\n`
+          : body
+      }
+      const options = { files, engine: 'pdflatex' as const, texliveVersion, texliveUrl }
+      const candidate = new WasmTexCompiler({ ...options, incremental: true, heapCheckpointOptions: { maxCheckpoints: 1, maxBytes: 64 * 2 ** 20 } })
+      const full = new WasmTexCompiler(options)
+      const normalize = (pdf: Uint8Array | null) => {
+        if (!pdf) return null
+        let text = ''
+        for (let i = 0; i < pdf.length; i += 8192) text += String.fromCharCode(...pdf.subarray(i, i + 8192))
+        return text.replace(/\/(?:CreationDate|ModDate)\s*\([^)]*\)/g, '').replace(/\/ID\s*\[[^\]]*\]/g, '')
+      }
+      const hint = { incrementalPreparation: { path: 'chapter4.tex', offset: files['chapter4.tex']!.indexOf('Every function') } }
+      try {
+        await candidate.init()
+        await full.init()
+        const initial = await candidate.compile(hint)
+        await full.compile()
+        const settled = await full.compile()
+        const wantedLine = main.slice(0, main.indexOf('{chapter4}')).split('\n').length
+        const rows = []
+        for (const replacement of ['Every mapping', 'Every morphism']) {
+          const edited = files['chapter4.tex']!.replace('Every function', replacement)
+          candidate.setFile('chapter4.tex', edited)
+          full.setFile('chapter4.tex', edited)
+          const actual = await candidate.compile(hint)
+          const expected = await full.compile()
+          const outputs = []
+          for (const extension of ['aux', 'toc', 'ind', 'out']) {
+            outputs.push(await candidate.readOutput(`main.${extension}`) === await full.readOutput(`main.${extension}`))
+          }
+          rows.push({ success: actual.success, resumed: actual.phaseTimings?.checkpointResume === true,
+            pdf: normalize(actual.pdf) === normalize(expected.pdf), outputs: outputs.every(Boolean),
+            errors: actual.errors, synctex: !!actual.synctex && String(actual.synctex) === String(expected.synctex) })
+        }
+        candidate.setFile('chapter4.tex', files['chapter4.tex']!)
+        full.setFile('chapter4.tex', files['chapter4.tex']!)
+        const early = files['chapter1.tex']!.replace('Every function', 'A changed function')
+        candidate.setFile('chapter1.tex', early)
+        full.setFile('chapter1.tex', early)
+        const fallback = await candidate.compile(hint)
+        const truth = await full.compile()
+        return { rows, wantedLine, line: initial.heapCheckpoints?.[0]?.line,
+          coldEqual: normalize(initial.pdf) === normalize(settled.pdf), coldErrors: initial.errors,
+          fallback: { resumed: fallback.phaseTimings?.checkpointResume === true, equal: normalize(fallback.pdf) === normalize(truth.pdf) } }
+      } finally { candidate.dispose(); full.dispose() }
+    }, { command, texliveVersion, texliveUrl })
+    expect(out.coldErrors).toEqual([])
+    expect(out.coldEqual).toBe(true)
+    expect(out.line).toBe(out.wantedLine)
+    expect(out.rows).toHaveLength(2)
+    for (const row of out.rows) expect(row).toEqual({ success: true, resumed: true, pdf: true, outputs: true, errors: [], synctex: true })
+    expect(out.fallback).toEqual({ resumed: false, equal: true })
+  })
+}

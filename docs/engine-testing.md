@@ -1,5 +1,47 @@
 # Engine testing and profiling
 
+## Book edit lab
+
+`scripts/bench-book-edits.mjs` runs an initial browser compile and repeated prose
+edits against the same live compiler. It generates a twelve-chapter indexed book
+by default. Supply a text-only project directory to exercise a real book;
+the input files remain untouched. `--assets` names the directory containing
+`wasmtex/<year>/`. A disk proxy caches exact mirror responses, including 404s;
+a measured warm sample fails if it fetches new upstream inputs. All output stays
+under ignored `report/` directories.
+
+```sh
+node scripts/bench-book-edits.mjs --assets /path/to/released/assets \
+  --texlive-url https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+  --out report/book-synthetic
+node scripts/bench-book-edits.mjs --assets /path/to/released/assets \
+  --texlive-url https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+  --project /path/to/DaoFP --main DaoFP.tex --edit 12-Coalgebras.tex \
+  --from 'Coalgebras are just' --to 'Coalgebras are also' --out report/book-dao
+```
+
+Use `--sdk-entry /lib/headless.js` for an unchanged committed bundle and the
+default `/src/headless.ts` for the candidate. Keep assets, mirror, browser,
+inputs and edit sequence identical; compare both orderings on an otherwise idle
+machine. `--heap false` qualifies the plain-engine fallback separately. Each
+sample records engine passes, phase timings, heap checkpoints, diagnostics and
+auxiliary outputs, plus a PDF and its typeset hash. Hash normalization removes
+only dates and document IDs, as in the output-preservation tool. Compare matching
+sample PDFs and outputs, and separately test pagination/index changes. Initial
+network/format work is separate from repeat costs. These are compile-to-bytes
+measurements, not application edit-to-paint or total browser memory measurements.
+
+Add `--page-limit 168 --checkpoints 32 --checkpoint-mib 256` to measure a
+same-build preview session alongside each canonical edit. Each warm sample
+alternates three foreground edits and saves their prefix PDFs. The report
+separates setup, preview-to-bytes and canonical time and records the actual
+controller hash and retained checkpoint allocation. Select a page limit that
+includes the edited page; a prefix ending before it is not evidence of a visible
+edit. This still does not measure application input-to-paint or process memory.
+`e2e/page-preview-fork.spec.ts` covers include/subfile books, bounded sharing,
+independent preview changes/reversion and canonical PDF, auxiliary and SyncTeX
+preservation against the authored controller on both annual native engines.
+
 For contributors qualifying engine/controller changes. Complete the [development setup](develop.md) first and follow the [optimization policy](engine-optimization-policy.md).
 [Engine builds](engine-build.md) produce candidate assets; these procedures compare
 them with explicit baselines. For SDK integration, use [headless compilation](headless.md).

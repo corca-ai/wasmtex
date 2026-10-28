@@ -554,6 +554,14 @@ that buffer, and later TeX allocations cannot overwrite a pending unwind.
 Checkpoints stay bound to the same worker and engine release. This allocation
 is separate from the SDK's retained-checkpoint count and byte budgets.
 
+Capable workers share immutable nonzero 4 KiB blocks and unchanged working-file
+buffers across retained chapter states. The worker enforces the host's count and
+actual backing-byte budget, returning the surviving IDs and allocated bytes;
+shared buffers count once. Live Wasm extent, snapshot temporaries and JS metadata
+remain outside this bound. Prefix validity uses observed native filesystem reads
+rather than a recorder that may still have buffered writes. The SDK owns source
+validation and drops proofs for worker-evicted IDs.
+
 ## Disposable page-prefix previews
 
 The explicit headless `previewPages()` operation is separate from canonical
@@ -573,3 +581,12 @@ use only a retained checkpoint with complete proof that the file was unread;
 otherwise the SDK requests full compilation. The SDK never publishes partial
 metadata as a full compile and requires a successful baseline. The
 [preview API contract](compiler-api.md#deferred-pdf-preview-parts) defines host reconciliation.
+
+A `createPagePreviewSession()` host may clone one checkpoint into a separate
+same-build worker. The fork copies the actual package cache, lookup maps and
+Bloom state; it skips unrelated warmup and format preparation. Its worker URL,
+endpoint, native data pointer and engine build identity must agree. It accepts
+only disposable previews. Setup cancellation terminates the sibling and settles
+its startup wait without killing the canonical parent. The caller owns returned
+session disposal. [Compiler API](compiler-api.md#deferred-pdf-preview-parts)
+defines proof checks, the 512 MiB heap / 192 MiB copy admission bounds and fallback.

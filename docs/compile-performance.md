@@ -21,6 +21,7 @@ to their source files and requalification requirements.
 | pdfTeX / XeTeX format loading | Bounded byte-verified decoded-format read cache with original O2 flags and published fmt bytes. | One source, at most 8 MiB compressed / 32 MiB decoded / 65,536 chunks; lifecycle and fallback checks required. |
 | LuaHBTeX build | O3 + LTO on the pinned toolchain. | Larger compressed assets; no decoded-format cache. |
 | pdfTeX incremental path | Preamble formats, optional durable preamble cache and browser heap checkpoints. | Each has a distinct identity/lifetime; see [engine caches](engine.md#preamble-snapshots). |
+| Book edit previews | Capable browser pdfTeX workers share bounded chapter states and can fork a disposable foreground preview session. | Adds one live heap and a bounded copy; hosts own admission/lifetime. Canonical compilation remains authoritative. |
 | Plain pdfTeX working capacity | The authored controller starts without extra main-memory allowances and promotes once on main-memory exhaustion. | Working-directory rollback preserves inputs/outputs; snapshots add transient copies. INITEX and checkpoint paths retain the original capacity. Immutable release/adoption qualification is separate from the [screening record](history/compact-capacity-2026-10.md). |
 
 The September 2026 controlled corpus measured repeat/body improvements around
@@ -59,8 +60,10 @@ repeats found no reproducible compile slowdown in the measured corpus; this
 does not establish identical initialization latency or a browser memory budget.
 
 The [cache memory record](history/cache-memory-2026-10.md) separates retained warmup
-originals from transient dump allocations and records the rejected delta-save,
-auxiliary-snapshot and checkpoint-sharing implementations.
+originals from transient dump allocations and records the rejected earlier delta-save,
+auxiliary-snapshot and checkpoint-sharing implementations. The current bounded
+4 KiB checkpoint sharing uses exact immutable blocks across live states; it does
+not revive those earlier approaches.
 
 ## Continuous page-prefix preview
 
@@ -80,12 +83,22 @@ to export incomplete documents or change published formats.
 
 The pdfTeX controller grows from 82,668 to 84,993 bytes (gzip-9: 22,402 to
 22,866 bytes). Both annual controller ceilings are 86,000 bytes to accommodate the
-new command, filesystem rollback and capability handshake. Other artifact and
+new command, filesystem rollback and capability handshake. The subsequent
+shared-checkpoint/fork controller is 93,273 bytes (gzip-9: 24,980 bytes); its two
+annual controller ceilings are 94,000 bytes. All other artifact and
 runtime ceilings are unchanged. Native code is built from the existing upstream
 pins and reuses the exact published formats. Annual release and application
 qualification remain separate from the SDK unit tests.
 
 ## Checkpoints in compact source
+
+Capable pdfTeX workers place a hinted standalone `\include`, `\input` or
+`\subfile` checkpoint immediately before that command's source line. A compact
+chapter list therefore resumes at the edited chapter rather than at the blank
+paragraph before the entire list. Earlier included source bodies count toward
+the minimum useful head, so a short main file can still qualify. Older workers
+keep paragraph placement. Input proof, invalidation and memory budgets remain
+authoritative; a chapter-loading line is not a portable chapter cache.
 
 On capable pdfTeX workers, sources without an earlier blank paragraph separator
 use the previous source line for checkpoint placement. Existing paragraph

@@ -61,7 +61,7 @@ const result = await compiler.compile()
 | `onEngineSelected` | `(selection: Readonly<EngineDetection>) => void \| Promise<void>` | - | Headless compiler notification before initialization of each newly selected engine, including Auto changes. Contains `engine`, `reason`, and `forced`. Returned promises are not awaited; observer failures are logged without failing compilation. Same-engine edits do not notify again. |
 | `onLoadProgress` | `(event: LoadProgressEvent) => void` | - | Load progress for a host UI: `{ phase: 'format', percent }` while the precompiled format downloads, `{ phase: 'file', file, count }` for every TeX Live file fetched on demand. Pair with `warmup({ onProgress })` for the prefetch phase. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
-| `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number; minHeadBytes?: number }` | 4 checkpoints / 320 MiB / 512 head bytes | Retained browser pdfLaTeX heap checkpoints, bounded by count and sparse-image bytes. Values must be nonnegative safe integers. `minHeadBytes: 0` permits a checkpoint at the first body line. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
+| `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number; minHeadBytes?: number }` | 4 checkpoints / 320 MiB / 512 head bytes | Retained browser pdfLaTeX heap checkpoints, bounded by count and retained image/filesystem backing bytes (shared blocks count once on capable workers). Values must be nonnegative safe integers. `minHeadBytes: 0` permits a checkpoint at the first body line. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number; idleMs?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
@@ -96,6 +96,29 @@ content-addressed cache.
 > `\printindex` runs client-side via the bundled makeindex WASM by default; a backend
 > registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
 > See the [execution model](execution-model.md#pluggable-stages-available-today).
+
+Generated indexes validate the actual `.idx` after each TeX pass. Ordinary prose
+edits retain the previous `.ind`; identical requests skip makeindex, and changed
+requests force another TeX pass only when their output changes. Page-number and
+entry changes rebuild automatically, including removal of the final entry.
+Authored `.ind` files remain authoritative. Replacing a project, retiring its
+engine or switching roots retires request reuse. Changed output also retires
+checkpoints that may contain an old index. Auxiliary-only reruns share the
+reference loop's termination bound; exhausted convergence never reports settled
+references. [The book-edit lab](engine-testing.md#book-edit-lab) measures this path.
+
+PDF-outline rerun requests also participate in convergence, with `.out` content
+in their progress signature. A required settling pass replaces checkpoints that
+may have read old auxiliary state. This can add an initial pass where the old
+compiler stopped before creating the final index bookmark; subsequent edits
+reuse the settled state.
+
+`TexError.line` is one-based, or zero when no source line was found. File context
+for a zero-line diagnostic is inferred from the log's parentheses; it is not
+verified source evidence and can differ between full and resumed logs. Preserve
+these messages in Problems, but require a positive line and a file for editor
+markers or source navigation. Unsupported tools such as minted can produce
+many such unlocated errors even when the engine returns a PDF.
 
 #### Reference convergence
 
@@ -160,9 +183,29 @@ The returned `PagePreviewResult` contains `pdf`, `synctex`, `compileTime` and
 references, not an export or proof of settled pagination. Auxiliary files and
 compiler metadata remain unchanged. Hosts must run `compile()` after editing
 settles, keep partial results out of export/cache paths, and bound retained
-preview versions. Preview errors return `null` so the host can fall back to the
-normal diagnostic pipeline. Input mutation, disposal and overlapping calls obey
+preview versions. New error signatures, verified locations or increased counts
+return `null`. Errors already present in the full baseline may remain in a
+preview. Unverified line-zero diagnostics compare message/count only; previews
+do not certify diagnostics, and the full compile remains authoritative. Input mutation, disposal and overlapping calls obey
 the same serialization rules as `compile()`.
+
+`await compiler.createPagePreviewSession(hint?, signal?)` captures one valid
+checkpoint into an independent same-build worker for foreground previews. Call
+while the parent is idle and synchronized, after a successful full compile.
+`hint` has the same `{path, offset}` shape as `incrementalPreparation`. Missing
+proof, externalized figures, unsupported workers or an incompatible build return
+`null`; initialization failures reject. The signal cancels setup. The returned
+`PagePreviewSession` exposes only `setFile`, `previewPages` and idempotent
+`dispose`. It can preview during the parent's subsequent full compile. Its
+baseline is frozen: later parent changes do not refresh it. Hosts must rebuild
+it when appropriate and dispose it on project/engine transitions. Parent disposal
+fences an unfinished creation but does not own an already returned session.
+
+Only one checkpoint and the parent's actual package/lookup state are copied;
+no new warmup set or portable heap import is exposed. Fork setup declines heaps
+above 512 MiB or retained checkpoint/filesystem/package copies above 192 MiB.
+These bounds exclude JS metadata, temporary message copies and native compiler
+memory. Hosts own device admission and the number/lifetime of siblings.
 
 `await compiler.compilePreview()` runs the same serialized compile pipeline as
 `compile()`, but returns `PreviewCompileResult`. Its `pdf` is ordinary bytes for
@@ -210,11 +253,14 @@ memory copy, so it serves any number of edits after it.
   boundary, placement uses the previous source line instead of replaying from the body start,
   when the worker advertises `lineCheckpoints`. Older workers retain paragraph placement.
   This also works inside an unfinished paragraph or macro argument: the snapshot preserves
-  execution state, and prefix/input validation still applies. A single long source line cannot
+  execution state, and prefix/input validation still applies. Capable shared-checkpoint
+  workers also arm standalone `\include`, `\input` and `\subfile` lines automatically,
+  within the configured count/byte budget. Unchanged 4 KiB memory blocks and
+  working files share immutable backing storage across retained states. A single long source line cannot
   be checkpointed in the middle. Up to 4 are kept (LRU, ~35–80 MB
   each as sparse images) and freed with the compiler.
 - **Validity**: the main-file bytes before the checkpoint line, and every project file TeX had
-  opened by then (from the run's recorder), must be unchanged. Preamble edits, edits before
+  read by then (observed native filesystem reads, plus cached preamble evidence), must be unchanged. Preamble edits, edits before
   the earliest checkpoint, and label/citation/numbering edits take the full path (the latter
   because a resumed run reads cross-references from the `.aux` the original run loaded).
 - **Result**: a resumed compile is an ordinary `CompileResult` with `phaseTimings.checkpointResume`

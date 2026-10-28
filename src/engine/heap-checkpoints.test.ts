@@ -67,6 +67,20 @@ describe('checkpointLineForEdit', () => {
     expect(checkpointLineForEdit(DOC, DOC.indexOf('Paragraph 2'), 10_000)).toBeNull()
     expect(checkpointLineForEdit('no document env', 3)).toBeNull()
   })
+
+  it('places chapter-list checkpoints at the input line instead of the preceding paragraph', () => {
+    for (const command of ['include', 'input', 'subfile']) {
+      const source = DOC.replace(
+        '\\end{document}',
+        `\\${command}{chapter1}\n  \\${command}{chapter2} % next chapter\n\\end{document}`,
+      )
+      const offset = source.indexOf('{chapter2}')
+      expect(checkpointLineForEdit(source, offset, 0, true)).toBe(lineOfOffset(source, offset))
+      expect(checkpointLineForEdit(source, offset, 0, false)).toBeLessThan(
+        lineOfOffset(source, offset),
+      )
+    }
+  })
 })
 
 class FakeEngine implements HeapCheckpointEngine {
@@ -114,6 +128,20 @@ class FakeEngine implements HeapCheckpointEngine {
 
 describe('HeapCheckpointCompiler', () => {
   const files = () => new Map([['chapter.tex', 'chapter']])
+
+  it('counts preceding chapter bodies in a short main file without relaxing old-worker placement', () => {
+    const source = `${PRE}\\include{chapters/a}\n\\include{chapters/b}\n\\end{document}`
+    const sources = new Map([['chapters/a.tex', 'Earlier content.\n'.repeat(100)]])
+    const engine = new FakeEngine()
+    const hc = new HeapCheckpointCompiler(engine)
+    const offset = source.indexOf('{chapters/b}')
+    const arms = hc.armsForFullCompile(source, sources, offset)
+    expect(arms).toHaveLength(1)
+    expect(arms[0]?.line).toBe(lineOfOffset(source, offset))
+    expect(hc.armsForFullCompile(source, new Map(), offset)).toEqual([])
+    engine.supportsLineCheckpoints = false
+    expect(hc.armsForFullCompile(source, sources, offset)).toEqual([])
+  })
 
   it('prepares only the requested cursor region within a one-checkpoint budget', async () => {
     const engine = new FakeEngine()

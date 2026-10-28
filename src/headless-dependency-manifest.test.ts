@@ -20,7 +20,7 @@ class FakeEngine {
   constructor(
     private readonly aux: string,
     private readonly bcf = '',
-    private readonly idx = '',
+    public idx = '',
   ) {}
 
   async compile(): Promise<CompileResult> {
@@ -76,7 +76,41 @@ function installFakeEngine(compiler: WasmTexCompiler, engine: FakeEngine): void 
   internals.engine = engine
 }
 
+function indexedCompiler(engine: FakeEngine, index: (request: { idx: string }) => Promise<string>) {
+  const source = String.raw`\documentclass{book}\makeindex\begin{document}\printindex\end{document}`
+  const backends = new BackendRegistry()
+  backends.register(INDEX_STAGE, {
+    id: 'index',
+    stage: INDEX_STAGE,
+    location: 'server',
+    run: index,
+  })
+  const compiler = new WasmTexCompiler({ files: { 'main.tex': source }, backends })
+  installFakeEngine(compiler, engine)
+  return { source, compiler }
+}
+
 describe('WasmTexCompiler dependency manifest composition', () => {
+  it('settles changing PDF outlines even when label/ref command names are unchanged', async () => {
+    const compiler = new WasmTexCompiler({ files: { 'main.tex': '\\documentclass{book}' } })
+    const engine = new FakeEngine('')
+    const compile = engine.compile.bind(engine)
+    vi.spyOn(engine, 'compile').mockImplementation(async () => ({
+      ...(await compile()),
+      semanticTrace: 'L:unchanged-label-name',
+      log: engine.compileCount < 3 ? 'Rerun to get outlines right' : '',
+    }))
+    const read = engine.readFile.bind(engine)
+    vi.spyOn(engine, 'readFile').mockImplementation(async (path) =>
+      path === 'main.out' ? `outline-${Math.min(engine.compileCount, 2)}` : read(path),
+    )
+    installFakeEngine(compiler, engine)
+    const result = await compiler.compile()
+    expect(engine.compileCount).toBe(3)
+    expect(result.telemetry?.referencesSettled).toBe(true)
+    compiler.dispose()
+  })
+
   it('attaches only compile-produced runtime evidence and stales it immediately on edit', async () => {
     const source = '\\documentclass{article}\\begin{document}x\\end{document}'
     const compiler = new WasmTexCompiler({
@@ -188,7 +222,143 @@ describe('WasmTexCompiler dependency manifest composition', () => {
 
     compiler.setFile('styles/custom.bst', 'ENTRY{author}{}{}')
     expect(compiler.getFile('main.bbl')).toBeNull()
-    expect(compiler.getFile('main.ind')).toBeNull()
+    expect(compiler.getFile('main.ind')).toBe('\\begin{theindex}\\end{theindex}')
+  })
+
+  it('reuses generated index inputs after prose edits and regenerates changed page numbers', async () => {
+    const engine = new FakeEngine('', '', String.raw`\indexentry{term}{1}`)
+    const index = vi.fn(async ({ idx }: { idx: string }) => `index: ${idx}`)
+    const { source, compiler } = indexedCompiler(engine, index)
+
+    await compiler.compile()
+    expect(engine.compileCount).toBe(2)
+    compiler.setFile('main.tex', `${source}\n% prose edit`)
+    const repeated = await compiler.compile()
+    expect(engine.compileCount).toBe(3)
+    expect(index).toHaveBeenCalledTimes(1)
+    expect(repeated.telemetry?.dependencyManifest?.complete).toBe(true)
+    expect(repeated.telemetry?.dependencyManifest?.projectInputs).not.toContain('main.ind')
+
+    engine.idx = String.raw`\indexentry{term}{2}`
+    compiler.setFile('main.tex', `${source}\n% page changed`)
+    await compiler.compile()
+    expect(engine.compileCount).toBe(5)
+    expect(index).toHaveBeenCalledTimes(2)
+    expect(compiler.getFile('main.ind')).toContain('{2}')
+
+    engine.idx = ''
+    compiler.setFile('main.tex', `${source}\n% last entry removed`)
+    await compiler.compile()
+    expect(engine.compileCount).toBe(7)
+    expect(compiler.getFile('main.ind')).toBe('')
+    const empty = await compiler.compile()
+    expect(engine.compileCount).toBe(8)
+    expect(empty.telemetry?.dependencyManifest?.complete).toBe(true)
+    expect(empty.telemetry?.dependencyManifest?.projectInputs).not.toContain('main.ind')
+    engine.idx = String.raw`\indexentry{restored}{4}`
+    compiler.setFile('main.tex', `${source}\n% restored entry`)
+    await compiler.compile()
+    expect(engine.compileCount).toBe(10)
+    expect(compiler.getFile('main.ind')).toContain('restored')
+    compiler.dispose()
+  })
+
+  it('bounds nonconverging index pages and does not reuse a replaced project artifact', async () => {
+    const engine = new FakeEngine('')
+    const compile = engine.compile.bind(engine)
+    vi.spyOn(engine, 'compile').mockImplementation(async () => {
+      engine.idx = `\\indexentry{term}{${engine.compileCount + 1}}`
+      return compile()
+    })
+    const index = vi.fn(async ({ idx }: { idx: string }) => idx)
+    const { source, compiler } = indexedCompiler(engine, index)
+    const result = await compiler.compile()
+    expect(engine.compileCount).toBe(6)
+    expect(result.telemetry?.referencesSettled).toBe(false)
+
+    Object.assign(engine, { flushCache: async () => {} })
+    await compiler.loadProject({ 'main.tex': source })
+    vi.mocked(engine.compile).mockImplementation(compile)
+    const previousCalls = index.mock.calls.length
+    await compiler.compile()
+    expect(index.mock.calls.length).toBe(previousCalls + 1)
+    expect(compiler.getFile('main.ind')).toBe(engine.idx)
+    compiler.dispose()
+  })
+
+  it('does not rerun TeX when changed index input produces identical output', async () => {
+    const engine = new FakeEngine('', '', String.raw`\indexentry{term}{1}`)
+    const index = vi.fn(async () => 'same sorted index')
+    const { source, compiler } = indexedCompiler(engine, index)
+    await compiler.compile()
+    engine.idx += '\n' // Whitespace/order can change without changing the sorted output.
+    compiler.setFile('main.tex', `${source}\n% changed`)
+    await compiler.compile()
+    expect(engine.compileCount).toBe(3)
+    expect(index).toHaveBeenCalledTimes(2)
+
+    compiler.setFile('main.ind', 'author supplied index')
+    engine.idx = String.raw`\indexentry{other}{3}`
+    await compiler.compile()
+    expect(engine.compileCount).toBe(4)
+    expect(index).toHaveBeenCalledTimes(2)
+    expect(compiler.getFile('main.ind')).toBe('author supplied index')
+    compiler.dispose()
+  })
+
+  it('invalidates index reuse when the registered backend or its version changes', async () => {
+    const engine = new FakeEngine('', '', String.raw`\indexentry{term}{1}`)
+    const backends = new BackendRegistry()
+    const first = vi.fn(async () => 'old index')
+    backends.register(INDEX_STAGE, {
+      id: 'index',
+      version: '1',
+      stage: INDEX_STAGE,
+      location: 'server',
+      run: first,
+    })
+    const source = String.raw`\documentclass{book}\makeindex\begin{document}\printindex\end{document}`
+    const compiler = new WasmTexCompiler({ files: { 'main.tex': source }, backends })
+    installFakeEngine(compiler, engine)
+    await compiler.compile()
+
+    const next = vi.fn(async () => 'new index')
+    const backend = {
+      id: 'index',
+      version: '2',
+      stage: 'index' as const,
+      location: 'server' as const,
+      run: next,
+    }
+    backends.register(INDEX_STAGE, backend)
+    compiler.setFile('main.tex', `${source}\n% prose edit`)
+    await compiler.compile()
+    expect(next).toHaveBeenCalledOnce()
+    expect(compiler.getFile('main.ind')).toBe('new index')
+
+    backend.version = '3'
+    next.mockResolvedValue('version 3 index')
+    await compiler.compile()
+    expect(next).toHaveBeenCalledTimes(2)
+    expect(compiler.getFile('main.ind')).toBe('version 3 index')
+    compiler.dispose()
+  })
+
+  it('settles index page numbers that change after the table of contents appears', async () => {
+    const engine = new FakeEngine('')
+    const compile = engine.compile.bind(engine)
+    vi.spyOn(engine, 'compile').mockImplementation(async () => {
+      engine.idx = `\\indexentry{term}{${engine.compileCount === 0 ? 1 : 2}}`
+      return compile()
+    })
+    const index = vi.fn(async ({ idx }: { idx: string }) => idx)
+    const { compiler } = indexedCompiler(engine, index)
+    const result = await compiler.compile()
+    expect(engine.compileCount).toBe(3)
+    expect(index).toHaveBeenCalledTimes(2)
+    expect(compiler.getFile('main.ind')).toContain('{2}')
+    expect(result.telemetry?.referencesSettled).toBe(true)
+    compiler.dispose()
   })
 
   it.each([

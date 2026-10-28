@@ -4,6 +4,8 @@ export type SourceSet = Map<string, string>;
 export interface HeapCheckpointEngine {
     readonly supportsHeapCheckpoints: boolean;
     readonly supportsLineCheckpoints?: boolean;
+    readonly supportsSharedCheckpoints?: boolean;
+    setCheckpointBudget?(maxCount: number, maxBytes: number): void;
     compile(options?: {
         checkpoints?: Array<{
             id: string;
@@ -22,7 +24,7 @@ export interface HeapCheckpointOptions {
     maxCheckpoints?: number;
     /** Total sparse-image bytes kept across checkpoints. Default 320 MiB. */
     maxBytes?: number;
-    /** Never checkpoint within this many bytes of the start of the body. Default 512. */
+    /** Minimum effective head text, including earlier included files. Default 512. */
     minHeadBytes?: number;
 }
 export interface HeapCheckpointArm {
@@ -72,8 +74,12 @@ export declare class HeapCheckpointCompiler {
         line: number;
         bytes: number;
     }>;
+    /** Copy proof and diff baselines; the engine's fork owns the copied heap. */
+    cloneForEngine(engine: HeapCheckpointEngine, onlyId?: string): HeapCheckpointCompiler;
     /** A preview must not advance the full-result baseline or arm new checkpoints. */
     previewCheckpoint(source: string, files: SourceSet): string | undefined;
+    /** Select a prepared region before an edit, before its bytes are written. */
+    previewCheckpointForEdit(source: string, files: SourceSet, path: string, offset: number): string | undefined;
     reset(): void;
     /** Keep a secondary-source edit only when the checkpoint proves it had not
      * read that file, including through a precompiled preamble. Older workers
@@ -82,9 +88,11 @@ export declare class HeapCheckpointCompiler {
     /**
      * Checkpoints to arm on the full compile about to run for `source`: the paragraph before
      * the region the last edit touched (or, with no baseline, before the end of the document),
-     * unless a held checkpoint already covers it. `extraLine` lets a host add the cursor line.
+     * unless a held checkpoint already covers it. `extraOffset` lets a host add the cursor location.
      */
     armsForFullCompile(source: string, files: SourceSet, extraOffset?: number): HeapCheckpointArm[];
+    private fullCompileOffsets;
+    private effectiveHeadFloor;
     /** Record a finished full compile (or resume) and the checkpoints it took. */
     noteFull(source: string, files: SourceSet, result: CompileResult): void;
     /**

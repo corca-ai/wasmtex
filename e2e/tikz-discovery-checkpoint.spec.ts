@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test'
 
 test.setTimeout(300_000)
 const year = process.env.TEXLIVE_VERSION === '2025' ? ('2025' as const) : ('2026' as const)
+// Use the same immutable annual mirror directly, as the other checkpoint specs do.
+// An extra development proxy can stall package requests independently of the engine.
+const texliveUrl = process.env.TEXLIVE_URL ?? (year === '2025'
+  ? 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/'
+  : 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/')
 const paragraph = 'Unchanged academic text before the diagrams. '.repeat(100)
 const source = String.raw`\documentclass{article}
 \usepackage{tikz}
@@ -23,10 +28,10 @@ test('TikZ discovery resumes before figures and reconciles canonical PDF and map
   })
   await page.route('**/tikz-probe.html', (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>TikZ qualification</title>' }))
   await page.goto('http://localhost:6001/tikz-probe.html')
-  const out = await page.evaluate(async ({ source, year }) => {
+  const out = await page.evaluate(async ({ source, year, texliveUrl }) => {
     const { WasmTexCompiler } = await import('/src/headless.ts')
     const { warmup } = await import('/src/warmup.ts')
-    const warmupCache = await warmup({ texliveVersion: year, texliveUrl: `${location.origin}/texlive/` })
+    const warmupCache = await warmup({ texliveVersion: year, texliveUrl })
     const normalize = (bytes: Uint8Array) => {
       let text = ''
       for (let i = 0; i < bytes.length; i += 8192)
@@ -38,7 +43,7 @@ test('TikZ discovery resumes before figures and reconciles canonical PDF and map
       warmupCache,
       engine: 'pdflatex' as const,
       texliveVersion: year,
-      texliveUrl: `${location.origin}/texlive/`,
+      texliveUrl,
       tikzExternalization: { mode: 'auto' as const, workers: 1, idleMs: 5000 },
     }
     const candidate = new WasmTexCompiler({ ...options, incremental: true, heapCheckpointOptions: { maxCheckpoints: 1, maxBytes: 64 * 2 ** 20, minHeadBytes: 0 } })
@@ -96,7 +101,7 @@ test('TikZ discovery resumes before figures and reconciles canonical PDF and map
       candidate.dispose()
       full.dispose()
     }
-  }, { source, year })
+  }, { source, year, texliveUrl })
   expect(out.initial).toMatchObject({success: true, errors: []})
   expect(out.initialFull).toBe(true)
   expect(out.prepared).toBe(true)

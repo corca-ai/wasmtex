@@ -61,6 +61,12 @@ export interface CompileResult {
     errors: TexError[];
     /** Checkpoints taken during this compile, when any were requested (#81). */
     heapCheckpoints?: HeapCheckpointRecord[];
+    /** Actual shared checkpoint backing bytes and retained IDs in a capable worker.
+     * Includes checkpoint file snapshots; excludes the live WASM heap and JS metadata. */
+    heapCheckpointRetention?: {
+        ids: string[];
+        bytes: number;
+    };
     /** Time in milliseconds */
     compileTime: number;
     /** Raw synctex data (uncompressed or gzipped) from pdfTeX -synctex=1 */
@@ -482,9 +488,11 @@ export interface GlyphCoverageReport {
     gaps: FontGlyphGap[];
 }
 export interface TexError {
+    /** One-based source line, or 0 when the log supplies no source location. */
     line: number;
     message: string;
     severity: 'error' | 'warning';
+    /** Log-inferred context when line is 0; not a verified source location. */
     file?: string;
     /** Machine-readable classification for select errors so a host can branch
      *  (rather than regex the message). Currently: `'missing-package'` — a `.sty`/

@@ -21,7 +21,7 @@
  *   follows up with a full compile, exactly as for #55.
  */
 import type { CompileResult, HeapCheckpointRecord } from '../types'
-import { firstDifference, hashString } from './checkpoint-boundaries'
+import { firstDifference, hashString, includePositions } from './checkpoint-boundaries'
 import { normalizeProjectDependencyPath } from './dependency-manifest'
 import { editTouchesLabels } from './incremental'
 import { extractPreamble } from './preamble-utils'
@@ -32,6 +32,8 @@ export type SourceSet = Map<string, string>
 export interface HeapCheckpointEngine {
   readonly supportsHeapCheckpoints: boolean
   readonly supportsLineCheckpoints?: boolean
+  readonly supportsSharedCheckpoints?: boolean
+  setCheckpointBudget?(maxCount: number, maxBytes: number): void
   compile(options?: { checkpoints?: Array<{ id: string; line: number }> }): Promise<CompileResult>
   compileFromHeapCheckpoint(
     id: string,
@@ -46,7 +48,7 @@ export interface HeapCheckpointOptions {
   maxCheckpoints?: number
   /** Total sparse-image bytes kept across checkpoints. Default 320 MiB. */
   maxBytes?: number
-  /** Never checkpoint within this many bytes of the start of the body. Default 512. */
+  /** Minimum effective head text, including earlier included files. Default 512. */
   minHeadBytes?: number
 }
 
@@ -117,6 +119,11 @@ export function checkpointLineForEdit(
   const earliest = floor + 1
   if (offset < earliest + minHeadBytes) return null
   const currentLineStart = source.lastIndexOf('\n', Math.min(offset, source.length) - 1) + 1
+  // A chapter list often has no blank lines. Paragraph slack there would put
+  // every chapter's checkpoint before the entire list. Capable workers can
+  // suspend before reading the actual standalone input command instead.
+  if (lineFallback && standaloneInputLine(source, currentLineStart))
+    return lineOfOffset(source, currentLineStart)
   const fallback = lineFallback
     ? Math.max(earliest, source.lastIndexOf('\n', currentLineStart - 2) + 1)
     : minHeadBytes === 0
@@ -125,6 +132,12 @@ export function checkpointLineForEdit(
   const candidate = previousParagraphStart(source, offset, earliest) ?? fallback
   if (candidate < earliest + minHeadBytes) return null
   return lineOfOffset(source, candidate)
+}
+
+function standaloneInputLine(source: string, start: number): boolean {
+  const end = source.indexOf('\n', start)
+  const line = source.slice(start, end < 0 ? undefined : end)
+  return /^\s*\\(?:include|input|subfile)\s*\{[^}\n]+\}\s*(?:%[^\n]*)?$/.test(line)
 }
 
 /** Prefer one paragraph of slack; compact sources may have no blank separator. */
@@ -170,6 +183,7 @@ export class HeapCheckpointCompiler {
     this.maxCheckpoints = options.maxCheckpoints ?? 4
     this.maxBytes = options.maxBytes ?? 320 * 1024 * 1024
     this.minHeadBytes = options.minHeadBytes ?? 512
+    engine.setCheckpointBudget?.(this.maxCheckpoints, this.maxBytes)
   }
 
   get enabled(): boolean {
@@ -181,10 +195,61 @@ export class HeapCheckpointCompiler {
     return [...this.checkpoints.values()].map((c) => ({ id: c.id, line: c.line, bytes: c.bytes }))
   }
 
+  /** Copy proof and diff baselines; the engine's fork owns the copied heap. */
+  cloneForEngine(engine: HeapCheckpointEngine, onlyId?: string): HeapCheckpointCompiler {
+    const copy = new HeapCheckpointCompiler(engine, {
+      mainFile: this.mainFile,
+      maxCheckpoints: this.maxCheckpoints,
+      maxBytes: this.maxBytes,
+      minHeadBytes: this.minHeadBytes,
+    })
+    copy.last = this.last ? new Map(this.last) : null
+    copy.lastMain = this.lastMain
+    copy.seq = this.seq
+    copy.tick = this.tick
+    for (const [id, checkpoint] of this.checkpoints) {
+      if (onlyId !== undefined && id !== onlyId) continue
+      copy.checkpoints.set(id, {
+        ...checkpoint,
+        inputs: new Map(checkpoint.inputs),
+        inputPaths: checkpoint.inputPaths ? [...checkpoint.inputPaths] : null,
+      })
+    }
+    return copy
+  }
+
   /** A preview must not advance the full-result baseline or arm new checkpoints. */
   previewCheckpoint(source: string, files: SourceSet): string | undefined {
     if (!this.enabled || this.lastMain === null) return undefined
     return this.findValid(source, files, firstDifference(this.lastMain, source))?.id
+  }
+
+  /** Select a prepared region before an edit, before its bytes are written. */
+  previewCheckpointForEdit(
+    source: string,
+    files: SourceSet,
+    path: string,
+    offset: number,
+  ): string | undefined {
+    const content = files.get(path)
+    if (
+      !this.enabled ||
+      this.lastMain === null ||
+      content === undefined ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      offset > content.length
+    )
+      return undefined
+    if (path === this.mainFile) return this.findValid(source, files, offset)?.id
+    const checkpoint = this.findValid(
+      source,
+      files,
+      source.length,
+      undefined,
+      (paths) => !paths.some((raw) => projectPath(raw) === path),
+    )
+    return checkpoint?.inputsComplete ? checkpoint.id : undefined
   }
 
   reset(): void {
@@ -225,26 +290,21 @@ export class HeapCheckpointCompiler {
   /**
    * Checkpoints to arm on the full compile about to run for `source`: the paragraph before
    * the region the last edit touched (or, with no baseline, before the end of the document),
-   * unless a held checkpoint already covers it. `extraLine` lets a host add the cursor line.
+   * unless a held checkpoint already covers it. `extraOffset` lets a host add the cursor location.
    */
   armsForFullCompile(source: string, files: SourceSet, extraOffset?: number): HeapCheckpointArm[] {
     if (!this.enabled) return []
-    const offsets: number[] = []
-    if (extraOffset !== undefined) {
-      offsets.push(extraOffset)
-    } else if (this.lastMain != null) {
-      const diff = firstDifference(this.lastMain, source)
-      if (diff < source.length || this.lastMain !== source) offsets.push(diff)
-    } else {
-      offsets.push(source.length)
-    }
+    const offsets = this.fullCompileOffsets(source, extraOffset)
     const arms: HeapCheckpointArm[] = []
     const seenLines = new Set<number>()
     for (const offset of offsets) {
+      if (arms.length >= Math.min(this.maxCheckpoints, 64)) break
       const line = checkpointLineForEdit(
         source,
         offset,
-        this.minHeadBytes,
+        this.engine.supportsLineCheckpoints
+          ? this.effectiveHeadFloor(source, files, offset)
+          : this.minHeadBytes,
         this.engine.supportsLineCheckpoints,
       )
       if (line === null || seenLines.has(line)) continue
@@ -255,13 +315,58 @@ export class HeapCheckpointCompiler {
     return arms
   }
 
+  private fullCompileOffsets(source: string, extraOffset?: number): number[] {
+    const offsets: number[] = []
+    if (extraOffset !== undefined) {
+      offsets.push(extraOffset)
+    } else if (this.lastMain != null) {
+      const diff = firstDifference(this.lastMain, source)
+      if (diff < source.length || this.lastMain !== source) offsets.push(diff)
+    } else {
+      offsets.push(source.length)
+    }
+    if (this.engine.supportsSharedCheckpoints && this.maxCheckpoints > 1) {
+      const target = offsets[0] ?? source.length
+      const chapters = [...includePositions(source).values()].filter((offset) =>
+        standaloneInputLine(source, source.lastIndexOf('\n', offset - 1) + 1),
+      )
+      chapters.sort((a, b) => Math.abs(a - target) - Math.abs(b - target))
+      offsets.push(...chapters)
+    }
+    return offsets
+  }
+
+  private effectiveHeadFloor(source: string, files: SourceSet, offset: number): number {
+    let remaining = this.minHeadBytes
+    const directory = this.mainFile.slice(0, this.mainFile.lastIndexOf('/') + 1)
+    for (const name of includePositions(source.slice(0, offset)).keys()) {
+      const path = normalizeProjectDependencyPath(`${directory}${name}.tex`)
+      const text = files.get(`${name}.tex`) ?? (path ? files.get(path) : undefined)
+      remaining -= text?.length ?? 0
+      if (remaining <= 0) return 0
+    }
+    return remaining
+  }
+
   /** Record a finished full compile (or resume) and the checkpoints it took. */
   noteFull(source: string, files: SourceSet, result: CompileResult): void {
     this.last = new Map(files)
     this.last.set(this.mainFile, source)
     this.lastMain = source
-    for (const record of result.heapCheckpoints ?? []) this.remember(source, files, record)
-    void this.enforceBudget()
+    const retained = this.engine.supportsSharedCheckpoints
+      ? result.heapCheckpointRetention
+      : undefined
+    const shared =
+      retained && retained.ids.length <= this.maxCheckpoints && retained.bytes <= this.maxBytes
+        ? new Set(retained.ids)
+        : null
+    if (shared) {
+      for (const id of this.checkpoints.keys()) if (!shared.has(id)) this.checkpoints.delete(id)
+    }
+    for (const record of result.heapCheckpoints ?? []) {
+      if (!shared || shared.has(record.id)) this.remember(source, files, record)
+    }
+    if (!shared) void this.enforceBudget()
   }
 
   /**

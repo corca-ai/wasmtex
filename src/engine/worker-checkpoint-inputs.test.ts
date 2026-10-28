@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createContext, runInContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
-// Execute the authored checkpoint capture against recorder files. Memory/stream
+// Execute authored checkpoint capture against observed filesystem reads. Memory/stream
 // capture is independent of the dependency evidence tested here.
 function capture(usedPreamble: boolean, preamble: string[] | null, body: string | null) {
   let removed = false
@@ -28,7 +28,19 @@ function capture(usedPreamble: boolean, preamble: string[] | null, body: string 
   )
   scope.hcSparseImage = () => ({ bytes: 0 })
   scope.hcSnapshotFS = () => ({ files: {}, streams: [] })
-  scope._hc = { transform: { usedPreamble } }
+  scope._hc = {
+    transform: { usedPreamble },
+    readInputs:
+      body === null
+        ? null
+        : Object.fromEntries(
+            body
+              .trimEnd()
+              .split('\n')
+              .filter((line) => line.startsWith('INPUT '))
+              .map((line) => [line.slice(6), true]),
+          ),
+  }
   scope._preambleInputFiles = preamble
   const snapshot = runInContext('hcTakeSnapshot({id: "cp", line: 5, offset: 100})', scope)
   expect(removed).toBe(false) // The live recorder must remain available to finalization.

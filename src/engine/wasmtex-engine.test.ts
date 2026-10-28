@@ -42,6 +42,7 @@ describe('WasmTexPdftexEngine persistent cache', () => {
 })
 
 type WorkerReply = {
+  previewState?: unknown
   heapCheckpoints?: unknown
   lineCheckpoints?: unknown
   cmd?: string
@@ -720,4 +721,47 @@ it.each([
   }))
   const result = await engine.compile()
   expect(result.heapCheckpoints?.[0]?.inputsComplete).toBe(sample.expected)
+})
+
+it('cancels preview export waits without terminating or confusing canonical RPC replies', async () => {
+  const engine = new TestableEngine()
+  Object.assign(engine, { pagePreviewForkSupported: true, engineBuildId: 'a'.repeat(64) })
+  engine.installWorker()
+  engine.markReady()
+  const controller = new AbortController()
+  const pending = engine.forkForPagePreview('first', controller.signal)
+  controller.abort()
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  expect(engine.isReady()).toBe(true)
+  // The abandoned response still drains its own FIFO slot.
+  engine.deliver({ cmd: 'exportpagepreview', result: 'failed' })
+  const next = engine.forkForPagePreview('next')
+  engine.deliver({ cmd: 'exportpagepreview', result: 'failed' })
+  expect(await next).toBeNull()
+  expect(engine.isReady()).toBe(true)
+})
+
+it('cancels a preview sibling whose startup never reports readiness', async () => {
+  const engine = new TestableEngine()
+  Object.assign(engine, { pagePreviewForkSupported: true, engineBuildId: 'a'.repeat(64) })
+  engine.installWorker(() => ({ cmd: 'exportpagepreview', result: 'ok', previewState: {} }))
+  engine.markReady()
+  const init = vi
+    .spyOn(WasmTexPdftexEngine.prototype, 'init')
+    .mockImplementation(() => new Promise(() => {}))
+  const terminate = vi
+    .spyOn(WasmTexPdftexEngine.prototype, 'terminate')
+    .mockImplementation(() => {})
+  try {
+    const controller = new AbortController()
+    const pending = engine.forkForPagePreview('first', controller.signal)
+    await vi.waitFor(() => expect(init).toHaveBeenCalledTimes(1))
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(terminate).toHaveBeenCalled()
+    expect(engine.isReady()).toBe(true)
+  } finally {
+    init.mockRestore()
+    terminate.mockRestore()
+  }
 })

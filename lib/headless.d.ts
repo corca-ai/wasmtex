@@ -100,6 +100,12 @@ export interface WasmTexCompilerOptions {
     };
 }
 type FileContent = string | Uint8Array;
+/** A bounded, disposable sibling with no diagnostics, metadata or export authority. */
+export interface PagePreviewSession {
+    setFile(path: string, content: string | Uint8Array): void;
+    previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
+    dispose(): void;
+}
 export declare class WasmTexCompiler {
     private engine;
     private engineKind;
@@ -108,6 +114,8 @@ export declare class WasmTexCompiler {
     private unavailable;
     private bibtexEngine;
     private makeindexEngine;
+    /** Last successful index request; one root, bounded by the current .idx size. */
+    private indexInput;
     /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
      *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
     private incremental;
@@ -118,6 +126,7 @@ export declare class WasmTexCompiler {
     private prebuildInFlight;
     private compileInFlight;
     private pagePreviewBaseline;
+    private pagePreviewErrors;
     private pagePreviewRequiresCheckpoint;
     private readonly operations;
     private initInFlight;
@@ -177,6 +186,11 @@ export declare class WasmTexCompiler {
     compile(options?: CompileOptions): Promise<CompileResult>;
     /** Opt in to independent PDF parts for final page-break incremental results. */
     compilePreview(options?: CompileOptions): Promise<PreviewCompileResult>;
+    /** Keep foreground page previews independent of a long canonical compile.
+     * Captures one same-build checkpoint; unsupported engines return null. The
+     * caller owns and disposes the sibling, including after project transitions.
+     */
+    createPagePreviewSession(hint?: CompileOptions['incrementalPreparation'], signal?: AbortSignal): Promise<PagePreviewSession | null>;
     /** Render a PDF prefix using the last full pass's references. This leaves full
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */
@@ -185,6 +199,7 @@ export declare class WasmTexCompiler {
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
     private compileIdle;
+    private rerunSignature;
     /**
      * Build the incremental checkpoint nearest an expected edit while the compiler is idle.
      * Calling this after a successful full compile moves the one-time checkpoint build out of
@@ -325,14 +340,18 @@ export declare class WasmTexCompiler {
     private runClientBiblatexLite;
     /**
      * Auto-run the index stage for `\printindex` (analogous to {@link maybeRunBibtex}): when
-     * the LaTeX pass emitted a non-empty `.idx` and no `.ind` exists yet, turn it into `.ind`
+     * the LaTeX pass emitted a changed `.idx`, turn it into `.ind`
      * — via a registered **server** backend for the `index` stage (makeindex/xindy), else the
      * bundled makeindex WASM (client-first, fully on-device) — and inject it so `\printindex`
      * resolves on the next pass. Gated on the source actually using `\makeindex`+`\printindex`
      * so a stale `.idx` in a reused engine can't add a phantom index.
-     * @returns whether a fresh `.ind` was injected this pass (forces one more LaTeX pass).
+     * An unchanged request keeps the prior artifact; changed requests need another TeX
+     * pass only when the generated .ind differs. Authored .ind inputs stay authoritative.
+     * @returns whether a changed `.ind` was injected (forces one more LaTeX pass).
      */
     private maybeRunMakeindex;
+    private matchesIndexInput;
+    private buildIndex;
     /** Resolve the project-local custom `.bst` named by `\bibliographystyle` (read from the
      *  VFS), or null when the style is bundled / absent. Shared by the client + server paths. */
     private resolveProjectBst;

@@ -8,6 +8,7 @@ describe('needsRerun', () => {
   it('detects rerun requests', () => {
     expect(needsRerun(RERUN_LOG)).toBe(true)
     expect(needsRerun('Please (re)run Biber')).toBe(true)
+    expect(needsRerun('Rerun to get outlines right')).toBe(true)
     expect(needsRerun(CLEAN_LOG)).toBe(false)
   })
 })
@@ -59,6 +60,14 @@ describe('RerunController', () => {
     expect(c.decide(RERUN_LOG, 'b').stopped).toBe('limit')
     c.reset()
     expect(c.decide(RERUN_LOG, 'c').rerun).toBe(true)
+  })
+
+  it('bounds auxiliary-only reruns even when TeX emits no rerun warning', () => {
+    const c = new RerunController(2)
+    expect(c.decide(CLEAN_LOG, 'same', true).rerun).toBe(true)
+    expect(c.decide(CLEAN_LOG, 'same', true).rerun).toBe(true)
+    expect(c.decide(CLEAN_LOG, 'same', true)).toEqual({ rerun: false, stopped: 'limit' })
+    expect(c.decide(CLEAN_LOG, 'same', false)).toEqual({ rerun: false })
   })
 })
 
