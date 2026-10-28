@@ -619,3 +619,14 @@ available and use the same figure/heading analysis. Hosts consuming the full
 preflight diagnostics should disable these two overlapping lint rules.
 `artifact`, non-empty `alt`, and non-empty `actualtext` are accepted; empty
 alternatives and `artifact=false` are not.
+
+### Literal reference occurrences
+
+`getReferenceOccurrences(content)` returns editor-neutral UTF-16 spans, command
+names and keys for literal `\label`, `\ref`, `\eqref`, `\pageref` and plain
+`\cite` commands. Citation clusters retain all keys as one occurrence. Token and
+mask ownership excludes comments, verbatim and escaped control sequences. Computed
+keys, optional citation arguments and other reference commands are not inferred.
+The function provides syntax positions only: hosts must associate display values
+with the exact compiled source/root/profile, preserve native citation styles, and
+refuse stale positions. It does not assign any number or mutate source.
