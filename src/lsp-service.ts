@@ -940,3 +940,5 @@ export type {
 
 export { accessiblePdfSourceDiagnostics, buildAccessiblePdfPreflight } from './lsp/accessible-pdf'
 export type { LinkedEditingRanges } from './lsp/environment-pairs'
+
+export { getReferenceOccurrences, type ReferenceOccurrence } from './lsp/reference-occurrences'
