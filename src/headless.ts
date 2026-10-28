@@ -11,6 +11,7 @@ import {
   resolveBstFile,
   runRemoteBibliography,
 } from './engine/bibliography-backend'
+import { collectBibliographyInputs } from './engine/bibliography-inputs'
 import { BibtexEngine } from './engine/bibtex-engine'
 import {
   type CompileEngine,
@@ -1925,7 +1926,12 @@ export class WasmTexCompiler {
 
     // Pluggable bibliography stage: if the integrator routed it to a server backend, use
     // that `.bbl` and skip the client BibTeX engine entirely. Default = client BibTeX.
-    const bibFiles = this.collectBibFiles()
+    const projectBibFiles = this.collectBibFiles()
+    const { bibFiles, hasGenerated } = (
+      await this.operations.observe(
+        collectBibliographyInputs(auxContent, projectBibFiles, (path) => mainEngine.readFile(path)),
+      )
+    ).resume()
     const request: BibliographyStageRequest = { aux: auxContent, bibFiles }
     // Forward a project-local custom `.bst` so a server backend can resolve it too (the
     // client path writes it directly in runClientBibtex).
@@ -1938,7 +1944,11 @@ export class WasmTexCompiler {
       (await this.operations.observe(this.runClientBibtex(mainBase, auxContent, bibFiles))).resume()
     const observation: AuxiliaryDependencyObservation = {
       stage: 'bibliography',
-      projectInputs: [...Object.keys(bibFiles), ...Object.keys(request.bstFiles ?? {})],
+      projectInputs: [
+        ...Object.keys(projectBibFiles),
+        ...Object.keys(request.bstFiles ?? {}),
+        ...(hasGenerated ? this.projectTexFiles().keys() : []),
+      ],
       complete: !!bbl,
     }
     this.currentAuxiliaryDependencies.set('bibliography', observation)

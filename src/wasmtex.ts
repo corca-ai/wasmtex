@@ -6,6 +6,7 @@ import {
   type OverrideHandle,
 } from './editor/open-code-editor-override'
 import { createEditor, createFileModel, revealLine } from './editor/setup'
+import { collectBibliographyInputs } from './engine/bibliography-inputs'
 import { BibtexEngine } from './engine/bibtex-engine'
 import { unavailableEngineResult } from './engine/compile-engine'
 import { CompileScheduler } from './engine/compile-scheduler'
@@ -1972,14 +1973,16 @@ export class WasmTex {
   ): Promise<void> {
     await engine.writeFile(`${mainBase}.aux`, auxContent)
 
-    const bibFiles = this.fs.listFiles().filter((f) => f.endsWith('.bib'))
-
-    for (const bibPath of bibFiles) {
-      const content = this.fs.readFile(bibPath)
-
-      if (content != null) {
-        await engine.writeFile(bibPath, content)
-      }
+    const projectFiles: Record<string, string | Uint8Array> = {}
+    for (const path of this.fs.listFiles().filter((file) => file.endsWith('.bib'))) {
+      const content = this.fs.readFile(path)
+      if (content != null) projectFiles[path] = content
+    }
+    const { bibFiles } = await collectBibliographyInputs(auxContent, projectFiles, (path) =>
+      this.engine.readFile(path),
+    )
+    for (const [path, content] of Object.entries(bibFiles)) {
+      await engine.writeFile(path, content)
     }
 
     const bstMatch = auxContent.match(/\\bibstyle\{([^}]+)\}/)
