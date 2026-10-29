@@ -91,6 +91,11 @@ jobs:
           TEXLIVE_VERSION: ${{ matrix.year }}
           TEXLIVE_URL: ${{ matrix.mirror }}
 
+      - name: Checkpoint output ownership on Chromium
+        run: npx playwright test e2e/checkpoint-output-collision.spec.ts --workers=1
+        env:
+          TEXLIVE_VERSION: ${{ matrix.year }}
+
   # The published library bundle (`lib/`) is committed so `github:` installs resolve
   # `exports` without a build step (#146). Rebuild it and fail if it drifts from `src/`,
   # with an actionable message. build:lib needs no engine assets, so this is a fast,

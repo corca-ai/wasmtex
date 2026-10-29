@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
-import { PDFDocument } from 'pdf-lib'
 
 const year = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
 const texliveUrl = process.env.TEXLIVE_URL ?? (year === '2026'
@@ -19,11 +18,7 @@ for (const command of ['include', 'subfile'] as const) {
       body: controller, contentType: 'application/javascript',
     }))
     await page.goto('http://localhost:6001')
-    // Git repositories often retain a PDF beside its matching TeX source.
-    const imported = await PDFDocument.create()
-    imported.addPage([100, 100])
-    const importedPdf = Array.from(await imported.save())
-    const out = await page.evaluate(async ({ year, texliveUrl, command, inside, importedPdf }) => {
+    const out = await page.evaluate(async ({ year, texliveUrl, command, inside }) => {
       const { WasmTexCompiler } = await import('/src/headless.ts')
       const strip = (pdf: Uint8Array) => {
         let text = ''
@@ -42,7 +37,7 @@ for (const command of ['include', 'subfile'] as const) {
         `\\chapter{Chapter ${i}}\n` + Array.from({ length: 4 }, () => prose.repeat(8) + '\\index{composition}\n\n').join('') +
         (command === 'subfile' ? '\\end{document}\n' : '')
       const options = { texliveVersion: year, texliveUrl, engine: 'pdflatex' as const,
-        incremental: true, files: { ...files, 'main.pdf': Uint8Array.from(importedPdf) }, heapCheckpointOptions: { maxCheckpoints: 32, maxBytes: 256 * 2 ** 20, minHeadBytes: 0 } }
+        incremental: true, files, heapCheckpointOptions: { maxCheckpoints: 32, maxBytes: 256 * 2 ** 20, minHeadBytes: 0 } }
       const compiler = new WasmTexCompiler(options)
       let sibling: Awaited<ReturnType<typeof compiler.createPagePreviewSession>> = null
       try {
@@ -96,7 +91,7 @@ for (const command of ['include', 'subfile'] as const) {
             index: typeof changedAux['main.ind'] === 'string' && changedAux['main.ind'].includes('composition') }
         } finally { fresh.dispose() }
       } finally { sibling?.dispose(); compiler.dispose() }
-    }, { year, texliveUrl, command, inside, importedPdf })
+    }, { year, texliveUrl, command, inside })
     console.log(JSON.stringify(out))
     expect(out.held?.ids.length).toBeGreaterThanOrEqual(22)
     expect(out.held!.bytes).toBeLessThanOrEqual(256 * 2 ** 20)
