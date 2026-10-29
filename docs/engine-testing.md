@@ -162,10 +162,13 @@ Pass one with `--project report/startup-corpus/paper.json`.
 `scripts/profile-font-cpu.mjs` also accepts `--latency-ms 60` to delay each
 measured mirror/engine-asset response, `--prepare-runs 3` to prepare bounded
 speculation before closing upstream access, and `--save-pdf true` to retain
-final PDFs for comparison. Initialization, first/unchanged/body/preamble
+final PDFs and SyncTeX files for comparison. Initialization, first/unchanged/body/preamble
 compiles, native passes, provisional PDF time and transferred bytes remain
-separate. This is response latency, not bandwidth throttling. Run baseline and
-candidate serially with the same mirror, formats, corpus and browser; measured
+separate. This is response latency unless `--bandwidth-mbps 8` is also supplied.
+That option serves gzip-compressed mirror/engine responses over one shared,
+server-paced link, and records decoded, compressed and sent payload sizes.
+It models throughput rather than TCP behavior; SDK modules remain unthrottled.
+Run baseline and candidate serially with the same mirror, formats, corpus and browser; measured
 upstream misses fail the run. The report embeds the project inputs and hashes.
 
 ## Cross-Host (Node) Engine Tests

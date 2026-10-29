@@ -31,6 +31,21 @@ Before font: \IfFileExists{/tex/cmr12.tfm}{present}{absent}.
 After font: \IfFileExists{/tex/cmr12.tfm}{present}{absent}.`),
   },
 }
+// A failed externalization pass can still create TeX files. These probes prevent
+// treating that pass as disposable work without proving equivalent file effects.
+cases['tikzcd-aux-branch'] = {
+  ...cases.tikzcd,
+  source: cases.tikzcd.source.replace('\\begin{document}', String.raw`\IfFileExists{main.aux}{\def\auxstate{Prior auxiliary present.}}{\def\auxstate{First auxiliary absent.}}
+\begin{document}\auxstate`),
+}
+cases['tikzcd-side-effect'] = {
+  ...cases.tikzcd,
+  source: cases.tikzcd.source.replace('\\begin{document}', String.raw`\newwrite\probeoutput
+\begin{document}
+\IfFileExists{probe.dat}{Prior output present.}{First output absent.}
+\immediate\openout\probeoutput=probe.dat
+\immediate\write\probeoutput{proof}\immediate\closeout\probeoutput`),
+}
 for (const [name, { source, files, compilerOptions }] of Object.entries(cases)) {
   await writeFile(resolve(out, `${name}.json`), JSON.stringify({
     mainFile: 'main.tex', files: { 'main.tex': source, ...files }, compilerOptions,
