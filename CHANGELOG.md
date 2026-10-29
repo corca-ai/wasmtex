@@ -43,6 +43,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Host-provided local Biber stage executors, with operation cancellation forwarded
+  through caching and HTTP adapters; the unregistered biblatex-lite default remains.
+
 - Opt-in `compilePreview()` returns immutable, renderer-neutral PDF parts for final
   page-break incremental results, with deferred canonical materialization and stable
   head identity. `getRetentionStats()` observes retained JavaScript checkpoint buffers.

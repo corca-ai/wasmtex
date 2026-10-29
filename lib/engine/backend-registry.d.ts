@@ -26,6 +26,10 @@ type StageResponse<Contract> = Contract extends BackendStageContract<unknown, in
 type BackendImplementations<Stages> = {
     [Stage in StageName<Stages>]: ToolBackend<StageRequest<Stages[Stage]>, StageResponse<Stages[Stage]>, Stage>;
 };
+/** Cancellation owned by the current compiler operation, independent of execution location. */
+export interface BackendRunContext {
+    readonly signal?: AbortSignal | undefined;
+}
 /** A backend that runs one compile stage. `Req`/`Res` are the stage's payloads. */
 export interface ToolBackend<Req, Res, Stage extends string = string> {
     readonly id: string;
@@ -36,7 +40,7 @@ export interface ToolBackend<Req, Res, Stage extends string = string> {
     /** Where this backend runs. Drives telemetry and the privacy default — a `server`
      *  backend only ever sees what the integrator routes to it. */
     readonly location: 'client' | 'server';
-    run(request: Req): Promise<Res>;
+    run(request: Req, context?: BackendRunContext): Promise<Res>;
 }
 /**
  * Per-stage backend registry. Construct with the client defaults; an integrator

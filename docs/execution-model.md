@@ -52,7 +52,7 @@ consults three typed slots:
 | Slot | Request / result | Default |
 | --- | --- | --- |
 | `BIBTEX_STAGE` (`bibliography:bibtex`) | `{ aux, bibFiles }` → `.bbl` text | Bundled BibTeX path. |
-| `BIBER_STAGE` (`bibliography:biber`) | `{ bcf, bibFiles }` → `.bbl` text | Local biblatex-lite subset when no remote Biber result is selected. |
+| `BIBER_STAGE` (`bibliography:biber`) | `{ bcf, bibFiles }` → `.bbl` text | Host-provided local or server executor; biblatex-lite when unregistered. |
 | `INDEX_STAGE` (`index`) | Index request → `.ind` text | Bundled makeindex path. |
 
 Biber routing is implemented. Engine-pass and export stages are not automatic

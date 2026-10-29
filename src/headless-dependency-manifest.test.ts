@@ -364,6 +364,18 @@ describe('WasmTexCompiler dependency manifest composition', () => {
   it.each([
     ['biblatex-lite', undefined],
     [
+      'local Biber',
+      {
+        id: 'local-biber',
+        stage: BIBER_STAGE as typeof BIBER_STAGE,
+        location: 'client' as const,
+        run: async (_input: unknown, context?: { signal?: AbortSignal | undefined }) => {
+          expect(context?.signal).toBeInstanceOf(AbortSignal)
+          return '\\begin{refsection}\\end{refsection}'
+        },
+      },
+    ],
+    [
       'server Biber',
       {
         id: 'test-biber',

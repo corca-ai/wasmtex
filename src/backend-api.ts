@@ -1,6 +1,7 @@
 /** Headless-safe public exports for pluggable compile-stage backends. */
 export {
   BackendRegistry,
+  type BackendRunContext,
   type BackendStageContract,
   BIBER_STAGE,
   BIBTEX_STAGE,
@@ -16,6 +17,7 @@ export {
   type BiberBackendOptions,
   type BiberRequest,
   createBiberBackend,
+  runBiberBackend,
   runRemoteBiber,
 } from './engine/biber-backend'
 export {

@@ -1,6 +1,6 @@
 import type { AccessibleExportOptions, DocumentMetadataInjection } from './engine/accessible-export'
 import type { BackendRegistry, ToolBackend } from './engine/backend-registry'
-import { runRemoteBiber } from './engine/biber-backend'
+import { runBiberBackend } from './engine/biber-backend'
 import {
   type BibliographyStageRequest,
   detectBiblatexBackend,
@@ -1969,7 +1969,7 @@ export class WasmTexCompiler {
    * The biblatex counterpart of {@link maybeRunBibtex}. A biblatex document does **not** write
    * the classic `\bibdata{}`/`\citation{}` markers to the `.aux` (it uses `\abx@aux@cite` and a
    * `.bcf` control file), so {@link maybeRunBibtex}'s gate never fires for it. Here we route the
-   * `.bcf` the first LaTeX pass emitted: when `backend=biber` and a **server** Biber backend is
+   * `.bcf` the first LaTeX pass emitted: when `backend=biber` and a local or server Biber backend is
    * registered, run it on `{ bcf, bibFiles }` (full fidelity); otherwise fall back to the bundled
    * biblatex-lite (cite keys parsed from the `.bcf`, entries from the project `.bib`s). Inject the
    * `.bbl` so the next pass resolves `\cite`s.
@@ -1990,11 +1990,17 @@ export class WasmTexCompiler {
     if (!bcf?.trim()) return false
 
     const bibFiles = this.collectBibFiles()
-    // Server Biber (full fidelity) when wired for `backend=biber`; else bundled biblatex-lite.
+    // Explicit Biber executor (full fidelity) when wired for `backend=biber`; else bundled biblatex-lite.
     const bbl =
       (detectBiblatexBackend(source) === 'biber'
         ? (
-            await this.operations.observe(runRemoteBiber(this.opts.backends, { bcf, bibFiles }))
+            await this.operations.observe(
+              runBiberBackend(
+                this.opts.backends,
+                { bcf, bibFiles },
+                { signal: this.operations.signal },
+              ),
+            )
           ).resume()
         : null) ?? this.runClientBiblatexLite(source, bcf, bibFiles)
     const observation: AuxiliaryDependencyObservation = {
@@ -2016,7 +2022,7 @@ export class WasmTexCompiler {
 
   /** Bundled biblatex-lite for the bibliography stage → `.bbl`: parse the cited keys from the
    *  `.bcf` and the entries from the project `.bib`s, then generate the documented-subset `.bbl`.
-   *  The client default when no server Biber backend is registered (so a biblatex document still
+   *  The client default when no Biber backend is registered (so a biblatex document still
    *  gets a bibliography fully on-device). */
   private runClientBiblatexLite(
     source: string,

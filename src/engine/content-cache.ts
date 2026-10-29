@@ -1,4 +1,4 @@
-import type { ToolBackend } from './backend-registry'
+import type { BackendRunContext, ToolBackend } from './backend-registry'
 
 /**
  * Content-addressed cache (S5 / #112, execution-model). A stage's output is a pure
@@ -125,11 +125,14 @@ export function withCache<Req, Res extends string, Stage extends string>(
     stage: backend.stage,
     ...(identity.backendVersion ? { version: identity.backendVersion } : {}),
     location: backend.location,
-    async run(request: Req): Promise<Res> {
+    async run(request: Req, context?: BackendRunContext): Promise<Res> {
+      context?.signal?.throwIfAborted()
       const key = await backendCacheKey(identity, await keyOf(request))
       const hit = await store.get(key)
+      context?.signal?.throwIfAborted()
       if (hit !== undefined) return hit as Res
-      const result = await backend.run(request)
+      const result = await backend.run(request, context)
+      context?.signal?.throwIfAborted()
       await store.set(key, result)
       return result
     },

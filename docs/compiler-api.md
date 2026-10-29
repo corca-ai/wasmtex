@@ -64,7 +64,7 @@ const result = await compiler.compile()
 | `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number; minHeadBytes?: number }` | 4 checkpoints / 320 MiB / 512 head bytes | Retained browser pdfLaTeX heap checkpoints, bounded by count and retained image/filesystem backing bytes (shared blocks count once on capable workers). Values must be nonnegative safe integers. `minHeadBytes: 0` permits a checkpoint at the first body line. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number; idleMs?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
-| `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. See [Server backends](#server-backends). |
+| `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. Biber also accepts a host-provided local executor. See [Server backends](#server-backends). |
 
 #### Server backends
 
@@ -85,6 +85,9 @@ const compiler = new WasmTexCompiler({ files, backends })
 await compiler.init()
 await compiler.compile() // Biber runs on your endpoint; client biblatex-lite is skipped
 ```
+
+A Biber backend may instead declare `location: 'client'`; its `run(request,
+context?)` receives the operation abort signal. See [local Biber](bibliography.md#host-provided-local-biber).
 
 `createBiberBackend` (biblatex/Biber → `.bbl`), `createMakeindexBackend` and
 `createXindyBackend` (the `index` stage, `.idx` → `.ind`) build server backends
