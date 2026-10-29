@@ -6,10 +6,16 @@ All engine changes follow the [optimization policy](engine-optimization-policy.m
 [the upgrade inventory](engine-upgrade-customizations.md) maps maintained changes
 to their source files and requalification requirements.
 
+The [October startup record](history/startup-2026-10.md) separates first-load I/O
+gains from unchanged warm-edit CPU and records transfer/memory costs.
+
 ## Adopted behavior
 
 | Area | Current implementation | Boundary / cost |
 | --- | --- | --- |
+| pdfTeX startup | Worker boot overlaps format, map and Bloom downloads; resolver helpers are bundled with the controller. | Installation still waits for worker readiness and preserves caller/durable warmup precedence. |
+| First pdfTeX dependency fetches | Capable workers accept bounded, parallel HTTP-response preparation inferred from literal source declarations. | No filesystem path or resolver alias exists before real demand. At most 128 requests, eight concurrent fetches, 8 MiB retained responses and a 1.5 s deadline; unused downloads are possible. Repeated compiles skip preparation. |
+| Initial PDF observation | An optional observer receives an independent first-successful-pass PDF while bibliography/references settle. | Provisional display only; final result, SyncTeX and dependency publication remain authoritative. No observer means no extra PDF copy. |
 | Unicode initial memory | XeTeX and LuaHBTeX start at 128 MiB with growth enabled. | This is initial WASM memory, not browser RSS or a maximum document budget. |
 | Unicode/converter heap growth | XeTeX, LuaHBTeX and dvipdfmx use 5% growth headroom capped at 16 MiB; dvipdfmx starts at 64 MiB. | Stack sizes, growable maximums and TeX capacities are unchanged. Grown memory does not shrink on reset. |
 | Initial heap snapshots | pdfTeX trims the zero suffix; XeTeX, LuaHBTeX and dvipdfmx pack occupied page prefixes and clear omitted gaps. | Preserves the original reset extent; distinct from resumable checkpoints. |

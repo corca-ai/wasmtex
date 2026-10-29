@@ -21,6 +21,14 @@ export type { AccessibleExportResult, CompilePhaseTimings, CompilerRetentionStat
 export declare function compileAccessiblePdf(options: WasmTexCompilerOptions, exportOptions?: AccessibleExportOptions): Promise<AccessibleExportResult>;
 /** Best-effort placement for a heap checkpoint during an already-needed full pass. */
 export interface CompileOptions {
+    /** Optional provisional full-document PDF from the first successful pass, before
+     * bibliography/index/reference settling. Display only: never export or publish as
+     * canonical output. Bytes are independently owned; observer exceptions are ignored.
+     * No extra engine pass is run, and the final compile result remains authoritative. */
+    onProgressPdf?: (frame: {
+        pdf: Uint8Array;
+        compileTime: number;
+    }) => void;
     incrementalPreparation?: {
         path: string;
         offset: number;
@@ -198,6 +206,7 @@ export declare class WasmTexCompiler {
     private previewPagesIdle;
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
+    private emitProgressPdf;
     private compileIdle;
     private rerunSignature;
     /**

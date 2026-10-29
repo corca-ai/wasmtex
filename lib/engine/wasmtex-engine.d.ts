@@ -122,6 +122,9 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     /** Last-written text sources, so dependency extraction can read the main source
      *  synchronously (no worker round-trip). */
     private readonly sources;
+    private transportPrefetchSupported;
+    private transportPrefetchAttempted;
+    private transportPrefetchAbort;
     private completionObservation;
     /** Download/persist watermark (drives auto-persist; single-flight guarded). */
     private readonly persist;
@@ -129,6 +132,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     onFileDownload?: (filename: string) => void;
     constructor(options?: WasmTexEngineOptions);
     init(): Promise<void>;
+    private prepareInitInputs;
     private loadEngineBuildId;
     /**
      * Dispatch a worker message to the appropriate handler.
@@ -141,8 +145,6 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private preloadTexliveFile;
     /** Inject pre-fetched warmup cache into the worker. */
     protected injectWarmupCache(cache: WarmupCache): Promise<void>;
-    /** Fetch bloom filter from CDN and send it to the worker. */
-    private fetchAndSendBloomFilter;
     /**
      * Fetch a URL with optional download-progress tracking for the .fmt preload.
      */
@@ -188,6 +190,8 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     get supportsFileCheckpoints(): boolean;
     get supportsSharedCheckpoints(): boolean;
     setCheckpointBudget(maxCount: number, maxBytes: number): void;
+    terminate(): void;
+    private prefetchTransport;
     /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
      *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
     compile(options?: {

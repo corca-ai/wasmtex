@@ -30,7 +30,7 @@ describe.runIf(process.env.NODE_COMPILE_SMOKE === '1')(
       // The staged tree is test-only; published assets and receipts stay untouched.
       writeFileSync(
         join(assets, 'wasmtex-pdftex.worker.js'),
-        ['shared-file.js', 'pdftex-worker.js']
+        ['shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js']
           .map((name) => readFileSync(join(root, 'wasm-build', name), 'utf8'))
           .join('\n'),
       )

@@ -42,6 +42,21 @@ await compiler.init()
 const result = await compiler.compile()
 ```
 
+### First PDF while references settle
+
+`compile({ onProgressPdf })` optionally reports the first successful full-pass
+PDF before bibliography, index and reference settling finishes. The callback
+receives `{ pdf: Uint8Array, compileTime: number }`; its bytes are independently
+owned and its synchronous exceptions do not fail compilation. It causes no
+extra engine pass. A fast incremental result may return without a progress frame.
+
+Use this only for a provisional display while awaiting `compile()`. The frame
+has no canonical metadata, SyncTeX or publication proof; references, contents and
+index may still change. Export, sharing and final diagnostics must use the final
+result. Hosts must bind the callback to the request's project, source revision
+and engine, rejecting obsolete frames after an edit or transition. If a callback
+edits or disposes the compiler, the normal cancellation contract still applies.
+
 ### `WasmTexCompilerOptions`
 
 | Option | Type | Default | Description |
@@ -413,7 +428,7 @@ See [engine profiling](engine-testing.md) for controlled measurement procedures.
 ### `WasmTexCompiler` Methods
 
 - `init(): Promise<void>` — initializes the selected engine and synchronizes files; does not compile.
-- `compile(): Promise<CompileResult>` — compiles and settles supported reruns/auxiliary stages; inspect `success`, `errors` and `pdf`.
+- `compile(options?: CompileOptions): Promise<CompileResult>` — compiles and settles supported reruns/auxiliary stages; inspect `success`, `errors` and `pdf`.
 - `exportAccessiblePdf(options?: AccessibleExportOptions): Promise<AccessibleExportResult>` — see [tagged export](#accessible-export-tagged-pdf--pdf-ua).
 - `prepareIncrementalCompile(path?: string, offset?: number): Promise<boolean>` — with
   `incremental: true`, build an eligible pdfLaTeX checkpoint while idle. Defaults to the end

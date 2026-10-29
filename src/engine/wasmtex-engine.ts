@@ -32,6 +32,7 @@ import { isIndexedDbSupported, PersistentCache } from './persistent-cache'
 import { durablePreambleKey, PreambleSnapshotCache, preambleSha256 } from './preamble-cache'
 import { extractPreamble } from './preamble-utils'
 import { type RawResolverEvidence, ResolverEvidenceCollector } from './resolver-evidence'
+import { prefetchTexliveResponses } from './transport-prefetch'
 import { createEngineWorker } from './worker-host'
 
 export interface WasmTexEngineOptions {
@@ -260,6 +261,9 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** Last-written text sources, so dependency extraction can read the main source
    *  synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
+  private transportPrefetchSupported = false
+  private transportPrefetchAttempted = false
+  private transportPrefetchAbort: AbortController | null = null
   private completionObservation: EngineCompletionObservation | null = null
   /** Download/persist watermark (drives auto-persist; single-flight guarded). */
   private readonly persist: PersistState = { downloadCount: 0, lastPersisted: -1, inFlight: false }
@@ -322,8 +326,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     }
 
     this.status = 'loading'
+    this.transportPrefetchSupported = false
+    this.transportPrefetchAttempted = false
 
-    await new Promise<void>((resolve, reject) => {
+    const ready = new Promise<void>((resolve, reject) => {
       this.worker = createEngineWorker(this.enginePath)
 
       this.worker.onmessage = (ev) => {
@@ -338,6 +344,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         reject(this.handleWorkerError(err))
       }
     })
+
+    // Fetch independent inputs while the worker downloads and instantiates WASM.
+    // Installation still waits for ready, and warmup retains precedence over map preload.
+    const inputs = this.previewForkInitializing ? undefined : this.prepareInitInputs()
+    const [, prepared] = await Promise.all([ready, inputs])
 
     // Set TexLive endpoint — proxied through Vite dev server (/texlive/ → texlive:5001)
     // Note: do NOT use PdfTeXEngine's setTexliveEndpoint() — it has a bug
@@ -354,38 +365,35 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       return
     }
 
-    // Build the effective warmup set: the durable cache (if enabled) rehydrated
-    // from a previous session, merged with any caller-provided warmup cache.
-    const warmup = await this.resolveWarmupCache()
-
-    // Inject warmup cache (pre-fetched files + 404 entries + bloom filter) before other preloads
-    if (warmup) {
-      await this.injectWarmupCache(warmup)
-    } else {
-      // No warmup cache — fetch bloom filter directly
-      await this.fetchAndSendBloomFilter()
+    if (!prepared) return
+    if (prepared.warmup) await this.injectWarmupCache(prepared.warmup)
+    else if (prepared.bloom) {
+      if (this.persistentCacheEnabled) this.bloomFilter = prepared.bloom.slice(0)
+      this.worker!.postMessage({ cmd: 'loadbloom', data: prepared.bloom }, [prepared.bloom])
     }
 
-    // Pre-load format and pdftex.map in parallel — unless the warmup set already
-    // carried the map (a replayed dependency set does), which saves a ~5 MB fetch.
-    const preloads: Promise<void>[] = []
-    if (!this.warmupPositiveSources.has('11/pdftex.map')) {
-      preloads.push(
-        this.preloadTexliveFile(
-          11,
-          'pdftex.map',
-          `${resolveTexliveUrl(this.texliveUrl, this.version)}pdftex/11/pdftex.map`,
-        ),
-      )
-    }
-    if (!this.skipFormatPreload) {
-      preloads.push(this.preloadFormat())
-    }
-    const receipt =
+    await Promise.all([
+      this.preloadFormat(prepared.format),
+      this.preloadTexliveFile(11, 'pdftex.map', prepared.map),
       this.preambleCache || this.pagePreviewForkSupported
         ? this.loadEngineBuildId()
-        : Promise.resolve()
-    await Promise.all([...preloads, receipt])
+        : Promise.resolve(),
+    ])
+  }
+
+  private async prepareInitInputs() {
+    const format = this.skipFormatPreload
+      ? Promise.resolve(null)
+      : this.fetchGzWithProgress(this.formatPath)
+    const warmup = await this.resolveWarmupCache()
+    const [formatBytes, map, bloom] = await Promise.all([
+      format,
+      this.warmupPositiveSources.has('11/pdftex.map')
+        ? Promise.resolve(null)
+        : this.fetchGzWithProgress(`${this.effectiveTexliveUrl}pdftex/11/pdftex.map`, false),
+      warmup ? Promise.resolve(null) : fetchBloomFilter(this.effectiveTexliveUrl).catch(() => null),
+    ])
+    return { warmup, format: formatBytes, map, bloom }
   }
 
   private async loadEngineBuildId(): Promise<void> {
@@ -425,6 +433,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     if (!data.cmd && !data.msgId) {
       if (data.result === 'ok') {
         this.status = 'ready'
+        this.transportPrefetchSupported =
+          (data as { transportPrefetch?: unknown }).transportPrefetch === true
         this.lineCheckpointsSupported =
           (data as { lineCheckpoints?: unknown }).lineCheckpoints === true
         this.heapCheckpointsSupported =
@@ -472,10 +482,9 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     return false
   }
 
-  private async preloadFormat(): Promise<void> {
+  private async preloadFormat(buf: ArrayBuffer | null): Promise<void> {
+    if (!buf) return
     try {
-      const buf = await this.fetchGzWithProgress(this.formatPath)
-      if (!buf) return
       await this.postMessageWithResponse({ cmd: 'loadformat', data: buf }, 'cmd:loadformat', [buf])
     } catch {
       // Format not available — worker will try building one at compile time
@@ -483,11 +492,13 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   }
 
   /** Pre-load a texlive file into the worker's MEMFS cache. */
-  private async preloadTexliveFile(format: number, filename: string, url: string): Promise<void> {
+  private async preloadTexliveFile(
+    format: number,
+    filename: string,
+    buf: ArrayBuffer | null,
+  ): Promise<void> {
+    if (!buf) return
     try {
-      const resp = await fetch(url)
-      if (!resp.ok) return
-      const buf = await resp.arrayBuffer()
       const msgId = `msg-${nextMsgId++}`
       await this.postMessageWithResponse(
         { cmd: 'preloadtexlive', format, filename, data: buf, source: 'warmup-cache', msgId },
@@ -574,27 +585,14 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     await Promise.all(promises)
   }
 
-  /** Fetch bloom filter from CDN and send it to the worker. */
-  private async fetchAndSendBloomFilter(): Promise<void> {
-    try {
-      const buf = await fetchBloomFilter(resolveTexliveUrl(this.texliveUrl, this.version))
-      if (!buf) return
-      // Retain a copy for the durable cache before the original is transferred.
-      if (this.persistentCacheEnabled) this.bloomFilter = buf.slice(0)
-      this.worker!.postMessage({ cmd: 'loadbloom', data: buf }, [buf])
-    } catch {
-      // Bloom filter not available — worker falls back to XHR for all lookups
-    }
-  }
-
   /**
    * Fetch a URL with optional download-progress tracking for the .fmt preload.
    */
-  private async fetchGzWithProgress(url: string): Promise<ArrayBuffer | null> {
+  private async fetchGzWithProgress(url: string, progress = true): Promise<ArrayBuffer | null> {
     try {
       const resp = await fetch(url)
       if (!resp.ok) return null
-      const bytes = await readResponseWithProgress(resp, this.onProgress)
+      const bytes = await readResponseWithProgress(resp, progress ? this.onProgress : undefined)
       return bytes.buffer as ArrayBuffer
     } catch {
       return null
@@ -791,11 +789,53 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     this.checkpointBudget = { maxCount: Math.min(maxCount, 64), maxBytes }
   }
 
+  override terminate(): void {
+    this.transportPrefetchAbort?.abort()
+    super.terminate()
+  }
+
+  private async prefetchTransport(): Promise<void> {
+    this.transportPrefetchAttempted = true
+    const worker = this.worker
+    const controller = new AbortController()
+    this.transportPrefetchAbort = controller
+    const timeout = setTimeout(() => controller.abort(), 1500)
+    try {
+      const files = await prefetchTexliveResponses(
+        this.sources.values(),
+        this.effectiveTexliveUrl,
+        controller.signal,
+        new Set(this.warmupPositiveSources.keys()),
+      )
+      // A deadline keeps useful completed responses; termination must never install into a new worker.
+      if (!worker || this.worker !== worker) throw new DOMException('Engine disposed', 'AbortError')
+      if (this.status !== 'compiling') throw new Error('Engine unavailable during prefetch')
+      const msgId = `msg-${nextMsgId++}`
+      await this.postMessageWithResponse(
+        { cmd: 'preloadtransport', files, msgId },
+        msgId,
+        files.map((file) => file.data),
+      )
+    } finally {
+      clearTimeout(timeout)
+      if (this.transportPrefetchAbort === controller) this.transportPrefetchAbort = null
+    }
+  }
+
   /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
    *  state before reading each listed main-file line (reported in `result.heapCheckpoints`). */
   async compile(options?: {
     checkpoints?: Array<{ id: string; line: number; path?: string }>
   }): Promise<CompileResult> {
+    if (this.transportPrefetchSupported && !this.transportPrefetchAttempted) {
+      this.checkReady()
+      this.status = 'compiling'
+      try {
+        await this.prefetchTransport()
+      } finally {
+        if (this.status === 'compiling') this.status = 'ready'
+      }
+    }
     const checkpoints = options?.checkpoints?.length ? options.checkpoints : undefined
     return this.runCompile(
       checkpoints ? { cmd: 'compilelatex', checkpoints } : { cmd: 'compilelatex' },

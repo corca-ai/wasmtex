@@ -7,6 +7,7 @@ level up, starting with the [documentation index](../README.md).
 
 | Record | Scope | Current guide |
 | --- | --- | --- |
+| [pdfTeX startup measurements](startup-2026-10.md) | Annual transport/init qualification, paper edit and bandwidth measurements, provisional first PDF, rejected TikZ pass suppression. | [Compile performance](../compile-performance.md) |
 | [September 2026 compile experiments](compile-performance-2026-09.md) | Memory/warmup, font investigation, dvipdfmx index, build flags, fmt cache and transfer decisions. Later sections supersede earlier holds. | [Compile performance](../compile-performance.md) |
 | [October 2026 heap memory experiment](heap-memory-2026-10.md) | Unpromoted pdfTeX/Unicode snapshot candidates, annual output comparisons, browser timings and Unicode RSS measurements. | [Compile performance](../compile-performance.md) |
 | [Unicode heap growth experiment](heap-growth-2026-10.md) | Growth headroom and converter initial-memory screening; source qualification. | [Compile performance](../compile-performance.md) |

@@ -7,7 +7,7 @@ const texliveUrl = process.env.TEXLIVE_URL ?? (year === '2026'
   : 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/')
 // Exercise authored controller changes against pinned native engines before a
 // release exists. Distribution qualification separately uses the built receipt.
-const controller = ['shared-file.js', 'pdftex-worker.js'].map((name) =>
+const controller = ['shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js'].map((name) =>
   readFileSync(new URL(`../wasm-build/${name}`, import.meta.url), 'utf8')).join('\n')
 
 test.setTimeout(300_000)

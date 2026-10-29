@@ -489,7 +489,7 @@ wasm-compile:
 	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-pdftex.map; then \
 		echo "ERROR: forbidden pplib archive or symbol remains in the pdfTeX link map" >&2; exit 1; \
 	fi
-	cat /src/shared-file.js $(PDFTEX_WORKER) > $(DIST)/wasmtex-pdftex.worker.js
+	cat /src/shared-file.js /src/resolver-evidence.js $(KPSE_RESOLVE) $(PDFTEX_WORKER) > $(DIST)/wasmtex-pdftex.worker.js
 	cp $(KPSE_RESOLVE) $(DIST)/wasmtex-kpse-resolve.js
 	cp /src/resolver-evidence.js $(DIST)/wasmtex-pdftex-resolver-evidence.js
 	@echo ""
