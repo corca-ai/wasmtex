@@ -7,6 +7,7 @@ export function needsRerun(log: string): boolean {
     log.includes('Rerun to get citations correct') ||
     log.includes('Rerun to get outlines right') ||
     log.includes('Rerun LaTeX') ||
+    log.includes('Please rerun LaTeX') ||
     log.includes('Label(s) may have changed. Rerun') ||
     log.includes('Please (re)run Biber') ||
     log.includes('Please (re)run BibTeX')
