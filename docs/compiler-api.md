@@ -265,6 +265,10 @@ suspended run: TeX typesets only the rest of the document and writes the complet
 SyncTeX itself (nothing is spliced, `pdf-lib` is not needed). A checkpoint is restored by a
 memory copy, so it serves any number of edits after it.
 
+During restore, files open for writing belong to the suspended engine. Their
+checkpoint bytes take precedence over imported files with the same path, such as
+`main.pdf` beside `main.tex`. Other project files receive the latest host bytes.
+
 - **Placement**: every full compile takes a checkpoint at the paragraph boundary before the
   region the last edit touched (edits cluster), and `prepareIncrementalCompile(path, offset)`
   takes one before the cursor's paragraph during idle time. If there is no preceding blank-line
