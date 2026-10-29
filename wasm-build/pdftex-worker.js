@@ -24,7 +24,7 @@
 //
 // =============================================================================
 
-importScripts('wasmtex-pdftex-resolver-evidence.js');
+// The build bundles shared-file, resolver evidence and kpse name helpers before this controller.
 
 // --- Constants ---------------------------------------------------------------
 
@@ -90,7 +90,7 @@ Module["preRun"] = function() {
 // the host that the engine is ready.
 Module["postRun"] = function() {
     if (hcSupported()) hcEnsureDataBuffer();
-    self.postMessage({ "result": "ok", "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
+    self.postMessage({ "result": "ok", "transportPrefetch": true, "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
@@ -483,6 +483,9 @@ function allocateString(str) {
     return ptr;
 }
 
+// Speculation stores HTTP responses only. No MEMFS path or kpse cache entry exists
+// until the ordinary resolver chooses this exact candidate, preserving IfFileExists.
+var texliveTransport = Object.create(null);
 var texlive404_cache = {};
 var texlive200_cache = {};
 var texlive404_source = {};
@@ -610,6 +613,17 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
         // Notify host about the download
         self.postMessage({ "cmd": "downloading", "file": name });
 
+        var transportKey = format + "/" + name;
+        var prefetched = texliveTransport[transportKey];
+        if (prefetched) {
+            delete texliveTransport[transportKey];
+            resolverAttempts.push({ "source": "warmup-cache", "outcome": "hit", "candidate": name, "status": 200 });
+            return {
+                status: 200,
+                response: prefetched.data,
+                getResponseHeader: function() { return prefetched.fileId; }
+            };
+        }
         var url = self.texlive_endpoint + "pdftex/" + format + "/" + name;
         var xhr = new XMLHttpRequest();
         xhr.open("GET", url, false);
@@ -1434,6 +1448,14 @@ self["onmessage"] = function(ev) {
         self._fmtData = fmtData;
         self._fmtIsNative = true;
         self.postMessage({ "result": "ok", "cmd": "loadformat" });
+    } else if (cmd === "preloadtransport") {
+        texliveTransport = Object.create(null);
+        var transportFiles = data["files"] || [];
+        for (var ti = 0; ti < transportFiles.length; ti++) {
+            var transportFile = transportFiles[ti];
+            texliveTransport[transportFile.format + "/" + transportFile.filename] = transportFile;
+        }
+        self.postMessage({ "result": "ok", "cmd": "preloadtransport", "msgId": data["msgId"] });
     } else if (cmd === "preloadtexlive") {
         // Pre-load a texlive file from main thread (avoids sync XHR on first compile).
         // data: {format, filename, data: ArrayBuffer, msgId}
@@ -2183,7 +2205,6 @@ async function compileFromHeapCheckpointRoutine(data) {
     try {
         wantCheckpoint = new URLSearchParams(self.location.search).get("engine") === "checkpoint";
     } catch(e) {}
-    importScripts("wasmtex-kpse-resolve.js");
     if (wantCheckpoint) {
         // A self-hosted asset set may predate the checkpoint build; fall back to the
         // plain engine rather than failing to boot (the host then sees no checkpoint

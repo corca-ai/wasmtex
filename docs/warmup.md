@@ -2,6 +2,30 @@
 
 Reduce cold-start latency by pre-fetching TeX Live files before the WASM engine initializes.
 
+## Automatic pdfLaTeX startup
+
+On transport-prefetch-capable engines, the first compile automatically fetches
+literal class/package declarations and a bounded set of common dependencies
+in parallel. Declarations in included project sources are also considered.
+This stores HTTP response candidates only: it creates no TeX filesystem paths
+or resolver aliases until ordinary lookup requests the exact candidate. Existing
+candidate order and `\IfFileExists` transitions remain authoritative. Missing,
+failed and cancelled speculative requests never become negative cache entries.
+Supplied/durable warmup positives are skipped; with an existing warmup set,
+speculation is limited to literal declarations instead of adding the generic
+font palette again. Older workers retain demand loading.
+
+Speculation runs once per engine, with eight concurrent requests, at most 128
+candidates, 8 MiB retained bytes and a 1.5-second deadline. Plain text documents
+avoid the math/font prediction set. These bounds limit preparation work; they
+are not engine memory or network-transfer budgets. Subsequent edits use the
+existing caches and checkpoints without another speculative scan or wait.
+
+Engine initialization overlaps WASM startup, format download and warmup-cache
+restoration. The map and Bloom downloads start as soon as cache precedence is
+known. pdfTeX's small resolver helpers are bundled with its controller, removing
+two blocking script requests. Published format and mirror bytes stay unchanged.
+
 ## Problem
 
 A cold compiler can resolve packages and fonts through sequential synchronous

@@ -153,7 +153,22 @@ file dependencies. `scripts/compare-fontmap-reports.mjs baseline/report.json
 candidate/report.json` rejects output, log, dependency or unaffected-asset changes.
 See the [font-map experiment decision](history/compile-performance-2026-09.md#font-map-index-qualification).
 
-### Cross-Host (Node) Engine Tests
+#### Controlled startup measurements
+
+`node scripts/gen-startup-corpus.mjs report/startup-corpus` creates plain-note,
+paper, large-document, bibliography, mixed-TikZ and lookup-state JSON inputs.
+Pass one with `--project report/startup-corpus/paper.json`.
+
+`scripts/profile-font-cpu.mjs` also accepts `--latency-ms 60` to delay each
+measured mirror/engine-asset response, `--prepare-runs 3` to prepare bounded
+speculation before closing upstream access, and `--save-pdf true` to retain
+final PDFs for comparison. Initialization, first/unchanged/body/preamble
+compiles, native passes, provisional PDF time and transferred bytes remain
+separate. This is response latency, not bandwidth throttling. Run baseline and
+candidate serially with the same mirror, formats, corpus and browser; measured
+upstream misses fail the run. The report embeds the project inputs and hashes.
+
+## Cross-Host (Node) Engine Tests
 The same from-source WASM engine runs under Node via `installNodeWorkerHost`
 (`src/engine/node-host.ts`, exported from `wasmtex/node`); install curl for its
 synchronous package resolver. The verification tests are
@@ -171,6 +186,10 @@ CROSS_HOST_PARITY=1 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 
 For the Unicode initialization-heap optimization, stage baseline and candidate
 asset trees separately, retaining identical WASM, generated JS, and base formats.
+For pdfTeX controller-only test staging, concatenate `shared-file.js`,
+`resolver-evidence.js`, `kpse-resolve.cjs` and `pdftex-worker.js` from
+`wasm-build/`, in that order, matching the Makefile. Generated modules and
+format files remain the explicitly supplied baseline artifacts.
 For controller-only Unicode test staging, concatenate `wasm-build/heap-snapshot.js`
 before each of `xetex-worker.js`, `luatex-worker.js` and `dvipdfm-worker.js`,
 writing the corresponding `wasmtex-<engine>.worker.js` in the candidate tree.

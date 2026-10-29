@@ -177,6 +177,15 @@ describe('auto-mode blockers', () => {
     expect(detectAutoBlocker(main(three), [main(three), '% [overlay]'])).toBeNull()
   })
 
+  it('keeps mixed tikzpicture and tikz-cd projects inline before a failing discovery pass', () => {
+    const source = String.raw`\documentclass{article}\usepackage{tikz-cd}`
+    const pictures = String.raw`\begin{tikzpicture}\end{tikzpicture}`.repeat(4)
+    expect(
+      detectAutoBlocker(source, [source, pictures, String.raw`\begin{tikzcd}A\end{tikzcd}`]),
+    ).toBe('wrapped-environment')
+    expect(detectAutoBlocker(source, [source, pictures, '% \\begin{tikzcd}'])).toBeNull()
+  })
+
   it('refuses pictures wrapped in user-defined environments or commands', () => {
     const three = pic + pic + pic
     expect(

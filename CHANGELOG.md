@@ -21,6 +21,12 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- Overlap pdfTeX startup downloads and bundle resolver helpers into its controller.
+  Speculate on bounded first-compile response candidates without changing TeX lookup state.
+- Offer a provisional first-pass PDF while canonical reference/bibliography/index settling
+  continues, without extra engine passes or warm-edit work for hosts that omit the observer.
+- Keep mixed TikZ/tikz-cd projects inline automatically, avoiding a failing discovery pass.
+
 - Resume eligible TikZ discovery passes from browser heap checkpoints, retaining
   a full canonical main pass and rejecting prefixes that already read figure resources.
 - Retire sibling figure pools on engine transitions, preserving engine and idle-policy ownership.

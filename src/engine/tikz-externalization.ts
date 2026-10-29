@@ -215,7 +215,8 @@ export function hasPictureLoops(sources: Iterable<string>): boolean {
  * cooperation (each picture becomes an isolated PDF, so nothing may reach across pictures
  * or onto the page): page-anchored/overlay pictures (`remember picture`, `overlay`,
  * `current page`, `\tikzmark`), beamer overlays, and pictures hidden inside user-defined
- * environments (the library's picture skipping looks for a literal `\end{tikzpicture}`).
+ * environments (including tikz-cd, whose closing macro hides the literal terminator).
+ * The library's picture skipping looks for a literal `\end{tikzpicture}`.
  * `'document'` mode never consults this — an author who wrote `\tikzexternalize` opted in.
  */
 export function detectAutoBlocker(
@@ -235,6 +236,7 @@ export function detectAutoBlocker(
       return 'remember-picture'
     }
     if (
+      /\\begin\s*\{tikzcd\}/.test(code) ||
       /\\(?:re)?newenvironment\s*\*?\s*\{[^}]*\}(?:\s*\[[^\]]*\])*\s*\{[^{}]*\\begin\s*\{tikzpicture\}/.test(
         code,
       ) ||
