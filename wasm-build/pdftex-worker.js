@@ -1990,9 +1990,15 @@ function hcRestoreFS(snap) {
         try { FS.mkdirTree(dir); } catch(e) {}
         FS.writeFile(p, snap.files[p]);
     }
-    // Project files are the host's: whatever it wrote last wins over the checkpoint's copy.
+    // Active outputs belong to the suspended engine. A project may also contain
+    // an older PDF with the job's name; replaying it would corrupt the prefix
+    // whose offsets and buffered writes the restored heap still references.
+    var outputs = new Set(snap.streams.filter(function(st) { return (st.flags & 3) !== 0; })
+        .map(function(st) { return st.path; }));
+    // Other project files retain the host's latest input bytes.
     for (p in self._hc.hostWrites) {
         var full = WORKROOT + "/" + p;
+        if (outputs.has(full)) continue;
         var d2 = full.substring(0, full.lastIndexOf("/"));
         try { FS.mkdirTree(d2); } catch(e) {}
         FS.writeFile(full, self._hc.hostWrites[p]);
