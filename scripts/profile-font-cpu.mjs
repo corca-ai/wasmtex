@@ -6,6 +6,7 @@ import { createServer } from 'node:http'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 import { chromium } from '@playwright/test'
 
 function arg(name, fallback) {
@@ -25,6 +26,13 @@ if (!['none', 'baseline-assets'].includes(controlMode)) throw Error('Invalid con
 const mirror = new URL(arg('texlive-url', 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'))
 if (!mirror.pathname.endsWith('/')) throw Error('Mirror URL must end in /')
 const year = arg('year', '2026')
+const latencyMs = Number(arg('latency-ms', '0'))
+const bandwidthMbps = Number(arg('bandwidth-mbps', '0'))
+const preparationRuns = Number(arg('prepare-runs', '1'))
+const savePdf = arg('save-pdf', 'false') === 'true'
+if (!Number.isFinite(latencyMs) || latencyMs < 0 || latencyMs > 1000) throw Error('Invalid latency')
+if (!Number.isFinite(bandwidthMbps) || bandwidthMbps < 0 || bandwidthMbps > 1000) throw Error('Invalid bandwidth')
+if (!Number.isInteger(preparationRuns) || preparationRuns < 1 || preparationRuns > 5) throw Error('Invalid prepare-runs')
 if (!['2025', '2026'].includes(year)) throw Error('Unsupported year')
 const out = resolve(arg('out', 'test-results/font-cpu'))
 const cacheDir = resolve(arg('cache-dir', `${out}/mirror-cache`))
@@ -50,7 +58,7 @@ if (project?.binaryFiles) {
     return [name, (await readFile(resolve(dirname(resolve(projectPath)), file))).toString('base64')]
   })))
 }
-if (cacheProbe && (project || checkpointProbe || !['unicode', 'xelatex', 'lualatex'].includes(selected) || luaNamesProbe)) throw Error('Cache probe requires the standard non-checkpoint document')
+if (cacheProbe && (project || checkpointProbe || !['pdflatex', 'unicode', 'xelatex', 'lualatex'].includes(selected) || luaNamesProbe)) throw Error('Cache probe requires a standard non-checkpoint document')
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 await mkdir(out, { recursive: true })
 await mkdir(cacheDir, { recursive: true })
@@ -58,10 +66,34 @@ let locked = false
 const network = []
 const preparationRetries = []
 const memo = new Map()
+const compressed = new Map()
+let linkAvailableAt = 0
+async function respond(res, status, type, bytes, entry) {
+  if (!bandwidthMbps) { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' }).end(bytes); return }
+  const key = hash(bytes)
+  let wire = compressed.get(key)
+  if (!wire) { wire = gzipSync(bytes); compressed.set(key, wire) }
+  entry.wireBytes = wire.length
+  entry.sentWireBytes = 0
+  res.writeHead(status, { 'Content-Type': type, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store' })
+  for (let at = 0; at < wire.length && !res.destroyed; at += 16384) {
+    const chunk = wire.subarray(at, at + 16384)
+    if (locked) {
+      const now = performance.now()
+      linkAvailableAt = Math.max(now, linkAvailableAt) + chunk.length * 8 / (bandwidthMbps * 1000)
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, linkAvailableAt - now)))
+    }
+    if (res.destroyed) break
+    res.write(chunk)
+    entry.sentWireBytes += chunk.length
+  }
+  res.end()
+}
 const mime = (name) => ({ '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json' })[extname(name)] || 'application/octet-stream'
 const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, 'http://localhost').pathname
+    if (locked && latencyMs && (pathname.startsWith('/mirror/') || pathname.startsWith('/assets/'))) await new Promise(resolve => setTimeout(resolve, latencyMs))
     if (pathname.startsWith('/mirror/')) {
       const target = new URL(mirror.href)
       // Keep the configured origin fixed: a request path is never a URL.
@@ -97,8 +129,9 @@ const server = createServer(async (req, res) => {
         if (entry.url !== url || hash(Buffer.from(entry.body, 'base64')) !== entry.sha256) throw Error('Corrupt mirror cache')
         memo.set(key, entry)
       }
-      network.push({ url, source, status: entry.status })
-      res.writeHead(entry.status, { 'Content-Type': entry.type || 'application/octet-stream', 'Cache-Control': 'no-store' }).end(Buffer.from(entry.body, 'base64'))
+      const transfer = { url, source, status: entry.status, bytes: Buffer.from(entry.body, 'base64').length }
+      network.push(transfer)
+      await respond(res, entry.status, entry.type || 'application/octet-stream', Buffer.from(entry.body, 'base64'), transfer)
       return
     }
     if (pathname === '/') { res.writeHead(200, { 'Content-Type': 'text/html' }).end('<!doctype html><title>WasmTex CPU diagnostic</title>'); return }
@@ -108,7 +141,11 @@ const server = createServer(async (req, res) => {
     const file = resolve(base, decodeURIComponent(pathname.slice(prefix.length)))
     if (!file.startsWith(base + sep)) { res.writeHead(403).end(); return }
     const bytes = await readFile(file)
-    res.writeHead(200, { 'Content-Type': mime(file), 'Cache-Control': 'no-store' }).end(bytes)
+    if (prefix.startsWith('/assets/')) {
+      const transfer = { url: pathname, source: 'asset', status: 200, bytes: bytes.length }
+      network.push(transfer)
+      await respond(res, 200, mime(file), bytes, transfer)
+    } else res.writeHead(200, { 'Content-Type': mime(file), 'Cache-Control': 'no-store' }).end(bytes)
   } catch (error) {
     network.push({ url: req.url, error: String(error), cause: String(error.cause) })
     res.writeHead(error.code === 'ENOENT' ? 404 : 500).end(String(error))
@@ -130,7 +167,7 @@ if (arg('serve-only', 'false') === 'true') {
 const browser = await chromium.launch()
 const cdp = await browser.newBrowserCDPSession()
 const report = {
-  schemaVersion: 2, controlMode, initPhases, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
+  schemaVersion: 2, latencyMs, bandwidthMbps, preparationRuns, savePdf, controlMode, initPhases, browser: browser.version(), assets, mirror: mirror.href, year, repetitions, variants,
   traceEnabled, heapStatsEnabled, cacheProbe, sdkDir, project, luaNamesProbe, checkpointProbe, fixedWorkerClock: !luaNamesProbe, preparationRetries, samples: [],
   sdkSourceRevision: arg('sdk-source-revision', null),
   sdkHashes: Object.fromEntries(await Promise.all((await readdir(sdkDir, { recursive: true })).filter(name => name.endsWith('.js')).sort().map(async name => [name, hash(await readFile(resolve(sdkDir, name)))]))),
@@ -140,6 +177,8 @@ const report = {
   assetHashes: Object.fromEntries(await Promise.all((await readdir(assets)).filter((name) => /\.(wasm|js|fmt|gz|json)$/.test(name)).map(async (name) => [name, hash(await readFile(resolve(assets, name)))]))),
   limitations: [
     'Mirror responses are populated before measurement; measured runs prohibit upstream misses. Loopback HTTP transfers remain and are not counted as font CPU.',
+    `A fixed ${latencyMs} ms response delay applies only to measured mirror/asset requests.`,
+    bandwidthMbps ? `Mirror/asset responses use gzip and share a modeled ${bandwidthMbps} Mbps link in 16 KiB chunks. This is a server pacing model, not TCP or a mobile-device measurement; SDK modules are unthrottled.` : 'No bandwidth throttling or wire compression is applied; request bytes are decoded payload bytes.',
     'New contexts have empty browser caches; same-worker repeat/edit retains SDK and MEMFS caches. No file aliases are pre-injected.',
     traceEnabled ? 'Tracing adds overhead; traced timings are diagnostic only.' : 'Tracing is disabled; compare alternating baseline/candidate runs on the same machine.',
     'conversionMs measures the dvipdfmx worker routine, including its heap reset and file I/O; timings exclude post-compile artifact hashing.',
@@ -182,7 +221,7 @@ async function runVariant(variant, repetition, measured) {
     await page.evaluate(async () => { globalThis.Compiler = (await import('/lib/headless.js')).WasmTexCompiler })
     for (const stage of ['init', 'first', 'repeat', ...(checkpointProbe ? ['prepare-checkpoint'] : []), 'body-edit', 'preamble-edit', ...(project?.stages?.restore ? ['restore'] : [])]) {
       const networkStart = network.length
-      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project }) => {
+      const action = () => page.evaluate(async ({ stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project, savePdf }) => {
         const font = variant.startsWith('pdflatex')
           ? '\\usepackage[T1]{fontenc}\\usepackage{lmodern}'
           : '\\usepackage{fontspec}\\setmainfont{Latin Modern Roman}'
@@ -239,6 +278,7 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
             observe(engine.dvipdfm, 'init', 'converter-worker-boot')
           }
           globalThis.compiler = new globalThis.Compiler({
+            ...project?.compilerOptions,
             engine: variant === 'pdflatex-checkpoint' ? 'pdflatex' : variant,
             incremental: variant === 'pdflatex-checkpoint',
             texliveVersion: year, texliveUrl: `${base}/mirror/`, assetBaseUrl: `${base}/assets/`,
@@ -269,6 +309,11 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
             await globalThis.compiler.init()
             globalThis.returnInitMs = performance.now() - returnStart
           }
+          globalThis.passes = []
+          for (const method of ['compile', 'compileFromHeapCheckpoint']) {
+            const engine = globalThis.compiler.engine, original = engine[method]?.bind(engine)
+            if (original) engine[method] = async (...args) => { const t = performance.now(); const r = await original(...args); globalThis.passes.push({method, ms:performance.now()-t, success:r.success, phaseTimings:r.phaseTimings}); return r }
+          }
           return { seedCache: globalThis.seedCache ?? null, returnInitMs: globalThis.returnInitMs ?? null, initPhaseTimings: initPhases ? globalThis.initPhaseTimings : null, ms: performance.now() - start }
         }
         if (stage === 'prepare-checkpoint') {
@@ -278,7 +323,9 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
         if (!project && stage === 'body-edit') globalThis.compiler.setFile('main.tex', source.replace('Font CPU probe.', 'Body edited: another font CPU probe.'))
         if (!project && stage === 'preamble-edit') globalThis.compiler.setFile('main.tex', source.replace('\\documentclass{article}', '\\documentclass[12pt]{article}'))
         if (project) globalThis.compiler.setFile(project.mainFile || 'main.tex', project.stages?.[stage] ?? source)
-        const result = await globalThis.compiler.compile()
+        globalThis.passes = []
+        const progress = []
+        const result = await globalThis.compiler.compile({onProgressPdf: (frame) => progress.push({ms: performance.now()-start, bytes:frame.pdf.length})})
         const expectedSuccess = project?.expectedSuccess?.[stage] ?? true
         if (result.success !== expectedSuccess) throw Error(result.log)
         if (checkpointProbe && stage === 'body-edit' && !result.phaseTimings?.checkpointResume) throw Error('Body edit did not resume a checkpoint')
@@ -290,7 +337,7 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           if (data !== null) artifacts[suffix] = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data))), (b) => b.toString(16).padStart(2, '0')).join('')
         }
         if (result.synctex) artifacts.synctex = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', result.synctex)), (b) => b.toString(16).padStart(2, '0')).join('')
-        if (!result.pdf) return { ms: elapsed, success: result.success, artifacts, synctexPresent: result.synctex != null, errors: result.errors, diagnostics: result.telemetry?.diagnostics, geometry: result.telemetry?.geometry, dependencies: result.telemetry?.dependencies, pdfConversionInputs: result.pdfConversionInputs, glyphCoverage: result.glyphCoverage, log: result.log }
+        if (!result.pdf) return { ms: elapsed, passes: globalThis.passes, progress, success: result.success, artifacts, synctexPresent: result.synctex != null, errors: result.errors, diagnostics: result.telemetry?.diagnostics, geometry: result.telemetry?.geometry, dependencies: result.telemetry?.dependencies, pdfConversionInputs: result.pdfConversionInputs, glyphCoverage: result.glyphCoverage, log: result.log }
         const bytes = result.pdf
         const digest = await crypto.subtle.digest('SHA-256', bytes)
         let text = ''
@@ -298,13 +345,15 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
         const normalized = text.replace(/\/(?:CreationDate|ModDate)\s*\([^)]*\)/g, '').replace(/\/ID\s*\[[^\]]*\]/g, '')
         const normalizedDigest = await crypto.subtle.digest('SHA-256', Uint8Array.from(normalized, (c) => c.charCodeAt(0)))
         return {
-          ms: elapsed, success: result.success, artifacts, synctexPresent: result.synctex != null, errors: result.errors, diagnostics: result.telemetry?.diagnostics, geometry: result.telemetry?.geometry, dependencies: result.telemetry?.dependencies, pdfConversionInputs: result.pdfConversionInputs, glyphCoverage: result.glyphCoverage, pdfBytes: bytes.length,
+          ms: elapsed, passes: globalThis.passes, progress, success: result.success, artifacts, synctexPresent: result.synctex != null, errors: result.errors, diagnostics: result.telemetry?.diagnostics, geometry: result.telemetry?.geometry, dependencies: result.telemetry?.dependencies, pdfConversionInputs: result.pdfConversionInputs, glyphCoverage: result.glyphCoverage, pdfBytes: bytes.length,
           pdfSha256: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join(''),
+          ...(savePdf ? { pdfBase64: btoa(text) } : {}),
+          ...(savePdf && result.synctex ? { synctexBase64: btoa(Array.from(result.synctex, byte => String.fromCharCode(byte)).join('')) } : {}),
           typesetSha256: Array.from(new Uint8Array(normalizedDigest), (b) => b.toString(16).padStart(2, '0')).join(''),
           log: result.log, phaseTimings: result.phaseTimings ?? null,
           preambleSnapshot: result.preambleSnapshot ?? null, preambleRebuilt: result.preambleRebuilt ?? null,
         }
-      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project })
+      }, { stage, variant, year, base, luaNamesProbe, checkpointProbe, cacheProbe, initPhases, project, savePdf })
       const result = measured ? await collectTrace(`${variant}-${repetition}-${stage}`, action) : await action()
       if (cacheProbe && stage === 'init') {
         result.cacheReadOwnership = []
@@ -356,6 +405,7 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
                 : snapshot.byteLength,
               ranges: snapshot.ranges ? snapshot.ranges.length / 2 : null,
               retainedIcuBytes: self.icuData?.byteLength || 0,
+              retainedTransportBytes: Object.values(self.texliveTransport || {}).reduce((sum, file) => sum + file.data.byteLength, 0),
             }
           })
           if (stats) result.heapSnapshots.push({ worker: worker.url().split('/').pop(), ...stats })
@@ -412,9 +462,17 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
           }))
         }
       }
+      if (result.pdfBase64) {
+        await writeFile(`${out}/${variant}-${repetition}-${stage}.pdf`, Buffer.from(result.pdfBase64, 'base64'))
+        delete result.pdfBase64
+      }
+      if (result.synctexBase64) {
+        await writeFile(`${out}/${variant}-${repetition}-${stage}.synctex.gz`, Buffer.from(result.synctexBase64, 'base64'))
+        delete result.synctexBase64
+      }
       const requests = network.slice(networkStart)
       sample.stages.push({ stage, ...result, requests })
-      if (requests.some((r) => r.error || r.source === 'blocked-miss' || (measured && r.source === 'upstream'))) throw Error('Measured run encountered unprepared request')
+      if (requests.some((r) => r.error || r.source === 'blocked-miss' || (measured && r.source === 'upstream'))) throw Error('Measured run encountered unprepared request: ' + JSON.stringify(requests.filter(r => r.error || r.source === 'blocked-miss')))
       await writeFile(`${out}/report.json`, JSON.stringify(report, null, 2))
       console.log(`${measured ? 'measure' : 'prepare'} ${variant} ${repetition} ${stage}: ${result.ms.toFixed(1)} ms, ${requests.length} local requests`)
     }
@@ -422,7 +480,7 @@ texio.write_nl("FONT-NAMES-PROBE sourceMs=" .. sourceMs .. " binaryMs=" .. binar
 }
 try {
   // Exercise every mutation before closing the upstream boundary.
-  for (const variant of variants) await runVariant(variant, -1, false)
+  for (const variant of variants) { for (let preparation = 1; preparation <= preparationRuns; preparation++) await runVariant(variant, -preparation, false) }
   locked = true
   for (let repetition = 0; repetition < repetitions; repetition++) {
     for (const variant of variants) await runVariant(variant, repetition, true)

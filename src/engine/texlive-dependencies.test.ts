@@ -17,7 +17,10 @@ describe('buildTexliveDependencySet', () => {
     expect(buildTexliveDependencySet('2025', profile, [])).toBeUndefined()
   })
 
-  it('unions passes, keeps the mirror candidate from the pass that saw the network', () => {
+  it.each([
+    'network',
+    'warmup-cache',
+  ] as const)('unions passes and keeps the %s mirror candidate', (source) => {
     const first = report([
       {
         stage: 'pdftex',
@@ -26,7 +29,7 @@ describe('buildTexliveDependencySet', () => {
         outcome: 'resolved',
         attempts: [
           { source: 'network', outcome: 'not-found', candidate: 'ptmr7t.vf', status: 404 },
-          { source: 'network', outcome: 'hit', candidate: 'ptmr7t', status: 200 },
+          { source, outcome: 'hit', candidate: 'ptmr7t', status: 200 },
         ],
       },
       {

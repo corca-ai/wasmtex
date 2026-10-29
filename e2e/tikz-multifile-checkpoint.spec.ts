@@ -12,7 +12,7 @@ const texliveUrl = process.env.TEXLIVE_URL ?? (year === '2025'
 test('unread secondary TikZ edits reuse a proven prefix; preamble edits and new files retire it', async ({ page }) => {
   // Exercise the candidate controller with the pinned native engine and formats.
   // This does not change a published asset directory or claim a released identity.
-  const controller = readFileSync('wasm-build/shared-file.js', 'utf8') + '\n' + readFileSync('wasm-build/pdftex-worker.js', 'utf8')
+  const controller = ['shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js'].map(name => readFileSync(`wasm-build/${name}`, 'utf8')).join('\n')
   const clock = `var NativeDate = Date; Date = class extends NativeDate { constructor(...args) { super(...(args.length ? args : ['2026-10-13T00:00:00Z'])); } static now() { return 1791849600000; } };\n`
   await page.route('**/wasmtex-pdftex.worker.js*', route => route.fulfill({ contentType: 'text/javascript', body: controller.replace('Module["postRun"] = function() {', 'Module["postRun"] = function() {' + clock) }))
   await page.route('**/tikz-multifile.html', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Multi-file checkpoints</title>' }))
@@ -91,7 +91,7 @@ ${Array.from({ length: 12 }, () => 'Unchanged academic text. '.repeat(180) + '\n
 })
 
 test('ordinary heap prefixes invalidate an already read file recorded through dot segments', async ({ page }) => {
-  const controller = readFileSync('wasm-build/shared-file.js', 'utf8') + '\n' + readFileSync('wasm-build/pdftex-worker.js', 'utf8')
+  const controller = ['shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js'].map(name => readFileSync(`wasm-build/${name}`, 'utf8')).join('\n')
   await page.route('**/wasmtex-pdftex.worker.js*', route => route.fulfill({ contentType: 'text/javascript', body: controller }))
   await page.route('**/heap-alias.html', route => route.fulfill({contentType: 'text/html', body: '<!doctype html><title>Alias invalidation</title>'}))
   await page.goto('http://localhost:6001/heap-alias.html')

@@ -62,7 +62,10 @@ describe('ResolverEvidenceCollector', () => {
     ])
   })
 
-  it('keeps the network attempts when the same request repeats as a cache hit', () => {
+  it.each([
+    'network',
+    'warmup-cache',
+  ] as const)('keeps %s candidates when a request repeats as a session hit', (source) => {
     const collector = new ResolverEvidenceCollector('pdftex', profile)
     collector.markSupported()
     collector.begin()
@@ -72,7 +75,7 @@ describe('ResolverEvidenceCollector', () => {
       outcome: 'resolved',
       attempts: [
         { source: 'network', outcome: 'not-found', candidate: 'ptmr7t.vf', status: 404 },
-        { source: 'network', outcome: 'hit', candidate: 'ptmr7t', status: 200 },
+        { source, outcome: 'hit', candidate: 'ptmr7t', status: 200 },
       ],
     })
     collector.record({

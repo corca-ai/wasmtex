@@ -315,6 +315,11 @@ function canonicalReferencesSettled(result: CompileResult, finished: boolean): b
 
 /** Best-effort placement for a heap checkpoint during an already-needed full pass. */
 export interface CompileOptions {
+  /** Optional provisional full-document PDF from the first successful pass, before
+   * bibliography/index/reference settling. Display only: never export or publish as
+   * canonical output. Bytes are independently owned; observer exceptions are ignored.
+   * No extra engine pass is run, and the final compile result remains authoritative. */
+  onProgressPdf?: (frame: { pdf: Uint8Array; compileTime: number }) => void
   incrementalPreparation?: { path: string; offset: number }
 }
 
@@ -838,10 +843,24 @@ export class WasmTexCompiler {
     }
   }
 
+  private emitProgressPdf(
+    result: CompileResult,
+    options: CompileOptions | undefined,
+    started: number,
+  ): void {
+    if (!options?.onProgressPdf || !result.success || !result.pdf) return
+    try {
+      options.onProgressPdf({ pdf: result.pdf.slice(), compileTime: performance.now() - started })
+    } catch {
+      // A display observer cannot invalidate an otherwise successful canonical compile.
+    }
+  }
+
   private async compileIdle(
     preview: boolean,
     options?: CompileOptions,
   ): Promise<PreviewCompileResult> {
+    const started = performance.now()
     this.currentAuxiliaryDependencies.clear()
     ;(await this.operations.observe(this.ensureEngine())).resume()
     if (this.unavailable || !this.engine) {
@@ -891,6 +910,8 @@ export class WasmTexCompiler {
     ).resume()
     collectConversionInputs(conversionInputs, result)
     const tikzTelemetry = result.telemetry?.tikzExternalization
+    this.emitProgressPdf(result, options, started)
+    this.operations.assertCurrent()
     let auxInjected = (await this.operations.observe(this.runAuxStages(result))).resume()
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
