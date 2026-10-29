@@ -150,3 +150,15 @@ original public source, `--main DaoFP.tex --edit 22-DependentTypes.tex
 --repetitions 3 --checkpoints 32 --checkpoint-mib 256 --page-limit 363`, the
 same immutable 2026 mirror, and explicit baseline/candidate SDK and asset roots.
 The harness and raw reports remain PR artifacts, not a runtime dependency.
+
+## Controller byte budget
+
+Bundling the two previously separate helper requests changes the unit of the
+controller size check. The old 97,000-byte per-controller ceiling did not include
+those 3,812 helper bytes. The final controllers are 100,127 bytes; the combined
+baseline controller and helpers were 98,933 bytes on both annual lines. The new
+101,000-byte controller ceiling therefore admits approximately 1.2 KB of actual
+startup-script growth and the helper relocation. All WASM, format and runtime
+limits stay unchanged. The initial CI build rejected the stale ceiling; the
+new ceiling is supported by the startup, compressed-bandwidth and memory results
+above, not by accepting an unmeasured regression.
