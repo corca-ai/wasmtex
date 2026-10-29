@@ -31,26 +31,19 @@ Paths outside the virtual project root are never read for this transfer.
 
 ## Design
 
-biblatex's default engine is **Biber** (a Perl program); the classic BibTeX
-engine can't produce biblatex's `.bbl`, and Biber itself — Perl + Text::BibTeX
-(the C `btparse`) + a large CPAN tree — is intractable to ship as WASM. The
-architecture therefore combines a pluggable backend interface with two concrete
-backends:
-
-- **biblatex-lite (JS/TS)**, the bundled, zero-download client default. It
-  implements the common path natively (cite collection, sorting, the core
-  fields, `.bbl` generation) on top of the project's `.bib` parser, covering
-  the numeric/author-year subset rather than the full biber feature set.
-- **Server Biber** (`createBiberBackend`) for full fidelity. Biber is
-  deterministic and not in the hot interactive loop, so it is an ideal offload:
-  an integrator points the backend at an endpoint running real Biber.
+biblatex's default engine is **Biber**. The headless compiler accepts a host-provided
+`ToolBackend<BiberRequest, string>` at `BIBER_STAGE`, with either `client` or
+`server` location. A host can supply a full Biber WASM runtime; the SDK does not
+bundle or download it. The zero-download default remains **biblatex-lite**, a
+limited JS/TS implementation of common numeric/author-year bibliography fields.
+`createBiberBackend` constructs the optional HTTP backend for a host-owned server.
 
 The classic BibTeX path is independent of both, so `\bibliography` documents
 are unaffected.
 
 The headless `WasmTexCompiler` **drives this automatically**: when it detects
 a biblatex document it reads the `.bcf` the first LaTeX pass emitted, runs a
-registered server Biber backend (or biblatex-lite by default), injects the
+registered local or server Biber backend (or biblatex-lite by default), injects the
 `.bbl`, and reruns — you don't hand-wire it (see *Server backends* below). The
 low-level primitives are exported for custom (non-headless) hosts:
 
@@ -80,8 +73,29 @@ matches `preferredId`, else the first supplied backend, else the bundled
   journal.
 
 Full biblatex fidelity — every field, name-disambiguation hashes,
-`sortinit`/locale collation, and the complete style set — is the **server Biber
+`sortinit`/locale collation, and the complete style set — is the **full Biber
 backend's** job (see below).
+
+## Host-provided local Biber
+
+```ts
+backends.register(BIBER_STAGE, {
+  id: 'host-biber', stage: BIBER_STAGE, location: 'client', version: 'pinned-runtime',
+  async run(request, context) {
+    return (await localBiber.run(request, { signal: context?.signal })).bbl
+  },
+})
+```
+
+`runBiberBackend` calls the selected backend regardless of location. An absent
+backend returns `null` and selects biblatex-lite; a selected backend's errors
+propagate without silently changing bibliography implementations. The legacy
+`runRemoteBiber` helper remains remote-only. The compiler passes the current
+operation's abort signal to Biber. `withCache` forwards it and rejects cancelled
+results before caching; the HTTP adapter forwards it to fetch. Hosts must forward
+cancellation to their runtime and own its disposal, assets, version compatibility,
+and any explicit recovery policy. Other built-in stages retain their existing
+remote-only routing and do not yet receive the compiler signal.
 
 ## Server backends (per-stage offload)
 
@@ -104,7 +118,7 @@ Two distinct request shapes flow off-device, both file-level:
   builds a server backend for the separate `BIBER_STAGE` (`'bibliography:biber'`) that consumes a
   `BiberRequest` (`{ bcf, bibFiles }` — the `.bcf` control file plus the `.bib`s)
   and returns the `.bbl`. The compiler auto-routes here for a biblatex +
-  `backend=biber` document: it reads the `.bcf`, calls `runRemoteBiber`, injects
+  `backend=biber` document: it reads the `.bcf`, calls `runBiberBackend`, injects
   the returned `.bbl`, and reruns — so **registering the backend is all you do**.
   With no registry, biblatex-lite runs on-device, unchanged.
 

@@ -51,6 +51,11 @@ type BackendImplementations<Stages> = {
   >
 }
 
+/** Cancellation owned by the current compiler operation, independent of execution location. */
+export interface BackendRunContext {
+  readonly signal?: AbortSignal | undefined
+}
+
 /** A backend that runs one compile stage. `Req`/`Res` are the stage's payloads. */
 export interface ToolBackend<Req, Res, Stage extends string = string> {
   readonly id: string
@@ -61,7 +66,7 @@ export interface ToolBackend<Req, Res, Stage extends string = string> {
   /** Where this backend runs. Drives telemetry and the privacy default — a `server`
    *  backend only ever sees what the integrator routes to it. */
   readonly location: 'client' | 'server'
-  run(request: Req): Promise<Res>
+  run(request: Req, context?: BackendRunContext): Promise<Res>
 }
 
 /**
@@ -136,13 +141,15 @@ export function createRemoteBackend<Req, Res, const Stage extends string = strin
     stage: opts.stage,
     ...(opts.version ? { version: opts.version } : {}),
     location: 'server',
-    async run(request: Req): Promise<Res> {
+    async run(request: Req, context?: BackendRunContext): Promise<Res> {
+      context?.signal?.throwIfAborted()
       const doFetch = opts.fetchImpl ?? fetch
       const headers: Record<string, string> = { 'x-wasmtex-stage': opts.stage }
       const key = opts.cacheKey?.(request)
       if (key) headers['x-wasmtex-cache-key'] = key
       const response = await doFetch(opts.endpoint, {
         method: 'POST',
+        ...(context?.signal ? { signal: context.signal } : {}),
         headers,
         body: opts.encodeRequest(request),
       })

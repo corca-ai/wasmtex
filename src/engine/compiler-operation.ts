@@ -6,6 +6,10 @@ export class CompilerOperations {
     settled: Promise<void>
   } | null = null
 
+  get signal(): AbortSignal | undefined {
+    return this.active?.controller.signal
+  }
+
   get busy(): boolean {
     return this.active !== null
   }

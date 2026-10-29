@@ -1,19 +1,17 @@
 import {
   type BackendRegistry,
+  type BackendRunContext,
   BIBER_STAGE,
   createJsonTextBackend,
   type ToolBackend,
 } from './backend-registry'
 
 /**
- * Biber as a server-first pluggable backend (M4 / #116, execution-model principle 3).
+ * File-level Biber stage for host-provided local or server executors.
  *
- * Biber is Perl + Text::BibTeX (the C `btparse`) + a large CPAN tree — intractable to
- * ship to WASM, NOT in the hot interactive loop, and deterministic. That makes it the
- * ideal **server offload**: an integrator points {@link createBiberBackend} at an endpoint
- * running Biber; the client default stays the bundled biblatex-lite (so nothing leaves
- * the device unless a backend is wired). Because the endpoint runs the same deterministic
- * Biber, its `.bbl` is reproducible — content-addressable for a shared cache (S5 #112).
+ * The host supplies the full Biber runtime, for example in an isolated WASM Worker,
+ * or registers a server using createBiberBackend. Without an explicit executor,
+ * the compiler retains its bundled biblatex-lite subset.
  *
  * Unlike the legacy `BibliographyBackend.generateBbl` (entry-level, synchronous), Biber
  * is **file-level**: it consumes the `.bcf` control file (emitted by the first LaTeX pass)
@@ -72,3 +70,14 @@ export async function runRemoteBiber(
 }
 
 export { BIBER_STAGE }
+
+/** Run the explicitly selected Biber executor, preserving the built-in default when absent. */
+export async function runBiberBackend(
+  registry: BackendRegistry | undefined,
+  request: BiberRequest,
+  context?: BackendRunContext,
+): Promise<string | null> {
+  context?.signal?.throwIfAborted()
+  const backend = registry?.resolve(BIBER_STAGE)
+  return backend ? backend.run(request, context) : null
+}
