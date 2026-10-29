@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Honor biblatex's `Please rerun LaTeX` warning after Biber output is loaded,
+  so the compile settles references before marking them complete.
+
 - Forward class-generated BibTeX databases (REVTeX notes and ACS controls) from
   the TeX engine to client and remote bibliography stages.
 

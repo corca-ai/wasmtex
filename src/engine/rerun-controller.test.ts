@@ -14,6 +14,17 @@ describe('needsRerun', () => {
 })
 
 describe('RerunController', () => {
+  it('settles biblatex after the first pass that reads the generated BBL', () => {
+    const controller = new RerunController()
+    const biber = 'Package biblatex Warning: Please (re)run Biber on the file: main.'
+    const latex =
+      'Package biblatex Warning: Please rerun LaTeX.\n(biblatex) Page breaks have changed.'
+    expect(controller.decide(biber, 'before-bbl', true)).toEqual({ rerun: true })
+    expect(controller.decide(latex, 'bbl-loaded')).toEqual({ rerun: true })
+    expect(controller.decide(CLEAN_LOG, 'bbl-loaded')).toEqual({ rerun: false })
+    expect(needsRerun(latex)).toBe(true)
+  })
+
   it('does not rerun a converged compile', () => {
     expect(new RerunController().decide(CLEAN_LOG, 'sig').rerun).toBe(false)
   })
