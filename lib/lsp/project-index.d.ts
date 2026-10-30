@@ -13,11 +13,12 @@ export interface ProjectIndexStats {
     latexSymbols: number;
     bibliographyEntries: number;
     bibliographyStrings: number;
-    /** Deterministic UTF-16 payload estimate for retained semantic index records. */
+    /** Deterministic UTF-16 payload estimate for retained sources and semantic records. */
     estimatedBytes: number;
 }
 export declare class ProjectIndex {
     private files;
+    private fileSources;
     private auxData;
     private bibEntries;
     private bibStrings;
