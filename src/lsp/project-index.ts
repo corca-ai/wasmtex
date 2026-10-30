@@ -36,7 +36,7 @@ export interface ProjectIndexStats {
   latexSymbols: number
   bibliographyEntries: number
   bibliographyStrings: number
-  /** Deterministic UTF-16 payload estimate for retained semantic index records. */
+  /** Deterministic UTF-16 payload estimate for retained sources and semantic records. */
   estimatedBytes: number
 }
 
@@ -118,6 +118,7 @@ function detectEnvironments(names: Set<string>): Set<string> {
 
 export class ProjectIndex {
   private files = new Map<string, FileSymbols>()
+  private fileSources = new Map<string, string>()
   private auxData: AuxData = { labels: new Map(), citations: new Set(), includes: [] }
   private bibEntries: BibEntry[] = []
   private bibStrings: BibStringDef[] = []
@@ -149,11 +150,18 @@ export class ProjectIndex {
   private allLabelsCache: LabelDef[] | null = null
 
   updateFile(filePath: string, content: string): void {
+    const previousSource = this.fileSources.get(filePath)
+    if (previousSource !== undefined && previousSource === content) {
+      this.invalidateCompletionSnapshot()
+      return
+    }
     this.updateFileSymbols(filePath, parseLatexFile(content, filePath))
+    this.fileSources.set(filePath, content)
   }
 
   /** Update from a caller-owned syntax snapshot without parsing the source again. */
   updateFileSymbols(filePath: string, symbols: FileSymbols): void {
+    this.fileSources.delete(filePath)
     this.invalidateCompletionSnapshot()
     const previous = this.files.get(filePath)
     if (previous) this.removeFromIndexes(filePath, previous)
@@ -165,6 +173,7 @@ export class ProjectIndex {
   }
 
   removeFile(filePath: string): void {
+    this.fileSources.delete(filePath)
     this.invalidateCompletionSnapshot()
     const previous = this.files.get(filePath)
     if (previous) this.removeFromIndexes(filePath, previous)
@@ -669,6 +678,7 @@ export class ProjectIndex {
     for (const [path, symbols] of this.files) {
       estimatedCodeUnits +=
         path.length +
+        (this.fileSources.get(path)?.length ?? 0) +
         JSON.stringify(symbols).length +
         structuralSelectionEstimatedBytes(symbols) / 2
       for (const values of Object.values(symbols)) latexSymbols += values.length

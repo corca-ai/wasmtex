@@ -49,6 +49,13 @@ file. The cached active graph follows `input`/`include`/`subfile` plus project-l
 class/package load edges. Queries for completion use that graph, while per-name navigation
 lookups remain backed by inverted indexes.
 
+Repeated observations of identical source reuse that file's parsed symbols and
+static query caches. Changed source, file removal, and caller-supplied syntax
+replacement retire the source witness; a subsequent source observation reparses
+when its provenance is no longer known. Every source write still invalidates
+runtime completion evidence, including an identical write. Retained-index memory
+estimates include the source witnesses, which keep only the current text per file.
+
 `LatexSyntaxService` is the parser/index owner for composed authoring runtimes. A host
 passes the same instance to `LatexLanguageService`; each stable document update then
 produces Document Syntax Snapshot v8 and updates LSP symbols from one token stream.
