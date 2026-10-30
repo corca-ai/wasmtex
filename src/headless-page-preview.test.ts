@@ -142,11 +142,11 @@ it('serializes previews and fences source mutation while one is in flight', asyn
   compiler.dispose()
 })
 
-async function forkFixture() {
+async function forkFixture(chapter = 'body', local = false) {
   const f = await fixture(undefined, {
     incremental: true,
     heapCheckpointOptions: { minHeadBytes: 0 },
-    files: { 'main.tex': source, 'chapter.tex': 'body' },
+    files: { 'main.tex': source, 'chapter.tex': chapter },
   })
   vi.spyOn(f.engine, 'supportsHeapCheckpoints', 'get').mockReturnValue(true)
   vi.spyOn(f.engine, 'dropHeapCheckpoints').mockResolvedValue()
@@ -161,6 +161,20 @@ async function forkFixture() {
         inputs: ['/work/main.tex'],
         inputsComplete: true,
       },
+      ...(local
+        ? [
+            {
+              id: 'inside-chapter',
+              path: 'chapter.tex',
+              line: 3,
+              bytes: 1000,
+              ms: 1,
+              inputs: ['/work/main.tex', '/work/chapter.tex'],
+              inputsComplete: true,
+              prefixSafe: true,
+            },
+          ]
+        : []),
     ],
   })
   vi.spyOn(f.engine, 'compileFromHeapCheckpoint').mockResolvedValue(result)
@@ -181,7 +195,7 @@ it('a fork renders edited secondary inputs while its canonical owner is compilin
   const { compiler, engine, fork, preview, create } = await forkFixture()
   const session = await compiler.createPagePreviewSession({ path: 'chapter.tex', offset: 0 })
   expect(session).not.toBeNull()
-  expect(create).toHaveBeenCalledWith('before-chapter', undefined)
+  expect(create).toHaveBeenCalledWith('before-chapter', undefined, 'before-chapter')
   expect('compile' in session!).toBe(false)
   let complete!: (value: CompileResult) => void
   vi.mocked(engine.compile).mockImplementationOnce(
@@ -242,5 +256,31 @@ it('a project replacement fences a fork created from the preceding project', asy
   finish(fork)
   expect(await pending).toBeNull()
   expect(terminate).toHaveBeenCalledTimes(1)
+  compiler.dispose()
+})
+
+it.each([
+  false,
+  true,
+])('keeps earlier edit proof only when its state was admitted: %s', async (admitted) => {
+  const chapter = 'First paragraph.\n\nSecond paragraph.\n'
+  const { compiler, fork, preview, create } = await forkFixture(chapter, true)
+  vi.spyOn(fork, 'pagePreviewFallbackId', 'get').mockReturnValue(
+    admitted ? 'before-chapter' : undefined,
+  )
+  const session = await compiler.createPagePreviewSession({
+    path: 'chapter.tex',
+    offset: chapter.length,
+  })
+  expect(create).toHaveBeenCalledWith('inside-chapter', undefined, 'before-chapter')
+  session!.setFile('chapter.tex', chapter.replace('Second', 'Edited'))
+  expect(await session!.previewPages(2)).not.toBeNull()
+  expect(preview).toHaveBeenLastCalledWith(2, 'inside-chapter')
+  session!.setFile('chapter.tex', chapter.replace('First', 'Earlier'))
+  expect(!!(await session!.previewPages(2))).toBe(admitted)
+  if (admitted) expect(preview).toHaveBeenLastCalledWith(2, 'before-chapter')
+  session!.setFile('main.tex', source.replace('article', 'report'))
+  expect(await session!.previewPages(2)).toBeNull()
+  session!.dispose()
   compiler.dispose()
 })

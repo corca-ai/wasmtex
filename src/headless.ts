@@ -704,7 +704,12 @@ export class WasmTexCompiler {
         )
       : this.heap.previewCheckpoint(this.mainSource(), this.projectTexFiles())
     if (!checkpoint) return null
-    const proof = this.heap.cloneForEngine(engine, checkpoint)
+    // Keep the nearby state fast, with an independently proven earlier state
+    // for edits that invalidate its consumed prefix. The worker bounds both.
+    const fallback = hint
+      ? this.heap.previewCheckpointForEdit(this.mainSource(), this.projectTexFiles(), hint.path, 0)
+      : undefined
+    const proof = this.heap.cloneForEngine(engine, [checkpoint, fallback])
     const baseline = this.pagePreviewBaseline
     const errors = this.pagePreviewErrors.map((error) => ({ ...error }))
     const mainFile = this.mainFile
@@ -719,7 +724,7 @@ export class WasmTexCompiler {
       const value = this.fs.readFile(path)
       if (value !== null) files[path] = typeof value === 'string' ? value : value.slice()
     }
-    const fork = await engine.forkForPagePreview(checkpoint, signal)
+    const fork = await engine.forkForPagePreview(checkpoint, signal, fallback)
     if (!fork) return null
     if (
       this.disposalRevision !== disposal ||
@@ -744,7 +749,7 @@ export class WasmTexCompiler {
     child.detection = detection
     child.initialized = true
     child.fs.markSynced()
-    child.heap = proof.cloneForEngine(fork)
+    child.heap = proof.cloneForEngine(fork, [checkpoint, fork.pagePreviewFallbackId])
     child.pagePreviewBaseline = baseline
     child.pagePreviewErrors = errors
     return {

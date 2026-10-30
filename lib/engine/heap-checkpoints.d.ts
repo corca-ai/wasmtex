@@ -75,7 +75,7 @@ export declare class HeapCheckpointCompiler {
         bytes: number;
     }>;
     /** Copy proof and diff baselines; the engine's fork owns the copied heap. */
-    cloneForEngine(engine: HeapCheckpointEngine, onlyId?: string): HeapCheckpointCompiler;
+    cloneForEngine(engine: HeapCheckpointEngine, onlyIds?: readonly (string | undefined)[]): HeapCheckpointCompiler;
     /** A preview must not advance the full-result baseline or arm new checkpoints. */
     previewCheckpoint(source: string, files: SourceSet): string | undefined;
     /** Select a prepared region before an edit, before its bytes are written. */

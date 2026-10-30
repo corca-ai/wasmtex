@@ -53,7 +53,7 @@ for (const command of ['include', 'subfile'] as const) {
         const baselineAux = await auxiliary()
         sibling = await compiler.createPagePreviewSession(hint)
         if (!sibling) throw new Error('Capable checkpoint worker did not create a preview session')
-        const original = files['ch12.tex'], changed = original.slice(0,offset) + original.slice(offset).replace('Every function', 'Each  function')
+        const original = files['ch12.tex'], changed = original.slice(0,offset) + original.slice(offset).replace('Every function', '\\textsf{Each function}')
         compiler.setFile('ch12.tex', changed)
         const canonical = compiler.compile()
         sibling.setFile('ch12.tex', changed)
@@ -62,6 +62,12 @@ for (const command of ['include', 'subfile'] as const) {
         const revertedPreview = await sibling.previewPages(30)
         sibling.setFile('ch12.tex', changed)
         const repeatedPreview = await sibling.previewPages(30)
+        // Move before the local checkpoint while canonical work still owns
+        // the parent. This must use the independent earlier proof in the fork.
+        sibling.setFile('ch12.tex', original.replace('Every function', 'Early function'))
+        const earlierPreview = await sibling.previewPages(30)
+        sibling.setFile('ch12.tex', original)
+        const earlierReverted = await sibling.previewPages(30)
         const full = await canonical
         const changedAux = await auxiliary()
         const verification = await compiler.createPagePreviewSession(hint)
@@ -71,13 +77,15 @@ for (const command of ['include', 'subfile'] as const) {
         const reverted = await compiler.compile()
         const revertedAux = await auxiliary()
         // Invalidate every later checkpoint by changing an already-read chapter.
-        compiler.setFile('ch1.tex', files['ch1.tex'].replace('Every function', 'Each  function'))
+        compiler.setFile('ch1.tex', files['ch1.tex'].replace('Every function', '\\textsf{Each function}'))
         const early = await compiler.compile()
         const fresh = new WasmTexCompiler({ ...options, incremental: false,
-          files: { ...files, 'ch1.tex': files['ch1.tex'].replace('Every function', 'Each  function') } })
+          files: { ...files, 'ch1.tex': files['ch1.tex'].replace('Every function', '\\textsf{Each function}') } })
         try {
           await fresh.init(); const settled = await fresh.compile()
           return { held: baseline.heapCheckpointRetention, first: !!first,
+            earlierChanged: !!earlierPreview && !!revertedPreview && strip(earlierPreview.pdf) !== strip(revertedPreview.pdf),
+            earlierRevertedExact: !!earlierReverted && !!revertedPreview && strip(earlierReverted.pdf) === strip(revertedPreview.pdf),
             previewChanged: !!first && !!revertedPreview && strip(first.pdf) !== strip(revertedPreview.pdf),
             repeatExact: !!first && !!repeatedPreview && strip(first.pdf) === strip(repeatedPreview.pdf),
             matchesCanonicalPrefix: !!first && !!sameWorkerPreview && strip(first.pdf) === strip(sameWorkerPreview.pdf),
@@ -97,6 +105,8 @@ for (const command of ['include', 'subfile'] as const) {
     expect(out.held!.bytes).toBeLessThanOrEqual(256 * 2 ** 20)
     expect(out.retained!.bytes).toBeLessThanOrEqual(256 * 2 ** 20)
     expect(out.first).toBe(true)
+    expect(out.earlierChanged).toBe(true)
+    expect(out.earlierRevertedExact).toBe(true)
     expect(out.previewChanged).toBe(true)
     expect(out.repeatExact).toBe(true)
     expect(out.matchesCanonicalPrefix).toBe(true)

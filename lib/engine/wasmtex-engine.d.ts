@@ -49,6 +49,8 @@ export interface WasmTexEngineOptions {
 interface WorkerMessage {
     sharedCheckpoints?: boolean;
     heapCheckpointRetention?: unknown;
+    pagePreviewFallback?: boolean;
+    checkpointIds?: string[];
     pagePreviewFork?: boolean;
     previewState?: unknown;
     result?: string;
@@ -115,6 +117,10 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private lineCheckpointsSupported;
     private pagePreviewSupported;
     private pagePreviewForkSupported;
+    private pagePreviewFallbackSupported;
+    private previewFallbackId;
+    /** @internal The additional checkpoint actually admitted by the fork. */
+    get pagePreviewFallbackId(): string | undefined;
     private readonly forkOptions;
     private sharedCheckpointsSupported;
     private checkpointBudget;
@@ -216,7 +222,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     /** @internal Same-build, host-local fork for disposable page previews only.
      * The opaque state never escapes this method or enables canonical compilation.
      */
-    forkForPagePreview(id: string, signal?: AbortSignal): Promise<WasmTexPdftexEngine | null>;
+    forkForPagePreview(id: string, signal?: AbortSignal, fallbackId?: string): Promise<WasmTexPdftexEngine | null>;
     /** Free checkpoints in the worker (all when `ids` is omitted). */
     dropHeapCheckpoints(ids?: string[]): Promise<void>;
     private runCompile;

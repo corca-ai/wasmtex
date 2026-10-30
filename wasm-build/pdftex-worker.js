@@ -90,7 +90,7 @@ Module["preRun"] = function() {
 // the host that the engine is ready.
 Module["postRun"] = function() {
     if (hcSupported()) hcEnsureDataBuffer();
-    self.postMessage({ "result": "ok", "transportPrefetch": true, "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
+    self.postMessage({ "result": "ok", "transportPrefetch": true, "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFallback": hcSupported(), "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
@@ -1665,21 +1665,23 @@ function exportPagePreviewRoutine(data) {
         self.postMessage({ result: "failed", cmd: "exportpagepreview" });
         return;
     }
-    var bytes = snap.image.bytes;
-    Object.keys(snap.fs.files).forEach(function(path) { bytes += snap.fs.files[path].byteLength; });
+    var snapshots = [snap], fallback = self._hc.checkpoints[data["fallbackId"]];
+    var cacheBytes = 0;
     (function count(dir) {
         FS.readdir(dir).forEach(function(name) {
             if (name === "." || name === "..") return;
             var path = dir + "/" + name, stat = FS.stat(path);
-            if (FS.isDir(stat.mode)) count(path); else bytes += stat.size;
+            if (FS.isDir(stat.mode)) count(path); else cacheBytes += stat.size;
         });
     })(TEXCACHEROOT);
-    if (bytes > 192 * 1024 * 1024) {
+    if (fallback && fallback !== snap && fallback.image.length <= 512 * 1024 * 1024) snapshots.push(fallback);
+    if (pagePreviewCopyBytes(snapshots, []) + cacheBytes > 192 * 1024 * 1024) snapshots = [snap];
+    if (pagePreviewCopyBytes(snapshots, []) + cacheBytes > 192 * 1024 * 1024) {
         self.postMessage({ result: "failed", cmd: "exportpagepreview" });
         return;
     }
-    self.postMessage({ result: "ok", cmd: "exportpagepreview", previewState: {
-        version: 1, worker: self.location.href, endpoint: self.texlive_endpoint,
+    self.postMessage({ result: "ok", cmd: "exportpagepreview", checkpointIds: snapshots.map(function(cp) { return cp.id; }), previewState: {
+        version: snapshots.length > 1 ? 2 : 1, snapshots: snapshots, worker: self.location.href, endpoint: self.texlive_endpoint,
         dataPtr: self._hc.dataPtr, snapshot: snap, mainfile: self.mainfile,
         hostWrites: self._hc.hostWrites, cacheFiles: snapshotDirectory(TEXCACHEROOT),
         positive: texlive200_cache, negative: texlive404_cache,
@@ -1689,15 +1691,35 @@ function exportPagePreviewRoutine(data) {
     } });
 }
 
+// Structured clone preserves shared block/file identity across these states.
+function pagePreviewCopyBytes(snapshots, cacheFiles) {
+    var buffers = new Set(), bytes = 0;
+    snapshots.forEach(function(cp) {
+        cp.image.pages.forEach(function(page) { buffers.add(page.data); });
+        Object.keys(cp.fs.files).forEach(function(path) { buffers.add(cp.fs.files[path]); });
+    });
+    cacheFiles.forEach(function(entry) { if (entry.data) buffers.add(entry.data); });
+    buffers.forEach(function(data) { bytes += data.byteLength; });
+    return bytes;
+}
+
 function importPagePreviewRoutine(data) {
     var state = data["previewState"];
     try {
-        if (!state || state.version !== 1 || state.worker !== self.location.href ||
+        if (!state || (state.version !== 1 && state.version !== 2) || state.worker !== self.location.href ||
             state.endpoint !== self.texlive_endpoint || state.dataPtr !== self._hc.dataPtr ||
             !hcSupported() || !state.snapshot || !state.snapshot.image ||
             !Number.isSafeInteger(state.snapshot.image.length) || state.snapshot.image.length < HC_PAGE ||
             state.snapshot.image.length > 512 * 1024 * 1024) {
             throw new Error("incompatible page-preview checkpoint");
+        }
+        var snapshots = state.version === 2 ? state.snapshots : [state.snapshot];
+        if (!Array.isArray(snapshots) || snapshots.length !== (state.version === 2 ? 2 : 1) ||
+            snapshots[0].id !== state.snapshot.id || snapshots.some(function(cp) {
+                return !cp.image || !Number.isSafeInteger(cp.image.length) ||
+                    cp.image.length < HC_PAGE || cp.image.length > 512 * 1024 * 1024;
+            }) || pagePreviewCopyBytes(snapshots, state.cacheFiles) > 192 * 1024 * 1024) {
+            throw new Error("invalid page-preview checkpoint set");
         }
         // Packages and cached misses are part of lookup semantics, not a new
         // preload set. Copy the parent's actual filesystem and lookup state.
@@ -1715,7 +1737,7 @@ function importPagePreviewRoutine(data) {
         self.mainfile = state.mainfile;
         self._hc.hostWrites = state.hostWrites;
         self._hc.checkpoints = {};
-        self._hc.checkpoints[state.snapshot.id] = state.snapshot;
+        snapshots.forEach(function(cp) { self._hc.checkpoints[cp.id] = cp; });
         hcInstallReadHook();
         FS.chdir(WORKROOT);
         self._pagePreviewOnly = true;

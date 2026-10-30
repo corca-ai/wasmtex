@@ -197,7 +197,10 @@ export class HeapCheckpointCompiler {
   }
 
   /** Copy proof and diff baselines; the engine's fork owns the copied heap. */
-  cloneForEngine(engine: HeapCheckpointEngine, onlyId?: string): HeapCheckpointCompiler {
+  cloneForEngine(
+    engine: HeapCheckpointEngine,
+    onlyIds?: readonly (string | undefined)[],
+  ): HeapCheckpointCompiler {
     const copy = new HeapCheckpointCompiler(engine, {
       mainFile: this.mainFile,
       maxCheckpoints: this.maxCheckpoints,
@@ -209,7 +212,7 @@ export class HeapCheckpointCompiler {
     copy.seq = this.seq
     copy.tick = this.tick
     for (const [id, checkpoint] of this.checkpoints) {
-      if (onlyId !== undefined && id !== onlyId) continue
+      if (onlyIds && !onlyIds.includes(id)) continue
       copy.checkpoints.set(id, {
         ...checkpoint,
         inputs: new Map(checkpoint.inputs),
