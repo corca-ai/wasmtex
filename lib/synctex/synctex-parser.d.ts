@@ -61,17 +61,22 @@ export interface SynctexData {
  * search for any file in a subdirectory).
  */
 export declare function normalizeSynctexInputName(name: string): string;
+export interface SynctexParseOptions {
+    /** Retire work for an output revision that the host no longer displays. */
+    signal?: AbortSignal;
+}
 export declare class SynctexParser {
     /**
      * Parse raw synctex data (possibly gzip-compressed) into structured data.
      */
-    parse(data: Uint8Array): Promise<SynctexData>;
+    parse(data: Uint8Array, options?: SynctexParseOptions): Promise<SynctexData>;
     /**
      * Parse synctex text content into a tree-structured representation.
      * Uses a stack to track open vbox/hbox containers, building parent-child
      * relationships and a friend index for O(1) forward lookup.
      */
     parseText(text: string): SynctexData;
+    private parseChunks;
     /**
      * Inverse search: PDF click → source location.
      * Port of synctex_iterator_new_edit from reference.
