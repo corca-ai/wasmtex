@@ -22,6 +22,16 @@ if (data) {
 }
 ```
 
+`parse(bytes, { signal })` accepts an optional AbortSignal for a superseded
+output revision. Raw text shorter than 256 Ki UTF-16 code units is parsed in the same
+task after decoding. Larger inputs scan records in chunks, returning execution
+to the host between roughly 4 ms slices; this is a cooperative target, not a
+hard deadline for decoding, allocation or an individual record. Parsing keeps
+one result tree and the existing synchronous lookup API, without a Worker
+startup or copying the tree across threads. `parseText(text)` remains fully
+synchronous. Retire a stale parse with its signal and fence publication against
+the displayed PDF revision.
+
 `parser.forwardLookup(data, file, line)` returns the primary PDF region for
 hosts that paint one marker. Use `forwardLookupAll(data, file, line)` to preserve
 every distinct region. A single source line can map to separated boxes, such as the

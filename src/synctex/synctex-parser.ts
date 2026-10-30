@@ -327,14 +327,57 @@ export function normalizeSynctexInputName(name: string): string {
   return n.replace(/\/\.\//g, '/')
 }
 
+export interface SynctexParseOptions {
+  /** Retire work for an output revision that the host no longer displays. */
+  signal?: AbortSignal
+}
+
+async function yieldParserTask(): Promise<void> {
+  {
+    const scheduler: unknown = Reflect.get(globalThis, 'scheduler')
+    if (
+      typeof scheduler === 'object' &&
+      scheduler !== null &&
+      'yield' in scheduler &&
+      typeof scheduler.yield === 'function'
+    ) {
+      await scheduler.yield()
+      return
+    }
+  }
+  await new Promise<void>((resolve) => {
+    const channel = new MessageChannel()
+    channel.port1.onmessage = () => {
+      channel.port1.close()
+      channel.port2.close()
+      resolve()
+    }
+    channel.port2.postMessage(null)
+  })
+}
+
 export class SynctexParser {
   /**
    * Parse raw synctex data (possibly gzip-compressed) into structured data.
    */
-  async parse(data: Uint8Array): Promise<SynctexData> {
+  async parse(data: Uint8Array, options: SynctexParseOptions = {}): Promise<SynctexData> {
+    options.signal?.throwIfAborted()
     const bytes = await maybeDecompress(data)
+    options.signal?.throwIfAborted()
     const text = new TextDecoder().decode(bytes)
-    return this.parseText(text)
+    // Small outputs keep the synchronous path: no task or worker startup.
+    if (text.length < 256 * 1024) return this.parseText(text)
+    const chunks = this.parseChunks(text)
+    let until = performance.now() + 4
+    for (;;) {
+      options.signal?.throwIfAborted()
+      const step = chunks.next()
+      if (step.done) return step.value
+      if (performance.now() >= until) {
+        await yieldParserTask()
+        until = performance.now() + 4
+      }
+    }
   }
 
   /**
@@ -342,8 +385,16 @@ export class SynctexParser {
    * Uses a stack to track open vbox/hbox containers, building parent-child
    * relationships and a friend index for O(1) forward lookup.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: stack-based tree parser with preamble handling
   parseText(text: string): SynctexData {
+    const chunks = this.parseChunks(text)
+    for (;;) {
+      const step = chunks.next()
+      if (step.done) return step.value
+    }
+  }
+
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: stack-based tree parser with preamble handling
+  private *parseChunks(text: string): Generator<void, SynctexData> {
     const pageRoots = new Map<number, SynctexNode[]>()
     const friendIndex = new Map<string, SynctexNode[]>()
 
@@ -368,15 +419,23 @@ export class SynctexParser {
       }
     }
 
-    // Split on CRLF or LF so a Windows-authored .synctex (trailing '\r') still matches the
-    // line classifiers (`line === 'Content:'`, `startsWith('Postamble:')`) and does not leave
-    // a trailing '\r' on parsed input filenames — otherwise the whole parse silently no-ops.
-    const lines = text.split(/\r?\n/)
+    // Scan CRLF/LF records without retaining an array of every line. The final
+    // unterminated record keeps its bytes, just as the synchronous parser does.
+    let offset = 0
+    let records = 0
     let currentPage = 0
     let inContent = false
     const stack: SynctexNode[] = []
 
-    for (const line of lines) {
+    while (offset < text.length) {
+      const newline = text.indexOf('\n', offset)
+      const end = newline < 0 ? text.length : newline
+      const line = text.slice(
+        offset,
+        newline >= 0 && text.charCodeAt(end - 1) === 13 ? end - 1 : end,
+      )
+      offset = end + 1
+      if (++records % 256 === 0) yield
       if (!line) continue
 
       // Input entries can appear both in the preamble and mid-content
