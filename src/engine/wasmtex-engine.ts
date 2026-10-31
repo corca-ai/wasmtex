@@ -82,6 +82,8 @@ let nextMsgId = 1
 interface WorkerMessage {
   sharedCheckpoints?: boolean
   heapCheckpointRetention?: unknown
+  pagePreviewFallback?: boolean
+  checkpointIds?: string[]
   pagePreviewFork?: boolean
   previewState?: unknown
   result?: string
@@ -254,6 +256,13 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private lineCheckpointsSupported = false
   private pagePreviewSupported = false
   private pagePreviewForkSupported = false
+  private pagePreviewFallbackSupported = false
+  private previewFallbackId: string | undefined
+
+  /** @internal The additional checkpoint actually admitted by the fork. */
+  get pagePreviewFallbackId(): string | undefined {
+    return this.previewFallbackId
+  }
   private readonly forkOptions: WasmTexEngineOptions
   private sharedCheckpointsSupported = false
   private checkpointBudget: { maxCount: number; maxBytes: number } | undefined
@@ -441,6 +450,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
           (data as { heapCheckpoints?: unknown }).heapCheckpoints === true
         this.pagePreviewSupported = (data as { pagePreview?: unknown }).pagePreview === true
         this.pagePreviewForkSupported = data.pagePreviewFork === true
+        this.pagePreviewFallbackSupported = data.pagePreviewFallback === true
         this.sharedCheckpointsSupported = data.sharedCheckpoints === true
         this.fileCheckpointsSupported =
           (data as { fileCheckpoints?: unknown }).fileCheckpoints === true
@@ -873,7 +883,11 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   /** @internal Same-build, host-local fork for disposable page previews only.
    * The opaque state never escapes this method or enables canonical compilation.
    */
-  async forkForPagePreview(id: string, signal?: AbortSignal): Promise<WasmTexPdftexEngine | null> {
+  async forkForPagePreview(
+    id: string,
+    signal?: AbortSignal,
+    fallbackId?: string,
+  ): Promise<WasmTexPdftexEngine | null> {
     if (!this.pagePreviewForkSupported || !this.engineBuildId || this.status !== 'ready')
       return null
     signal?.throwIfAborted()
@@ -881,7 +895,14 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     const sources = new Map(this.sources)
     const projectFiles = new Map(this.projectFiles)
     const state = await abortablePreviewSetup(
-      this.postMessageWithResponse({ cmd: 'exportpagepreview', id }, 'cmd:exportpagepreview'),
+      this.postMessageWithResponse(
+        {
+          cmd: 'exportpagepreview',
+          id,
+          fallbackId: this.pagePreviewFallbackSupported ? fallbackId : undefined,
+        },
+        'cmd:exportpagepreview',
+      ),
       signal,
     )
     signal?.throwIfAborted()
@@ -912,6 +933,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         return null
       }
       signal?.throwIfAborted()
+      fork.previewFallbackId =
+        fallbackId && state.checkpointIds?.includes(fallbackId) ? fallbackId : undefined
       fork.mainFileName = mainFileName
       for (const [path, source] of sources) fork.sources.set(path, source)
       for (const [path, content] of projectFiles) fork.projectFiles.set(path, content)

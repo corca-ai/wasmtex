@@ -582,8 +582,12 @@ otherwise the SDK requests full compilation. The SDK never publishes partial
 metadata as a full compile and requires a successful baseline. The
 [preview API contract](compiler-api.md#deferred-pdf-preview-parts) defines host reconciliation.
 
-A `createPagePreviewSession()` host may clone one checkpoint into a separate
-same-build worker. The fork copies the actual package cache, lookup maps and
+A `createPagePreviewSession()` host may clone a nearby checkpoint and an optional
+earlier fallback into a separate
+same-build worker. Both retained states count toward the same 192 MiB copy
+ceiling, with shared backing buffers counted once. The fallback is omitted if
+it would exceed the ceiling. Switching states never reimports lookup caches.
+The fork copies the actual package cache, lookup maps and
 Bloom state; it skips unrelated warmup and format preparation. Its worker URL,
 endpoint, native data pointer and engine build identity must agree. It accepts
 only disposable previews. Setup cancellation terminates the sibling and settles

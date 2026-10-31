@@ -145,6 +145,13 @@ function boot(
   fs.writeFile('/tex/preloaded.sty', 'warmup bytes')
   return {
     fs,
+    scope,
+    command: (data: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        deliver = resolve
+        scope.request = data
+        runInContext('self.onmessage({ data: request })', scope)
+      }),
     fmt,
     builds: () => builds,
     allowances,
@@ -253,4 +260,70 @@ describe('pdfTeX compact working capacity', () => {
     expect(await worker.compile()).toMatchObject({ result: 'failed', status: 1 })
     expect(worker.allowances).toEqual([0])
   })
+})
+
+it('imports both nearby and earlier states with the actual package and font lookup caches', async () => {
+  const parent = boot(undefined, undefined, true)
+  parent.scope.location = { href: 'same-worker' }
+  runInContext(
+    `
+    self._hc.checkpoints = {
+      late: { id: 'late', image: { length: 65536, bytes: 4, pages: [{ data: new Uint8Array(4) }] }, fs: { files: {} } },
+      early: { id: 'early', image: { length: 65536, bytes: 4, pages: [{ data: new Uint8Array(4) }] }, fs: { files: {} } }
+    };
+    texlive404_cache['26/absent.sty'] = 1;
+    pk200_cache['600/font'] = '/tex/font.pk';
+  `,
+    parent.scope,
+  )
+  const exported = await parent.command({
+    cmd: 'exportpagepreview',
+    id: 'late',
+    fallbackId: 'early',
+  })
+  expect(exported).toMatchObject({ result: 'ok', checkpointIds: ['late', 'early'] })
+  const child = boot(undefined, undefined, true)
+  child.scope.location = { href: 'same-worker' }
+  expect(
+    await child.command({
+      cmd: 'importpagepreview',
+      previewState: structuredClone(exported.previewState),
+    }),
+  ).toMatchObject({ result: 'ok' })
+  expect(runInContext('Object.keys(self._hc.checkpoints)', child.scope)).toEqual(['late', 'early'])
+  expect(runInContext('texlive404_cache["26/absent.sty"]', child.scope)).toBe(1)
+  expect(runInContext('pk200_cache["600/font"]', child.scope)).toBe('/tex/font.pk')
+  expect(await child.command({ cmd: 'compilelatex' })).toMatchObject({ result: 'failed' })
+})
+
+it('shares checkpoint buffers within the copy ceiling and omits an oversized fallback', async () => {
+  const parent = boot(undefined, undefined, true)
+  parent.scope.location = { href: 'same-worker' }
+  runInContext(
+    `
+    var shared = new Uint8Array(100 * 1024 * 1024);
+    self._hc.checkpoints = {
+      late: { id: 'late', image: { length: 128 * 1024 * 1024, pages: [{ data: shared }] }, fs: { files: {} } },
+      early: { id: 'early', image: { length: 128 * 1024 * 1024, pages: [{ data: shared }] }, fs: { files: {} } }
+    };
+  `,
+    parent.scope,
+  )
+  expect(
+    await parent.command({ cmd: 'exportpagepreview', id: 'late', fallbackId: 'early' }),
+  ).toMatchObject({ result: 'ok', checkpointIds: ['late', 'early'] })
+  runInContext(
+    'self._hc.checkpoints.early.image.pages[0].data = new Uint8Array(100 * 1024 * 1024)',
+    parent.scope,
+  )
+  expect(
+    await parent.command({ cmd: 'exportpagepreview', id: 'late', fallbackId: 'early' }),
+  ).toMatchObject({ result: 'ok', checkpointIds: ['late'] })
+  runInContext(
+    'self._hc.checkpoints.late.image.pages[0].data = new Uint8Array(193 * 1024 * 1024)',
+    parent.scope,
+  )
+  expect(
+    await parent.command({ cmd: 'exportpagepreview', id: 'late', fallbackId: 'early' }),
+  ).toMatchObject({ result: 'failed' })
 })

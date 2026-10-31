@@ -24,6 +24,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- Keep a bounded earlier checkpoint in foreground preview sessions so edits before a prepared paragraph can continue while canonical compilation runs.
+
+
 - Overlap pdfTeX startup downloads and bundle resolver helpers into its controller.
   Speculate on bounded first-compile response candidates without changing TeX lookup state.
 - Offer a provisional first-pass PDF while canonical reference/bibliography/index settling

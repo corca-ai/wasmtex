@@ -207,7 +207,7 @@ preview. Unverified line-zero diagnostics compare message/count only; previews
 do not certify diagnostics, and the full compile remains authoritative. Input mutation, disposal and overlapping calls obey
 the same serialization rules as `compile()`.
 
-`await compiler.createPagePreviewSession(hint?, signal?)` captures one valid
+`await compiler.createPagePreviewSession(hint?, signal?)` captures a valid
 checkpoint into an independent same-build worker for foreground previews. Call
 while the parent is idle and synchronized, after a successful full compile.
 `hint` has the same `{path, offset}` shape as `incrementalPreparation`. Missing
@@ -219,8 +219,13 @@ baseline is frozen: later parent changes do not refresh it. Hosts must rebuild
 it when appropriate and dispose it on project/engine transitions. Parent disposal
 fences an unfinished creation but does not own an already returned session.
 
-Only one checkpoint and the parent's actual package/lookup state are copied;
-no new warmup set or portable heap import is exposed. Fork setup declines heaps
+Capable workers also retain a proven checkpoint before the hinted file, when
+available, so moving before the nearby checkpoint need not wait for canonical
+compilation. If the extra state exceeds the copy ceiling, only the nearby state
+is copied. Each edit must still pass its own prefix/dependency checks. Both
+states share one worker and its evolving package/font lookup caches; changing
+checkpoints does not reset those caches. Older workers copy only the nearby
+state. No new warmup set or portable heap import is exposed. Fork setup declines heaps
 above 512 MiB or retained checkpoint/filesystem/package copies above 192 MiB.
 These bounds exclude JS metadata, temporary message copies and native compiler
 memory. Hosts own device admission and the number/lifetime of siblings.

@@ -27,7 +27,7 @@ gains from unchanged warm-edit CPU and records transfer/memory costs.
 | pdfTeX / XeTeX format loading | Bounded byte-verified decoded-format read cache with original O2 flags and published fmt bytes. | One source, at most 8 MiB compressed / 32 MiB decoded / 65,536 chunks; lifecycle and fallback checks required. |
 | LuaHBTeX build | O3 + LTO on the pinned toolchain. | Larger compressed assets; no decoded-format cache. |
 | pdfTeX incremental path | Preamble formats, optional durable preamble cache and browser heap checkpoints. | Each has a distinct identity/lifetime; see [engine caches](engine.md#preamble-snapshots). |
-| Book edit previews | Capable browser pdfTeX workers share bounded chapter states and can fork a disposable foreground preview session. | Adds one live heap and a bounded copy; hosts own admission/lifetime. Canonical compilation remains authoritative. |
+| Book edit previews | Capable browser pdfTeX workers share bounded chapter states and can fork a disposable foreground preview session. | Adds one live heap and a bounded copy, optionally retaining an earlier fallback within that copy; hosts own admission/lifetime. Canonical compilation remains authoritative. |
 | Plain pdfTeX working capacity | The authored controller starts without extra main-memory allowances and promotes once on main-memory exhaustion. | Working-directory rollback preserves inputs/outputs; snapshots add transient copies. INITEX and checkpoint paths retain the original capacity. Immutable release/adoption qualification is separate from the [screening record](history/compact-capacity-2026-10.md). |
 
 The September 2026 controlled corpus measured repeat/body improvements around
@@ -95,6 +95,15 @@ annual controller ceilings are 94,000 bytes. All other artifact and
 runtime ceilings are unchanged. Native code is built from the existing upstream
 pins and reuses the exact published formats. Annual release and application
 qualification remain separate from the SDK unit tests.
+
+The foreground fallback protocol retains a nearby state and an optional earlier
+state in the same worker, within the unchanged 192 MiB copy ceiling. Shared
+backing buffers count once; an oversized fallback is omitted. The authored
+controller plus bundled helpers is 102,088 bytes (gzip-9: 27,506 bytes); both
+annual controller ceilings are 103,000 bytes. Native WASM and format inputs
+remain unchanged by this protocol change; release receipts and annual
+qualification still bind the assembled artifacts. The [fallback qualification](history/preview-fallback-2026-10.md)
+records the delayed-edit reproduction, retained cold-start limit and annual proof.
 
 ## Checkpoints inside included sources
 
