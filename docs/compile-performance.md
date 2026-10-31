@@ -102,7 +102,8 @@ backing buffers count once; an oversized fallback is omitted. The authored
 controller plus bundled helpers is 102,088 bytes (gzip-9: 27,506 bytes); both
 annual controller ceilings are 103,000 bytes. Native WASM and format inputs
 remain unchanged by this protocol change; release receipts and annual
-qualification still bind the assembled artifacts.
+qualification still bind the assembled artifacts. The [fallback qualification](history/preview-fallback-2026-10.md)
+records the delayed-edit reproduction, retained cold-start limit and annual proof.
 
 ## Checkpoints inside included sources
 
