@@ -5,7 +5,7 @@ import type { CompileWorkerDriver } from './wasmtex-worker'
 
 type Run = Awaited<ReturnType<CompileWorkerDriver['run']>>
 
-function engine(run: (main: string) => Run) {
+function engine(run: (main: string, files: Map<string, string | Uint8Array>) => Run) {
   const instance = new WasmTexLuatexEngine({ texliveVersion: '2026' })
   const files = new Map<string, string | Uint8Array>([
     ['wasmtex-luatex.fmt', new Uint8Array(70000)],
@@ -26,7 +26,7 @@ function engine(run: (main: string) => Run) {
   vi.spyOn(driver, 'setMainFile').mockImplementation((path) => {
     main = path
   })
-  vi.spyOn(driver, 'run').mockImplementation(async () => run(main))
+  vi.spyOn(driver, 'run').mockImplementation(async () => run(main, files))
   Reflect.set(instance, 'fmtBytes', new Uint8Array(70000))
   return { instance, files, directories, main: () => main }
 }
@@ -117,6 +117,63 @@ describe('LuaTeX page previews', () => {
         line: 3,
       }),
     ])
+  })
+
+  it('maps a chapter preview onto the full PDF and refuses one that disagrees', async () => {
+    const entry = '\\@writefile{toc}{\\contentsline {chapter}{\\numberline {2}Two}{5}{chapter.2}}'
+    const full =
+      '(./main.tex [1] [2] (./chapters/ch1.tex [3] [4]) (./chapters/ch2.tex [5] [6]))\nOutput written on main.pdf (6 pages).'
+    let previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [5] [6]))'
+    const { instance, files } = engine((current, fs) => {
+      if (current !== 'main.tex') fs.set(`${LUATEX_PREVIEW_OUTPUT_DIR}/chapters__ch2.aux`, entry)
+      return output(['./main.tex', './main.aux'], current === 'main.tex' ? full : previewLog)
+    })
+    files.set('chapters/ch2.aux', entry)
+    await instance.writeFile('main.tex', '\\documentclass{book}')
+    instance.setMainFile('main.tex')
+    await instance.compile()
+
+    expect((await instance.compilePagePreview(10, 'chapters/ch2'))?.firstPage).toBe(5)
+    expect(files.get(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(
+      `${luatexPreviewHook(10, { name: 'chapters/ch2', cap: 6 })}\\documentclass{book}`,
+    )
+    // A chapter starting after the page limit is never typeset alone.
+    expect(await instance.compilePagePreview(4, 'chapters/ch2')).toBeNull()
+    // A discarded blank page before the heading shifts the placement by one.
+    previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [6]))'
+    expect((await instance.compilePagePreview(10, 'chapters/ch2'))?.firstPage).toBe(6)
+    // A first page the full pass does not have there refuses the chapter until the next pass.
+    previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [9] [10]))'
+    expect(await instance.compilePagePreview(10, 'chapters/ch2')).toBeNull()
+    previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [5] [6]))'
+    expect(await instance.compilePagePreview(10, 'chapters/ch2')).toBeNull()
+    expect((await instance.compilePagePreview(2))?.firstPage).toBe(1)
+    await instance.compile()
+    expect((await instance.compilePagePreview(10, 'chapters/ch2'))?.firstPage).toBe(5)
+  })
+
+  it('refuses a chapter preview whose contents entry differs, and pages from stateful packages', async () => {
+    const full =
+      '(./main.tex [1] (./ch1.tex [2]) (./ch2.tex [3]))\nOutput written on main.pdf (3 pages).'
+    let inputs = ['./main.tex', './main.aux']
+    const { instance, files } = engine((current, fs) => {
+      if (current !== 'main.tex')
+        fs.set(
+          `${LUATEX_PREVIEW_OUTPUT_DIR}/ch2.aux`,
+          '\\@writefile{toc}{\\contentsline {chapter}{\\numberline {A}Two}{3}{}}',
+        )
+      return output(inputs, current === 'main.tex' ? full : '(./ch2.tex [3])')
+    })
+    files.set('ch2.aux', '\\@writefile{toc}{\\contentsline {chapter}{\\numberline {2}Two}{3}{}}')
+    await instance.writeFile('main.tex', 'Body')
+    instance.setMainFile('main.tex')
+    await instance.compile()
+    expect(await instance.compilePagePreview(5, 'ch2')).toBeNull()
+
+    inputs = ['./main.tex', '/tex/biblatex.sty', './main.aux']
+    await instance.compile()
+    expect(await instance.compilePagePreview(5, 'ch2')).toBeNull()
+    expect(files.has(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(true)
   })
 
   it('offers no preview from a worker that has not finished a full pass', async () => {

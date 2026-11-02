@@ -200,7 +200,25 @@ proof, new files, or a subsequently unavailable checkpoint require a full
 compile. Other edits may resume a valid heap checkpoint before the edit.
 
 The returned `PagePreviewResult` contains `pdf`, `synctex`, `compileTime` and
-`pageLimit`. It is a first-pass preview using the preceding full compile's
+`pageLimit`. `previewPages(pageLimit, { placement: true })` also reports
+`firstPage`, the full PDF's page that the preview's first page replaces (1 for a
+prefix), and lets LuaLaTeX and XeLaTeX typeset an edited chapter alone. That
+happens when the only edit since the full compile is to one `\include`d chapter
+that starts within `pageLimit`. The preview then holds that chapter's pages, from
+`firstPage` up to about `pageLimit`, and the host overlays them there. Without the
+option, previews are always prefixes.
+
+Omitted chapters restore only their counters. Chapter mode is therefore refused,
+falling back to a prefix, in these cases:
+- the author uses `\includeonly`;
+- the full pass loaded biblatex, glossaries, acro/acronym, excludeonly, jurabib or
+  titletoc;
+- an earlier chapter changes other state (`\appendix`, `\mainmatter`, page styles,
+  definitions, lengths, `secnumdepth`);
+- the page count or the chapter's contents entry does not match the full pass;
+- the chapter fails to compile alone.
+
+A refused chapter stays refused until the next full compile. It is a first-pass preview using the preceding full compile's
 references, not an export or proof of settled pagination. Auxiliary files and
 compiler metadata remain unchanged. Hosts must run `compile()` after editing
 settles, keep partial results out of export/cache paths, and bound retained

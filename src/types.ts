@@ -54,6 +54,9 @@ export interface PagePreviewResult {
   synctex: Uint8Array | null
   compileTime: number
   pageLimit: number
+  /** Physical page of the full PDF that the preview's first page replaces; absent for a
+   *  prefix starting at page 1. A chapter preview holds only that chapter's pages. */
+  firstPage?: number
 }
 
 /** Logical byte lengths of retained SDK JavaScript views, not deduplicated backing

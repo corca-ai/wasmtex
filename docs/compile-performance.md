@@ -92,8 +92,12 @@ LuaLaTeX and XeLaTeX use the same API without a controller change, as separate
 jobs that start from the format. Format load, font setup and the preamble still
 run on every preview, so the saving is the body after the limit (and, for XeTeX,
 converting only the prefix). Edits to existing chapter files preview too. Without
-checkpoints a prefix still typesets every page before the limit, so edits near the
-end of a long book approach the full-pass time. The
+checkpoints a prefix still typesets every page before the limit. With `placement`,
+an edit confined to one `\include`d chapter typesets only that chapter. On a
+303-page book with 12-page chapters that took about 0.6 s (LuaLaTeX) and 0.26 s
+(XeLaTeX) wherever the chapter was, instead of up to the full-pass time. The cost
+grows with the chapter's length, and documents whose chapters share other state
+keep prefixes. The
 [November record](history/unicode-preview-2026-11.md) has the measurements; on a
 warm 34-section `fontspec` article, LuaLaTeX took 709 ms for a full pass and
 518 ms for `previewPages(3)`.

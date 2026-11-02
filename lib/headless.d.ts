@@ -111,8 +111,13 @@ type FileContent = string | Uint8Array;
 /** A bounded, disposable sibling with no diagnostics, metadata or export authority. */
 export interface PagePreviewSession {
     setFile(path: string, content: string | Uint8Array): void;
-    previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
+    previewPages(pageLimit: number, options?: PagePreviewOptions): Promise<PagePreviewResult | null>;
     dispose(): void;
+}
+/** `placement: true` lets a preview hold a span of the full PDF other than its first
+ *  pages (an edited chapter alone) and always reports `firstPage`. */
+export interface PagePreviewOptions {
+    placement?: boolean;
 }
 export declare class WasmTexCompiler {
     private engine;
@@ -138,6 +143,8 @@ export declare class WasmTexCompiler {
     private pagePreviewBaseline;
     private pagePreviewErrors;
     private pagePreviewRequiresCheckpoint;
+    /** Secondary sources edited since the baseline full compile (LuaLaTeX/XeLaTeX). */
+    private previewEdits;
     private readonly operations;
     private initInFlight;
     private replacingProject;
@@ -207,11 +214,20 @@ export declare class WasmTexCompiler {
     /** Render a PDF prefix using the last full pass's references. This leaves full
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */
-    previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
+    previewPages(pageLimit: number, options?: PagePreviewOptions): Promise<PagePreviewResult | null>;
     private previewPagesIdle;
     /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
-     * stops after the requested pages, so it previews edits to any existing source. */
+     * stops after the requested pages, so it previews edits to any existing source. With
+     * placement, an edit confined to one chapter typesets that chapter alone. */
     private previewFormatPages;
+    private acceptedPreview;
+    /**
+     * The one `\include`d chapter edited since the full pass, when nothing else changed.
+     * Omitted chapters restore only their counters, so an author `\includeonly`, or an
+     * earlier chapter that changes other state (`\appendix`, `\mainmatter`, page styles,
+     * definitions, lengths), keeps ordinary prefixes.
+     */
+    private previewChapter;
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
     private emitProgressPdf;

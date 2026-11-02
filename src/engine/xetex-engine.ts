@@ -21,7 +21,10 @@ import { resolveTexliveUrl } from './base-worker-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import {
   BaseTexFmtEngine,
+  type ChapterPreviewResult,
+  chapterPreviewHook,
   createCompileWorker,
+  firstChapterEntry,
   type PreviewRun,
   unicodeFormatUrl,
 } from './tex-fmt-engine'
@@ -37,12 +40,16 @@ import { attachPlacements, parseXdv } from './xdv'
  * keeps the stop out of the transcript the SDK parses. The hook precedes the
  * author's first line on that same line, so diagnostics keep their line numbers.
  */
-export function xetexPreviewHook(pageLimit: number): string {
+export function xetexPreviewHook(
+  pageLimit: number,
+  chapter?: { name: string; cap: number },
+): string {
+  const stop = '\\immediate\\write16{}\\batchmode\\read16 to\\wasmtexPreviewStop'
+  if (chapter) return chapterPreviewHook(chapter.name, stop, chapter.cap)
   return (
     `\\gdef\\wasmtexPreviewShipped{0}\\AddToHook{shipout/after}{` +
     `\\xdef\\wasmtexPreviewShipped{\\the\\numexpr\\wasmtexPreviewShipped+1}` +
-    `\\ifnum\\wasmtexPreviewShipped<${pageLimit} \\else` +
-    `\\immediate\\write16{}\\batchmode\\read16 to\\wasmtexPreviewStop\\fi}`
+    `\\ifnum\\wasmtexPreviewShipped<${pageLimit} \\else${stop}\\fi}`
   )
 }
 
@@ -165,7 +172,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     // After a successful compile that fetched new files, persist the worker's
     // cache to IndexedDB (non-blocking, best-effort) for instant return visits.
     if (result.success) {
-      this.recordFullPass(xelatex.inputFiles)
+      this.recordFullPass(xelatex.inputFiles, xelatex.log, 'characters')
       await this.keepChapterAux(xelatex.inputFiles, jobName)
       this.maybePersist()
     }
@@ -183,16 +190,27 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     )
   }
 
-  /** Typeset only pages 1..`pageLimit` of the current main source as a separate job
-   *  (see {@link runPreviewJob}) and convert just those pages; null means run
-   *  {@link compile} instead. */
-  async compilePagePreview(pageLimit: number): Promise<CompileResult | null> {
+  /** Typeset only pages 1..`pageLimit` of the current main source, or only the
+   *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}) and convert
+   *  just those pages; null means run {@link compile} instead. */
+  async compilePagePreview(
+    pageLimit: number,
+    chapter?: string,
+  ): Promise<ChapterPreviewResult | null> {
+    const start = chapter ? this.chapterStart(chapter, pageLimit) : 1
+    if (start === null) return null
     let preview: PreviewRun | null
+    let entry: string | null = null
     try {
-      preview = await this.runPreviewJob(xetexPreviewHook(pageLimit), (job) =>
+      preview = await this.runPreviewJob(
+        xetexPreviewHook(
+          pageLimit,
+          chapter ? { name: chapter, cap: pageLimit - start + 1 } : undefined,
+        ),
         // A run that ships nothing must not return an earlier preview's output.
-        this.tex.writeFile(`${job}.xdv`, new Uint8Array()),
+        (job) => this.tex.writeFile(`${job}.xdv`, new Uint8Array()),
       )
+      if (chapter && preview) entry = firstChapterEntry(await this.tex.readFile(`${chapter}.aux`))
     } finally {
       // The stop leaves the chapters' aux files partly written.
       await Promise.allSettled(
@@ -211,8 +229,15 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
         undefined,
         [xelatex.resolver],
       )
-      return this.attributePreviewErrors(failed, preview.main)
+      return { ...this.attributePreviewErrors(failed, preview.main), firstPage: 1 }
     }
+    const firstPage = chapter
+      ? this.placeChapter(chapter, start, xelatex.log, 'characters', [
+          entry,
+          firstChapterEntry(this.chapterAux.get(`${chapter}.aux`) ?? null),
+        ])
+      : 1
+    if (firstPage === null) return null
     const dvi = await this.convert(preview.job, xelatex.out)
     const result = this.result(
       dvi.success && !!dvi.out?.length,
@@ -223,7 +248,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       undefined,
       [xelatex.resolver, dvi.resolver],
     )
-    return this.attributePreviewErrors(result, preview.main)
+    return { ...this.attributePreviewErrors(result, preview.main), firstPage }
   }
 
   /** XeTeX emits the job's basename in /work even for nested source files.

@@ -141,6 +141,89 @@ export function jobInputExtensions(
   return [...extensions]
 }
 
+/** How an engine wraps its terminal transcript at 79 columns: XeTeX counts
+ *  characters, LuaTeX counts bytes. */
+export type TranscriptWrap = 'characters' | 'bytes'
+
+/**
+ * Each project `.tex` file's first physical page, and every shipped page's
+ * `\\count0`, from a full pass's terminal transcript. A page announces itself as
+ * ` [n` and a file opening as `(./path`. The excerpt line after an over/underfull
+ * box warning is skipped, since its text can hold ` [12]`. Null when the count
+ * disagrees with the transcript's own `Output written on … (N pages`.
+ */
+export function transcriptPages(
+  log: string,
+  wrap: TranscriptWrap,
+): { starts: Map<string, number>; numbers: number[] } | null {
+  const { starts, numbers, written } = scanTranscript(log, wrap)
+  return written === numbers.length ? { starts, numbers } : null
+}
+
+function scanTranscript(log: string, wrap: TranscriptWrap) {
+  const encoder = new TextEncoder()
+  const width = (line: string) =>
+    wrap === 'characters' ? [...line].length : encoder.encode(line).length
+  let excerpt = false
+  const text = log
+    .split('\n')
+    .map((line) => {
+      const skip = excerpt
+      excerpt =
+        /^(?:Overfull|Underfull|Loose|Tight) \\[hv]box/.test(line) ||
+        (excerpt && width(line) === 79)
+      if (skip) return width(line) === 79 ? '' : '\n'
+      return width(line) === 79 ? line : `${line}\n`
+    })
+    .join('')
+  const starts = new Map<string, number>()
+  const numbers: number[] = []
+  for (const match of text.matchAll(/\[(-?\d+)|\((?:\.\/)?([^\s()[\]]+\.tex)/g)) {
+    if (match[2] !== undefined) {
+      if (!starts.has(match[2])) starts.set(match[2], numbers.length + 1)
+    } else if (match.index === 0 || /\s/.test(text[match.index - 1]!))
+      numbers.push(Number(match[1]))
+  }
+  const written = /Output written on \S+ \((\d+) pages?/.exec(text)
+  return { starts, numbers, written: written ? Number(written[1]) : null }
+}
+
+/** Packages that carry state across chapters outside the counters an omitted
+ *  chapter's aux file restores, or that replace `\include` without its hooks. */
+const CHAPTER_STATE_PACKAGES =
+  /\/(?:biblatex|glossaries|glossaries-extra|acro|acronym|excludeonly|jurabib|titletoc)\.sty$/
+
+/**
+ * Typeset only the `\include`d `chapter`: `\includeonly` restores the other
+ * chapters' counters from their aux files and earlier pages are discarded. A blank
+ * `openright` page before the chapter heading carries no new left mark, so it is
+ * discarded too: its running head would show the previous mark, not the omitted
+ * chapter's. The job stops after `cap` kept pages or at the end of the chapter.
+ * With one chapter included, the unnamed include hooks are its own (named ones do
+ * not parse a name containing `/`).
+ */
+export function chapterPreviewHook(chapter: string, stop: string, cap: number): string {
+  return (
+    `\\includeonly{${chapter}}\\gdef\\wasmtexChapterOpen{0}\\gdef\\wasmtexChapterKept{0}` +
+    `\\AddToHook{shipout/before}{\\ifcase\\wasmtexChapterOpen\\DiscardShipoutBox\\or` +
+    `\\IfMarksEqualTF{2e-left}{top}{last}{\\DiscardShipoutBox}{\\gdef\\wasmtexChapterOpen{2}}\\fi}` +
+    `\\AddToHook{shipout/after}{\\ifnum\\wasmtexChapterOpen=2 ` +
+    `\\xdef\\wasmtexChapterKept{\\the\\numexpr\\wasmtexChapterKept+1}` +
+    `\\ifnum\\wasmtexChapterKept<${cap} \\else${stop}\\fi\\fi}` +
+    `\\AddToHook{include/before}{\\gdef\\wasmtexChapterOpen{1}}\\AddToHook{include/after}{${stop}}`
+  )
+}
+
+/** The first chapter entry an aux file writes to the contents: its number, title,
+ *  page and anchor, which a preview must reproduce. */
+export function firstChapterEntry(aux: string | null): string | null {
+  return /\\@writefile\{toc\}\{\\contentsline \{chapter\}.*/.exec(aux ?? '')?.[0] ?? null
+}
+
+/** A page preview and the physical page of the full PDF its first page replaces
+ *  (1 for a prefix). */
+export type ChapterPreviewResult = CompileResult & { firstPage?: number }
+
 /** A preview job's names, timing and raw worker result. */
 export interface PreviewRun {
   job: string
@@ -159,7 +242,14 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   /** What this worker's last successful full pass read. A preview needs those files, so
    *  a worker that has not finished one (e.g. created after an interrupted compile)
    *  offers none. */
-  private fullPass: { jobInputs: string[]; preambleInputs: Set<string> } | null = null
+  private fullPass: {
+    jobInputs: string[]
+    preambleInputs: Set<string>
+    /** Page placement for chapter previews; null when it cannot be trusted. */
+    pages: ReturnType<typeof transcriptPages>
+    /** Chapters whose preview failed or could not be placed since this pass. */
+    refused: Set<string>
+  } | null = null
   /** Last-written text sources, kept so dependency extraction can read the main
    *  source synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
@@ -527,14 +617,24 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
 
   /** Record a successful full pass's inputs, in recorder order. Project `.tex` files read
    *  before the job's `.aux` (which `\\begin{document}` reads) belong to the preamble. */
-  protected recordFullPass(inputFiles: readonly string[] | undefined): void {
+  protected recordFullPass(
+    inputFiles: readonly string[] | undefined,
+    log: string,
+    wrap: TranscriptWrap,
+  ): void {
     const job = this.jobName()
     const preambleInputs = new Set<string>()
     for (const file of inputFiles ?? []) {
       if (file === `./${job}.aux`) break
       if (file.startsWith('./') && file.endsWith('.tex')) preambleInputs.add(file.slice(2))
     }
-    this.fullPass = { jobInputs: jobInputExtensions(inputFiles, job), preambleInputs }
+    const stateful = (inputFiles ?? []).some((file) => CHAPTER_STATE_PACKAGES.test(file))
+    this.fullPass = {
+      jobInputs: jobInputExtensions(inputFiles, job),
+      preambleInputs,
+      pages: stateful ? null : transcriptPages(log, wrap),
+      refused: new Set(),
+    }
   }
 
   /** Whether the last full pass read `path` in the preamble; unknown counts as read. */
@@ -574,6 +674,41 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     } finally {
       this.tex.setMainFile(`${this.mainBase}.tex`)
     }
+  }
+
+  /** The physical page where `chapter` starts in the full PDF, or null when a chapter
+   *  preview cannot be placed: no trusted pages, a refused chapter, or a start past
+   *  the page limit. */
+  protected chapterStart(chapter: string, pageLimit: number): number | null {
+    const pass = this.fullPass
+    if (!pass?.pages || pass.refused.has(chapter)) return null
+    const start = pass.pages.starts.get(`${chapter}.tex`)
+    return start !== undefined && start <= pageLimit ? start : null
+  }
+
+  /** Stop offering `chapter` previews until the next full pass. */
+  refuseChapter(chapter: string): void {
+    this.fullPass?.refused.add(chapter)
+  }
+
+  /** Where a successful chapter preview belongs, or null (refusing the chapter) when
+   *  its first page number or its contents entry disagrees with the full pass. A
+   *  leading blank page it discarded shifts it by one. */
+  protected placeChapter(
+    chapter: string,
+    start: number,
+    previewLog: string,
+    wrap: TranscriptWrap,
+    entries: [preview: string | null, full: string | null],
+  ): number | null {
+    const numbers = this.fullPass?.pages?.numbers
+    const first = scanTranscript(previewLog, wrap).numbers[0]
+    const shift = [0, 1].find((k) => first !== undefined && numbers?.[start - 1 + k] === first)
+    if (shift === undefined || entries[0] === null || entries[0] !== entries[1]) {
+      this.refuseChapter(chapter)
+      return null
+    }
+    return start + shift
   }
 
   /** The author's errors must match the full pass's, which name the real main file. */

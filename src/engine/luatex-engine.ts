@@ -15,7 +15,14 @@
 import type { CompileResult } from '../types'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { LUATEX_KNOWN_404, LUATEX_PRELOAD } from './luatex-manifest'
-import { BaseTexFmtEngine, createCompileWorker, unicodeFormatUrl } from './tex-fmt-engine'
+import {
+  BaseTexFmtEngine,
+  type ChapterPreviewResult,
+  chapterPreviewHook,
+  createCompileWorker,
+  firstChapterEntry,
+  unicodeFormatUrl,
+} from './tex-fmt-engine'
 import type { WasmTexEngineOptions } from './wasmtex-engine'
 
 /** Directory receiving every `\\openout` file a preview writes. */
@@ -29,11 +36,17 @@ export const LUATEX_PREVIEW_OUTPUT_DIR = 'wasmtex-preview-out'
  * the next full pass reads. The hook precedes the author's first line on that
  * same line, so diagnostics keep their source line numbers.
  */
-export function luatexPreviewHook(pageLimit: number): string {
+export function luatexPreviewHook(
+  pageLimit: number,
+  chapter?: { name: string; cap: number },
+): string {
+  const redirect =
+    `\\directlua{luatexbase.add_to_callback("find_write_file",function(_,name) ` +
+    `return "${LUATEX_PREVIEW_OUTPUT_DIR}/"..name:gsub("/","__") end,"wasmtex-preview")}`
+  if (chapter)
+    return redirect + chapterPreviewHook(chapter.name, '\\directlua{tex.finish()}', chapter.cap)
   return (
-    `\\directlua{wasmtexPreviewShipped=0 ` +
-    `luatexbase.add_to_callback("find_write_file",function(_,name) ` +
-    `return "${LUATEX_PREVIEW_OUTPUT_DIR}/"..name:gsub("/","__") end,"wasmtex-preview")}` +
+    `${redirect}\\directlua{wasmtexPreviewShipped=0}` +
     `\\AddToHook{shipout/after}{\\directlua{wasmtexPreviewShipped=wasmtexPreviewShipped+1 ` +
     `if wasmtexPreviewShipped>=${pageLimit} then tex.finish() end}}`
   )
@@ -88,7 +101,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       [lua.resolver],
     )
     if (result.success) {
-      this.recordFullPass(lua.inputFiles)
+      this.recordFullPass(lua.inputFiles, lua.log, 'bytes')
       // After a successful compile that fetched new files, persist the worker's
       // cache to IndexedDB (non-blocking, best-effort) for instant return visits.
       this.maybePersist()
@@ -96,11 +109,22 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
     return result
   }
 
-  /** Typeset only pages 1..`pageLimit` of the current main source as a separate job
-   *  (see {@link runPreviewJob}); null means run {@link compile} instead. */
-  async compilePagePreview(pageLimit: number): Promise<CompileResult | null> {
+  /** Typeset only pages 1..`pageLimit` of the current main source, or only the
+   *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}); null means
+   *  run {@link compile} instead. */
+  async compilePagePreview(
+    pageLimit: number,
+    chapter?: string,
+  ): Promise<ChapterPreviewResult | null> {
+    const start = chapter ? this.chapterStart(chapter, pageLimit) : 1
+    if (start === null) return null
     this.tex.mkdir(LUATEX_PREVIEW_OUTPUT_DIR)
-    const preview = await this.runPreviewJob(luatexPreviewHook(pageLimit))
+    const preview = await this.runPreviewJob(
+      luatexPreviewHook(
+        pageLimit,
+        chapter ? { name: chapter, cap: pageLimit - start + 1 } : undefined,
+      ),
+    )
     if (!preview) return null
     const lua = preview.run
     const log = `${preview.fmtLog}\n${lua.log.replace(PREVIEW_STOP_LOG, '')}`.trim()
@@ -113,7 +137,18 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       undefined,
       [lua.resolver],
     )
-    return this.attributePreviewErrors(result, preview.main)
+    const attributed = this.attributePreviewErrors(result, preview.main)
+    // A failed run reports its failure; the host refuses the chapter and retries.
+    if (!chapter || !result.success) return { ...attributed, firstPage: 1 }
+    const entries = await Promise.all([
+      this.tex.readFile(`${LUATEX_PREVIEW_OUTPUT_DIR}/${chapter.replaceAll('/', '__')}.aux`),
+      this.tex.readFile(`${chapter}.aux`),
+    ])
+    const firstPage = this.placeChapter(chapter, start, lua.log, 'bytes', [
+      firstChapterEntry(entries[0]),
+      firstChapterEntry(entries[1]),
+    ])
+    return firstPage === null ? null : { ...attributed, firstPage }
   }
 
   async flushCache(): Promise<void> {

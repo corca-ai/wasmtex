@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import * as factory from './engine/compile-engine'
 import { WasmTexLuatexEngine } from './engine/luatex-engine'
+import type { ChapterPreviewResult } from './engine/tex-fmt-engine'
 import { WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { WasmTexXetexEngine } from './engine/xetex-engine'
 import { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
@@ -289,8 +290,13 @@ it.each([
 })
 
 async function formatEngineFixture(
-  preview: () => Promise<CompileResult | null>,
+  preview: (pageLimit: number, chapter?: string) => Promise<ChapterPreviewResult | null>,
   kind: 'lualatex' | 'xelatex' = 'lualatex',
+  files: Record<string, string> = {
+    'main.tex': source,
+    'chapter.tex': 'Chapter.',
+    'macros.tex': '\\def\\x{}',
+  },
 ) {
   const engine =
     kind === 'lualatex'
@@ -305,12 +311,9 @@ async function formatEngineFixture(
   vi.spyOn(engine, 'readsInPreamble').mockImplementation((path) => path === 'macros.tex')
   const pages = vi.spyOn(engine, 'compilePagePreview').mockImplementation(preview)
   vi.spyOn(factory, 'createCompileEngine').mockReturnValue(engine)
-  const compiler = new WasmTexCompiler({
-    engine: kind,
-    files: { 'main.tex': source, 'chapter.tex': 'Chapter.', 'macros.tex': '\\def\\x{}' },
-  })
+  const compiler = new WasmTexCompiler({ engine: kind, files })
   await compiler.init()
-  return { compiler, pages }
+  return { compiler, pages, engine }
 }
 
 it.each([
@@ -336,6 +339,81 @@ it.each([
   expect(await compiler.previewPages(2)).toBeNull()
   expect(pages).toHaveBeenCalledTimes(2)
   expect(compiler.supportsPagePreviewSessions()).toBe(false)
+  compiler.dispose()
+})
+
+const book = (main = '', first = 'chapters/ch1') =>
+  `\\documentclass{book}${main}\n\\begin{document}\n\\include{${first}}\n\\include{chapters/ch2}\n\\end{document}`
+
+it.each([
+  { main: '', ch1: 'One.', edits: ['chapters/ch2.tex'], chapter: 'chapters/ch2' },
+  {
+    main: '\\includeonly{chapters/ch2}',
+    ch1: 'One.',
+    edits: ['chapters/ch2.tex'],
+    chapter: undefined,
+  },
+  { main: '% \\includeonly{x}', ch1: 'One.', edits: ['chapters/ch2.tex'], chapter: 'chapters/ch2' },
+  { main: '', ch1: '\\appendix One.', edits: ['chapters/ch2.tex'], chapter: undefined },
+  { main: '', ch1: '\\newcommand{\\x}{y} One.', edits: ['chapters/ch2.tex'], chapter: undefined },
+  { main: '', ch1: 'One.', edits: ['chapters/ch2.tex', 'notes.tex'], chapter: undefined },
+  { main: '', ch1: 'One.', edits: ['notes.tex'], chapter: undefined },
+])('previews one edited \\include chapter alone: $main $ch1 $edits', async ({
+  main,
+  ch1,
+  edits,
+  chapter,
+}) => {
+  const { compiler, pages } = await formatEngineFixture(
+    async (_limit, name) => ({ ...result, firstPage: name ? 7 : 1 }),
+    'lualatex',
+    {
+      'main.tex': book(main),
+      'chapters/ch1.tex': ch1,
+      'chapters/ch2.tex': 'Two.',
+      'notes.tex': 'N.',
+    },
+  )
+  await compiler.compile()
+  for (const path of edits) compiler.setFile(path, 'Edited.')
+  const preview = await compiler.previewPages(8, { placement: true })
+  expect(pages.mock.calls).toEqual([[8, ...(chapter ? [chapter] : [])]])
+  expect(preview?.firstPage).toBe(chapter ? 7 : 1)
+  compiler.dispose()
+})
+
+it('keeps prefixes for hosts that do not ask for placement, and for unnormalized names', async () => {
+  for (const [main, placement] of [
+    [book(), false],
+    [book('', './chapters/ch1'), true],
+  ] as const) {
+    const { compiler, pages } = await formatEngineFixture(async () => result, 'xelatex', {
+      'main.tex': main,
+      'chapters/ch1.tex': 'One.',
+      'chapters/ch2.tex': 'Two.',
+    })
+    await compiler.compile()
+    compiler.setFile('chapters/ch2.tex', 'Edited.')
+    const preview = await compiler.previewPages(8, { placement })
+    expect(pages.mock.calls).toEqual([[8]])
+    expect(preview?.firstPage).toBe(placement ? 1 : undefined)
+    compiler.dispose()
+    vi.restoreAllMocks()
+  }
+})
+
+it('refuses a chapter that fails alone and falls back to a prefix', async () => {
+  const { compiler, pages, engine } = await formatEngineFixture(
+    async (_limit, name) => (name ? { ...result, success: false, pdf: null } : result),
+    'xelatex',
+    { 'main.tex': book(), 'chapters/ch1.tex': 'One.', 'chapters/ch2.tex': 'Two.' },
+  )
+  const refuse = vi.spyOn(engine, 'refuseChapter')
+  await compiler.compile()
+  compiler.setFile('chapters/ch2.tex', 'Edited.')
+  expect(await compiler.previewPages(8, { placement: true })).toMatchObject({ firstPage: 1 })
+  expect(pages.mock.calls).toEqual([[8, 'chapters/ch2'], [8]])
+  expect(refuse).toHaveBeenCalledWith('chapters/ch2')
   compiler.dispose()
 })
 

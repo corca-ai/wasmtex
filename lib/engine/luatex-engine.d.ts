@@ -1,5 +1,5 @@
 import { CompileResult } from '../types.js';
-import { BaseTexFmtEngine } from './tex-fmt-engine.js';
+import { BaseTexFmtEngine, ChapterPreviewResult } from './tex-fmt-engine.js';
 import { WasmTexEngineOptions } from './wasmtex-engine.js';
 /** Directory receiving every `\\openout` file a preview writes. */
 export declare const LUATEX_PREVIEW_OUTPUT_DIR = "wasmtex-preview-out";
@@ -11,14 +11,18 @@ export declare const LUATEX_PREVIEW_OUTPUT_DIR = "wasmtex-preview-out";
  * the next full pass reads. The hook precedes the author's first line on that
  * same line, so diagnostics keep their source line numbers.
  */
-export declare function luatexPreviewHook(pageLimit: number): string;
+export declare function luatexPreviewHook(pageLimit: number, chapter?: {
+    name: string;
+    cap: number;
+}): string;
 export declare class WasmTexLuatexEngine extends BaseTexFmtEngine {
     constructor(options?: WasmTexEngineOptions);
     init(): Promise<void>;
     compile(): Promise<CompileResult>;
-    /** Typeset only pages 1..`pageLimit` of the current main source as a separate job
-     *  (see {@link runPreviewJob}); null means run {@link compile} instead. */
-    compilePagePreview(pageLimit: number): Promise<CompileResult | null>;
+    /** Typeset only pages 1..`pageLimit` of the current main source, or only the
+     *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}); null means
+     *  run {@link compile} instead. */
+    compilePagePreview(pageLimit: number, chapter?: string): Promise<ChapterPreviewResult | null>;
     flushCache(): Promise<void>;
     terminate(): void;
 }
