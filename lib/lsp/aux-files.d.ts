@@ -5,6 +5,8 @@ export interface AuxFileSet {
     root: string;
     files: Readonly<Record<string, string>>;
 }
+/** A working-directory-relative `.aux` path, or null for anything else. */
+export declare function auxPath(value: string): string | null;
 /** Read only aux paths discovered from compiler output. The callback is the
  * host's authorization boundary, e.g. compiler.readOutput, never project fetch. */
 export declare function readAuxFiles(root: string, read: (path: string) => Promise<string | null>): Promise<AuxFileSet>;

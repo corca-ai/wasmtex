@@ -11,7 +11,7 @@ import {
   resolveBstFile,
   runRemoteBibliography,
 } from './engine/bibliography-backend'
-import { collectBibliographyInputs } from './engine/bibliography-inputs'
+import { collectBibliographyInputs, flattenAuxInputs } from './engine/bibliography-inputs'
 import { BibtexEngine } from './engine/bibtex-engine'
 import {
   type CompileEngine,
@@ -1966,8 +1966,11 @@ export class WasmTexCompiler {
     if (!this.fs.listFiles().some((path) => path.endsWith('.bib'))) return false
 
     const mainBase = this.mainFile.replace(/\.tex$/, '')
+    // Chapters written by `\include` keep their citations in their own aux files.
     const auxContent = (
-      await this.operations.observe(mainEngine.readFile(`${mainBase}.aux`))
+      await this.operations.observe(
+        flattenAuxInputs(`${mainBase}.aux`, (path) => mainEngine.readFile(path)),
+      )
     ).resume()
     if (!auxContent?.includes('\\citation{') || !auxContent.includes('\\bibdata{')) return false
     if (this.fs.readFile(`${mainBase}.bbl`)) return false

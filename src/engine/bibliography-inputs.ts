@@ -1,3 +1,4 @@
+import { auxPath, readAuxFiles } from '../lsp/aux-files'
 import { normalizeProjectDependencyPath } from './dependency-manifest'
 
 /** Include databases emitted by TeX classes (e.g. REVTeX notes and ACS controls).
@@ -34,4 +35,24 @@ function bibliographyPaths(aux: string): Set<string> {
     }
   }
   return paths
+}
+
+/** Inline the `\@input{…}` auxiliary files BibTeX follows: each `\include`d chapter
+ * writes its own citations, which BibTeX reads only through the main `.aux`. Reads
+ * share the bounded, path-checked walk of {@link readAuxFiles}; a missing or
+ * repeated file contributes nothing, as BibTeX skips it. */
+export async function flattenAuxInputs(
+  root: string,
+  read: (path: string) => Promise<string | null>,
+): Promise<string | null> {
+  const { files } = await readAuxFiles(root, read)
+  const inlined = new Set<string>()
+  const inline = (path: string | null): string => {
+    const content = path === null ? undefined : files[path]
+    if (path === null || content === undefined || inlined.has(path)) return ''
+    inlined.add(path)
+    return content.replace(/^\\@input\{([^}]+)\}/gm, (_, nested: string) => inline(auxPath(nested)))
+  }
+  const start = auxPath(root)
+  return start === null || files[start] === undefined ? null : inline(start)
 }
