@@ -51,12 +51,28 @@ export interface TexFmtWarmSet {
     }>;
     source: 'warmup-cache' | 'persistent-cache';
 }
+/** Suffix of the separate job a page preview runs as. */
+export declare const PREVIEW_JOB_SUFFIX = "-wasmtex-preview";
+/** Job-named inputs a full pass read, e.g. `./main.aux` -> `aux`. */
+export declare function jobInputExtensions(inputFiles: readonly string[] | undefined, job: string): string[];
+/** A preview job's names, timing and raw worker result. */
+export interface PreviewRun {
+    job: string;
+    main: string;
+    start: number;
+    fmtLog: string;
+    run: Awaited<ReturnType<CompileWorkerDriver['run']>>;
+}
 export declare abstract class BaseTexFmtEngine implements CompileEngine {
     protected tex: CompileWorkerDriver;
     /** Filename under which the built format is re-injected for `compilelatex`
      *  (e.g. `wasmtex-xetex.fmt`, `wasmtex-luatex.fmt`). */
     private readonly fmtFile;
     protected mainBase: string;
+    /** What this worker's last successful full pass read. A preview needs those files, so
+     *  a worker that has not finished one (e.g. created after an interrupted compile)
+     *  offers none. */
+    private fullPass;
     /** Last-written text sources, kept so dependency extraction can read the main
      *  source synchronously (no worker round-trip). */
     private readonly sources;
@@ -149,6 +165,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     protected ensureFormat(): Promise<string>;
     /** Mark the injected format as gone (call after a flushCache wipes the work
      *  dir) so the next {@link ensureFormat} re-injects it. */
+    /** The work directory was wiped: the format and the full pass's outputs are gone. */
     protected clearInjectedFormat(): void;
     protected result(success: boolean, pdf: Uint8Array | null, log: string, start: number, inputFiles?: string[], inputFilesComplete?: boolean, resolverReports?: ReadonlyArray<ResolverEvidenceReport | undefined>): CompileResult;
     writeFile(path: string, content: string | Uint8Array): Promise<void>;
@@ -157,6 +174,22 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     mkdir(path: string): Promise<void>;
     setMainFile(path: string): void;
     readFile(path: string): Promise<string | null>;
+    protected jobName(): string;
+    /** Record a successful full pass's inputs, in recorder order. Project `.tex` files read
+     *  before the job's `.aux` (which `\\begin{document}` reads) belong to the preamble. */
+    protected recordFullPass(inputFiles: readonly string[] | undefined): void;
+    /** Whether the last full pass read `path` in the preamble; unknown counts as read. */
+    readsInPreamble(path: string): boolean;
+    /**
+     * Run the current main source, prefixed by `hook` on its first line, as a separate
+     * preview job beside the main file, then restore the main file. The job starts from
+     * copies of the last full pass's job-named inputs, so its references match that pass
+     * while the full pass's own auxiliary files stay untouched. Null means there is no
+     * main source or no full pass on this worker: run `compile()` instead.
+     */
+    protected runPreviewJob(hook: string, beforeRun?: (job: string) => Promise<void>): Promise<PreviewRun | null>;
+    /** The author's errors must match the full pass's, which name the real main file. */
+    protected attributePreviewErrors(result: CompileResult, previewMain: string): CompileResult;
     clearCache(): Promise<void>;
     /** Whether the durable (IndexedDB) cache is active — i.e. `persistentCache`
      *  was requested AND IndexedDB is available. Lets hosts/tests verify that an

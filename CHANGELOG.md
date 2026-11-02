@@ -17,6 +17,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
   chapter's own aux file; a book citing only inside chapters ran no bibliography.
 - Empty a generated bibliography once the last citation is removed instead of
   leaving the engine's stale `.bbl` in place.
+- Keep LuaLaTeX previews for documents with an existing error in the main file:
+  the preview job's errors now carry the main file's name.
+- Offer Unicode-engine previews only from a worker that finished a full pass, so a
+  worker recreated after an interrupted compile no longer previews without references.
 
 - Honor biblatex's `Please rerun LaTeX` warning after Biber output is loaded,
   so the compile settles references before marking them complete.
@@ -32,6 +36,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 - Keep a generated `.bbl` while the BibTeX/Biber request is unchanged, so a prose edit
   in a cited document takes one TeX pass instead of two. Changed lists (`.toc`, `.lof`, …)
   still take the pass the forced rerun used to provide.
+- Add XeLaTeX page-prefix previews (a separate job stopped after the requested page,
+  converting only those pages), and preview LuaLaTeX/XeLaTeX edits to existing
+  chapter files.
 
 - Keep a bounded earlier checkpoint in foreground preview sessions so edits before a prepared paragraph can continue while canonical compilation runs.
 

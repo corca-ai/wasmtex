@@ -88,11 +88,15 @@ metadata with the last full result. Hosts reconcile after input settles.
 state and memory boundary. This is a separate preview feature, not permission
 to export incomplete documents or change published formats.
 
-LuaLaTeX uses the same API without a controller change. On a warm 34-section
-`fontspec` article (2026 assets, Node worker host, three rounds), a full pass
-took 709 ms, `previewPages(3)` 518 ms and `previewPages(12)` 610 ms. Format load,
-`luaotfload` and the preamble still run on every preview, so the saving is the
-body after the limit. The 12-page prefix matched the full PDF's first 12 pages.
+LuaLaTeX and XeLaTeX use the same API without a controller change, as separate
+jobs that start from the format. Format load, font setup and the preamble still
+run on every preview, so the saving is the body after the limit (and, for XeTeX,
+converting only the prefix). Edits to existing chapter files preview too. Without
+checkpoints a prefix still typesets every page before the limit, so edits near the
+end of a long book approach the full-pass time. The
+[November record](history/unicode-preview-2026-11.md) has the measurements; on a
+warm 34-section `fontspec` article, LuaLaTeX took 709 ms for a full pass and
+518 ms for `previewPages(3)`.
 
 The pdfTeX controller grows from 82,668 to 84,993 bytes (gzip-9: 22,402 to
 22,866 bytes). Both annual controller ceilings are 86,000 bytes to accommodate the

@@ -77,6 +77,7 @@ import {
 } from './engine/tikz-externalization'
 import type { TikzFigurePool } from './engine/tikz-figure-pool'
 import { type WasmTexEngineOptions, WasmTexPdftexEngine } from './engine/wasmtex-engine'
+import { WasmTexXetexEngine } from './engine/xetex-engine'
 import { syncAllFilesToEngine } from './fs/engine-sync'
 import { VirtualFS } from './fs/virtual-fs'
 import { parseAuxFiles, readAuxFiles } from './lsp/aux-files'
@@ -460,6 +461,13 @@ export interface PagePreviewSession {
   dispose(): void
 }
 
+/** Engines whose page preview reruns from the format as a separate job. */
+function startsFromFormat(
+  engine: CompileEngine | null,
+): engine is WasmTexLuatexEngine | WasmTexXetexEngine {
+  return engine instanceof WasmTexLuatexEngine || engine instanceof WasmTexXetexEngine
+}
+
 export class WasmTexCompiler {
   private engine: CompileEngine | null = null
   private engineKind: TexEngine = 'pdflatex'
@@ -817,7 +825,7 @@ export class WasmTexCompiler {
   private async previewPagesIdle(pageLimit: number): Promise<PagePreviewResult | null> {
     ;(await this.operations.observe(this.ensureEngine())).resume()
     const engine = this.engine
-    if (engine instanceof WasmTexLuatexEngine) return this.previewLuatexPages(engine, pageLimit)
+    if (startsFromFormat(engine)) return this.previewFormatPages(engine, pageLimit)
     if (!(engine instanceof WasmTexPdftexEngine)) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
     const checkpoint = this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
@@ -834,10 +842,10 @@ export class WasmTexCompiler {
     return { pdf: result.pdf, synctex: result.synctex, compileTime: result.compileTime, pageLimit }
   }
 
-  /** LuaTeX has no heap checkpoints: each prefix starts from the format and stops
-   * after the requested pages, so it previews edits to any existing source. */
-  private async previewLuatexPages(
-    engine: WasmTexLuatexEngine,
+  /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
+   * stops after the requested pages, so it previews edits to any existing source. */
+  private async previewFormatPages(
+    engine: WasmTexLuatexEngine | WasmTexXetexEngine,
     pageLimit: number,
   ): Promise<PagePreviewResult | null> {
     if (this.pagePreviewRequiresCheckpoint) return null
@@ -1259,8 +1267,9 @@ export class WasmTexCompiler {
     if (this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())) {
       this.pagePreviewBaseline = previewBaseline
       this.pagePreviewRequiresCheckpoint = true
-    } else if (this.engine instanceof WasmTexLuatexEngine) {
-      // A LuaLaTeX prefix starts from the format and reads every source afresh.
+    } else if (startsFromFormat(this.engine) && !this.engine.readsInPreamble(path)) {
+      // A LuaLaTeX or XeLaTeX prefix starts from the format and reads every source afresh.
+      // A preamble input still needs a full compile, like the main file's preamble.
       this.pagePreviewBaseline = previewBaseline
     }
   }

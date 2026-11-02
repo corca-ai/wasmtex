@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  LUATEX_PREVIEW_JOB_SUFFIX,
-  LUATEX_PREVIEW_OUTPUT_DIR,
-  luatexJobInputExtensions,
-  luatexPreviewHook,
-  WasmTexLuatexEngine,
-} from './luatex-engine'
+import { LUATEX_PREVIEW_OUTPUT_DIR, luatexPreviewHook, WasmTexLuatexEngine } from './luatex-engine'
+import { jobInputExtensions, PREVIEW_JOB_SUFFIX } from './tex-fmt-engine'
 import type { CompileWorkerDriver } from './wasmtex-worker'
 
 type Run = Awaited<ReturnType<CompileWorkerDriver['run']>>
@@ -58,7 +53,7 @@ describe('LuaTeX page previews', () => {
 
   it('selects job-named inputs the full pass read', () => {
     expect(
-      luatexJobInputExtensions(
+      jobInputExtensions(
         [
           'wasmtex-luatex.fmt',
           './main.tex',
@@ -72,7 +67,7 @@ describe('LuaTeX page previews', () => {
         'main',
       ),
     ).toEqual(['aux', 'toc', 'out'])
-    expect(luatexJobInputExtensions(undefined, 'main')).toEqual([])
+    expect(jobInputExtensions(undefined, 'main')).toEqual([])
   })
 
   it('runs as a separate job seeded from the full pass and restores the main file', async () => {
@@ -89,7 +84,7 @@ describe('LuaTeX page previews', () => {
 
     const preview = await instance.compilePagePreview(2)
 
-    const job = `main${LUATEX_PREVIEW_JOB_SUFFIX}`
+    const job = `main${PREVIEW_JOB_SUFFIX}`
     expect(files.get(`${job}.aux`)).toBe('\\relax')
     expect(files.get(`${job}.toc`)).toBe('contents')
     expect(files.get(`${job}.tex`)).toBe(
@@ -124,15 +119,24 @@ describe('LuaTeX page previews', () => {
     ])
   })
 
+  it('offers no preview from a worker that has not finished a full pass', async () => {
+    const { instance, files } = engine(() => output(['./main.tex']))
+    await instance.writeFile('main.tex', '\\documentclass{article}')
+    instance.setMainFile('main.tex')
+    expect(await instance.compilePagePreview(2)).toBeNull()
+    expect(files.has(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(false)
+  })
+
   it('keeps nested main files beside their job and restores them after a failure', async () => {
     const { instance, files, main } = engine((current) => {
-      if (current.endsWith(`${LUATEX_PREVIEW_JOB_SUFFIX}.tex`)) throw new Error('worker lost')
+      if (current.endsWith(`${PREVIEW_JOB_SUFFIX}.tex`)) throw new Error('worker lost')
       return output(['./paper.tex'])
     })
     await instance.writeFile('chapter/paper.tex', 'Body')
     instance.setMainFile('chapter/paper.tex')
+    await instance.compile()
     await expect(instance.compilePagePreview(1)).rejects.toThrow('worker lost')
-    expect(files.has(`chapter/paper${LUATEX_PREVIEW_JOB_SUFFIX}.tex`)).toBe(true)
+    expect(files.has(`chapter/paper${PREVIEW_JOB_SUFFIX}.tex`)).toBe(true)
     expect(main()).toBe('chapter/paper.tex')
   })
 })

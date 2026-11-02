@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import * as factory from './engine/compile-engine'
 import { WasmTexLuatexEngine } from './engine/luatex-engine'
 import { WasmTexPdftexEngine } from './engine/wasmtex-engine'
+import { WasmTexXetexEngine } from './engine/xetex-engine'
 import { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
 import type { CompileResult } from './types'
 
@@ -286,26 +287,36 @@ it.each([
   compiler.dispose()
 })
 
-async function luatexFixture(preview: () => Promise<CompileResult | null>) {
-  const engine = new WasmTexLuatexEngine({ texliveVersion: '2026' })
+async function formatEngineFixture(
+  preview: () => Promise<CompileResult | null>,
+  kind: 'lualatex' | 'xelatex' = 'lualatex',
+) {
+  const engine =
+    kind === 'lualatex'
+      ? new WasmTexLuatexEngine({ texliveVersion: '2026' })
+      : new WasmTexXetexEngine({ texliveVersion: '2026' })
   vi.spyOn(engine, 'init').mockResolvedValue()
   vi.spyOn(engine, 'writeFile').mockResolvedValue()
   vi.spyOn(engine, 'mkdir').mockResolvedValue()
   vi.spyOn(engine, 'readFile').mockResolvedValue(null)
   vi.spyOn(engine, 'setMainFile').mockImplementation(() => {})
   vi.spyOn(engine, 'compile').mockResolvedValue(result)
+  vi.spyOn(engine, 'readsInPreamble').mockImplementation((path) => path === 'macros.tex')
   const pages = vi.spyOn(engine, 'compilePagePreview').mockImplementation(preview)
   vi.spyOn(factory, 'createCompileEngine').mockReturnValue(engine)
   const compiler = new WasmTexCompiler({
-    engine: 'lualatex',
-    files: { 'main.tex': source, 'chapter.tex': 'Chapter.' },
+    engine: kind,
+    files: { 'main.tex': source, 'chapter.tex': 'Chapter.', 'macros.tex': '\\def\\x{}' },
   })
   await compiler.init()
   return { compiler, pages }
 }
 
-it('previews LuaTeX source edits as a stopped prefix after a full baseline', async () => {
-  const { compiler, pages } = await luatexFixture(async () => result)
+it.each([
+  'lualatex',
+  'xelatex',
+] as const)('previews %s source edits as a stopped prefix after a full baseline', async (kind) => {
+  const { compiler, pages } = await formatEngineFixture(async () => result, kind)
   expect(await compiler.previewPages(2)).toBeNull()
   await compiler.compile()
   compiler.setFile('main.tex', source.replace('A paragraph.', 'Edited paragraph.'))
@@ -326,8 +337,54 @@ it('previews LuaTeX source edits as a stopped prefix after a full baseline', asy
   compiler.dispose()
 })
 
+it('requires a full compile after an edit to a file the preamble reads', async () => {
+  const { compiler, pages } = await formatEngineFixture(async () => result, 'xelatex')
+  await compiler.compile()
+  compiler.setFile('macros.tex', '\\def\\x{y}')
+  expect(await compiler.previewPages(2)).toBeNull()
+  expect(pages).not.toHaveBeenCalled()
+  compiler.dispose()
+})
+
+it('keeps a LuaLaTeX preview when the main file already had the same error', async () => {
+  const engine = new WasmTexLuatexEngine({ texliveVersion: '2026' })
+  const tex = Reflect.get(engine, 'tex') as {
+    run: () => Promise<unknown>
+    writeFile: () => Promise<void>
+    readFile: () => Promise<string | null>
+    mkdir: () => void
+    setMainFile: (path: string) => void
+  }
+  let main = 'main.tex'
+  const error = (file: string) =>
+    `(./${file}\n! Undefined control sequence.\nl.3 \\undefinedmacro\n)`
+  vi.spyOn(tex, 'writeFile').mockResolvedValue()
+  vi.spyOn(tex, 'readFile').mockResolvedValue(null)
+  vi.spyOn(tex, 'mkdir').mockImplementation(() => {})
+  vi.spyOn(tex, 'setMainFile').mockImplementation((path) => {
+    main = path
+  })
+  vi.spyOn(tex, 'run').mockImplementation(async () => ({
+    success: true,
+    out: new Uint8Array([1]),
+    log: error(main),
+    inputFiles: ['./main.tex', './main.aux'],
+    inputFilesComplete: true,
+  }))
+  vi.spyOn(engine, 'init').mockResolvedValue()
+  Reflect.set(engine, 'fmtBytes', new Uint8Array(70000))
+  vi.spyOn(factory, 'createCompileEngine').mockReturnValue(engine)
+  const compiler = new WasmTexCompiler({ engine: 'lualatex', files: { 'main.tex': source } })
+  await compiler.init()
+  const full = await compiler.compile()
+  expect(full.errors[0]?.file).toBe('main.tex')
+  compiler.setFile('main.tex', source.replace('A paragraph.', 'Edited paragraph.'))
+  expect(await compiler.previewPages(2)).not.toBeNull()
+  compiler.dispose()
+})
+
 it('rejects a LuaTeX prefix that reports a new error', async () => {
-  const { compiler } = await luatexFixture(async () => ({
+  const { compiler } = await formatEngineFixture(async () => ({
     ...result,
     errors: [{ line: 3, message: 'Undefined control sequence.', severity: 'error' }],
   }))

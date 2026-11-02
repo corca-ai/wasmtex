@@ -609,3 +609,21 @@ only that line from the returned log. Errors in the author's main file keep its
 name, so a document with an existing error still previews. Because each prefix
 reads every source afresh, edits to existing secondary `.tex` files preview too;
 new files and non-TeX resources fall back to `compile()`. No fork session is offered.
+
+XeLaTeX previews follow the same separate-job pattern, also without an engine
+release. XeTeX has no `tex.finish()`, and `\end` is not allowed in the output
+routine, so after the requested page ships the hook ends the transcript's line
+and reads from the terminal in batch mode. That fatal error closes the files and
+writes the XDV postamble; batch mode keeps it out of the transcript the SDK
+parses. dvipdfmx then converts only the prefix pages. XeTeX has no
+`find_write_file`, so writes run as in a full pass: job-named files land under
+the preview job's name, and the SDK restores the `\include`d chapters' aux files,
+read once after each full pass, when the preview ends. (`\nofiles` was rejected:
+it skips expanding aux writes, hiding their errors, and drops `\if@filesw`-guarded
+write nodes, which can move breaks.)
+
+Both Unicode engines preview only from a worker that finished a successful full
+pass, since an engine recreated after an interrupted compile has none of the
+auxiliary files a preview reads. An edit to a project `.tex` file the full pass
+read before the job's `.aux` (that is, in the preamble) needs a full compile, as a
+changed main-file preamble does.
