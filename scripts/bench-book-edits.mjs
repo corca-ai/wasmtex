@@ -14,6 +14,9 @@ function arg(name, fallback) {
   return index < 0 ? fallback : process.argv[index + 1]
 }
 const assets = resolve(arg('assets', 'public'))
+const engine = arg('engine', 'pdflatex')
+if (!['pdflatex', 'xelatex', 'lualatex'].includes(engine))
+  throw new Error('--engine must be pdflatex, xelatex or lualatex')
 const mirror = arg('texlive-url')
 if (!mirror || !/\/snapshots\/[^/]+\/(2025|2026)\/$/.test(mirror))
   throw new Error('--texlive-url must identify an immutable annual snapshot')
@@ -59,20 +62,37 @@ if (project) {
   }
   await visit(resolve(project))
 } else {
+  // Defaults reproduce the historical twelve-chapter pdfTeX book; the options scale it.
+  const chapters = Number(arg('chapters', '12'))
+  const sections = Number(arg('sections', '6'))
+  const bibliography = process.argv.includes('--bib')
+  const layout = arg('layout', 'include')
+  if (![chapters, sections].every((n) => Number.isSafeInteger(n) && n >= 1 && n <= 200) ||
+      !['include', 'input'].includes(layout))
+    throw new Error('--chapters/--sections must be 1..200 and --layout include|input')
   const text =
     'Every function preserves the structure of its argument. Composition respects identity and associativity. The following equation describes a useful transformation.'
   files[mainFile] =
-    '\\documentclass{book}\n\\usepackage{amsmath,makeidx}\n\\makeindex\n\\begin{document}\n\\tableofcontents\n' +
-    Array.from({ length: 12 }, (_, i) => `\\include{chapters/ch${i + 1}}`).join('\n') +
+    '\\documentclass{book}\n' +
+    (engine === 'pdflatex' ? '' : '\\usepackage{fontspec}\n') +
+    '\\usepackage{amsmath,makeidx}\n\\makeindex\n\\begin{document}\n\\tableofcontents\n' +
+    Array.from({ length: chapters }, (_, i) => `\\${layout}{chapters/ch${i + 1}}`).join('\n') +
+    (bibliography ? '\n\\bibliographystyle{plain}\n\\bibliography{references}' : '') +
     '\n\\printindex\n\\end{document}\n'
-  for (let i = 1; i <= 12; i++)
+  for (let i = 1; i <= chapters; i++)
     files[`chapters/ch${i}.tex`] =
       `\\chapter{Chapter ${i}}\n` +
       Array.from(
-        { length: 6 },
+        { length: sections },
         (_, j) =>
-          `\\section{Section ${j}}\n${text}\\index{composition}\n\n${Array(4).fill(text).join('\n\n')}\n\\begin{equation}f(x)=\\sum_{k=1}^{20}\\frac{k^2}{k+1}\\end{equation}\n`,
+          `\\section{Section ${j}}\n${text}\\index{composition}${bibliography ? `\\cite{ref${(i * sections + j) % 40}}` : ''}\n\n${Array(4).fill(text).join('\n\n')}\n\\begin{equation}f(x)=\\sum_{k=1}^{20}\\frac{k^2}{k+1}\\end{equation}\n`,
       ).join('\n')
+  if (bibliography)
+    files['references.bib'] = Array.from(
+      { length: 40 },
+      (_, k) =>
+        `@article{ref${k},\n  author = {Author ${k} and Writer ${k + 1}},\n  title = {On structure ${k}},\n  journal = {Journal of Composition},\n  year = {${1990 + (k % 30)}},\n  volume = {${k + 1}},\n  pages = {${k * 10 + 1}--${k * 10 + 9}}\n}`,
+    ).join('\n\n')
 }
 if (!(mainFile in files) || !files[editPath]?.includes(from))
   throw new Error('Missing main document, edit file, or --from text')
@@ -160,7 +180,12 @@ const report = {
   sdkHead: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   sdkDiffHash: hash(execFileSync('git', ['diff', 'HEAD'], { cwd: root })),
   assetManifestHash: hash(manifest),
-  workerHash: hash(await readFile(join(assets, 'wasmtex', year, 'wasmtex-pdftex.worker.js'))),
+  engine,
+  workerHash: hash(
+    await readFile(
+      join(assets, 'wasmtex', year, `wasmtex-${{ pdflatex: 'pdftex', xelatex: 'xetex', lualatex: 'luatex' }[engine]}.worker.js`),
+    ),
+  ),
   pageLimit, checkpointCount, checkpointMiB,
   sdkEntry: arg('sdk-entry', '/src/headless.ts'),
   heap: arg('heap', 'true') !== 'false',
@@ -168,7 +193,8 @@ const report = {
   mirror,
   year,
   assets,
-  project: project ? resolve(project) : 'synthetic-12-chapter',
+  project: project ? resolve(project) : 'synthetic',
+  synthetic: project ? undefined : process.argv.slice(2).join(' '),
   mainFile,
   editPath,
   from,
@@ -212,18 +238,24 @@ try {
     async (input) => {
       const { WasmTexCompiler } = await import(input.entry)
       const compiler = new WasmTexCompiler({
-        engine: 'pdflatex',
+        engine: input.engine,
         files: input.files,
         mainFile: input.mainFile,
         assetBaseUrl: '/engines/',
         texliveVersion: input.year,
         texliveUrl: `${location.origin}/mirror/`,
-        incremental: true,
-        heapCheckpoints: input.heap,
+        incremental: input.engine === 'pdflatex',
+        heapCheckpoints: input.engine === 'pdflatex' && input.heap,
         heapCheckpointOptions: { maxCheckpoints: input.checkpointCount, maxBytes: input.checkpointMiB * 2 ** 20, minHeadBytes: 0 },
         tikzExternalization: { mode: 'auto', workers: 1, idleMs: 0 },
         persistentCache: false,
       })
+      const base64 = (bytes) => {
+        let text = ''
+        for (let at = 0; at < bytes.length; at += 32768)
+          text += String.fromCharCode(...bytes.subarray(at, at + 32768))
+        return btoa(text)
+      }
       let timer
       let session
       let forkSetup
@@ -256,6 +288,15 @@ try {
             input.files[input.editPath] = input.files[input.editPath].replace(before, after)
             compiler.setFile(input.editPath, input.files[input.editPath])
           }
+          const previews = []
+          // Without a fork (Unicode engines, or --fork false), a keystroke previews on the
+          // one compiler before its canonical compile, as an application would.
+          if (!session && input.pageLimit && index > 0) {
+            const began = performance.now()
+            const preview = await compiler.previewPages(input.pageLimit, { placement: true })
+            previews.push({ wallMs: performance.now() - began, accepted: !!preview, bytes: preview?.pdf.length, firstPage: preview?.firstPage ?? 1 })
+            if (preview) await globalThis.saveBookPreview({ index, revision: 0, base64: base64(preview.pdf) })
+          }
           passes = []
           const start = performance.now()
           const canonical = Promise.race([
@@ -269,7 +310,6 @@ try {
               timer = setTimeout(() => reject(new Error('Compile exceeded 10 minutes')), 600_000)
             }),
           ])
-          const previews = []
           if (session && index > 0) {
             for (let revision = 0; revision < 3; revision++) {
               const current = input.files[input.editPath]
@@ -278,19 +318,14 @@ try {
               session.setFile(input.editPath, revision % 2 ? alternate : current)
               const began = performance.now()
               const preview = await session.previewPages(input.pageLimit)
-              previews.push({ wallMs: performance.now() - began, accepted: !!preview, bytes: preview?.pdf.length })
-              if (preview) {
-                let text = ''
-                for (let at = 0; at < preview.pdf.length; at += 32768)
-                  text += String.fromCharCode(...preview.pdf.subarray(at, at + 32768))
-                await globalThis.saveBookPreview({ index, revision, base64: btoa(text) })
-              }
+              previews.push({ wallMs: performance.now() - began, accepted: !!preview, bytes: preview?.pdf.length, firstPage: preview?.firstPage ?? 1 })
+              if (preview) await globalThis.saveBookPreview({ index, revision, base64: base64(preview.pdf) })
             }
           }
           const result = await canonical
           clearTimeout(timer)
           const wallMs = performance.now() - start
-          if (index === 0 && input.pageLimit) {
+          if (index === 0 && input.pageLimit && input.fork) {
             const began = performance.now()
             session = await compiler.createPagePreviewSession({ path: input.editPath,
               offset: input.files[input.editPath].indexOf(input.from) })
@@ -303,11 +338,7 @@ try {
             outputs[extension] = await compiler.readOutput(
               input.mainFile.replace(/\.tex$/, `.${extension}`),
             )
-          const pdfBase64 = btoa(
-            Array.from({ length: Math.ceil(result.pdf.length / 32768) }, (_, j) =>
-              String.fromCharCode(...result.pdf.subarray(j * 32768, (j + 1) * 32768)),
-            ).join(''),
-          )
+          const pdfBase64 = base64(result.pdf)
           await globalThis.saveBookSample({
             index,
             cold: index === 0,
@@ -336,6 +367,8 @@ try {
       year,
       heap: arg('heap', 'true') !== 'false',
       entry: arg('sdk-entry', '/src/headless.ts'),
+      engine,
+      fork: engine === 'pdflatex' && arg('fork', 'true') !== 'false',
       pageLimit, checkpointCount, checkpointMiB,
     },
   )
