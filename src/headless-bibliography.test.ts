@@ -280,6 +280,22 @@ describe('WasmTexCompiler bibliography stage', () => {
     expect(bibliography).toHaveBeenCalledOnce()
   })
 
+  it('compares the lists from the first compile of a cited document', async () => {
+    const engine = new AuxEngine(
+      { 'main.aux': '\\citation{knuth}\n\\bibstyle{plain}\n\\bibdata{refs}' },
+      (files, count) => {
+        // The bibliography read on the second pass moves the section to page 2.
+        files['main.toc'] = `\\contentsline{section}{Intro}{${count > 1 ? 2 : 1}}`
+      },
+    )
+    const { compiler } = bibtexCompiler(engine, {
+      'main.tex': article,
+      'refs.bib': '@book{knuth,title={TAOCP}}',
+    })
+    await compiler.compile()
+    expect(engine.compileCount).toBe(3)
+  })
+
   it('leaves a Biber document to Biber even when stale aux files still cite', async () => {
     const engine = new AuxEngine({
       'main.bcf': '<bcf:citekey>knuth</bcf:citekey>',
