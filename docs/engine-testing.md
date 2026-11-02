@@ -20,6 +20,14 @@ node scripts/bench-book-edits.mjs --assets /path/to/released/assets \
   --from 'Coalgebras are just' --to 'Coalgebras are also' --out report/book-dao
 ```
 
+`--engine pdflatex|xelatex|lualatex` selects the engine (pdfLaTeX by default). The
+synthetic book scales with `--chapters N --sections N` (defaults 12 and 6;
+24 × 24 gives about 300 pages), `--bib` adds BibTeX citations and a database, and
+`--layout input` uses `\input` instead of `\include`. Unicode engines load
+`fontspec`. With `--page-limit`, an engine without forks (or `--fork false`)
+previews on its one compiler before each canonical compile, as an application
+would. Each sample records the preview's time and `firstPage`.
+
 Use `--sdk-entry /lib/headless.js` for an unchanged committed bundle and the
 default `/src/headless.ts` for the candidate. Keep assets, mirror, browser,
 inputs and edit sequence identical; compare both orderings on an otherwise idle
