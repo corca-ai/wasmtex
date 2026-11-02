@@ -711,6 +711,12 @@ export class WasmTexCompiler {
    * Captures one same-build checkpoint; unsupported engines return null. The
    * caller owns and disposes the sibling, including after project transitions.
    */
+  /** Whether {@link createPagePreviewSession} can fork at all with the current engine:
+   *  only pdfTeX with heap checkpoints can. Hosts use it to plan a second lane. */
+  supportsPagePreviewSessions(): boolean {
+    return this.engine instanceof WasmTexPdftexEngine && !!this.heap
+  }
+
   async createPagePreviewSession(
     hint?: CompileOptions['incrementalPreparation'],
     signal?: AbortSignal,

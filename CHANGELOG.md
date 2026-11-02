@@ -38,7 +38,7 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
   still take the pass the forced rerun used to provide.
 - Add XeLaTeX page-prefix previews (a separate job stopped after the requested page,
   converting only those pages), and preview LuaLaTeX/XeLaTeX edits to existing
-  chapter files.
+  chapter files. `supportsPagePreviewSessions()` tells hosts that only pdfTeX forks.
 
 - Keep a bounded earlier checkpoint in foreground preview sessions so edits before a prepared paragraph can continue while canonical compilation runs.
 

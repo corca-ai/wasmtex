@@ -195,6 +195,7 @@ async function forkFixture(chapter = 'body', local = false) {
 
 it('a fork renders edited secondary inputs while its canonical owner is compiling', async () => {
   const { compiler, engine, fork, preview, create } = await forkFixture()
+  expect(compiler.supportsPagePreviewSessions()).toBe(true)
   const session = await compiler.createPagePreviewSession({ path: 'chapter.tex', offset: 0 })
   expect(session).not.toBeNull()
   expect(create).toHaveBeenCalledWith('before-chapter', undefined, 'before-chapter')
@@ -334,6 +335,7 @@ it.each([
   compiler.setFile('new.tex', 'A new file.')
   expect(await compiler.previewPages(2)).toBeNull()
   expect(pages).toHaveBeenCalledTimes(2)
+  expect(compiler.supportsPagePreviewSessions()).toBe(false)
   compiler.dispose()
 })
 

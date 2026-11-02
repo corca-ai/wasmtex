@@ -210,6 +210,10 @@ preview. Unverified line-zero diagnostics compare message/count only; previews
 do not certify diagnostics, and the full compile remains authoritative. Input mutation, disposal and overlapping calls obey
 the same serialization rules as `compile()`.
 
+`compiler.supportsPagePreviewSessions()` reports whether the current engine can
+fork at all: only pdfTeX with heap checkpoints can, so hosts need not plan a second
+lane for LuaLaTeX or XeLaTeX.
+
 `await compiler.createPagePreviewSession(hint?, signal?)` captures a valid
 checkpoint into an independent same-build worker for foreground previews. Call
 while the parent is idle and synchronized, after a successful full compile.

@@ -200,6 +200,9 @@ export declare class WasmTexCompiler {
      * Captures one same-build checkpoint; unsupported engines return null. The
      * caller owns and disposes the sibling, including after project transitions.
      */
+    /** Whether {@link createPagePreviewSession} can fork at all with the current engine:
+     *  only pdfTeX with heap checkpoints can. Hosts use it to plan a second lane. */
+    supportsPagePreviewSessions(): boolean;
     createPagePreviewSession(hint?: CompileOptions['incrementalPreparation'], signal?: AbortSignal): Promise<PagePreviewSession | null>;
     /** Render a PDF prefix using the last full pass's references. This leaves full
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
