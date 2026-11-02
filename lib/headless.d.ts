@@ -143,6 +143,8 @@ export declare class WasmTexCompiler {
     private pagePreviewBaseline;
     private pagePreviewErrors;
     private pagePreviewRequiresCheckpoint;
+    /** Whether a full compile has finished; until then an initial preview may run. */
+    private compiled;
     /** Secondary sources edited since the baseline full compile (LuaLaTeX/XeLaTeX). */
     private previewEdits;
     private readonly operations;
@@ -215,6 +217,15 @@ export declare class WasmTexCompiler {
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */
     previewPages(pageLimit: number, options?: PagePreviewOptions): Promise<PagePreviewResult | null>;
+    /**
+     * Before the first full compile, typeset the first pages of a cold document from the
+     * format, on any engine, without references: a provisional view of a long document
+     * whose first full pass is still far off. Errors return null, as does any call after
+     * a full compile. Working files and caches are left for the full compile; pdfTeX
+     * builds no preamble format here, so the full compile's own build is the one kept.
+     */
+    previewColdPages(pageLimit: number): Promise<PagePreviewResult | null>;
+    private previewColdPagesIdle;
     private previewPagesIdle;
     /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
      * stops after the requested pages, so it previews edits to any existing source. With

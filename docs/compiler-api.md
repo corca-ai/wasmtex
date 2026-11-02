@@ -218,7 +218,9 @@ falling back to a prefix, in these cases:
 - the page count or the chapter's contents entry does not match the full pass;
 - the chapter fails to compile alone.
 
-A refused chapter stays refused until the next full compile. It is a first-pass preview using the preceding full compile's
+A refused chapter stays refused until the next full compile.
+
+A preview is a first-pass preview using the preceding full compile's
 references, not an export or proof of settled pagination. Auxiliary files and
 compiler metadata remain unchanged. Hosts must run `compile()` after editing
 settles, keep partial results out of export/cache paths, and bound retained
@@ -227,6 +229,13 @@ return `null`. Errors already present in the full baseline may remain in a
 preview. Unverified line-zero diagnostics compare message/count only; previews
 do not certify diagnostics, and the full compile remains authoritative. Input mutation, disposal and overlapping calls obey
 the same serialization rules as `compile()`.
+
+`await compiler.previewColdPages(pageLimit)` runs only before the first full
+compile, while the compiler holds no references at all. It typesets the first pages
+of a cold document from the format on any engine, and returns null on any error or
+once a full compile has run. A long document can show its opening pages while its
+first full pass is still far off. pdfTeX builds no preamble format during it, so the
+full compile's own build is the one kept and persisted.
 
 `compiler.supportsPagePreviewSessions()` reports whether the current engine can
 fork at all: only pdfTeX with heap checkpoints can, so hosts need not plan a second

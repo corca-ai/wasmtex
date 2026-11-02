@@ -652,19 +652,22 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   protected async runPreviewJob(
     hook: string,
     beforeRun?: (job: string) => Promise<void>,
+    { cold = false }: { cold?: boolean } = {},
   ): Promise<PreviewRun | null> {
     const source = this.mainSource()
-    if (source === undefined || !this.fullPass) return null
+    if (source === undefined || !(this.fullPass || cold)) return null
     const start = performance.now()
     const fmtLog = await this.ensureFormat()
     const name = this.jobName()
     const job = `${name}${PREVIEW_JOB_SUFFIX}`
     await Promise.all(
-      this.fullPass.jobInputs.map(async (extension) => {
+      (this.fullPass?.jobInputs ?? []).map(async (extension) => {
         const content = await this.tex.readFile(`${name}.${extension}`)
         if (content !== null) await this.tex.writeFile(`${job}.${extension}`, content)
       }),
     )
+    // A cold preview reads no aux file, not even one an earlier cold preview left.
+    if (!this.fullPass) await this.tex.writeFile(`${job}.aux`, '')
     const main = `${this.mainBase.slice(0, this.mainBase.length - name.length)}${job}.tex`
     await this.tex.writeFile(main, hook + source)
     await beforeRun?.(job)

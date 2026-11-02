@@ -133,23 +133,23 @@ describe('LuaTeX page previews', () => {
     instance.setMainFile('main.tex')
     await instance.compile()
 
-    expect((await instance.compilePagePreview(10, 'chapters/ch2'))?.firstPage).toBe(5)
+    expect((await instance.compilePagePreview(10, { chapter: 'chapters/ch2' }))?.firstPage).toBe(5)
     expect(files.get(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(
       `${luatexPreviewHook(10, { name: 'chapters/ch2', cap: 6 })}\\documentclass{book}`,
     )
     // A chapter starting after the page limit is never typeset alone.
-    expect(await instance.compilePagePreview(4, 'chapters/ch2')).toBeNull()
+    expect(await instance.compilePagePreview(4, { chapter: 'chapters/ch2' })).toBeNull()
     // A discarded blank page before the heading shifts the placement by one.
     previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [6]))'
-    expect((await instance.compilePagePreview(10, 'chapters/ch2'))?.firstPage).toBe(6)
+    expect((await instance.compilePagePreview(10, { chapter: 'chapters/ch2' }))?.firstPage).toBe(6)
     // A first page the full pass does not have there refuses the chapter until the next pass.
     previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [9] [10]))'
-    expect(await instance.compilePagePreview(10, 'chapters/ch2')).toBeNull()
+    expect(await instance.compilePagePreview(10, { chapter: 'chapters/ch2' })).toBeNull()
     previewLog = '(./main-wasmtex-preview.tex (./chapters/ch2.tex [5] [6]))'
-    expect(await instance.compilePagePreview(10, 'chapters/ch2')).toBeNull()
+    expect(await instance.compilePagePreview(10, { chapter: 'chapters/ch2' })).toBeNull()
     expect((await instance.compilePagePreview(2))?.firstPage).toBe(1)
     await instance.compile()
-    expect((await instance.compilePagePreview(10, 'chapters/ch2'))?.firstPage).toBe(5)
+    expect((await instance.compilePagePreview(10, { chapter: 'chapters/ch2' }))?.firstPage).toBe(5)
   })
 
   it('refuses a chapter preview whose contents entry differs, and pages from stateful packages', async () => {
@@ -168,12 +168,27 @@ describe('LuaTeX page previews', () => {
     await instance.writeFile('main.tex', 'Body')
     instance.setMainFile('main.tex')
     await instance.compile()
-    expect(await instance.compilePagePreview(5, 'ch2')).toBeNull()
+    expect(await instance.compilePagePreview(5, { chapter: 'ch2' })).toBeNull()
 
     inputs = ['./main.tex', '/tex/biblatex.sty', './main.aux']
     await instance.compile()
-    expect(await instance.compilePagePreview(5, 'ch2')).toBeNull()
+    expect(await instance.compilePagePreview(5, { chapter: 'ch2' })).toBeNull()
     expect(files.has(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(true)
+  })
+
+  it('runs a cold preview from the format before any full pass, copying nothing', async () => {
+    const { instance, files } = engine(() => output(['./main.tex']))
+    await instance.writeFile('main.tex', '\\documentclass{article}')
+    instance.setMainFile('main.tex')
+    expect((await instance.compilePagePreview(2, { cold: true }))?.success).toBe(true)
+    expect(files.get(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(
+      `${luatexPreviewHook(2)}\\documentclass{article}`,
+    )
+    // Only the preview job's own aux exists, emptied so an earlier cold run cannot leak in.
+    expect([...files.keys()].filter((path) => path.endsWith('.aux'))).toEqual([
+      `main${PREVIEW_JOB_SUFFIX}.aux`,
+    ])
+    expect(files.get(`main${PREVIEW_JOB_SUFFIX}.aux`)).toBe('')
   })
 
   it('offers no preview from a worker that has not finished a full pass', async () => {

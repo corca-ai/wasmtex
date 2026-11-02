@@ -195,7 +195,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
    *  just those pages; null means run {@link compile} instead. */
   async compilePagePreview(
     pageLimit: number,
-    chapter?: string,
+    { chapter, cold = false }: { chapter?: string; cold?: boolean } = {},
   ): Promise<ChapterPreviewResult | null> {
     const start = chapter ? this.chapterStart(chapter, pageLimit) : 1
     if (start === null) return null
@@ -209,6 +209,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
         ),
         // A run that ships nothing must not return an earlier preview's output.
         (job) => this.tex.writeFile(`${job}.xdv`, new Uint8Array()),
+        { cold },
       )
       if (chapter && preview) entry = firstChapterEntry(await this.tex.readFile(`${chapter}.aux`))
     } finally {

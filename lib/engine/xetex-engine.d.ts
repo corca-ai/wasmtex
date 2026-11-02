@@ -33,7 +33,10 @@ export declare class WasmTexXetexEngine extends BaseTexFmtEngine {
     /** Typeset only pages 1..`pageLimit` of the current main source, or only the
      *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}) and convert
      *  just those pages; null means run {@link compile} instead. */
-    compilePagePreview(pageLimit: number, chapter?: string): Promise<ChapterPreviewResult | null>;
+    compilePagePreview(pageLimit: number, { chapter, cold }?: {
+        chapter?: string;
+        cold?: boolean;
+    }): Promise<ChapterPreviewResult | null>;
     /** XeTeX emits the job's basename in /work even for nested source files.
      *  Preserve that name when transferring XDV: dvipdfmx's C entry retains the
      *  supplied directory in -o, while its worker reads the job basename (#135). */

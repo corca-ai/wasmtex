@@ -114,7 +114,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
    *  run {@link compile} instead. */
   async compilePagePreview(
     pageLimit: number,
-    chapter?: string,
+    { chapter, cold = false }: { chapter?: string; cold?: boolean } = {},
   ): Promise<ChapterPreviewResult | null> {
     const start = chapter ? this.chapterStart(chapter, pageLimit) : 1
     if (start === null) return null
@@ -124,6 +124,8 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
         pageLimit,
         chapter ? { name: chapter, cap: pageLimit - start + 1 } : undefined,
       ),
+      undefined,
+      { cold },
     )
     if (!preview) return null
     const lua = preview.run

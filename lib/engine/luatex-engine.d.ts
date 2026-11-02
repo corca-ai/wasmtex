@@ -22,7 +22,10 @@ export declare class WasmTexLuatexEngine extends BaseTexFmtEngine {
     /** Typeset only pages 1..`pageLimit` of the current main source, or only the
      *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}); null means
      *  run {@link compile} instead. */
-    compilePagePreview(pageLimit: number, chapter?: string): Promise<ChapterPreviewResult | null>;
+    compilePagePreview(pageLimit: number, { chapter, cold }?: {
+        chapter?: string;
+        cold?: boolean;
+    }): Promise<ChapterPreviewResult | null>;
     flushCache(): Promise<void>;
     terminate(): void;
 }

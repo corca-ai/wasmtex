@@ -95,7 +95,7 @@ describe('XeTeX page previews', () => {
     await instance.writeFile('main.tex', 'Body')
     instance.setMainFile('main.tex')
     await instance.compile()
-    const preview = await instance.compilePagePreview(10, 'ch2')
+    const preview = await instance.compilePagePreview(10, { chapter: 'ch2' })
     expect(preview?.firstPage).toBe(3)
     expect(conversions.at(-1)).toBe(`main${PREVIEW_JOB_SUFFIX}.xdv`)
     expect(files.get(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(
