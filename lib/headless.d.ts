@@ -207,7 +207,7 @@ export declare class WasmTexCompiler {
     previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
     private previewPagesIdle;
     /** LuaTeX has no heap checkpoints: each prefix starts from the format and stops
-     * after the requested pages (main-source edits only; see setFile). */
+     * after the requested pages, so it previews edits to any existing source. */
     private previewLuatexPages;
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
@@ -250,6 +250,7 @@ export declare class WasmTexCompiler {
      *  spliced onto the last full compile's head — exact for the spliced PDF (#99 P2). */
     private toCompileResult;
     setFile(path: string, content: FileContent): void;
+    private noteSecondarySource;
     loadProject(files: Record<string, FileContent>): Promise<void>;
     private replaceProject;
     getFile(path: string): FileContent | null;

@@ -304,7 +304,7 @@ async function luatexFixture(preview: () => Promise<CompileResult | null>) {
   return { compiler, pages }
 }
 
-it('previews LuaTeX main-source edits as a stopped prefix after a full baseline', async () => {
+it('previews LuaTeX source edits as a stopped prefix after a full baseline', async () => {
   const { compiler, pages } = await luatexFixture(async () => result)
   expect(await compiler.previewPages(2)).toBeNull()
   await compiler.compile()
@@ -316,9 +316,13 @@ it('previews LuaTeX main-source edits as a stopped prefix after a full baseline'
     pageLimit: 2,
   })
   expect(pages.mock.calls).toEqual([[2]])
+  // Every prefix starts from the format, so an existing chapter needs no unread proof.
   compiler.setFile('chapter.tex', 'Edited chapter.')
+  expect(await compiler.previewPages(3)).not.toBeNull()
+  expect(pages.mock.calls).toEqual([[2], [3]])
+  compiler.setFile('new.tex', 'A new file.')
   expect(await compiler.previewPages(2)).toBeNull()
-  expect(pages).toHaveBeenCalledTimes(1)
+  expect(pages).toHaveBeenCalledTimes(2)
   compiler.dispose()
 })
 

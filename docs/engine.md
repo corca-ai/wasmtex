@@ -605,5 +605,7 @@ last full pass recorded, so references match that pass. A `find_write_file`
 callback sends every `\openout` into `wasmtex-preview-out/`, so a stopped
 prefix cannot truncate an `\include`d chapter's `.aux` or another project file
 the next full pass reads. The stop reports an unclosed group; the SDK removes
-only that line from the returned log. Without a heap checkpoint, edits to other
-files fall back to `compile()`, and no fork session is offered.
+only that line from the returned log. Errors in the author's main file keep its
+name, so a document with an existing error still previews. Because each prefix
+reads every source afresh, edits to existing secondary `.tex` files preview too;
+new files and non-TeX resources fall back to `compile()`. No fork session is offered.

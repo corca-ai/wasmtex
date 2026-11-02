@@ -835,7 +835,7 @@ export class WasmTexCompiler {
   }
 
   /** LuaTeX has no heap checkpoints: each prefix starts from the format and stops
-   * after the requested pages (main-source edits only; see setFile). */
+   * after the requested pages, so it previews edits to any existing source. */
   private async previewLuatexPages(
     engine: WasmTexLuatexEngine,
     pageLimit: number,
@@ -1230,22 +1230,8 @@ export class WasmTexCompiler {
     // Generated `.bbl`/`.ind` files stay: each stage compares its actual request after
     // every TeX pass and reruns, forcing another pass, only when its output changes.
     this.currentAuxiliaryDependencies.clear()
-    // New workers include preamble reads in checkpoint evidence. Retain only
-    // checkpoints that prove this secondary source had not been read yet.
-    if (path !== this.mainFile && path.endsWith('.tex')) {
-      if (existed) this.heap?.invalidateFile(path, content)
-      else this.heap?.reset() // A new file can change an earlier negative lookup.
-      // Only a retained checkpoint with complete unread-input proof can carry a
-      // secondary-source preview. Never fall back to the unchecked full prefix.
-      if (
-        existed &&
-        previewBaseline !== null &&
-        this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
-      ) {
-        this.pagePreviewBaseline = previewBaseline
-        this.pagePreviewRequiresCheckpoint = true
-      }
-    }
+    if (path !== this.mainFile && path.endsWith('.tex'))
+      this.noteSecondarySource(path, content, existed, previewBaseline)
     if (!path.endsWith('.tex')) {
       // A non-.tex file (image/data asset, .bib, .bst) can be baked into a checkpoint head
       // (e.g. \includegraphics{logo.png} on a title page) yet isn't tracked by the .tex-only
@@ -1255,6 +1241,28 @@ export class WasmTexCompiler {
       this.heap?.reset()
     }
     this.updateIndexForFile(path, content)
+  }
+
+  private noteSecondarySource(
+    path: string,
+    content: FileContent,
+    existed: boolean,
+    previewBaseline: string | null,
+  ): void {
+    // New workers include preamble reads in checkpoint evidence. Retain only
+    // checkpoints that prove this secondary source had not been read yet.
+    if (existed) this.heap?.invalidateFile(path, content)
+    else this.heap?.reset() // A new file can change an earlier negative lookup.
+    if (!existed || previewBaseline === null) return
+    // On pdfTeX only a retained checkpoint with complete unread-input proof can carry
+    // a secondary-source preview. Never fall back to the unchecked full prefix.
+    if (this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())) {
+      this.pagePreviewBaseline = previewBaseline
+      this.pagePreviewRequiresCheckpoint = true
+    } else if (this.engine instanceof WasmTexLuatexEngine) {
+      // A LuaLaTeX prefix starts from the format and reads every source afresh.
+      this.pagePreviewBaseline = previewBaseline
+    }
   }
 
   async loadProject(files: Record<string, FileContent>): Promise<void> {
