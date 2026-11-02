@@ -40,6 +40,7 @@ import {
   type IndexStageRequest,
   runRemoteIndex,
 } from './engine/index-backend'
+import { WasmTexLuatexEngine } from './engine/luatex-engine'
 import { MakeindexEngine } from './engine/makeindex-engine'
 import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
 import { extractPreamble } from './engine/preamble-utils'
@@ -791,6 +792,7 @@ export class WasmTexCompiler {
   private async previewPagesIdle(pageLimit: number): Promise<PagePreviewResult | null> {
     ;(await this.operations.observe(this.ensureEngine())).resume()
     const engine = this.engine
+    if (engine instanceof WasmTexLuatexEngine) return this.previewLuatexPages(engine, pageLimit)
     if (!(engine instanceof WasmTexPdftexEngine)) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
     const checkpoint = this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
@@ -805,6 +807,24 @@ export class WasmTexCompiler {
     )
       return null
     return { pdf: result.pdf, synctex: result.synctex, compileTime: result.compileTime, pageLimit }
+  }
+
+  /** LuaTeX has no heap checkpoints: each prefix starts from the format and stops
+   * after the requested pages (main-source edits only; see setFile). */
+  private async previewLuatexPages(
+    engine: WasmTexLuatexEngine,
+    pageLimit: number,
+  ): Promise<PagePreviewResult | null> {
+    if (this.pagePreviewRequiresCheckpoint) return null
+    ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
+    const result = (await this.operations.observe(engine.compilePagePreview(pageLimit))).resume()
+    if (
+      !result?.success ||
+      !result.pdf ||
+      !previewErrorsCovered(this.pagePreviewErrors, result.errors)
+    )
+      return null
+    return { pdf: result.pdf, synctex: null, compileTime: result.compileTime, pageLimit }
   }
 
   getRetentionStats(): CompilerRetentionStats {

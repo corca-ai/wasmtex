@@ -594,3 +594,16 @@ only disposable previews. Setup cancellation terminates the sibling and settles
 its startup wait without killing the canonical parent. The caller owns returned
 session disposal. [Compiler API](compiler-api.md#deferred-pdf-preview-parts)
 defines proof checks, the 512 MiB heap / 192 MiB copy admission bounds and fallback.
+
+LuaLaTeX previews need no engine patch or new release. The SDK writes the
+current main source as a separate `<job>-wasmtex-preview` job whose first line
+begins with a `shipout/after` hook; the author's text follows on that same line,
+so diagnostic line numbers stay unchanged. After the requested page count ships,
+`tex.finish()` runs normal end-of-job cleanup and PDF finalization. The job
+starts from copies of the job-named inputs (`.aux`, `.toc`, `.bbl`, …) that the
+last full pass recorded, so references match that pass. A `find_write_file`
+callback sends every `\openout` into `wasmtex-preview-out/`, so a stopped
+prefix cannot truncate an `\include`d chapter's `.aux` or another project file
+the next full pass reads. The stop reports an unclosed group; the SDK removes
+only that line from the returned log. Without a heap checkpoint, edits to other
+files fall back to `compile()`, and no fork session is offered.
