@@ -188,8 +188,10 @@ that changed since the last full compile falls back to a background full reconci
 
 `await compiler.previewPages(pageLimit)` requests a disposable PDF prefix after
 a successful full compile. Supported pdfTeX assets stop after a complete page
-has shipped and finalize the PDF normally; other engines and older assets return
-`null`. The positive integer limit is capped at 10,000. A changed preamble or
+has shipped and finalize the PDF normally. LuaLaTeX previews only main-source
+edits since the last full compile, with `synctex: null`; any other changed file
+returns `null`. XeLaTeX and older assets return `null`. The positive integer
+limit is capped at 10,000. A changed preamble or
 non-TeX resource requires a full compile first. Existing secondary `.tex` edits
 can preview only from a retained heap checkpoint proving that the changed file
 had not been read, including during preamble preparation. Missing/incomplete
