@@ -13,6 +13,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Give BibTeX the citations of `\include`d chapters, which LaTeX writes to each
+  chapter's own aux file; a book citing only inside chapters ran no bibliography.
+- Empty a generated bibliography once the last citation is removed instead of
+  leaving the engine's stale `.bbl` in place.
+
 - Honor biblatex's `Please rerun LaTeX` warning after Biber output is loaded,
   so the compile settles references before marking them complete.
 
@@ -23,6 +28,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
   a checkpoint cannot overwrite its suspended execution state.
 
 ### Performance
+
+- Keep a generated `.bbl` while the BibTeX/Biber request is unchanged, so a prose edit
+  in a cited document takes one TeX pass instead of two. Changed lists (`.toc`, `.lof`, …)
+  still take the pass the forced rerun used to provide.
 
 - Keep a bounded earlier checkpoint in foreground preview sessions so edits before a prepared paragraph can continue while canonical compilation runs.
 
