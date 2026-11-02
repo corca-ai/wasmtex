@@ -204,6 +204,9 @@ export declare class WasmTexCompiler {
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */
     previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
     private previewPagesIdle;
+    /** LuaTeX has no heap checkpoints: each prefix starts from the format and stops
+     * after the requested pages (main-source edits only; see setFile). */
+    private previewLuatexPages;
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
     private emitProgressPdf;

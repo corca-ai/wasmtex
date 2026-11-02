@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import * as factory from './engine/compile-engine'
+import { WasmTexLuatexEngine } from './engine/luatex-engine'
 import { WasmTexPdftexEngine } from './engine/wasmtex-engine'
 import { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
 import type { CompileResult } from './types'
@@ -282,5 +283,52 @@ it.each([
   session!.setFile('main.tex', source.replace('article', 'report'))
   expect(await session!.previewPages(2)).toBeNull()
   session!.dispose()
+  compiler.dispose()
+})
+
+async function luatexFixture(preview: () => Promise<CompileResult | null>) {
+  const engine = new WasmTexLuatexEngine({ texliveVersion: '2026' })
+  vi.spyOn(engine, 'init').mockResolvedValue()
+  vi.spyOn(engine, 'writeFile').mockResolvedValue()
+  vi.spyOn(engine, 'mkdir').mockResolvedValue()
+  vi.spyOn(engine, 'readFile').mockResolvedValue(null)
+  vi.spyOn(engine, 'setMainFile').mockImplementation(() => {})
+  vi.spyOn(engine, 'compile').mockResolvedValue(result)
+  const pages = vi.spyOn(engine, 'compilePagePreview').mockImplementation(preview)
+  vi.spyOn(factory, 'createCompileEngine').mockReturnValue(engine)
+  const compiler = new WasmTexCompiler({
+    engine: 'lualatex',
+    files: { 'main.tex': source, 'chapter.tex': 'Chapter.' },
+  })
+  await compiler.init()
+  return { compiler, pages }
+}
+
+it('previews LuaTeX main-source edits as a stopped prefix after a full baseline', async () => {
+  const { compiler, pages } = await luatexFixture(async () => result)
+  expect(await compiler.previewPages(2)).toBeNull()
+  await compiler.compile()
+  compiler.setFile('main.tex', source.replace('A paragraph.', 'Edited paragraph.'))
+  expect(await compiler.previewPages(2)).toEqual({
+    pdf: result.pdf,
+    synctex: null,
+    compileTime: 12,
+    pageLimit: 2,
+  })
+  expect(pages.mock.calls).toEqual([[2]])
+  compiler.setFile('chapter.tex', 'Edited chapter.')
+  expect(await compiler.previewPages(2)).toBeNull()
+  expect(pages).toHaveBeenCalledTimes(1)
+  compiler.dispose()
+})
+
+it('rejects a LuaTeX prefix that reports a new error', async () => {
+  const { compiler } = await luatexFixture(async () => ({
+    ...result,
+    errors: [{ line: 3, message: 'Undefined control sequence.', severity: 'error' }],
+  }))
+  await compiler.compile()
+  compiler.setFile('main.tex', source.replace('A paragraph.', '\\broken'))
+  expect(await compiler.previewPages(2)).toBeNull()
   compiler.dispose()
 })
