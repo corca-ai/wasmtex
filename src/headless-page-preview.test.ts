@@ -290,7 +290,10 @@ it.each([
 })
 
 async function formatEngineFixture(
-  preview: (pageLimit: number, chapter?: string) => Promise<ChapterPreviewResult | null>,
+  preview: (
+    pageLimit: number,
+    options?: { chapter?: string; cold?: boolean },
+  ) => Promise<ChapterPreviewResult | null>,
   kind: 'lualatex' | 'xelatex' = 'lualatex',
   files: Record<string, string> = {
     'main.tex': source,
@@ -365,7 +368,7 @@ it.each([
   chapter,
 }) => {
   const { compiler, pages } = await formatEngineFixture(
-    async (_limit, name) => ({ ...result, firstPage: name ? 7 : 1 }),
+    async (_limit, options) => ({ ...result, firstPage: options?.chapter ? 7 : 1 }),
     'lualatex',
     {
       'main.tex': book(main),
@@ -377,7 +380,7 @@ it.each([
   await compiler.compile()
   for (const path of edits) compiler.setFile(path, 'Edited.')
   const preview = await compiler.previewPages(8, { placement: true })
-  expect(pages.mock.calls).toEqual([[8, ...(chapter ? [chapter] : [])]])
+  expect(pages.mock.calls).toEqual([[8, ...(chapter ? [{ chapter }] : [])]])
   expect(preview?.firstPage).toBe(chapter ? 7 : 1)
   compiler.dispose()
 })
@@ -404,7 +407,8 @@ it('keeps prefixes for hosts that do not ask for placement, and for unnormalized
 
 it('refuses a chapter that fails alone and falls back to a prefix', async () => {
   const { compiler, pages, engine } = await formatEngineFixture(
-    async (_limit, name) => (name ? { ...result, success: false, pdf: null } : result),
+    async (_limit, options) =>
+      options?.chapter ? { ...result, success: false, pdf: null } : result,
     'xelatex',
     { 'main.tex': book(), 'chapters/ch1.tex': 'One.', 'chapters/ch2.tex': 'Two.' },
   )
@@ -412,8 +416,55 @@ it('refuses a chapter that fails alone and falls back to a prefix', async () => 
   await compiler.compile()
   compiler.setFile('chapters/ch2.tex', 'Edited.')
   expect(await compiler.previewPages(8, { placement: true })).toMatchObject({ firstPage: 1 })
-  expect(pages.mock.calls).toEqual([[8, 'chapters/ch2'], [8]])
+  expect(pages.mock.calls).toEqual([[8, { chapter: 'chapters/ch2' }], [8]])
   expect(refuse).toHaveBeenCalledWith('chapters/ch2')
+  compiler.dispose()
+})
+
+it.each([
+  'lualatex',
+  'xelatex',
+] as const)('shows the first pages of a cold %s document before its first full compile', async (kind) => {
+  const { compiler, pages } = await formatEngineFixture(async () => result, kind)
+  expect(await compiler.previewPages(2)).toBeNull()
+  expect(await compiler.previewColdPages(2)).toMatchObject({ pdf: result.pdf, pageLimit: 2 })
+  expect(pages.mock.calls).toEqual([[2, { cold: true }]])
+  await compiler.compile()
+  expect(await compiler.previewColdPages(2)).toBeNull()
+  expect(pages).toHaveBeenCalledOnce()
+  compiler.dispose()
+})
+
+it('offers no cold preview with an error', async () => {
+  const { compiler } = await formatEngineFixture(async () => ({
+    ...result,
+    errors: [{ line: 1, message: 'Undefined control sequence.', severity: 'error' }],
+  }))
+  expect(await compiler.previewColdPages(2)).toBeNull()
+  compiler.dispose()
+})
+
+it('runs a pdfTeX cold preview without a preamble format, and none after a compile', async () => {
+  const { compiler, engine, pages } = await fixture()
+  const snapshot = vi.mocked(engine.setPreambleSnapshot)
+  expect(await compiler.previewColdPages(2)).not.toBeNull()
+  expect(pages.mock.calls).toEqual([[2]])
+  expect(snapshot).toHaveBeenLastCalledWith(false)
+  await compiler.compile()
+  expect(await compiler.previewColdPages(2)).toBeNull()
+  compiler.dispose()
+})
+
+it('forgets a finished full compile when the project or main file changes', async () => {
+  const { compiler, pages } = await formatEngineFixture(async () => result, 'xelatex')
+  await compiler.compile()
+  expect(await compiler.previewColdPages(2)).toBeNull()
+  compiler.setMainFile('chapter.tex')
+  expect(await compiler.previewColdPages(2)).not.toBeNull()
+  await compiler.compile()
+  await compiler.loadProject({ 'main.tex': source })
+  expect(await compiler.previewColdPages(2)).not.toBeNull()
+  expect(pages).toHaveBeenCalledTimes(2)
   compiler.dispose()
 })
 

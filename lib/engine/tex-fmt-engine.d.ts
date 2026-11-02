@@ -219,7 +219,9 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
      * while the full pass's own auxiliary files stay untouched. Null means there is no
      * main source or no full pass on this worker: run `compile()` instead.
      */
-    protected runPreviewJob(hook: string, beforeRun?: (job: string) => Promise<void>): Promise<PreviewRun | null>;
+    protected runPreviewJob(hook: string, beforeRun?: (job: string) => Promise<void>, { cold }?: {
+        cold?: boolean;
+    }): Promise<PreviewRun | null>;
     /** The physical page where `chapter` starts in the full PDF, or null when a chapter
      *  preview cannot be placed: no trusted pages, a refused chapter, or a start past
      *  the page limit. */

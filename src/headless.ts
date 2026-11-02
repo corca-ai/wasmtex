@@ -513,6 +513,8 @@ export class WasmTexCompiler {
   private pagePreviewBaseline: string | null = null
   private pagePreviewErrors: CompileResult['errors'] = []
   private pagePreviewRequiresCheckpoint = false
+  /** Whether a full compile has finished; until then an initial preview may run. */
+  private compiled = false
   /** Secondary sources edited since the baseline full compile (LuaLaTeX/XeLaTeX). */
   private previewEdits = new Set<string>()
   private readonly operations = new CompilerOperations()
@@ -802,6 +804,7 @@ export class WasmTexCompiler {
     child.engineKind = 'pdflatex'
     child.detection = detection
     child.initialized = true
+    child.compiled = true
     child.fs.markSynced()
     child.heap = proof.cloneForEngine(fork, [checkpoint, fork.pagePreviewFallbackId])
     child.pagePreviewBaseline = baseline
@@ -847,6 +850,50 @@ export class WasmTexCompiler {
     }
   }
 
+  /**
+   * Before the first full compile, typeset the first pages of a cold document from the
+   * format, on any engine, without references: a provisional view of a long document
+   * whose first full pass is still far off. Errors return null, as does any call after
+   * a full compile. Working files and caches are left for the full compile; pdfTeX
+   * builds no preamble format here, so the full compile's own build is the one kept.
+   */
+  async previewColdPages(pageLimit: number): Promise<PagePreviewResult | null> {
+    if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 10000)
+      throw new RangeError('Invalid preview page limit')
+    this.ensureInitialized()
+    this.assertNoProjectReplacement()
+    if (this.compileInFlight) throw new Error('Compile already in progress')
+    if (this.compiled || this.tikzExternalizationKind()) return null
+    this.compileInFlight = true
+    const revision = this.inputRevision
+    try {
+      if (this.prebuildInFlight) await this.prebuildInFlight
+      this.assertRevision(revision)
+      const result = await this.operations.run(() => this.previewColdPagesIdle(pageLimit))
+      this.assertRevision(revision)
+      return result
+    } finally {
+      this.compileInFlight = false
+    }
+  }
+
+  private async previewColdPagesIdle(pageLimit: number): Promise<PagePreviewResult | null> {
+    ;(await this.operations.observe(this.ensureEngine())).resume()
+    const engine = this.engine
+    if (!startsFromFormat(engine) && !(engine instanceof WasmTexPdftexEngine)) return null
+    ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
+    if (engine instanceof WasmTexPdftexEngine) engine.setPreambleSnapshot(false)
+    const result = (
+      await this.operations.observe(
+        startsFromFormat(engine)
+          ? engine.compilePagePreview(pageLimit, { cold: true })
+          : engine.compilePagePreview(pageLimit),
+      )
+    ).resume()
+    if (!result?.success || !result.pdf || !previewErrorsCovered([], result.errors)) return null
+    return { pdf: result.pdf, synctex: result.synctex, compileTime: result.compileTime, pageLimit }
+  }
+
   private async previewPagesIdle(
     pageLimit: number,
     placement: boolean,
@@ -883,7 +930,7 @@ export class WasmTexCompiler {
     const chapter = placement ? this.previewChapter() : null
     if (chapter) {
       const result = (
-        await this.operations.observe(engine.compilePagePreview(pageLimit, chapter))
+        await this.operations.observe(engine.compilePagePreview(pageLimit, { chapter }))
       ).resume()
       const preview = this.acceptedPreview(result, pageLimit)
       if (preview) return { ...preview, firstPage: result?.firstPage ?? 1 }
@@ -963,6 +1010,7 @@ export class WasmTexCompiler {
       this.assertRevision(revision)
       const result = await this.operations.run(() => this.compileIdle(preview, options))
       this.assertRevision(revision)
+      this.compiled = true
       this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
       this.previewEdits.clear()
       this.pagePreviewErrors =
@@ -1365,6 +1413,7 @@ export class WasmTexCompiler {
   private async replaceProject(files: Record<string, FileContent>): Promise<void> {
     this.pagePreviewBaseline = null
     this.previewEdits.clear()
+    this.compiled = false
     this.fs = new VirtualFS({ empty: true })
     this.projectIndex = new ProjectIndex()
     this.generatedFiles.clear()
@@ -1417,6 +1466,7 @@ export class WasmTexCompiler {
     if (!changed) return
     this.pagePreviewBaseline = null
     this.previewEdits.clear()
+    this.compiled = false
     this.projectIndex.invalidateCompletionSnapshot()
     if (changed) this.invalidateOperation()
     this.mainFile = path

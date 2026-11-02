@@ -33,6 +33,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- `previewColdPages(limit)` shows the first pages of a cold document before its first
+  full compile, so long documents need not wait for a whole pass.
+
 - With `previewPages(limit, { placement: true })`, preview an edit confined to one
   `\include`d chapter by typesetting that chapter alone on LuaLaTeX/XeLaTeX;
   `PagePreviewResult.firstPage` places it in the full PDF. Hosts that omit the option
