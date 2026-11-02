@@ -144,9 +144,19 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       this.tex.setMainFile(`${this.mainBase}.tex`)
     }
     const log = `${fmtLog}\n${lua.log.replace(PREVIEW_STOP_LOG, '')}`.trim()
-    return this.result(lua.success && !!lua.out, lua.out, log, start, undefined, undefined, [
-      lua.resolver,
-    ])
+    const result = this.result(
+      lua.success && !!lua.out,
+      lua.out,
+      log,
+      start,
+      undefined,
+      undefined,
+      [lua.resolver],
+    )
+    // The author's errors must match the full pass's, which name the real main file.
+    for (const error of result.errors)
+      if (error.file === previewMain) error.file = `${this.mainBase}.tex`
+    return result
   }
 
   async flushCache(): Promise<void> {

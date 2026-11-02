@@ -102,6 +102,28 @@ describe('LuaTeX page previews', () => {
     expect(files.get('main.aux')).toBe('\\relax')
   })
 
+  it('reports errors in the author source under the real main file', async () => {
+    const { instance } = engine((current) =>
+      output(
+        ['./main.tex'],
+        current === 'main.tex' ? '' : `(./${current}\n! Undefined control sequence.\nl.3 \\foo\n)`,
+      ),
+    )
+    await instance.writeFile('main.tex', '\\documentclass{article}')
+    instance.setMainFile('main.tex')
+    await instance.compile()
+
+    const preview = await instance.compilePagePreview(1)
+
+    expect(preview?.errors).toEqual([
+      expect.objectContaining({
+        message: 'Undefined control sequence.',
+        file: 'main.tex',
+        line: 3,
+      }),
+    ])
+  })
+
   it('keeps nested main files beside their job and restores them after a failure', async () => {
     const { instance, files, main } = engine((current) => {
       if (current.endsWith(`${LUATEX_PREVIEW_JOB_SUFFIX}.tex`)) throw new Error('worker lost')
