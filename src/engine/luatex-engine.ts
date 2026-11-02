@@ -18,8 +18,6 @@ import { LUATEX_KNOWN_404, LUATEX_PRELOAD } from './luatex-manifest'
 import { BaseTexFmtEngine, createCompileWorker, unicodeFormatUrl } from './tex-fmt-engine'
 import type { WasmTexEngineOptions } from './wasmtex-engine'
 
-/** Suffix of the separate job a page preview runs as. */
-export const LUATEX_PREVIEW_JOB_SUFFIX = '-wasmtex-preview'
 /** Directory receiving every `\\openout` file a preview writes. */
 export const LUATEX_PREVIEW_OUTPUT_DIR = 'wasmtex-preview-out'
 
@@ -41,29 +39,11 @@ export function luatexPreviewHook(pageLimit: number): string {
   )
 }
 
-/** Job-named inputs a full pass read, e.g. `./main.aux` -> `aux`. */
-export function luatexJobInputExtensions(
-  inputFiles: readonly string[] | undefined,
-  job: string,
-): string[] {
-  const prefix = `./${job}.`
-  const extensions = new Set<string>()
-  for (const file of inputFiles ?? []) {
-    if (!file.startsWith(prefix)) continue
-    const extension = file.slice(prefix.length)
-    if (extension && extension !== 'tex' && !extension.includes('/')) extensions.add(extension)
-  }
-  return [...extensions]
-}
-
 // Stopping inside the document environment ends inside a group; that report
 // belongs to the preview stop, not to the author's source.
 const PREVIEW_STOP_LOG = /^\(\\end occurred (inside a group at level \d+|when .* incomplete)\)$/gm
 
 export class WasmTexLuatexEngine extends BaseTexFmtEngine {
-  /** Extensions of job-named inputs (`.aux`, `.toc`, `.bbl`, …) the last full pass read. */
-  private jobInputs: string[] = []
-
   constructor(options: WasmTexEngineOptions = {}) {
     const version = options.texliveVersion ?? '2025'
     super(
@@ -107,59 +87,41 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       lua.inputFilesComplete,
       [lua.resolver],
     )
-    this.jobInputs = luatexJobInputExtensions(lua.inputFiles, this.jobName())
-    // After a successful compile that fetched new files, persist the worker's
-    // cache to IndexedDB (non-blocking, best-effort) for instant return visits.
-    if (result.success) this.maybePersist()
+    if (result.success) {
+      this.recordFullPass(lua.inputFiles)
+      // After a successful compile that fetched new files, persist the worker's
+      // cache to IndexedDB (non-blocking, best-effort) for instant return visits.
+      this.maybePersist()
+    }
     return result
   }
 
-  /**
-   * Typeset only pages 1..`pageLimit` of the current main source. The prefix runs
-   * as a separate job that starts from copies of the last full pass's job-named
-   * inputs, so its references match that pass while the full pass's own
-   * auxiliary files stay untouched for the next canonical compile. Null means no
-   * main source is known: run {@link compile} instead.
-   */
+  /** Typeset only pages 1..`pageLimit` of the current main source as a separate job
+   *  (see {@link runPreviewJob}); null means run {@link compile} instead. */
   async compilePagePreview(pageLimit: number): Promise<CompileResult | null> {
-    const source = this.mainSource()
-    if (source === undefined) return null
-    const start = performance.now()
-    const fmtLog = await this.ensureFormat()
-    const job = this.jobName()
-    const previewJob = `${job}${LUATEX_PREVIEW_JOB_SUFFIX}`
-    for (const extension of this.jobInputs) {
-      const content = await this.tex.readFile(`${job}.${extension}`)
-      if (content !== null) await this.tex.writeFile(`${previewJob}.${extension}`, content)
-    }
-    const directory = this.mainBase.slice(0, this.mainBase.length - job.length)
-    const previewMain = `${directory}${previewJob}.tex`
     this.tex.mkdir(LUATEX_PREVIEW_OUTPUT_DIR)
-    await this.tex.writeFile(previewMain, luatexPreviewHook(pageLimit) + source)
-    this.tex.setMainFile(previewMain)
-    let lua: Awaited<ReturnType<typeof this.tex.run>>
-    try {
-      lua = await this.tex.run('compilelatex')
-    } finally {
-      this.tex.setMainFile(`${this.mainBase}.tex`)
-    }
-    const log = `${fmtLog}\n${lua.log.replace(PREVIEW_STOP_LOG, '')}`.trim()
-    return this.result(lua.success && !!lua.out, lua.out, log, start, undefined, undefined, [
-      lua.resolver,
-    ])
+    const preview = await this.runPreviewJob(luatexPreviewHook(pageLimit))
+    if (!preview) return null
+    const lua = preview.run
+    const log = `${preview.fmtLog}\n${lua.log.replace(PREVIEW_STOP_LOG, '')}`.trim()
+    const result = this.result(
+      lua.success && !!lua.out,
+      lua.out,
+      log,
+      preview.start,
+      undefined,
+      undefined,
+      [lua.resolver],
+    )
+    return this.attributePreviewErrors(result, preview.main)
   }
 
   async flushCache(): Promise<void> {
     this.tex.flushCache()
     this.clearInjectedFormat()
-    this.jobInputs = []
   }
 
   terminate(): void {
     this.tex.terminate()
-  }
-
-  private jobName(): string {
-    return this.mainBase.slice(this.mainBase.lastIndexOf('/') + 1)
   }
 }

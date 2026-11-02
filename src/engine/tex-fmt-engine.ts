@@ -123,12 +123,43 @@ function collisionSafeWarmup(cache: WarmupCache): WarmupCache {
   return { ...cache, files: cache.files.filter((file) => !conflicts.has(file.filename)) }
 }
 
+/** Suffix of the separate job a page preview runs as. */
+export const PREVIEW_JOB_SUFFIX = '-wasmtex-preview'
+
+/** Job-named inputs a full pass read, e.g. `./main.aux` -> `aux`. */
+export function jobInputExtensions(
+  inputFiles: readonly string[] | undefined,
+  job: string,
+): string[] {
+  const prefix = `./${job}.`
+  const extensions = new Set<string>()
+  for (const file of inputFiles ?? []) {
+    if (!file.startsWith(prefix)) continue
+    const extension = file.slice(prefix.length)
+    if (extension && extension !== 'tex' && !extension.includes('/')) extensions.add(extension)
+  }
+  return [...extensions]
+}
+
+/** A preview job's names, timing and raw worker result. */
+export interface PreviewRun {
+  job: string
+  main: string
+  start: number
+  fmtLog: string
+  run: Awaited<ReturnType<CompileWorkerDriver['run']>>
+}
+
 export abstract class BaseTexFmtEngine implements CompileEngine {
   protected tex: CompileWorkerDriver
   /** Filename under which the built format is re-injected for `compilelatex`
    *  (e.g. `wasmtex-xetex.fmt`, `wasmtex-luatex.fmt`). */
   private readonly fmtFile: string
   protected mainBase = 'main'
+  /** What this worker's last successful full pass read. A preview needs those files, so
+   *  a worker that has not finished one (e.g. created after an interrupted compile)
+   *  offers none. */
+  private fullPass: { jobInputs: string[]; preambleInputs: Set<string> } | null = null
   /** Last-written text sources, kept so dependency extraction can read the main
    *  source synchronously (no worker round-trip). */
   private readonly sources = new Map<string, string>()
@@ -424,8 +455,10 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
 
   /** Mark the injected format as gone (call after a flushCache wipes the work
    *  dir) so the next {@link ensureFormat} re-injects it. */
+  /** The work directory was wiped: the format and the full pass's outputs are gone. */
   protected clearInjectedFormat(): void {
     this.fmtInjected = false
+    this.fullPass = null
   }
 
   protected result(
@@ -486,6 +519,70 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
 
   readFile(path: string): Promise<string | null> {
     return this.tex.readFile(path)
+  }
+
+  protected jobName(): string {
+    return this.mainBase.slice(this.mainBase.lastIndexOf('/') + 1)
+  }
+
+  /** Record a successful full pass's inputs, in recorder order. Project `.tex` files read
+   *  before the job's `.aux` (which `\\begin{document}` reads) belong to the preamble. */
+  protected recordFullPass(inputFiles: readonly string[] | undefined): void {
+    const job = this.jobName()
+    const preambleInputs = new Set<string>()
+    for (const file of inputFiles ?? []) {
+      if (file === `./${job}.aux`) break
+      if (file.startsWith('./') && file.endsWith('.tex')) preambleInputs.add(file.slice(2))
+    }
+    this.fullPass = { jobInputs: jobInputExtensions(inputFiles, job), preambleInputs }
+  }
+
+  /** Whether the last full pass read `path` in the preamble; unknown counts as read. */
+  readsInPreamble(path: string): boolean {
+    return this.fullPass?.preambleInputs.has(path) ?? true
+  }
+
+  /**
+   * Run the current main source, prefixed by `hook` on its first line, as a separate
+   * preview job beside the main file, then restore the main file. The job starts from
+   * copies of the last full pass's job-named inputs, so its references match that pass
+   * while the full pass's own auxiliary files stay untouched. Null means there is no
+   * main source or no full pass on this worker: run `compile()` instead.
+   */
+  protected async runPreviewJob(
+    hook: string,
+    beforeRun?: (job: string) => Promise<void>,
+  ): Promise<PreviewRun | null> {
+    const source = this.mainSource()
+    if (source === undefined || !this.fullPass) return null
+    const start = performance.now()
+    const fmtLog = await this.ensureFormat()
+    const name = this.jobName()
+    const job = `${name}${PREVIEW_JOB_SUFFIX}`
+    await Promise.all(
+      this.fullPass.jobInputs.map(async (extension) => {
+        const content = await this.tex.readFile(`${name}.${extension}`)
+        if (content !== null) await this.tex.writeFile(`${job}.${extension}`, content)
+      }),
+    )
+    const main = `${this.mainBase.slice(0, this.mainBase.length - name.length)}${job}.tex`
+    await this.tex.writeFile(main, hook + source)
+    await beforeRun?.(job)
+    this.tex.setMainFile(main)
+    try {
+      return { job, main, start, fmtLog, run: await this.tex.run('compilelatex') }
+    } finally {
+      this.tex.setMainFile(`${this.mainBase}.tex`)
+    }
+  }
+
+  /** The author's errors must match the full pass's, which name the real main file. */
+  protected attributePreviewErrors(result: CompileResult, previewMain: string): CompileResult {
+    const main = `${this.mainBase}.tex`
+    for (const error of result.errors) if (error.file === previewMain) error.file = main
+    for (const diagnostic of result.telemetry?.diagnostics ?? [])
+      if (diagnostic.file === previewMain) diagnostic.file = main
+    return result
   }
 
   async clearCache(): Promise<void> {

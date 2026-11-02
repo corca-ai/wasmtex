@@ -200,15 +200,18 @@ export declare class WasmTexCompiler {
      * Captures one same-build checkpoint; unsupported engines return null. The
      * caller owns and disposes the sibling, including after project transitions.
      */
+    /** Whether {@link createPagePreviewSession} can fork at all with the current engine:
+     *  only pdfTeX with heap checkpoints can. Hosts use it to plan a second lane. */
+    supportsPagePreviewSessions(): boolean;
     createPagePreviewSession(hint?: CompileOptions['incrementalPreparation'], signal?: AbortSignal): Promise<PagePreviewSession | null>;
     /** Render a PDF prefix using the last full pass's references. This leaves full
      * compile metadata and auxiliary outputs unchanged. Null means unsupported or
      * unsafe: run compile() instead. Always reconcile with compile() after edits. */
     previewPages(pageLimit: number): Promise<PagePreviewResult | null>;
     private previewPagesIdle;
-    /** LuaTeX has no heap checkpoints: each prefix starts from the format and stops
-     * after the requested pages (main-source edits only; see setFile). */
-    private previewLuatexPages;
+    /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
+     * stops after the requested pages, so it previews edits to any existing source. */
+    private previewFormatPages;
     getRetentionStats(): CompilerRetentionStats;
     private compileOperation;
     private emitProgressPdf;
@@ -250,6 +253,7 @@ export declare class WasmTexCompiler {
      *  spliced onto the last full compile's head — exact for the spliced PDF (#99 P2). */
     private toCompileResult;
     setFile(path: string, content: FileContent): void;
+    private noteSecondarySource;
     loadProject(files: Record<string, FileContent>): Promise<void>;
     private replaceProject;
     getFile(path: string): FileContent | null;

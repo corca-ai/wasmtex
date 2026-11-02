@@ -19,13 +19,38 @@
 import type { CompileResult } from '../types'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { buildDependencyGraph } from './dependency-graph'
-import { BaseTexFmtEngine, createCompileWorker, unicodeFormatUrl } from './tex-fmt-engine'
+import {
+  BaseTexFmtEngine,
+  createCompileWorker,
+  type PreviewRun,
+  unicodeFormatUrl,
+} from './tex-fmt-engine'
 import type { WasmTexEngineOptions } from './wasmtex-engine'
 import type { CompileWorkerDriver } from './wasmtex-worker'
 import { attachPlacements, parseXdv } from './xdv'
 
+/**
+ * Stop after `pageLimit` shipped pages. XeTeX has no `tex.finish()`, and `\\end`
+ * is not allowed inside the output routine. Reading from the terminal in batch
+ * mode is a fatal error instead: XeTeX then closes its files and writes the XDV
+ * postamble. The empty line ends the transcript's last line first, and batch mode
+ * keeps the stop out of the transcript the SDK parses. The hook precedes the
+ * author's first line on that same line, so diagnostics keep their line numbers.
+ */
+export function xetexPreviewHook(pageLimit: number): string {
+  return (
+    `\\gdef\\wasmtexPreviewShipped{0}\\AddToHook{shipout/after}{` +
+    `\\xdef\\wasmtexPreviewShipped{\\the\\numexpr\\wasmtexPreviewShipped+1}` +
+    `\\ifnum\\wasmtexPreviewShipped<${pageLimit} \\else` +
+    `\\immediate\\write16{}\\batchmode\\read16 to\\wasmtexPreviewStop\\fi}`
+  )
+}
+
 export class WasmTexXetexEngine extends BaseTexFmtEngine {
   private dvipdfm: CompileWorkerDriver
+  /** Aux files outside the job name (`\\include`d chapters) as the last full pass left
+   *  them. XeTeX cannot redirect a preview's writes, so each preview restores them. */
+  private chapterAux = new Map<string, string>()
 
   constructor(options: WasmTexEngineOptions = {}) {
     const version = options.texliveVersion ?? '2025'
@@ -88,7 +113,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     const start = performance.now()
     // 0. Ensure the XeLaTeX format is built and present in the work dir.
     const fmtLog = await this.ensureFormat()
-    const jobName = this.mainBase.slice(this.mainBase.lastIndexOf('/') + 1)
+    const jobName = this.jobName()
     const xdvName = `${jobName}.xdv`
     // Existing workers may return an old output after a no-output TeX failure.
     // Truncate only this job's generated artifact before asking for fresh output.
@@ -107,13 +132,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       )
     }
     // 2. dvipdfmx: main.xdv -> main.pdf (fetches + embeds fonts from the CDN).
-    // XeTeX emits the job's basename in /work even for nested source files.
-    // Preserve that name when transferring XDV: dvipdfmx's C entry retains the
-    // supplied directory in -o, while its worker reads the job basename (#135).
-    await this.dvipdfm.writeFile(xdvName, xelatex.out)
-    await this.dvipdfm.writeFile(`${jobName}.pdf`, new Uint8Array())
-    this.dvipdfm.setMainFile(xdvName)
-    const dvi = await this.dvipdfm.run('compilepdf')
+    const dvi = await this.convert(jobName, xelatex.out)
     const log = `${xelatex.log}\n${dvi.log}`
     const result = this.result(
       dvi.success && !!dvi.out?.length,
@@ -145,14 +164,84 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     }
     // After a successful compile that fetched new files, persist the worker's
     // cache to IndexedDB (non-blocking, best-effort) for instant return visits.
-    if (result.success) this.maybePersist()
+    if (result.success) {
+      this.recordFullPass(xelatex.inputFiles)
+      await this.keepChapterAux(xelatex.inputFiles, jobName)
+      this.maybePersist()
+    }
     return result
+  }
+
+  private async keepChapterAux(inputFiles: readonly string[] | undefined, jobName: string) {
+    const paths = (inputFiles ?? [])
+      .filter((file) => file.startsWith('./') && file.endsWith('.aux'))
+      .map((file) => file.slice(2))
+      .filter((path) => path !== `${jobName}.aux`)
+    const contents = await Promise.all(paths.map((path) => this.tex.readFile(path)))
+    this.chapterAux = new Map(
+      paths.flatMap((path, i) => (contents[i] === null ? [] : [[path, contents[i]!] as const])),
+    )
+  }
+
+  /** Typeset only pages 1..`pageLimit` of the current main source as a separate job
+   *  (see {@link runPreviewJob}) and convert just those pages; null means run
+   *  {@link compile} instead. */
+  async compilePagePreview(pageLimit: number): Promise<CompileResult | null> {
+    let preview: PreviewRun | null
+    try {
+      preview = await this.runPreviewJob(xetexPreviewHook(pageLimit), (job) =>
+        // A run that ships nothing must not return an earlier preview's output.
+        this.tex.writeFile(`${job}.xdv`, new Uint8Array()),
+      )
+    } finally {
+      // The stop leaves the chapters' aux files partly written.
+      await Promise.allSettled(
+        [...this.chapterAux].map(([path, content]) => this.tex.writeFile(path, content)),
+      )
+    }
+    if (!preview) return null
+    const xelatex = preview.run
+    if (!xelatex.success || !xelatex.out?.length) {
+      const failed = this.result(
+        false,
+        null,
+        `${preview.fmtLog}\n${xelatex.log}`.trim(),
+        preview.start,
+        undefined,
+        undefined,
+        [xelatex.resolver],
+      )
+      return this.attributePreviewErrors(failed, preview.main)
+    }
+    const dvi = await this.convert(preview.job, xelatex.out)
+    const result = this.result(
+      dvi.success && !!dvi.out?.length,
+      dvi.out?.length ? dvi.out : null,
+      `${xelatex.log}\n${dvi.log}`,
+      preview.start,
+      undefined,
+      undefined,
+      [xelatex.resolver, dvi.resolver],
+    )
+    return this.attributePreviewErrors(result, preview.main)
+  }
+
+  /** XeTeX emits the job's basename in /work even for nested source files.
+   *  Preserve that name when transferring XDV: dvipdfmx's C entry retains the
+   *  supplied directory in -o, while its worker reads the job basename (#135). */
+  private async convert(jobName: string, xdv: Uint8Array) {
+    const xdvName = `${jobName}.xdv`
+    await this.dvipdfm.writeFile(xdvName, xdv)
+    await this.dvipdfm.writeFile(`${jobName}.pdf`, new Uint8Array())
+    this.dvipdfm.setMainFile(xdvName)
+    return this.dvipdfm.run('compilepdf')
   }
 
   async flushCache(): Promise<void> {
     this.tex.flushCache()
     this.dvipdfm.flushCache()
     this.clearInjectedFormat()
+    this.chapterAux.clear()
   }
 
   terminate(): void {
