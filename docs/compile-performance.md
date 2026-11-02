@@ -28,6 +28,7 @@ gains from unchanged warm-edit CPU and records transfer/memory costs.
 | LuaHBTeX build | O3 + LTO on the pinned toolchain. | Larger compressed assets; no decoded-format cache. |
 | pdfTeX incremental path | Preamble formats, optional durable preamble cache and browser heap checkpoints. | Each has a distinct identity/lifetime; see [engine caches](engine.md#preamble-snapshots). |
 | Book edit previews | Capable browser pdfTeX workers share bounded chapter states and can fork a disposable foreground preview session. | Adds one live heap and a bounded copy, optionally retaining an earlier fallback within that copy; hosts own admission/lifetime. Canonical compilation remains authoritative. |
+| Bibliography reruns | A generated `.bbl` is kept while the BibTeX/Biber request is unchanged; a changed request adds a TeX pass only when its `.bbl` changes. | The first compile still takes two passes; moved labels and changed lists still rerun; an edit during a compile drops generated files; each pass reads the chapters' aux files. See [bibliography](bibliography.md). |
 | Plain pdfTeX working capacity | The authored controller starts without extra main-memory allowances and promotes once on main-memory exhaustion. | Working-directory rollback preserves inputs/outputs; snapshots add transient copies. INITEX and checkpoint paths retain the original capacity. Immutable release/adoption qualification is separate from the [screening record](history/compact-capacity-2026-10.md). |
 
 The September 2026 controlled corpus measured repeat/body improvements around

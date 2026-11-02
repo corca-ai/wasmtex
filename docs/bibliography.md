@@ -111,8 +111,8 @@ Two distinct request shapes flow off-device, both file-level:
 - **Server BibTeX** — the classic `\bibliography` flow. The headless compiler
   routes it through `runRemoteBibliography` under `BIBTEX_STAGE`
   (`'bibliography:bibtex'`). The server backend receives a
-  `BibliographyStageRequest` (`{ aux, bibFiles }` — the first pass's `.aux` plus
-  the `.bib` databases) and returns the `.bbl`; the client BibTeX (WASM) engine
+  `BibliographyStageRequest` (`{ aux, bibFiles }` — the first pass's `.aux`,
+  with included chapters' aux files inlined, plus the `.bib` databases) and returns the `.bbl`; the client BibTeX (WASM) engine
   is then skipped. With no registry, the client BibTeX engine runs, unchanged.
 - **Server Biber** — full biblatex fidelity. `createBiberBackend({ endpoint })`
   builds a server backend for the separate `BIBER_STAGE` (`'bibliography:biber'`) that consumes a
@@ -141,6 +141,26 @@ backends.register(
 
 const compiler = new WasmTexCompiler({ backends })
 ```
+
+Within one compiler, a generated `.bbl` survives edits made between compiles; an
+edit that interrupts a compile retires the engine and its generated files. After
+each TeX pass the compiler compares the bibliography request with the one that
+produced the current file. Both requests include the backend and its version.
+
+- For BibTeX, the request is the `\citation`, `\bibdata` and `\bibstyle` lines,
+  including those in the aux files of `\include`d chapters, plus every database
+  and project style.
+- For biblatex, it is the `.bcf`, the sort option and every database. Biber
+  documents use only this stage, even when stale aux files still cite;
+  `backend=bibtex` documents use only the BibTeX stage.
+
+An unchanged request runs no backend. A changed request reruns the backend, and
+adds a TeX pass only when the resulting `.bbl` differs from the file that pass
+already read. Because a cited document used to take that pass on every compile,
+it now takes one whenever a pass changes its lists (`.toc`, `.lof`, `.lot` and
+similar files), which LaTeX rereads without asking. Removing the last citation
+empties a generated `.bbl`. When a backend fails, the file the pass already read
+stays, and the next compile retries. An authored `.bbl` remains authoritative.
 
 A server backend's output is reproducible (same deterministic engine, browser or
 server), so it is content-addressable: `withCache` (`content-cache.ts`) keys the

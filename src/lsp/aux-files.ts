@@ -11,7 +11,8 @@ export interface AuxFileSet {
 const MAX_FILES = 1024
 const MAX_CODE_UNITS = 2 * 1024 * 1024
 
-function auxPath(value: string): string | null {
+/** A working-directory-relative `.aux` path, or null for anything else. */
+export function auxPath(value: string): string | null {
   if (
     value.startsWith('/') ||
     /[\\{}%:#$~]/.test(value) ||

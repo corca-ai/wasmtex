@@ -124,6 +124,8 @@ export declare class WasmTexCompiler {
     private makeindexEngine;
     /** Last successful index request; one root, bounded by the current .idx size. */
     private indexInput;
+    /** Last generated bibliography request; a pass asking for the same one keeps its `.bbl`. */
+    private bibliographyRequest;
     /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
      *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
     private incremental;
@@ -211,6 +213,12 @@ export declare class WasmTexCompiler {
     private compileOperation;
     private emitProgressPdf;
     private compileIdle;
+    /** LaTeX rereads its lists (`.toc`, `.lof`, …) without asking for another pass. A cited
+     *  document always got one when its `.bbl` was regenerated, so it keeps one whenever a
+     *  pass changes them. The returned check compares each pass with the one before. */
+    private trackLists;
+    /** The job's lists as one comparable value. */
+    private readLists;
     private rerunSignature;
     /**
      * Build the incremental checkpoint nearest an expected edit while the compiler is idle.
@@ -327,13 +335,15 @@ export declare class WasmTexCompiler {
     private updateBibIndex;
     private updateMetadata;
     /** Run the auto aux stages (bibliography, then index) after a LaTeX pass. Returns whether
-     *  any stage injected a new artifact this pass — if so the caller runs another LaTeX pass
+     *  any stage injected a changed artifact this pass — if so the caller runs another LaTeX pass
      *  so the engine reads it (a `\printindex`-only document emits no rerun marker). A document
      *  is classic-BibTeX *or* biblatex (never both), so the two bibliography paths gate on
      *  mutually exclusive triggers and at most one fires. */
     private runAuxStages;
-    /** @returns whether a fresh `.bbl` was injected this pass (forces one more LaTeX pass). */
+    /** @returns whether a changed `.bbl` was injected this pass (forces one more LaTeX pass). */
     private maybeRunBibtex;
+    /** The aux content BibTeX would read, or null when this stage has nothing to do. */
+    private bibtexAux;
     /**
      * The biblatex counterpart of {@link maybeRunBibtex}. A biblatex document does **not** write
      * the classic `\bibdata{}`/`\citation{}` markers to the `.aux` (it uses `\abx@aux@cite` and a
@@ -342,9 +352,21 @@ export declare class WasmTexCompiler {
      * registered, run it on `{ bcf, bibFiles }` (full fidelity); otherwise fall back to the bundled
      * biblatex-lite (cite keys parsed from the `.bcf`, entries from the project `.bib`s). Inject the
      * `.bbl` so the next pass resolves `\cite`s.
-     * @returns whether a fresh `.bbl` was injected this pass (forces one more LaTeX pass).
+     * @returns whether a changed `.bbl` was injected this pass (forces one more LaTeX pass).
      */
     private maybeRunBiblatex;
+    /** An authored `.bbl`/`.ind` stays authoritative; only generated outputs are rebuilt. */
+    private authoredOutput;
+    private matchesBibliographyRequest;
+    /** Record the request and inject its `.bbl`. A failed backend leaves the file the pass
+     *  already read and records no request, so the next compile retries. */
+    private injectBibliography;
+    /** Record a stage's output. An unchanged file needs no further pass: the pass that asked
+     *  for it already read it. A changed one reaches both file systems and drops checkpoints
+     *  that may have typeset the old file (some books put an index or bibliography first). */
+    private injectGeneratedOutput;
+    /** A stage whose request is unchanged keeps its output and the inputs it recorded. */
+    private reuseGeneratedOutput;
     /** Bundled biblatex-lite for the bibliography stage → `.bbl`: parse the cited keys from the
      *  `.bcf` and the entries from the project `.bib`s, then generate the documented-subset `.bbl`.
      *  The client default when no Biber backend is registered (so a biblatex document still

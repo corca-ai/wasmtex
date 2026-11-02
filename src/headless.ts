@@ -1,5 +1,10 @@
 import type { AccessibleExportOptions, DocumentMetadataInjection } from './engine/accessible-export'
-import type { BackendRegistry, ToolBackend } from './engine/backend-registry'
+import {
+  type BackendRegistry,
+  BIBER_STAGE,
+  BIBTEX_STAGE,
+  type ToolBackend,
+} from './engine/backend-registry'
 import { runBiberBackend } from './engine/biber-backend'
 import {
   type BibliographyStageRequest,
@@ -11,7 +16,13 @@ import {
   resolveBstFile,
   runRemoteBibliography,
 } from './engine/bibliography-backend'
-import { collectBibliographyInputs } from './engine/bibliography-inputs'
+import {
+  type BibliographyInput,
+  bibtexControl,
+  collectBibliographyInputs,
+  flattenAuxInputs,
+  sameBibliographyInput,
+} from './engine/bibliography-inputs'
 import { BibtexEngine } from './engine/bibtex-engine'
 import {
   type CompileEngine,
@@ -430,6 +441,18 @@ const GENERATED_AUX_EXTENSIONS = [
   'xdy',
 ] as const
 
+/** Files LaTeX writes at the end of a pass and reads back at the next, without a
+ *  rerun warning when they change. */
+const LATEX_LIST_EXTENSIONS = ['toc', 'lof', 'lot', 'loa', 'thm', 'nav', 'snm'] as const
+
+/** The bibliography request behind a generated `.bbl`. */
+interface BibliographyRequest {
+  path: string
+  input: BibliographyInput
+  backend: { readonly version?: string } | null
+  version: string | undefined
+}
+
 /** A bounded, disposable sibling with no diagnostics, metadata or export authority. */
 export interface PagePreviewSession {
   setFile(path: string, content: string | Uint8Array): void
@@ -456,6 +479,8 @@ export class WasmTexCompiler {
     backend: ToolBackend<IndexStageRequest, string> | null
     version: string | undefined
   } | null = null
+  /** Last generated bibliography request; a pass asking for the same one keeps its `.bbl`. */
+  private bibliographyRequest: BibliographyRequest | null = null
   /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
    *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
   private incremental: IncrementalCompiler | null = null
@@ -911,6 +936,8 @@ export class WasmTexCompiler {
     ).resume()
     if (fast) return fast
 
+    const listsChanged = (await this.operations.observe(this.trackLists(engine))).resume()
+
     // Heap checkpoints (#81): resume the last run from before the edit when the engine holds
     // a valid checkpoint (a complete compile comes out of it), else a full compile that arms
     // checkpoints for the edited region.
@@ -937,7 +964,8 @@ export class WasmTexCompiler {
     const tikzTelemetry = result.telemetry?.tikzExternalization
     this.emitProgressPdf(result, options, started)
     this.operations.assertCurrent()
-    let auxInjected = (await this.operations.observe(this.runAuxStages(result))).resume()
+    let auxInjected =
+      (await this.operations.observe(this.runAuxStages(result))).resume() || (await listsChanged())
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
     // caps reruns and stops once the cross-reference state stops changing. An aux
@@ -966,7 +994,9 @@ export class WasmTexCompiler {
       ).resume()
       resolverReports.push(result.telemetry?.resolver)
       collectConversionInputs(conversionInputs, result)
-      auxInjected = (await this.operations.observe(this.runAuxStages(result))).resume()
+      auxInjected =
+        (await this.operations.observe(this.runAuxStages(result))).resume() ||
+        (await listsChanged())
     }
     this.heap?.noteFull(this.mainSource(), this.projectTexFiles(), result)
     // Cross-reference reruns replace `result`; the figure telemetry describes this compile.
@@ -990,6 +1020,29 @@ export class WasmTexCompiler {
     ;(await this.operations.observe(this.attachCompletionSnapshot(result))).resume()
     this.incremental?.noteFull(this.mainSource(), this.projectTexFiles(), result.synctex)
     return result
+  }
+
+  /** LaTeX rereads its lists (`.toc`, `.lof`, …) without asking for another pass. A cited
+   *  document always got one when its `.bbl` was regenerated, so it keeps one whenever a
+   *  pass changes them. The returned check compares each pass with the one before. */
+  private async trackLists(engine: CompileEngine): Promise<() => Promise<boolean>> {
+    if (!this.bibliographyRequest) return async () => false
+    let lists = await this.readLists(engine)
+    return async () => {
+      const next = (await this.operations.observe(this.readLists(engine))).resume()
+      const changed = next !== lists
+      lists = next
+      return changed
+    }
+  }
+
+  /** The job's lists as one comparable value. */
+  private async readLists(engine: CompileEngine): Promise<string> {
+    const mainBase = this.mainFile.replace(/\.tex$/, '')
+    const lists = await Promise.all(
+      LATEX_LIST_EXTENSIONS.map((extension) => engine.readFile(`${mainBase}.${extension}`)),
+    )
+    return JSON.stringify(lists)
   }
 
   private async rerunSignature(result: CompileResult): Promise<string> {
@@ -1173,17 +1226,10 @@ export class WasmTexCompiler {
     this.generatedFiles.delete(dependencyPath)
     this.generatedDependencyObservations.delete(dependencyPath)
     if (this.indexInput?.path === path) this.indexInput = null
+    if (this.bibliographyRequest?.path === path) this.bibliographyRequest = null
+    // Generated `.bbl`/`.ind` files stay: each stage compares its actual request after
+    // every TeX pass and reruns, forcing another pass, only when its output changes.
     this.currentAuxiliaryDependencies.clear()
-    if (
-      (path.endsWith('.tex') || path.endsWith('.bib') || path.endsWith('.bst')) &&
-      !path.endsWith('.bbl')
-    ) {
-      const base = this.mainFile.replace(/\.tex$/, '')
-      // Bibliography stages still invalidate on source changes. The index instead
-      // validates its actual .idx after every TeX pass, retaining an unchanged .ind.
-      // `.bst` is included: a custom style is just as much a bibliography input as `.bib`.
-      this.dropGeneratedFile(`${base}.bbl`)
-    }
     // New workers include preamble reads in checkpoint evidence. Retain only
     // checkpoints that prove this secondary source had not been read yet.
     if (path !== this.mainFile && path.endsWith('.tex')) {
@@ -1203,8 +1249,8 @@ export class WasmTexCompiler {
     if (!path.endsWith('.tex')) {
       // A non-.tex file (image/data asset, .bib, .bst) can be baked into a checkpoint head
       // (e.g. \includegraphics{logo.png} on a title page) yet isn't tracked by the .tex-only
-      // incremental diff. Drop checkpoints so the change forces a fresh full compile (which
-      // also re-runs the bibtex/makeindex aux stages) rather than splicing a stale head.
+      // incremental diff. Drop checkpoints so the change forces a fresh full compile (whose
+      // aux stages compare their requests again) rather than splicing a stale head.
       this.incremental?.reset()
       this.heap?.reset()
     }
@@ -1231,6 +1277,7 @@ export class WasmTexCompiler {
     this.projectIndex = new ProjectIndex()
     this.generatedFiles.clear()
     this.indexInput = null
+    this.bibliographyRequest = null
     this.generatedDependencyObservations.clear()
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
@@ -1284,6 +1331,7 @@ export class WasmTexCompiler {
     this.lastFullDependencyManifest = undefined
     if (changed) {
       this.indexInput = null
+      this.bibliographyRequest = null
       // Re-point (not just reset) the incremental compiler: its mainFile is wired into the
       // diff baseline / snapshot bookkeeping, so a bare reset() would leave it diffing the
       // wrong file after the active main changes. Hosts that re-assert the same main file
@@ -1381,6 +1429,7 @@ export class WasmTexCompiler {
 
   private dropGeneratedFile(path: string): void {
     if (this.indexInput?.path === path) this.indexInput = null
+    if (this.bibliographyRequest?.path === path) this.bibliographyRequest = null
     this.fs.deleteFile(path)
     const dependencyPath = normalizeProjectDependencyPath(path) ?? path
     this.generatedFiles.delete(dependencyPath)
@@ -1946,7 +1995,7 @@ export class WasmTexCompiler {
   }
 
   /** Run the auto aux stages (bibliography, then index) after a LaTeX pass. Returns whether
-   *  any stage injected a new artifact this pass — if so the caller runs another LaTeX pass
+   *  any stage injected a changed artifact this pass — if so the caller runs another LaTeX pass
    *  so the engine reads it (a `\printindex`-only document emits no rerun marker). A document
    *  is classic-BibTeX *or* biblatex (never both), so the two bibliography paths gate on
    *  mutually exclusive triggers and at most one fires. */
@@ -1958,19 +2007,18 @@ export class WasmTexCompiler {
     return bib || idx
   }
 
-  /** @returns whether a fresh `.bbl` was injected this pass (forces one more LaTeX pass). */
+  /** @returns whether a changed `.bbl` was injected this pass (forces one more LaTeX pass). */
   private async maybeRunBibtex(result: CompileResult): Promise<boolean> {
     const mainEngine = this.engine
     if (!mainEngine) return false
     if (!result.success && !result.pdf) return false
-    if (!this.fs.listFiles().some((path) => path.endsWith('.bib'))) return false
-
     const mainBase = this.mainFile.replace(/\.tex$/, '')
+    const outputPath = `${mainBase}.bbl`
     const auxContent = (
-      await this.operations.observe(mainEngine.readFile(`${mainBase}.aux`))
+      await this.operations.observe(this.bibtexAux(mainEngine, mainBase, outputPath))
     ).resume()
-    if (!auxContent?.includes('\\citation{') || !auxContent.includes('\\bibdata{')) return false
-    if (this.fs.readFile(`${mainBase}.bbl`)) return false
+    if (auxContent === null) return false
+    const cites = auxContent.includes('\\citation{')
 
     // Pluggable bibliography stage: if the integrator routed it to a server backend, use
     // that `.bbl` and skip the client BibTeX engine entirely. Default = client BibTeX.
@@ -1985,11 +2033,23 @@ export class WasmTexCompiler {
     // client path writes it directly in runClientBibtex).
     const bst = this.resolveProjectBst(auxContent)
     if (bst) request.bstFiles = { [bst.path]: bst.content }
-    const bbl =
-      (
-        await this.operations.observe(runRemoteBibliography(this.opts.backends, request))
-      ).resume() ??
-      (await this.operations.observe(this.runClientBibtex(mainBase, auxContent, bibFiles))).resume()
+    const registered = this.opts.backends?.resolve(BIBTEX_STAGE)
+    const backend = registered?.location === 'server' ? registered : null
+    const input = {
+      control: bibtexControl(auxContent),
+      files: { ...bibFiles, ...request.bstFiles },
+    }
+    if (this.matchesBibliographyRequest(outputPath, input, backend))
+      return this.reuseGeneratedOutput(outputPath)
+    // Removing the last citation must also remove the formerly generated bibliography.
+    const bbl = !cites
+      ? ''
+      : ((
+          await this.operations.observe(runRemoteBibliography(this.opts.backends, request))
+        ).resume() ??
+        (
+          await this.operations.observe(this.runClientBibtex(mainBase, auxContent, bibFiles))
+        ).resume())
     const observation: AuxiliaryDependencyObservation = {
       stage: 'bibliography',
       projectInputs: [
@@ -1997,18 +2057,33 @@ export class WasmTexCompiler {
         ...Object.keys(request.bstFiles ?? {}),
         ...(hasGenerated ? this.projectTexFiles().keys() : []),
       ],
-      complete: !!bbl,
+      complete: bbl !== null,
     }
-    this.currentAuxiliaryDependencies.set('bibliography', observation)
-    if (!bbl) return false
+    return this.injectBibliography(mainEngine, outputPath, bbl, observation, input, backend)
+  }
 
-    const outputPath = `${mainBase}.bbl`
-    const dependencyPath = normalizeProjectDependencyPath(outputPath) ?? outputPath
-    this.fs.writeFile(outputPath, bbl)
-    this.generatedFiles.add(dependencyPath)
-    this.generatedDependencyObservations.set(dependencyPath, observation)
-    ;(await this.operations.observe(mainEngine.writeFile(outputPath, bbl))).resume()
-    return true
+  /** The aux content BibTeX would read, or null when this stage has nothing to do. */
+  private async bibtexAux(
+    engine: CompileEngine,
+    mainBase: string,
+    outputPath: string,
+  ): Promise<string | null> {
+    if (!this.fs.listFiles().some((path) => path.endsWith('.bib'))) return null
+    // Biber documents belong to the biblatex stage, even if stale aux files still cite.
+    const source = this.mainSource()
+    if (detectBibliographyMode(source) === 'biblatex' && detectBiblatexBackend(source) === 'biber')
+      return null
+    if (this.authoredOutput(outputPath)) return null
+    // Chapters written by `\include` keep their citations in their own aux files.
+    const aux = (
+      await this.operations.observe(
+        flattenAuxInputs(`${mainBase}.aux`, (path) => engine.readFile(path)),
+      )
+    ).resume()
+    if (!aux?.includes('\\bibdata{')) return null
+    // Without citations, only a formerly generated bibliography needs removing.
+    if (!aux.includes('\\citation{') && this.fs.readFile(outputPath) === null) return null
+    return aux
   }
 
   /**
@@ -2019,7 +2094,7 @@ export class WasmTexCompiler {
    * registered, run it on `{ bcf, bibFiles }` (full fidelity); otherwise fall back to the bundled
    * biblatex-lite (cite keys parsed from the `.bcf`, entries from the project `.bib`s). Inject the
    * `.bbl` so the next pass resolves `\cite`s.
-   * @returns whether a fresh `.bbl` was injected this pass (forces one more LaTeX pass).
+   * @returns whether a changed `.bbl` was injected this pass (forces one more LaTeX pass).
    */
   private async maybeRunBiblatex(result: CompileResult): Promise<boolean> {
     const mainEngine = this.engine
@@ -2027,43 +2102,111 @@ export class WasmTexCompiler {
     if (!result.success && !result.pdf) return false
     const source = this.mainSource()
     if (detectBibliographyMode(source) !== 'biblatex') return false
+    // With `backend=bibtex` biblatex writes classic aux commands and no fresh `.bcf`.
+    const biber = detectBiblatexBackend(source) === 'biber'
+    if (!biber) return false
 
     const mainBase = this.mainFile.replace(/\.tex$/, '')
-    if (this.fs.readFile(`${mainBase}.bbl`)) return false
+    const outputPath = `${mainBase}.bbl`
+    if (this.authoredOutput(outputPath)) return false
     // biblatex emits the `.bcf` only once `\usepackage{biblatex}` ran; bail until it exists so
     // a stale/absent control file can't drive an empty bibliography.
     const bcf = (await this.operations.observe(mainEngine.readFile(`${mainBase}.bcf`))).resume()
     if (!bcf?.trim()) return false
 
     const bibFiles = this.collectBibFiles()
+    const backend = this.opts.backends?.resolve(BIBER_STAGE) ?? null
+    // biblatex-lite, the fallback, reads only the sort option from the source.
+    const input = { control: `${detectBiblatexSort(source)}\n${bcf}`, files: bibFiles }
+    if (this.matchesBibliographyRequest(outputPath, input, backend))
+      return this.reuseGeneratedOutput(outputPath)
     // Explicit Biber executor (full fidelity) when wired for `backend=biber`; else bundled biblatex-lite.
     const bbl =
-      (detectBiblatexBackend(source) === 'biber'
-        ? (
-            await this.operations.observe(
-              runBiberBackend(
-                this.opts.backends,
-                { bcf, bibFiles },
-                { signal: this.operations.signal },
-              ),
-            )
-          ).resume()
-        : null) ?? this.runClientBiblatexLite(source, bcf, bibFiles)
+      (
+        await this.operations.observe(
+          runBiberBackend(
+            this.opts.backends,
+            { bcf, bibFiles },
+            { signal: this.operations.signal },
+          ),
+        )
+      ).resume() ?? this.runClientBiblatexLite(source, bcf, bibFiles)
     const observation: AuxiliaryDependencyObservation = {
       stage: 'bibliography',
       projectInputs: Object.keys(bibFiles),
       complete: !!bbl,
     }
-    this.currentAuxiliaryDependencies.set('bibliography', observation)
-    if (!bbl) return false
+    return this.injectBibliography(mainEngine, outputPath, bbl, observation, input, backend)
+  }
 
-    const outputPath = `${mainBase}.bbl`
-    const dependencyPath = normalizeProjectDependencyPath(outputPath) ?? outputPath
-    this.fs.writeFile(outputPath, bbl)
+  /** An authored `.bbl`/`.ind` stays authoritative; only generated outputs are rebuilt. */
+  private authoredOutput(path: string): boolean {
+    const dependencyPath = normalizeProjectDependencyPath(path) ?? path
+    return this.fs.readFile(path) !== null && !this.generatedFiles.has(dependencyPath)
+  }
+
+  private matchesBibliographyRequest(
+    path: string,
+    input: BibliographyInput,
+    backend: BibliographyRequest['backend'],
+  ): boolean {
+    const cached = this.bibliographyRequest
+    return (
+      this.fs.readFile(path) !== null &&
+      !!cached &&
+      cached.path === path &&
+      cached.backend === backend &&
+      cached.version === backend?.version &&
+      sameBibliographyInput(cached.input, input)
+    )
+  }
+
+  /** Record the request and inject its `.bbl`. A failed backend leaves the file the pass
+   *  already read and records no request, so the next compile retries. */
+  private async injectBibliography(
+    engine: CompileEngine,
+    path: string,
+    bbl: string | null,
+    observation: AuxiliaryDependencyObservation,
+    input: BibliographyInput,
+    backend: BibliographyRequest['backend'],
+  ): Promise<boolean> {
+    this.currentAuxiliaryDependencies.set('bibliography', observation)
+    if (bbl === null) {
+      this.bibliographyRequest = null
+      return false
+    }
+    this.bibliographyRequest = { path, input, backend, version: backend?.version }
+    return this.injectGeneratedOutput(engine, path, bbl, observation)
+  }
+
+  /** Record a stage's output. An unchanged file needs no further pass: the pass that asked
+   *  for it already read it. A changed one reaches both file systems and drops checkpoints
+   *  that may have typeset the old file (some books put an index or bibliography first). */
+  private async injectGeneratedOutput(
+    engine: CompileEngine,
+    path: string,
+    content: string,
+    observation: AuxiliaryDependencyObservation,
+  ): Promise<boolean> {
+    const dependencyPath = normalizeProjectDependencyPath(path) ?? path
+    const previous = this.fs.readFile(path)
     this.generatedFiles.add(dependencyPath)
     this.generatedDependencyObservations.set(dependencyPath, observation)
-    ;(await this.operations.observe(mainEngine.writeFile(outputPath, bbl))).resume()
+    if (previous === content) return false
+    this.incremental?.reset()
+    this.heap?.reset()
+    this.fs.writeFile(path, content)
+    ;(await this.operations.observe(engine.writeFile(path, content))).resume()
     return true
+  }
+
+  /** A stage whose request is unchanged keeps its output and the inputs it recorded. */
+  private reuseGeneratedOutput(path: string): false {
+    const dependencyPath = normalizeProjectDependencyPath(path) ?? path
+    const observation = this.generatedDependencyObservations.get(dependencyPath)
+    if (observation) this.currentAuxiliaryDependencies.set(observation.stage, observation)
+    return false
   }
 
   /** Bundled biblatex-lite for the bibliography stage → `.bbl`: parse the cited keys from the
@@ -2103,15 +2246,14 @@ export class WasmTexCompiler {
 
     const mainBase = this.mainFile.replace(/\.tex$/, '')
     const outputPath = `${mainBase}.ind`
-    const dependencyPath = normalizeProjectDependencyPath(outputPath) ?? outputPath
-    const previous = this.fs.readFile(outputPath)
-    if (previous !== null && !this.generatedFiles.has(dependencyPath)) return false
+    if (this.authoredOutput(outputPath)) return false
     const idx = (await this.operations.observe(mainEngine.readFile(`${mainBase}.idx`))).resume()
     if (idx === null) return false
     const registered = this.opts.backends?.resolve(INDEX_STAGE)
     const backend = registered?.location === 'server' ? registered : null
-    if (this.matchesIndexInput(outputPath, idx, backend)) return false
-    if (!idx.trim() && previous === null) return false
+    if (this.matchesIndexInput(outputPath, idx, backend))
+      return this.reuseGeneratedOutput(outputPath)
+    if (!idx.trim() && this.fs.readFile(outputPath) === null) return false
 
     // Removing the last entry must also remove the formerly generated index.
     const ind = idx.trim() ? await this.buildIndex(mainBase, idx) : ''
@@ -2124,16 +2266,7 @@ export class WasmTexCompiler {
     if (ind === null) return false
 
     this.indexInput = { path: outputPath, idx, backend, version: backend?.version }
-    this.generatedFiles.add(dependencyPath)
-    this.generatedDependencyObservations.set(dependencyPath, observation)
-    if (previous === ind) return false
-    // A retained prefix may already have typeset the old index (some books put
-    // it before later chapters). It cannot prove the new generated input.
-    this.incremental?.reset()
-    this.heap?.reset()
-    this.fs.writeFile(outputPath, ind)
-    ;(await this.operations.observe(mainEngine.writeFile(outputPath, ind))).resume()
-    return true
+    return this.injectGeneratedOutput(mainEngine, outputPath, ind, observation)
   }
 
   private matchesIndexInput(

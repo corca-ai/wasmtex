@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collectBibliographyInputs } from './bibliography-inputs'
+import { collectBibliographyInputs, flattenAuxInputs } from './bibliography-inputs'
 
 describe('bibliography engine inputs', () => {
   it('preserves host databases and empty generated notes, reading each safe path once', async () => {
@@ -41,5 +41,29 @@ describe('bibliography engine inputs', () => {
       bibFiles: {},
       hasGenerated: false,
     })
+  })
+
+  it('inlines nested chapter aux files in order and drops missing ones', async () => {
+    const files: Record<string, string> = {
+      'main.aux': '\\@input{ch1.aux}\n\\@input{gone.aux}\n\\bibdata{refs}\n',
+      'ch1.aux': '\\citation{a}\n\\@input{./parts/p.aux}\n',
+      'parts/p.aux': '\\citation{b}\n',
+    }
+    const flattened = await flattenAuxInputs('main.aux', async (path) => files[path] ?? null)
+    expect(flattened).toBe('\\citation{a}\n\\citation{b}\n\n\n\n\\bibdata{refs}\n')
+    expect(await flattenAuxInputs('missing.aux', async () => null)).toBeNull()
+  })
+
+  it('reads each aux file once and ignores unsafe or repeated inputs', async () => {
+    const reads: string[] = []
+    const files: Record<string, string> = {
+      'main.aux': '\\@input{main.aux}\n\\@input{main.aux}\n\\@input{../up.aux}\n\\citation{x}\n',
+    }
+    const flattened = await flattenAuxInputs('main.aux', async (path) => {
+      reads.push(path)
+      return files[path] ?? null
+    })
+    expect(reads).toEqual(['main.aux'])
+    expect(flattened).toBe('\n\n\n\\citation{x}\n')
   })
 })

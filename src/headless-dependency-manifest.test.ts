@@ -221,8 +221,12 @@ describe('WasmTexCompiler dependency manifest composition', () => {
     expect(index).toHaveBeenCalledOnce()
 
     compiler.setFile('styles/custom.bst', 'ENTRY{author}{}{}')
-    expect(compiler.getFile('main.bbl')).toBeNull()
-    expect(compiler.getFile('main.ind')).toBe('\\begin{theindex}\\end{theindex}')
+    await compiler.compile()
+    expect(bibliography).toHaveBeenCalledTimes(2)
+    expect(bibliography).toHaveBeenLastCalledWith(
+      expect.objectContaining({ bstFiles: { 'styles/custom.bst': 'ENTRY{author}{}{}' } }),
+    )
+    expect(index).toHaveBeenCalledOnce()
   })
 
   it('reuses generated index inputs after prose edits and regenerates changed page numbers', async () => {
