@@ -942,9 +942,11 @@ export class WasmTexCompiler {
       ).resume()
       const preview = this.acceptedPreview(result, pageLimit)
       if (preview) return { ...preview, firstPage: result?.firstPage ?? 1 }
-      // A chapter that cannot preview alone (e.g. it needs a definition from an
-      // omitted chapter) falls back to a prefix until the next full pass.
-      engine.refuseChapter(chapter)
+      // A chapter that ran but cannot preview alone (e.g. it needs a definition from
+      // an omitted chapter) falls back to a prefix until the next full pass. No result
+      // means it was not placeable here, such as one starting past the page limit,
+      // and stays available once the viewer reaches it.
+      if (result) engine.refuseChapter(chapter)
     }
     return this.acceptedPreview(
       (await this.operations.observe(engine.compilePagePreview(pageLimit))).resume(),

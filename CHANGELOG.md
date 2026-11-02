@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Keep chapter previews for a chapter that starts past the page limit. Such a
+  chapter was refused until the next full compile, so scrolling to it afterwards
+  fell back to prefix previews.
 - Report settled references for documents whose only diagnostics are overfull
   boxes or missing glyphs. Any such warning used to withhold the evidence, so hosts
   ran a redundant settle pass on most documents with a bibliography.

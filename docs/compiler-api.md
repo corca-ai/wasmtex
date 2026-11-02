@@ -220,7 +220,9 @@ falling back to a prefix, in these cases:
 - the page count or the chapter's contents entry does not match the full pass;
 - the chapter fails to compile alone.
 
-A refused chapter stays refused until the next full compile.
+A refused chapter stays refused until the next full compile. A chapter that
+starts past `pageLimit` gets a prefix but is not refused, so it previews alone once
+the page limit reaches it.
 
 A preview is a first-pass preview using the preceding full compile's
 references, not an export or proof of settled pagination. Auxiliary files and
