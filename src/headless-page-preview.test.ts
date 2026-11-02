@@ -421,6 +421,26 @@ it('refuses a chapter that fails alone and falls back to a prefix', async () => 
   compiler.dispose()
 })
 
+it('keeps a chapter that was not placeable at this page limit', async () => {
+  const { compiler, pages, engine } = await formatEngineFixture(
+    async (limit, options) => (options?.chapter && limit < 20 ? null : result),
+    'lualatex',
+    { 'main.tex': book(), 'chapters/ch1.tex': 'One.', 'chapters/ch2.tex': 'Two.' },
+  )
+  const refuse = vi.spyOn(engine, 'refuseChapter')
+  await compiler.compile()
+  compiler.setFile('chapters/ch2.tex', 'Edited.')
+  await compiler.previewPages(8, { placement: true })
+  await compiler.previewPages(20, { placement: true })
+  expect(pages.mock.calls).toEqual([
+    [8, { chapter: 'chapters/ch2' }],
+    [8],
+    [20, { chapter: 'chapters/ch2' }],
+  ])
+  expect(refuse).not.toHaveBeenCalled()
+  compiler.dispose()
+})
+
 it.each([
   'lualatex',
   'xelatex',

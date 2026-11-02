@@ -246,6 +246,10 @@ export declare class WasmTexCompiler {
     /** LaTeX rereads its lists (`.toc`, `.lof`, …) without asking for another pass. A cited
      *  document always got one when its `.bbl` was regenerated, so it keeps one whenever a
      *  pass changes them. The returned check compares each pass with the one before. */
+    /** Whether a pass left work for another one. The lists are read after every pass,
+     *  even one whose auxiliary stages already ask for another, so each comparison is
+     *  against the previous pass. */
+    private afterPass;
     private trackLists;
     /** The job's lists as one comparable value. */
     private readLists;

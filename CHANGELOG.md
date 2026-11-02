@@ -13,6 +13,15 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Keep chapter previews for a chapter that starts past the page limit. Such a
+  chapter was refused until the next full compile, so scrolling to it afterwards
+  fell back to prefix previews.
+- Report settled references for documents whose only diagnostics are overfull
+  boxes or missing glyphs. Any such warning used to withhold the evidence, so hosts
+  ran a redundant settle pass on most documents with a bibliography.
+- Compare the table of contents and other lists from the first compile of a
+  document with a bibliography. A fresh compiler skipped the comparison, so a
+  contents page moved by the first bibliography stayed stale until the next edit.
 - Give BibTeX the citations of `\include`d chapters, which LaTeX writes to each
   chapter's own aux file; a book citing only inside chapters ran no bibliography.
 - Empty a generated bibliography once the last citation is removed instead of

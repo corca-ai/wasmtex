@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseTexErrors } from './engine/parse-errors'
 import { WasmTexCompiler } from './headless'
 import type { CompileResult, ResolverEvidenceReport } from './types'
 
@@ -139,20 +140,44 @@ describe('headless texliveDependencies telemetry', () => {
 })
 
 describe('canonical reference convergence evidence', () => {
-  it.each([
+  const citation = { line: 1, message: 'Citation undefined', severity: 'warning' } as const
+  // Every overfull variant and a missing glyph, as the log parser reports them.
+  const layout = parseTexErrors(
+    [
+      'Overfull \\hbox (23.93594pt too wide) in paragraph at lines 3--4',
+      '[]\\OT1/cmr/m/n/10 A long line',
+      'Overfull \\hbox (1.2pt too wide) in alignment at lines 10--12',
+      'Overfull \\hbox (0.5pt too wide) detected at line 20',
+      'Overfull \\vbox (3.0pt too high) has occurred while \\output is active',
+      'Missing character: There is no 안 (U+C548) in font [lmroman10-regular]:mapping=tex-text;!',
+    ].join('\n'),
+  )
+  const float = parseTexErrors("LaTeX Warning: `h' float specifier changed to `ht'.")
+  it('parses each layout warning', () => {
+    expect(layout.map((error) => error.code ?? error.message.slice(0, 14))).toEqual([
+      'Overfull \\hbox',
+      'Overfull \\hbox',
+      'Overfull \\hbox',
+      'Overfull \\vbox',
+      'missing-glyph',
+    ])
+  })
+  it.each<{ mode: string; expected: boolean; errors?: CompileResult['errors'] }>([
     { mode: 'settled', expected: true },
     { mode: 'stalled', expected: false },
     { mode: 'limit', expected: false },
-    { mode: 'warning', expected: false },
+    { mode: 'warning', expected: false, errors: [citation] },
+    { mode: 'layout', expected: true, errors: layout },
+    { mode: 'layout and citation', expected: false, errors: [...layout, citation] },
+    { mode: 'layout and float', expected: false, errors: [...layout, ...float] },
     { mode: 'failed', expected: false },
-  ])('reports $mode conservatively', async ({ mode, expected }) => {
+  ])('reports $mode conservatively', async ({ mode, expected, errors }) => {
     class Engine extends TwoPassEngine {
       override async compile(): Promise<CompileResult> {
         const result = await super.compile()
         if (mode === 'stalled' || mode === 'limit') result.log = 'Rerun LaTeX'
         if (mode === 'limit') result.semanticTrace = String(this.compileCount)
-        if (mode === 'warning')
-          result.errors = [{ line: 1, message: 'Citation undefined', severity: 'warning' }]
+        if (errors) result.errors = [...errors]
         if (mode === 'failed') {
           result.success = false
           result.pdf = null

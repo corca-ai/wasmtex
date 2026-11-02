@@ -142,9 +142,11 @@ many such unlocated errors even when the engine returns a PDF.
 
 Canonical results may report `telemetry.referencesSettled: true` when the SDK
 finished its rerun/auxiliary loop without a remaining rerun request, injected
-artifact, or diagnostic. A host may omit its additional bibliography settle
-pass only with this explicit evidence and a contract-valid complete dependency
-manifest. Missing/false evidence, incomplete manifests and older SDKs retain
+artifact, or entry of `result.errors`. Overfull boxes and missing glyphs (the
+`overfull-box` and `missing-glyph` diagnostics) do not count: they are never
+evidence that another pass is needed. A host may omit its
+additional bibliography settle pass only with this explicit evidence and a
+contract-valid complete dependency manifest. Missing/false evidence, incomplete manifests and older SDKs retain
 the host's fallback. This is not a promise that unsupported bibliography tools
 succeed; errors and bounded/non-progressing reruns never qualify.
 
@@ -218,7 +220,9 @@ falling back to a prefix, in these cases:
 - the page count or the chapter's contents entry does not match the full pass;
 - the chapter fails to compile alone.
 
-A refused chapter stays refused until the next full compile.
+A refused chapter stays refused until the next full compile. A chapter that
+starts past `pageLimit` gets a prefix but is not refused, so it previews alone once
+the page limit reaches it.
 
 A preview is a first-pass preview using the preceding full compile's
 references, not an export or proof of settled pagination. Auxiliary files and

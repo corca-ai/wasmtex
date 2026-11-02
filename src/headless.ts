@@ -53,7 +53,7 @@ import {
 } from './engine/index-backend'
 import { WasmTexLuatexEngine } from './engine/luatex-engine'
 import { MakeindexEngine } from './engine/makeindex-engine'
-import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
+import { buildDiagnostics, isOverfullBox, parseTexErrors } from './engine/parse-errors'
 import { extractPreamble } from './engine/preamble-utils'
 import { previewErrorsCovered } from './engine/preview-diagnostics'
 import { RerunController, signatureOf } from './engine/rerun-controller'
@@ -323,8 +323,16 @@ function emptyTikzTelemetry(mode: 'document' | 'auto'): TikzExternalizationTelem
   }
 }
 
+// Overfull boxes and missing glyphs (`overfull-box` and `missing-glyph` diagnostics)
+// are never evidence that another pass is needed: convergence is judged by the
+// remaining rerun requests, injected artifacts and reference warnings. Any other
+// entry of `result.errors`, such as an undefined citation, still withholds it.
+function describesPageOnly(error: CompileResult['errors'][number]): boolean {
+  return error.code === 'missing-glyph' || isOverfullBox(error.message)
+}
+
 function canonicalReferencesSettled(result: CompileResult, finished: boolean): boolean {
-  return finished && result.success && !!result.pdf && result.errors.length === 0
+  return finished && result.success && !!result.pdf && result.errors.every(describesPageOnly)
 }
 
 /** Best-effort placement for a heap checkpoint during an already-needed full pass. */
@@ -934,9 +942,11 @@ export class WasmTexCompiler {
       ).resume()
       const preview = this.acceptedPreview(result, pageLimit)
       if (preview) return { ...preview, firstPage: result?.firstPage ?? 1 }
-      // A chapter that cannot preview alone (e.g. it needs a definition from an
-      // omitted chapter) falls back to a prefix until the next full pass.
-      engine.refuseChapter(chapter)
+      // A chapter that ran but cannot preview alone (e.g. it needs a definition from
+      // an omitted chapter) falls back to a prefix until the next full pass. No result
+      // means it was not placeable here, such as one starting past the page limit,
+      // and stays available once the viewer reaches it.
+      if (result) engine.refuseChapter(chapter)
     }
     return this.acceptedPreview(
       (await this.operations.observe(engine.compilePagePreview(pageLimit))).resume(),
@@ -1093,8 +1103,7 @@ export class WasmTexCompiler {
     const tikzTelemetry = result.telemetry?.tikzExternalization
     this.emitProgressPdf(result, options, started)
     this.operations.assertCurrent()
-    let auxInjected =
-      (await this.operations.observe(this.runAuxStages(result))).resume() || (await listsChanged())
+    let auxInjected = await this.afterPass(result, listsChanged)
 
     // Auto-rerun for cross-references, guaranteed to terminate: the controller
     // caps reruns and stops once the cross-reference state stops changing. An aux
@@ -1123,9 +1132,7 @@ export class WasmTexCompiler {
       ).resume()
       resolverReports.push(result.telemetry?.resolver)
       collectConversionInputs(conversionInputs, result)
-      auxInjected =
-        (await this.operations.observe(this.runAuxStages(result))).resume() ||
-        (await listsChanged())
+      auxInjected = await this.afterPass(result, listsChanged)
     }
     this.heap?.noteFull(this.mainSource(), this.projectTexFiles(), result)
     // Cross-reference reruns replace `result`; the figure telemetry describes this compile.
@@ -1154,14 +1161,27 @@ export class WasmTexCompiler {
   /** LaTeX rereads its lists (`.toc`, `.lof`, …) without asking for another pass. A cited
    *  document always got one when its `.bbl` was regenerated, so it keeps one whenever a
    *  pass changes them. The returned check compares each pass with the one before. */
+  /** Whether a pass left work for another one. The lists are read after every pass,
+   *  even one whose auxiliary stages already ask for another, so each comparison is
+   *  against the previous pass. */
+  private async afterPass(
+    result: CompileResult,
+    listsChanged: () => Promise<boolean>,
+  ): Promise<boolean> {
+    const injected = (await this.operations.observe(this.runAuxStages(result))).resume()
+    const changed = await listsChanged()
+    return injected || changed
+  }
+
   private async trackLists(engine: CompileEngine): Promise<() => Promise<boolean>> {
-    if (!this.bibliographyRequest) return async () => false
+    // A fresh compiler learns its bibliography request only after the first pass, so
+    // the baseline is always taken and the request checked when a pass ends.
     let lists = await this.readLists(engine)
     return async () => {
       const next = (await this.operations.observe(this.readLists(engine))).resume()
       const changed = next !== lists
       lists = next
-      return changed
+      return changed && !!this.bibliographyRequest
     }
   }
 
