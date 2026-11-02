@@ -622,6 +622,28 @@ read once after each full pass, when the preview ends. (`\nofiles` was rejected:
 it skips expanding aux writes, hiding their errors, and drops `\if@filesw`-guarded
 write nodes, which can move breaks.)
 
+With `placement`, a chapter edit skips the pages before the chapter. When the
+only change since the full pass is one `\include`d chapter, the hook adds
+`\includeonly{<chapter>}`, and the omitted chapters restore their counters from
+their aux files, as LaTeX always does.
+- **Discarding pages.** Shipouts are discarded until the unnamed `include/before`
+  hook runs (named include hooks do not parse a name containing `/`). A blank
+  `openright` page before the chapter heading carries no new left mark, so it is
+  discarded too, rather than showing the previous chapter's running head.
+- **Stopping.** The job stops at `include/after`, or once the pages up to
+  `pageLimit` have shipped.
+- **Placement.** The full pass's transcript gives the chapter's first physical
+  page: the ` [n` page announcements before `(./<chapter>.tex` opens. XeTeX wraps
+  the transcript at 79 characters and LuaTeX at 79 bytes, and the excerpt line of
+  a box warning is skipped. The count is trusted only when it equals the
+  transcript's `Output written … (N pages`.
+- **Validation.** The preview's first page number must match the full pass's at
+  that position (allowing one discarded blank page). The chapter's first contents
+  entry (number, title, page, anchor) must match the full pass's aux file.
+
+Otherwise the chapter is refused until the next full pass, and the preview falls
+back to a prefix.
+
 Both Unicode engines preview only from a worker that finished a successful full
 pass, since an engine recreated after an interrupted compile has none of the
 auxiliary files a preview reads. An edit to a project `.tex` file the full pass

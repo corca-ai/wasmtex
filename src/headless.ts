@@ -57,6 +57,7 @@ import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
 import { extractPreamble } from './engine/preamble-utils'
 import { previewErrorsCovered } from './engine/preview-diagnostics'
 import { RerunController, signatureOf } from './engine/rerun-controller'
+import { stripTexComments } from './engine/tex-comments'
 import {
   buildTexliveDependencySet,
   mergeTexliveDependencySets,
@@ -457,9 +458,20 @@ interface BibliographyRequest {
 /** A bounded, disposable sibling with no diagnostics, metadata or export authority. */
 export interface PagePreviewSession {
   setFile(path: string, content: string | Uint8Array): void
-  previewPages(pageLimit: number): Promise<PagePreviewResult | null>
+  previewPages(pageLimit: number, options?: PagePreviewOptions): Promise<PagePreviewResult | null>
   dispose(): void
 }
+
+/** `placement: true` lets a preview hold a span of the full PDF other than its first
+ *  pages (an edited chapter alone) and always reports `firstPage`. */
+export interface PagePreviewOptions {
+  placement?: boolean
+}
+
+/** Commands in an earlier chapter whose effect an omitted chapter's counters cannot
+ *  restore. */
+const CHAPTER_STATE_COMMANDS =
+  /\\(?:appendix|frontmatter|mainmatter|backmatter|pagenumbering|pagestyle|(?:re|provide|new)command|[gex]?def|let|(?:set|addto)length|newtheorem|newcounter|markboth|markright|setcounter\s*\{(?:secnumdepth|tocdepth)\})(?![a-zA-Z])/
 
 /** Engines whose page preview reruns from the format as a separate job. */
 function startsFromFormat(
@@ -501,6 +513,8 @@ export class WasmTexCompiler {
   private pagePreviewBaseline: string | null = null
   private pagePreviewErrors: CompileResult['errors'] = []
   private pagePreviewRequiresCheckpoint = false
+  /** Secondary sources edited since the baseline full compile (LuaLaTeX/XeLaTeX). */
+  private previewEdits = new Set<string>()
   private readonly operations = new CompilerOperations()
   private initInFlight: Promise<void> | null = null
   private replacingProject = false
@@ -794,7 +808,7 @@ export class WasmTexCompiler {
     child.pagePreviewErrors = errors
     return {
       setFile: (path, content) => child.setFile(path, content),
-      previewPages: (limit) => child.previewPages(limit),
+      previewPages: (limit, options) => child.previewPages(limit, options),
       dispose: () => child.dispose(),
     }
   }
@@ -802,7 +816,10 @@ export class WasmTexCompiler {
   /** Render a PDF prefix using the last full pass's references. This leaves full
    * compile metadata and auxiliary outputs unchanged. Null means unsupported or
    * unsafe: run compile() instead. Always reconcile with compile() after edits. */
-  async previewPages(pageLimit: number): Promise<PagePreviewResult | null> {
+  async previewPages(
+    pageLimit: number,
+    options: PagePreviewOptions = {},
+  ): Promise<PagePreviewResult | null> {
     if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 10000)
       throw new RangeError('Invalid preview page limit')
     this.ensureInitialized()
@@ -820,18 +837,23 @@ export class WasmTexCompiler {
     try {
       if (this.prebuildInFlight) await this.prebuildInFlight
       this.assertRevision(revision)
-      const result = await this.operations.run(() => this.previewPagesIdle(pageLimit))
+      const result = await this.operations.run(() =>
+        this.previewPagesIdle(pageLimit, options.placement === true),
+      )
       this.assertRevision(revision)
-      return result
+      return result && options.placement ? { firstPage: 1, ...result } : result
     } finally {
       this.compileInFlight = false
     }
   }
 
-  private async previewPagesIdle(pageLimit: number): Promise<PagePreviewResult | null> {
+  private async previewPagesIdle(
+    pageLimit: number,
+    placement: boolean,
+  ): Promise<PagePreviewResult | null> {
     ;(await this.operations.observe(this.ensureEngine())).resume()
     const engine = this.engine
-    if (startsFromFormat(engine)) return this.previewFormatPages(engine, pageLimit)
+    if (startsFromFormat(engine)) return this.previewFormatPages(engine, pageLimit, placement)
     if (!(engine instanceof WasmTexPdftexEngine)) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
     const checkpoint = this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())
@@ -849,14 +871,33 @@ export class WasmTexCompiler {
   }
 
   /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
-   * stops after the requested pages, so it previews edits to any existing source. */
+   * stops after the requested pages, so it previews edits to any existing source. With
+   * placement, an edit confined to one chapter typesets that chapter alone. */
   private async previewFormatPages(
     engine: WasmTexLuatexEngine | WasmTexXetexEngine,
     pageLimit: number,
+    placement: boolean,
   ): Promise<PagePreviewResult | null> {
     if (this.pagePreviewRequiresCheckpoint) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
-    const result = (await this.operations.observe(engine.compilePagePreview(pageLimit))).resume()
+    const chapter = placement ? this.previewChapter() : null
+    if (chapter) {
+      const result = (
+        await this.operations.observe(engine.compilePagePreview(pageLimit, chapter))
+      ).resume()
+      const preview = this.acceptedPreview(result, pageLimit)
+      if (preview) return { ...preview, firstPage: result?.firstPage ?? 1 }
+      // A chapter that cannot preview alone (e.g. it needs a definition from an
+      // omitted chapter) falls back to a prefix until the next full pass.
+      engine.refuseChapter(chapter)
+    }
+    return this.acceptedPreview(
+      (await this.operations.observe(engine.compilePagePreview(pageLimit))).resume(),
+      pageLimit,
+    )
+  }
+
+  private acceptedPreview(result: CompileResult | null, pageLimit: number) {
     if (
       !result?.success ||
       !result.pdf ||
@@ -864,6 +905,31 @@ export class WasmTexCompiler {
     )
       return null
     return { pdf: result.pdf, synctex: null, compileTime: result.compileTime, pageLimit }
+  }
+
+  /**
+   * The one `\include`d chapter edited since the full pass, when nothing else changed.
+   * Omitted chapters restore only their counters, so an author `\includeonly`, or an
+   * earlier chapter that changes other state (`\appendix`, `\mainmatter`, page styles,
+   * definitions, lengths), keeps ordinary prefixes.
+   */
+  private previewChapter(): string | null {
+    const source = this.mainSource()
+    if (this.previewEdits.size !== 1 || source === undefined || source !== this.pagePreviewBaseline)
+      return null
+    const [path] = this.previewEdits
+    const code = stripTexComments(source)
+    if (code.includes('\\includeonly')) return null
+    for (const match of code.matchAll(/\\include\{([^}]+)\}/g)) {
+      // The name goes into `\\includeonly` and keys the transcript as written.
+      const name = match[1]!.trim()
+      if (normalizeProjectDependencyPath(name) !== name || !/^[\w./-]+$/.test(name)) return null
+      if (`${name}.tex` === path) return name
+      const earlier = this.fs.readFile(`${name}.tex`)
+      if (typeof earlier !== 'string' || CHAPTER_STATE_COMMANDS.test(stripTexComments(earlier)))
+        return null
+    }
+    return null
   }
 
   getRetentionStats(): CompilerRetentionStats {
@@ -898,6 +964,7 @@ export class WasmTexCompiler {
       const result = await this.operations.run(() => this.compileIdle(preview, options))
       this.assertRevision(revision)
       this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
+      this.previewEdits.clear()
       this.pagePreviewErrors =
         this.pagePreviewBaseline === null ? [] : result.errors.map((error) => ({ ...error }))
       this.pagePreviewRequiresCheckpoint = false
@@ -1277,6 +1344,7 @@ export class WasmTexCompiler {
       // A LuaLaTeX or XeLaTeX prefix starts from the format and reads every source afresh.
       // A preamble input still needs a full compile, like the main file's preamble.
       this.pagePreviewBaseline = previewBaseline
+      this.previewEdits.add(path)
     }
   }
 
@@ -1296,6 +1364,7 @@ export class WasmTexCompiler {
 
   private async replaceProject(files: Record<string, FileContent>): Promise<void> {
     this.pagePreviewBaseline = null
+    this.previewEdits.clear()
     this.fs = new VirtualFS({ empty: true })
     this.projectIndex = new ProjectIndex()
     this.generatedFiles.clear()
@@ -1347,6 +1416,7 @@ export class WasmTexCompiler {
     const changed = path !== this.mainFile
     if (!changed) return
     this.pagePreviewBaseline = null
+    this.previewEdits.clear()
     this.projectIndex.invalidateCompletionSnapshot()
     if (changed) this.invalidateOperation()
     this.mainFile = path

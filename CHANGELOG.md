@@ -33,6 +33,11 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Performance
 
+- With `previewPages(limit, { placement: true })`, preview an edit confined to one
+  `\include`d chapter by typesetting that chapter alone on LuaLaTeX/XeLaTeX;
+  `PagePreviewResult.firstPage` places it in the full PDF. Hosts that omit the option
+  keep prefixes.
+
 - Keep a generated `.bbl` while the BibTeX/Biber request is unchanged, so a prose edit
   in a cited document takes one TeX pass instead of two. Changed lists (`.toc`, `.lof`, …)
   still take the pass the forced rerun used to provide.

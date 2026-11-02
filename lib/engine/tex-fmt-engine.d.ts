@@ -55,6 +55,38 @@ export interface TexFmtWarmSet {
 export declare const PREVIEW_JOB_SUFFIX = "-wasmtex-preview";
 /** Job-named inputs a full pass read, e.g. `./main.aux` -> `aux`. */
 export declare function jobInputExtensions(inputFiles: readonly string[] | undefined, job: string): string[];
+/** How an engine wraps its terminal transcript at 79 columns: XeTeX counts
+ *  characters, LuaTeX counts bytes. */
+export type TranscriptWrap = 'characters' | 'bytes';
+/**
+ * Each project `.tex` file's first physical page, and every shipped page's
+ * `\\count0`, from a full pass's terminal transcript. A page announces itself as
+ * ` [n` and a file opening as `(./path`. The excerpt line after an over/underfull
+ * box warning is skipped, since its text can hold ` [12]`. Null when the count
+ * disagrees with the transcript's own `Output written on … (N pages`.
+ */
+export declare function transcriptPages(log: string, wrap: TranscriptWrap): {
+    starts: Map<string, number>;
+    numbers: number[];
+} | null;
+/**
+ * Typeset only the `\include`d `chapter`: `\includeonly` restores the other
+ * chapters' counters from their aux files and earlier pages are discarded. A blank
+ * `openright` page before the chapter heading carries no new left mark, so it is
+ * discarded too: its running head would show the previous mark, not the omitted
+ * chapter's. The job stops after `cap` kept pages or at the end of the chapter.
+ * With one chapter included, the unnamed include hooks are its own (named ones do
+ * not parse a name containing `/`).
+ */
+export declare function chapterPreviewHook(chapter: string, stop: string, cap: number): string;
+/** The first chapter entry an aux file writes to the contents: its number, title,
+ *  page and anchor, which a preview must reproduce. */
+export declare function firstChapterEntry(aux: string | null): string | null;
+/** A page preview and the physical page of the full PDF its first page replaces
+ *  (1 for a prefix). */
+export type ChapterPreviewResult = CompileResult & {
+    firstPage?: number;
+};
 /** A preview job's names, timing and raw worker result. */
 export interface PreviewRun {
     job: string;
@@ -177,7 +209,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     protected jobName(): string;
     /** Record a successful full pass's inputs, in recorder order. Project `.tex` files read
      *  before the job's `.aux` (which `\\begin{document}` reads) belong to the preamble. */
-    protected recordFullPass(inputFiles: readonly string[] | undefined): void;
+    protected recordFullPass(inputFiles: readonly string[] | undefined, log: string, wrap: TranscriptWrap): void;
     /** Whether the last full pass read `path` in the preamble; unknown counts as read. */
     readsInPreamble(path: string): boolean;
     /**
@@ -188,6 +220,16 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
      * main source or no full pass on this worker: run `compile()` instead.
      */
     protected runPreviewJob(hook: string, beforeRun?: (job: string) => Promise<void>): Promise<PreviewRun | null>;
+    /** The physical page where `chapter` starts in the full PDF, or null when a chapter
+     *  preview cannot be placed: no trusted pages, a refused chapter, or a start past
+     *  the page limit. */
+    protected chapterStart(chapter: string, pageLimit: number): number | null;
+    /** Stop offering `chapter` previews until the next full pass. */
+    refuseChapter(chapter: string): void;
+    /** Where a successful chapter preview belongs, or null (refusing the chapter) when
+     *  its first page number or its contents entry disagrees with the full pass. A
+     *  leading blank page it discarded shifts it by one. */
+    protected placeChapter(chapter: string, start: number, previewLog: string, wrap: TranscriptWrap, entries: [preview: string | null, full: string | null]): number | null;
     /** The author's errors must match the full pass's, which name the real main file. */
     protected attributePreviewErrors(result: CompileResult, previewMain: string): CompileResult;
     clearCache(): Promise<void>;

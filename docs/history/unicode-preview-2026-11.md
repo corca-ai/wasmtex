@@ -38,6 +38,21 @@ Times are the median of 3 warm samples.
 Before this change, chapter edits had no preview on either engine. A 203-page
 LuaLaTeX book previewed chapter 12 in 1.53 s, against 1.78 s for a full compile.
 
+## Chapter-only previews
+
+These are the same book and edits as above. An edit confined to one `\include`d
+chapter typesets that chapter alone and lands at its page in the full PDF.
+
+| engine   | chapter (first page) | prefix  | chapter preview |
+|----------|----------------------|---------|-----------------|
+| LuaLaTeX | 12 (p. 147)          | 1.57 s  | 0.59 s          |
+| LuaLaTeX | 24 (p. 291)          | 2.57 s  | 0.60 s          |
+| XeLaTeX  | 12 (p. 147)          | 0.77 s  | 0.26 s          |
+| XeLaTeX  | 24 (p. 291)          | 1.33 s  | 0.26 s          |
+
+Each chapter preview's 12 pages render pixel-identical to the full PDF at the
+reported `firstPage`. The full compiles that follow match the baseline build.
+
 ## Output preservation
 
 Every preview page was rendered at 72 dpi and compared with the matching page of

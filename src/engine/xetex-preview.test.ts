@@ -80,6 +80,31 @@ describe('XeTeX page previews', () => {
     ])
   })
 
+  it('converts only an included chapter, places it, and restores its aux file', async () => {
+    const entry = '\\@writefile{toc}{\\contentsline {chapter}{\\numberline {2}Two}{3}{}}'
+    const { instance, files, conversions } = engine((current, fs) => {
+      if (current === 'main.tex')
+        return output(
+          ['./main.tex', './main.aux', './ch2.aux'],
+          '(./main.tex [1] (./ch1.tex [2]) (./ch2.tex [3] [4]))\nOutput written on main.xdv (4 pages).',
+        )
+      fs.set('ch2.aux', entry)
+      return output([], `(./${current} (./ch2.tex [3] [4]))`)
+    })
+    files.set('ch2.aux', `${entry}\n\\@setckpt{ch2}{}`)
+    await instance.writeFile('main.tex', 'Body')
+    instance.setMainFile('main.tex')
+    await instance.compile()
+    const preview = await instance.compilePagePreview(10, 'ch2')
+    expect(preview?.firstPage).toBe(3)
+    expect(conversions.at(-1)).toBe(`main${PREVIEW_JOB_SUFFIX}.xdv`)
+    expect(files.get(`main${PREVIEW_JOB_SUFFIX}.tex`)).toBe(
+      `${xetexPreviewHook(10, { name: 'ch2', cap: 8 })}Body`,
+    )
+    expect(files.get('ch2.aux')).toBe(`${entry}\n\\@setckpt{ch2}{}`)
+    expect(xetexPreviewHook(10, { name: 'ch2', cap: 8 })).toContain('\\batchmode\\read16 to')
+  })
+
   it('names a nested main file job by its basename and maps its errors back', async () => {
     const job = `paper${PREVIEW_JOB_SUFFIX}`
     const { instance, files, conversions } = engine((current) =>

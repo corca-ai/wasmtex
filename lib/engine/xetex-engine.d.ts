@@ -1,5 +1,5 @@
 import { CompileResult } from '../types.js';
-import { BaseTexFmtEngine } from './tex-fmt-engine.js';
+import { BaseTexFmtEngine, ChapterPreviewResult } from './tex-fmt-engine.js';
 import { WasmTexEngineOptions } from './wasmtex-engine.js';
 import { CompileWorkerDriver } from './wasmtex-worker.js';
 /**
@@ -10,7 +10,10 @@ import { CompileWorkerDriver } from './wasmtex-worker.js';
  * keeps the stop out of the transcript the SDK parses. The hook precedes the
  * author's first line on that same line, so diagnostics keep their line numbers.
  */
-export declare function xetexPreviewHook(pageLimit: number): string;
+export declare function xetexPreviewHook(pageLimit: number, chapter?: {
+    name: string;
+    cap: number;
+}): string;
 export declare class WasmTexXetexEngine extends BaseTexFmtEngine {
     private dvipdfm;
     /** Aux files outside the job name (`\\include`d chapters) as the last full pass left
@@ -27,10 +30,10 @@ export declare class WasmTexXetexEngine extends BaseTexFmtEngine {
     mkdir(path: string): Promise<void>;
     compile(): Promise<CompileResult>;
     private keepChapterAux;
-    /** Typeset only pages 1..`pageLimit` of the current main source as a separate job
-     *  (see {@link runPreviewJob}) and convert just those pages; null means run
-     *  {@link compile} instead. */
-    compilePagePreview(pageLimit: number): Promise<CompileResult | null>;
+    /** Typeset only pages 1..`pageLimit` of the current main source, or only the
+     *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}) and convert
+     *  just those pages; null means run {@link compile} instead. */
+    compilePagePreview(pageLimit: number, chapter?: string): Promise<ChapterPreviewResult | null>;
     /** XeTeX emits the job's basename in /work even for nested source files.
      *  Preserve that name when transferring XDV: dvipdfmx's C entry retains the
      *  supplied directory in -o, while its worker reads the job basename (#135). */
