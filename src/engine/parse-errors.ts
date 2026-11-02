@@ -192,8 +192,13 @@ function tryPackageWarning(line: string, out: TexError[]): boolean {
   return true
 }
 
+/** An overfull box warning, which this parser keeps as the raw log line. */
+export function isOverfullBox(message: string): boolean {
+  return /^Overfull \\[hv]box .+/.test(message)
+}
+
 function tryBoxWarning(line: string, nextLine: string, out: TexError[]): boolean {
-  if (!/^Overfull \\[hv]box .+/.test(line)) return false
+  if (!isOverfullBox(line)) return false
   out.push({ line: findBoxLineNumber(line, nextLine), message: line, severity: 'warning' })
   return true
 }

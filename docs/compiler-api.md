@@ -142,9 +142,11 @@ many such unlocated errors even when the engine returns a PDF.
 
 Canonical results may report `telemetry.referencesSettled: true` when the SDK
 finished its rerun/auxiliary loop without a remaining rerun request, injected
-artifact, or diagnostic. A host may omit its additional bibliography settle
-pass only with this explicit evidence and a contract-valid complete dependency
-manifest. Missing/false evidence, incomplete manifests and older SDKs retain
+artifact, or entry of `result.errors`. Overfull boxes and missing glyphs (the
+`overfull-box` and `missing-glyph` diagnostics) do not count: they are never
+evidence that another pass is needed. A host may omit its
+additional bibliography settle pass only with this explicit evidence and a
+contract-valid complete dependency manifest. Missing/false evidence, incomplete manifests and older SDKs retain
 the host's fallback. This is not a promise that unsupported bibliography tools
 succeed; errors and bounded/non-progressing reruns never qualify.
 

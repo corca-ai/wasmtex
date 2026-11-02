@@ -21,6 +21,8 @@ export declare function scanFileEvents(lines: string[]): FileScanEvent[];
  * parenthesized file open/close markers: `(./file.tex ... )`
  */
 export declare function buildFileContext(lines: string[]): string[];
+/** An overfull box warning, which this parser keeps as the raw log line. */
+export declare function isOverfullBox(message: string): boolean;
 export declare function parseTexErrors(log: string): TexError[];
 /**
  * Every `Missing character:` occurrence in document order (NOT deduped), each as

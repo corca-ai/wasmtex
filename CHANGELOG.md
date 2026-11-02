@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Report settled references for documents whose only diagnostics are overfull
+  boxes or missing glyphs. Any such warning used to withhold the evidence, so hosts
+  ran a redundant settle pass on most documents with a bibliography.
 - Compare the table of contents and other lists from the first compile of a
   document with a bibliography. A fresh compiler skipped the comparison, so a
   contents page moved by the first bibliography stayed stale until the next edit.

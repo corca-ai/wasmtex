@@ -53,7 +53,7 @@ import {
 } from './engine/index-backend'
 import { WasmTexLuatexEngine } from './engine/luatex-engine'
 import { MakeindexEngine } from './engine/makeindex-engine'
-import { buildDiagnostics, parseTexErrors } from './engine/parse-errors'
+import { buildDiagnostics, isOverfullBox, parseTexErrors } from './engine/parse-errors'
 import { extractPreamble } from './engine/preamble-utils'
 import { previewErrorsCovered } from './engine/preview-diagnostics'
 import { RerunController, signatureOf } from './engine/rerun-controller'
@@ -323,8 +323,16 @@ function emptyTikzTelemetry(mode: 'document' | 'auto'): TikzExternalizationTelem
   }
 }
 
+// Overfull boxes and missing glyphs (`overfull-box` and `missing-glyph` diagnostics)
+// are never evidence that another pass is needed: convergence is judged by the
+// remaining rerun requests, injected artifacts and reference warnings. Any other
+// entry of `result.errors`, such as an undefined citation, still withholds it.
+function describesPageOnly(error: CompileResult['errors'][number]): boolean {
+  return error.code === 'missing-glyph' || isOverfullBox(error.message)
+}
+
 function canonicalReferencesSettled(result: CompileResult, finished: boolean): boolean {
-  return finished && result.success && !!result.pdf && result.errors.length === 0
+  return finished && result.success && !!result.pdf && result.errors.every(describesPageOnly)
 }
 
 /** Best-effort placement for a heap checkpoint during an already-needed full pass. */
