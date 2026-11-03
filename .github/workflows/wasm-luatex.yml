@@ -118,6 +118,15 @@ jobs:
             -v ${{ github.workspace }}/wasm-build/dist-luatex:/dist \
             luatex-wasm
 
+      - name: Upload selective Asyncify probe link inputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: luatex-probe-link-${{ env.TEXLIVE_YEAR }}
+          path: wasm-build/dist-luatex/probe-link.tgz
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Rotate Docker cache
         run: |
           rm -rf /tmp/.buildx-cache-luatex

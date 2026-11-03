@@ -228,6 +228,24 @@ if grep -aE 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|
   exit 1
 fi
 cat "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
+
+# PROBE (never merged): keep the exact link inputs so selective Asyncify links can be
+# iterated outside CI with the same emsdk image.
+PROBE_DIR="$OUT/probe-link"; mkdir -p "$PROBE_DIR"; probe_i=0
+for f in luatex-entry.o kpse-hook.o luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
+  libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a \
+  "${LUATEX_HARFBUZZ_ARCHIVES[@]}" \
+  "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a \
+  "$WB"/libs/zziplib/libzzip.a "$WB"/libs/libpng/libpng.a \
+  "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a \
+  "$XPDFLIB" "$WB"/libs/zlib/libz.a \
+  lib/lib.a "$WB"/texk/kpathsea/.libs/libkpathsea.a libmputil.a libunilib.a libmd5.a; do
+  probe_i=$((probe_i + 1)); b="$(printf '%02d' "$probe_i")-$(basename "$f")"
+  cp "$f" "$PROBE_DIR/$b"; echo "$b" >> "$PROBE_DIR/inputs.txt"
+done
+cp "$GLUE/luatex-library.js" "$PROBE_DIR/"
+tar -C "$OUT" -czf "$OUT/probe-link.tgz" probe-link && rm -rf "$PROBE_DIR"
+ls -l "$OUT/probe-link.tgz"
 cp "$GLUE/resolver-evidence.js" "$OUT/wasmtex-luatex-resolver-evidence.js"
 
 echo ""
