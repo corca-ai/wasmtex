@@ -13,6 +13,12 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Record every input of a pdfTeX compile resumed from a heap checkpoint. The
+  worker reopened the renamed recorder under its first name, so the job's `.fls`
+  kept only what was flushed before the checkpoint, and a host trusting the
+  complete manifest skipped later edits to files first read after that point and
+  kept showing the old PDF. Workers report the fix as `resumeRecorder`; on older
+  workers a resumed compile's manifest is incomplete.
 - Keep chapter previews for a chapter that starts past the page limit. Such a
   chapter was refused until the next full compile, so scrolling to it afterwards
   fell back to prefix previews.

@@ -34,6 +34,7 @@ export interface HeapCheckpointEngine {
   readonly supportsLineCheckpoints?: boolean
   readonly supportsSharedCheckpoints?: boolean
   readonly supportsFileCheckpoints?: boolean
+  readonly supportsResumeRecorder?: boolean
   setCheckpointBudget?(maxCount: number, maxBytes: number): void
   compile(options?: {
     checkpoints?: Array<{ id: string; line: number; path?: string }>
@@ -189,6 +190,11 @@ export class HeapCheckpointCompiler {
 
   get enabled(): boolean {
     return this.engine.supportsHeapCheckpoints
+  }
+
+  /** Whether a resume's recorder lists every input it read. */
+  get resumeRecordsInputs(): boolean {
+    return this.engine.supportsResumeRecorder === true
   }
 
   /** Ids and bytes of the checkpoints currently held (for telemetry and tests). */

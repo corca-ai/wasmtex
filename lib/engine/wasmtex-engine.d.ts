@@ -52,6 +52,7 @@ interface WorkerMessage {
     pagePreviewFallback?: boolean;
     checkpointIds?: string[];
     pagePreviewFork?: boolean;
+    resumeRecorder?: boolean;
     previewState?: unknown;
     result?: string;
     status?: number;
@@ -118,6 +119,7 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private pagePreviewSupported;
     private pagePreviewForkSupported;
     private pagePreviewFallbackSupported;
+    private resumeRecorderSupported;
     private previewFallbackId;
     /** @internal The additional checkpoint actually admitted by the fork. */
     get pagePreviewFallbackId(): string | undefined;
@@ -195,6 +197,9 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     get supportsHeapCheckpoints(): boolean;
     get supportsFileCheckpoints(): boolean;
     get supportsSharedCheckpoints(): boolean;
+    /** Whether a heap-checkpoint resume reports every input it read; older workers
+     *  lose the reads made after the checkpoint. */
+    get supportsResumeRecorder(): boolean;
     setCheckpointBudget(maxCount: number, maxBytes: number): void;
     terminate(): void;
     private prefetchTransport;

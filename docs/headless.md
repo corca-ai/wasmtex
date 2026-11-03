@@ -54,6 +54,10 @@ This check assumes the same main file, engine/options, and project topology.
 Compile conservatively when the manifest is absent/incomplete or a file was
 added, deleted, or renamed. The richer `telemetry.dependencies` graph is useful
 for inspection, but its best-effort observations are not itself a reuse proof.
+On a pdfTeX worker released before the `resumeRecorder` capability, a compile
+resumed from a heap checkpoint reports an incomplete manifest
+(`recorder-unavailable`): its recorder keeps only what was flushed before the
+checkpoint, so a resume is never proof that a PDF can be reused.
 
 With `incremental: true`, a host that owns the editor cursor can prepare the next
 pdfLaTeX checkpoint during idle time after a successful full compile:
