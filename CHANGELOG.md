@@ -13,6 +13,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Answer ok when the pdfTeX worker is asked to create a directory that already
+  exists. Hosts sync every parent directory again, so a book with chapter
+  folders logged "Not able to mkdir" for every keystroke.
 - Record every input of a pdfTeX compile resumed from a heap checkpoint. The
   worker reopened the renamed recorder under its first name, so the job's `.fls`
   kept only what was flushed before the checkpoint, and a host trusting the
