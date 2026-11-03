@@ -7,6 +7,7 @@ level up, starting with the [documentation index](../README.md).
 
 | Record | Scope | Current guide |
 | --- | --- | --- |
+| [Recorder inputs after a resume](resume-recorder-2026-11.md) | Truncated recorder after a heap-checkpoint resume, stale host reuse, controller fix, annual artifacts and source. | [Headless compiler](../headless.md) |
 | [Foreground preview fallback](preview-fallback-2026-10.md) | Earlier-edit delay, bounded two-state forks, rejected whole-chapter fallback, annual artifacts and source. | [Compile performance](../compile-performance.md) |
 | [pdfTeX startup measurements](startup-2026-10.md) | Annual transport/init qualification, paper edit and bandwidth measurements, provisional first PDF, rejected TikZ pass suppression. | [Compile performance](../compile-performance.md) |
 | [September 2026 compile experiments](compile-performance-2026-09.md) | Memory/warmup, font investigation, dvipdfmx index, build flags, fmt cache and transfer decisions. Later sections supersede earlier holds. | [Compile performance](../compile-performance.md) |
