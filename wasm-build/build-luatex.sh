@@ -230,6 +230,30 @@ fi
 cat "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
 cp "$GLUE/resolver-evidence.js" "$OUT/wasmtex-luatex-resolver-evidence.js"
 
+# PROBE (never merged): the same link instrumented with Asyncify, as for pdfTeX checkpoints.
+echo "=== PROBE: Asyncify LuaHBTeX link ==="
+em++ -O3 -flto -Wl,-u,htons,-u,ntohs "${LUATEX_DEBUG_FLAGS[@]}" \
+  -sEMIT_EMSCRIPTEN_LICENSE=1 \
+  luatex-entry.o kpse-hook.o \
+  luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
+  -Wl,--wrap=kpse_find_file \
+  libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a \
+  "${LUATEX_HARFBUZZ_ARCHIVES[@]}" \
+  "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a \
+  "$WB"/libs/zziplib/libzzip.a "$WB"/libs/libpng/libpng.a \
+  "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a \
+  "$XPDFLIB" "$WB"/libs/zlib/libz.a \
+  lib/lib.a "$WB"/texk/kpathsea/.libs/libkpathsea.a libmputil.a libunilib.a libmd5.a \
+  -sASYNCIFY=1 -sASYNCIFY_IMPORTS=["fd_read","wasi_snapshot_preview1.fd_read"] -sASYNCIFY_STACK_SIZE=1048576 -sASYNCIFY_ADVISE=1 -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
+  -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_malloc","_free"]' \
+  -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
+  -sINITIAL_MEMORY=134217728 \
+  -sMEMORY_GROWTH_GEOMETRIC_STEP=0.05 -sMEMORY_GROWTH_GEOMETRIC_CAP=16777216 \
+  --js-library "$GLUE/luatex-library.js" \
+  -o "$OUT/wasmtex-luatex-checkpoint.js" > "$OUT/probe-asyncify-advise.log" 2> "$OUT/probe-asyncify-link.log" \
+  && echo "PROBE: asyncify link ok" || echo "PROBE: asyncify link FAILED"
+ls -l "$OUT"/wasmtex-luatex-checkpoint.* "$OUT"/probe-* || true
+
 echo ""
 echo "=== Output ==="
 ls -lh "$OUT"/wasmtex-luatex.* || { echo "no output produced"; exit 1; }

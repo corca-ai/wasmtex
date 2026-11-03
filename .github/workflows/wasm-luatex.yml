@@ -118,6 +118,19 @@ jobs:
             -v ${{ github.workspace }}/wasm-build/dist-luatex:/dist \
             luatex-wasm
 
+      - name: Upload Asyncify probe
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: luatex-asyncify-probe-${{ matrix.texlive_year }}
+          path: |
+            wasm-build/dist-luatex/wasmtex-luatex-checkpoint.*
+            wasm-build/dist-luatex/probe-*
+            wasm-build/dist-luatex/wasmtex-luatex.wasm
+            wasm-build/dist-luatex/wasmtex-luatex.js
+            wasm-build/dist-luatex/wasmtex-luatex.worker.js
+          if-no-files-found: warn
+
       - name: Rotate Docker cache
         run: |
           rm -rf /tmp/.buildx-cache-luatex
