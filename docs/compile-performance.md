@@ -114,11 +114,13 @@ qualification remain separate from the SDK unit tests.
 The foreground fallback protocol retains a nearby state and an optional earlier
 state in the same worker, within the unchanged 192 MiB copy ceiling. Shared
 backing buffers count once; an oversized fallback is omitted. The authored
-controller plus bundled helpers is 102,088 bytes (gzip-9: 27,506 bytes); both
+controller plus bundled helpers is 102,316 bytes (gzip-9: 27,620 bytes); both
 annual controller ceilings are 103,000 bytes. Native WASM and format inputs
 remain unchanged by this protocol change; release receipts and annual
 qualification still bind the assembled artifacts. The [fallback qualification](history/preview-fallback-2026-10.md)
 records the delayed-edit reproduction, retained cold-start limit and annual proof.
+The [recorder qualification](history/resume-recorder-2026-11.md) records why a
+resumed compile now reports every input and how older workers are treated.
 
 ## Checkpoints inside included sources
 

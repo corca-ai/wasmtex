@@ -263,8 +263,12 @@ for (const command of ['include', 'subfile'] as const) {
           for (const extension of ['aux', 'toc', 'ind', 'out']) {
             outputs.push(await candidate.readOutput(`main.${extension}`) === await full.readOutput(`main.${extension}`))
           }
+          // A resume must still report every input, including the chapters after it.
+          const manifest = actual.telemetry?.dependencyManifest
+          const inputs = manifest?.complete === true &&
+            JSON.stringify(manifest.projectInputs) === JSON.stringify(expected.telemetry?.dependencyManifest?.projectInputs)
           rows.push({ success: actual.success, resumed: actual.phaseTimings?.checkpointResume === true,
-            pdf: normalize(actual.pdf) === normalize(expected.pdf), outputs: outputs.every(Boolean),
+            pdf: normalize(actual.pdf) === normalize(expected.pdf), outputs: outputs.every(Boolean), inputs,
             errors: actual.errors, synctex: !!actual.synctex && String(actual.synctex) === String(expected.synctex) })
         }
         candidate.setFile('chapter4.tex', files['chapter4.tex']!)
@@ -283,7 +287,7 @@ for (const command of ['include', 'subfile'] as const) {
     expect(out.coldEqual).toBe(true)
     expect(out.checkpoint).toEqual(out.expectedCheckpoint)
     expect(out.rows).toHaveLength(2)
-    for (const row of out.rows) expect(row).toEqual({ success: true, resumed: true, pdf: true, outputs: true, errors: [], synctex: true })
+    for (const row of out.rows) expect(row).toEqual({ success: true, resumed: true, pdf: true, outputs: true, inputs: true, errors: [], synctex: true })
     expect(out.fallback).toEqual({ resumed: false, equal: true })
   })
 }

@@ -1312,7 +1312,13 @@ export class WasmTexCompiler {
       )
     ).resume()
     if (!resume || !resume.final || !resume.result.pdf) return null
-    return resume.result
+    if (this.heap.resumeRecordsInputs) return resume.result
+    // Older workers reopen the renamed recorder under its first name after a
+    // restored heap, so the job's .fls lists only what was flushed before the
+    // checkpoint: a resume in chapter 12 of 24 reported chapters 1-11. A
+    // complete manifest would let a host reuse this PDF after an edit to a later
+    // chapter and never compile it.
+    return { ...resume.result, inputFilesComplete: false }
   }
 
   /** A discovery resume must not replay a prefix that already included a figure or an

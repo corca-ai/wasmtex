@@ -90,7 +90,7 @@ Module["preRun"] = function() {
 // the host that the engine is ready.
 Module["postRun"] = function() {
     if (hcSupported()) hcEnsureDataBuffer();
-    self.postMessage({ "result": "ok", "transportPrefetch": true, "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFallback": hcSupported(), "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
+    self.postMessage({ "result": "ok", "transportPrefetch": true, "heapCheckpoints": hcSupported(), "lineCheckpoints": hcSupported(), "fileCheckpoints": hcSupported(), "sharedCheckpoints": hcSupported(), "pagePreview": typeof _setPreviewPageLimit === "function", "pagePreviewFallback": hcSupported(), "resumeRecorder": hcSupported(), "pagePreviewFork": hcSupported() && typeof _setPreviewPageLimit === "function" });
     self.initmem = dumpHeapMemory();
 };
 
@@ -1998,7 +1998,9 @@ function hcSnapshotFS() {
     for (var fd = 3; fd < FS.streams.length; fd++) {
         var s = FS.streams[fd];
         if (!s) continue;
-        streams.push({ fd: fd, path: s.path, flags: s.flags, position: s.position });
+        // A stream keeps the path it was opened with, but web2c renames the open
+        // recorder to <job>.fls; reopening the old name would write a stray file.
+        streams.push({ fd: fd, path: s.node ? FS.getPath(s.node) : s.path, flags: s.flags, position: s.position });
     }
     return { files: files, streams: streams };
 }

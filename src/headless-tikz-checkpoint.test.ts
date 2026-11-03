@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { checkpointEngine, checkpointResult } from './__tests__/heap-checkpoint-engine'
 import * as factory from './engine/compile-engine'
 import { HeapCheckpointCompiler } from './engine/heap-checkpoints'
 import { WasmTexCompiler } from './headless'
-import type { CompileResult } from './types'
 
 const source = String.raw`\documentclass{article}
 \usepackage{tikz}
@@ -11,48 +11,8 @@ const source = String.raw`\documentclass{article}
 \begin{tikzpicture}\draw (0,0)--(2,1);\end{tikzpicture}
 \begin{tikzpicture}\draw (0,0)--(3,1);\end{tikzpicture}
 \end{document}`
-const result = (resumed = false): CompileResult => ({
-  success: true,
-  synctex: null,
-  pdf: new Uint8Array([resumed ? 1 : 2]),
-  log: '',
-  errors: [],
-  compileTime: 1,
-  ...(resumed
-    ? {
-        phaseTimings: {
-          workerTotalMs: 1,
-          heapRestoreMs: 0,
-          heapSnapshotMs: 0,
-          heapSnapshotBytes: 0,
-          heapSizeBytes: 0,
-          preambleBuildMs: 0,
-          formatInstallMs: 0,
-          preambleExportMs: 0,
-          postProcessMs: 0,
-          texRunMs: 1,
-          checkpointResume: true,
-        },
-      }
-    : {}),
-})
-function engine() {
-  return {
-    supportsHeapCheckpoints: true,
-    init: async () => {},
-    mkdir: async () => {},
-    writeFile: async () => {},
-    setMainFile: () => {},
-    readFile: async () => null,
-    flushCache: async () => {},
-    clearCache: async () => {},
-    terminate: vi.fn(),
-    getStatus: () => 'ready' as const,
-    compile: vi.fn(async () => result()),
-    compileFromHeapCheckpoint: vi.fn(async () => result(true)),
-    dropHeapCheckpoints: async () => {},
-  }
-}
+const result = checkpointResult
+const engine = () => checkpointEngine()
 afterEach(() => vi.restoreAllMocks())
 
 describe('TikZ discovery checkpoint admission', () => {

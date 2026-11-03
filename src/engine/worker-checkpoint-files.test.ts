@@ -55,3 +55,25 @@ it.each([
   expect(scope.snapshot.files['/work/book.pdf']).toBe('compiled PDF prefix')
   expect(scope._hc.hostWrites['book.pdf']).toBe('imported old PDF')
 })
+
+it('snapshots an open stream at the path of its renamed file', () => {
+  // web2c opens the recorder as pdftex<pid>.fls and renames it to the job name
+  // while it is still open; the stream keeps the name it was opened with.
+  const node = { path: '/work/main.fls' }
+  const scope = createContext({
+    performance,
+    importScripts() {},
+    FS: {
+      readdir: () => ['.', '..'],
+      streams: [null, null, null, { path: '/work/pdftex42.fls', node, flags: 577, position: 812 }],
+      getPath: (target: { path: string }) => target.path,
+    },
+  })
+  scope.self = scope
+  runInContext(
+    readFileSync(new URL('../../wasm-build/pdftex-worker.js', import.meta.url), 'utf8'),
+    scope,
+  )
+  const snapshot = runInContext('hcSnapshotFS()', scope)
+  expect(snapshot.streams).toEqual([{ fd: 3, path: '/work/main.fls', flags: 577, position: 812 }])
+})

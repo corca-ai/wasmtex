@@ -123,7 +123,16 @@ jobs:
             echo "::error::$tag already carries $(basename "$archive"); a published release is immutable"
             exit 1
           fi
-          gh release view "$tag" >/dev/null 2>&1 ||
-            gh release create "$tag" --title "Engine $release_id" \
+          # Releases are immutable once published, so the archive must arrive
+          # with the release; a published release can never receive it later.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            if [ "$(gh release view "$tag" --json isImmutable --jq .isImmutable)" = true ]; then
+              echo "::error::$tag is an immutable release without the archive; rebuild to a new release id"
+              exit 1
+            fi
+            gh release upload "$tag" "$archive" "$archive.sha256"
+          else
+            gh release create "$tag" "$archive" "$archive.sha256" --target "$GITHUB_SHA" \
+              --title "Engine $release_id" \
               --notes "Corresponding source for the TeX Live $TEXLIVE_YEAR engine release \`$release_id\`."
-          gh release upload "$tag" "$archive" "$archive.sha256"
+          fi

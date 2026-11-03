@@ -85,6 +85,7 @@ interface WorkerMessage {
   pagePreviewFallback?: boolean
   checkpointIds?: string[]
   pagePreviewFork?: boolean
+  resumeRecorder?: boolean
   previewState?: unknown
   result?: string
   status?: number
@@ -257,6 +258,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   private pagePreviewSupported = false
   private pagePreviewForkSupported = false
   private pagePreviewFallbackSupported = false
+  private resumeRecorderSupported = false
   private previewFallbackId: string | undefined
 
   /** @internal The additional checkpoint actually admitted by the fork. */
@@ -451,6 +453,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
         this.pagePreviewSupported = (data as { pagePreview?: unknown }).pagePreview === true
         this.pagePreviewForkSupported = data.pagePreviewFork === true
         this.pagePreviewFallbackSupported = data.pagePreviewFallback === true
+        this.resumeRecorderSupported = data.resumeRecorder === true
         this.sharedCheckpointsSupported = data.sharedCheckpoints === true
         this.fileCheckpointsSupported =
           (data as { fileCheckpoints?: unknown }).fileCheckpoints === true
@@ -793,6 +796,12 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   get supportsSharedCheckpoints(): boolean {
     return this.sharedCheckpointsSupported
+  }
+
+  /** Whether a heap-checkpoint resume reports every input it read; older workers
+   *  lose the reads made after the checkpoint. */
+  get supportsResumeRecorder(): boolean {
+    return this.resumeRecorderSupported
   }
 
   setCheckpointBudget(maxCount: number, maxBytes: number): void {
