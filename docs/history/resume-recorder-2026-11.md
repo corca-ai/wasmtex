@@ -53,6 +53,13 @@ benchmark runs, not percentiles.
 Unit tests cover the snapshot path of a renamed open stream and the manifest of
 a cold compile, a resume on an older worker and a resume on a fixed worker.
 
+Golden Canary [41585479990](https://github.com/corca-ai/wasmtex/actions/runs/41585479990)
+ran the registered candidates of both annual lines in Chrome: golden outputs,
+heap checkpoints, page previews and cross-host parity passed. The indexed
+`\include` and `\subfile` books resume the edited chapter with PDF, `.aux`,
+`.toc`, `.ind`, `.out` and SyncTeX equal to a full compile, and now also require
+the resumed dependency manifest to be complete and equal to the full compile's.
+
 `check-output-preservation.mjs` compared each assembled candidate with its
 annual baseline on `article.tex` and `fonts-and-microtype.tex`, at root and
 nested paths. All four comparisons per year matched using only the existing
