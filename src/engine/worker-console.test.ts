@@ -11,7 +11,7 @@ interface WorkerScope {
   postMessage: ReturnType<typeof vi.fn>
 }
 
-function loadController(name: string) {
+function loadController(name: string, fs?: unknown) {
   const source = readFileSync(resolve('wasm-build', name), 'utf8')
   const scope: WorkerScope = { postMessage: vi.fn() }
   const workerConsole = {
@@ -22,11 +22,12 @@ function loadController(name: string) {
     warn: vi.fn(),
   }
 
-  new Function('self', 'importScripts', 'console', 'performance', source)(
+  new Function('self', 'importScripts', 'console', 'performance', 'FS', source)(
     scope,
     vi.fn(),
     workerConsole,
     { now: () => 0 },
+    fs,
   )
 
   return { scope, workerConsole }
@@ -76,6 +77,34 @@ describe('engine worker console output', () => {
     })
 
     expect(workerConsole.warn).toHaveBeenCalledOnce()
+  })
+
+  it('answers ok for a pdfTeX directory that already exists', () => {
+    const nodes = new Map<string, 'dir' | 'file'>([['/work/figure', 'file']])
+    const fs = {
+      mkdir: (path: string) => {
+        if (nodes.has(path)) throw new Error('EEXIST')
+        nodes.set(path, 'dir')
+      },
+      stat: (path: string) => {
+        const mode = nodes.get(path)
+        if (!mode) throw new Error('ENOENT')
+        return { mode }
+      },
+      isDir: (mode: string) => mode === 'dir',
+    }
+    const { scope, workerConsole } = loadController('pdftex-worker.js', fs)
+
+    for (const url of ['chapters', 'chapters', 'figure']) {
+      scope.onmessage?.({ data: { cmd: 'mkdir', url } })
+    }
+
+    expect(scope.postMessage.mock.calls).toEqual([
+      [{ result: 'ok', cmd: 'mkdir' }],
+      [{ result: 'ok', cmd: 'mkdir' }],
+      [{ result: 'failed', cmd: 'mkdir' }],
+    ])
+    expect(workerConsole.error.mock.calls).toEqual([['Not able to mkdir figure']])
   })
 
   it('returns expected pdfTeX failures through the worker protocol without console dumps', () => {

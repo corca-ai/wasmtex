@@ -1365,13 +1365,20 @@ function compileFromCheckpointRoutine(data) {
 // --- File I/O routines -------------------------------------------------------
 
 function mkdirRoutine(dirname) {
+    var path = WORKROOT + "/" + dirname;
     try {
-        FS.mkdir(WORKROOT + "/" + dirname);
-        self.postMessage({ "result": "ok", "cmd": "mkdir" });
+        FS.mkdir(path);
     } catch(err) {
-        console.error("Not able to mkdir " + dirname);
-        self.postMessage({ "result": "failed", "cmd": "mkdir" });
+        // The host repeats mkdir on every sync; an existing directory is fine.
+        var stat = null;
+        try { stat = FS.stat(path); } catch(e) {}
+        if (!stat || !FS.isDir(stat.mode)) {
+            console.error("Not able to mkdir " + dirname);
+            self.postMessage({ "result": "failed", "cmd": "mkdir" });
+            return;
+        }
     }
+    self.postMessage({ "result": "ok", "cmd": "mkdir" });
 }
 
 function writeFileRoutine(filename, content) {
