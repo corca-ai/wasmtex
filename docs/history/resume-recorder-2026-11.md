@@ -76,8 +76,11 @@ their exact artifacts and receipts.
 The first 2025 candidate, `2025-d0c89e19cb43c7e8`, built the same controller
 but its source never reached its release: the repository now publishes
 immutable releases, and the workflow created the release before uploading the
-archive. That release was deleted and the line rebuilt after the workflow began
-creating the release together with its archive.
+archive. Its empty release was deleted (the protected tag remains, unused) and
+the line rebuilt after the workflow began creating each release together with
+its archive. Both published tags point at main `6856f34` because the workflow
+did not yet pass `--target`; the receipts name the controller commits
+(`cc70034` for 2026, `c16d824` for 2025), which this branch's merge preserves.
 
 The controller grows from 102,088 to 102,316 bytes (gzip-9: 27,531 to 27,620),
 within the unchanged 103,000-byte ceiling. Its SHA-256 is
