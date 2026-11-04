@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url'
 import { validateEngineReleaseComponents } from './lib/engine-release-components.mjs'
 
 // `run` replaces the paired pdfTeX/BibTeX download and `luatexRun` the LuaHBTeX one;
-// either may be omitted, not both.
-export function prepareEngineSourceCandidate(components, license, year, run, luatexRun) {
+// either may be omitted, not both. `rebuiltFormats` names families whose new run's own
+// format ships instead of the reused one: a change of format bytes, never an optimization.
+export function prepareEngineSourceCandidate(components, license, year, run, luatexRun, rebuiltFormats = []) {
   if (!['2025', '2026'].includes(year)) throw new Error('unsupported annual engine line')
   const runs = [['pdftex-bibtex', run, 'pdftex'], ['luahbtex', luatexRun, 'luatex']]
     .filter(([, value]) => value !== undefined)
@@ -21,6 +22,12 @@ export function prepareEngineSourceCandidate(components, license, year, run, lua
   const candidate = structuredClone(components)
   const release = validateEngineReleaseComponents(candidate, year)
   for (const [id, value] of runs) release.downloads.find((entry) => entry.id === id).runId = Number(value)
+  for (const family of rebuiltFormats) {
+    if (!release.reusedFormats?.some((entry) => entry.family === family)) {
+      throw new Error(`${family} has no reused format to rebuild`)
+    }
+    release.reusedFormats = release.reusedFormats.filter((entry) => entry.family !== family)
+  }
   validateEngineReleaseComponents(candidate, year)
   if (license.texliveVersion !== year) throw new Error('license annual engine line mismatch')
   const candidateLicense = {
@@ -45,8 +52,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const read = (path) => JSON.parse(readFileSync(path, 'utf8'))
   const pdftexRun = process.env.PDFTEX_RUN || undefined
   const luatexRun = process.env.LUATEX_RUN || undefined
+  const rebuiltFormats = (process.env.REBUILT_FORMATS || '').split(',').filter(Boolean)
   const candidate = prepareEngineSourceCandidate(
-    read(componentsPath), read(licensePath), year, pdftexRun, luatexRun,
+    read(componentsPath), read(licensePath), year, pdftexRun, luatexRun, rebuiltFormats,
   )
   for (const [path, value] of [[componentsPath, candidate.components], [licensePath, candidate.license]]) {
     writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
