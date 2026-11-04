@@ -370,7 +370,7 @@ self.onmessage = (ev) => {
     // Keyed exactly like kpse_find_file_impl: cacheKey `${format}/${filename}`,
     // saved at /tex/<filename> (on the LUAINPUTS/TEXINPUTS search path).
     try {
-      const savepath = `${TEXCACHEROOT}/${data.filename}`
+      const savepath = `${TEXCACHEROOT}/${cacheFileName(data.format, data.filename)}`
       FS.writeFile(savepath, new Uint8Array(data.data))
       const cacheKey = `${data.format}/${data.filename}`
       texlive200[cacheKey] = savepath
@@ -502,6 +502,18 @@ function resolveCdn(reqname, format) {
  *  only ever needed this bare fallback. */
 const BARE_STORED_FORMATS = new Set([3, 33]) // tfm, vf
 
+const CACHE_SUFFIXES = { 3: '.tfm', 33: '.vf' }
+
+/** The name a file is cached under. TEXCACHEROOT is flat, so a TFM and a VF requested
+ *  under one bare name (`ptmb8t`) must not overwrite each other. LuaTeX also looks up
+ *  the path it was given before opening it, and those formats search by suffix alone,
+ *  so a suffix-less VF is found once and then refused: Times stays a real font with no
+ *  outline and fails as a missing bitmap. */
+function cacheFileName(format, name) {
+  const suffix = CACHE_SUFFIXES[format]
+  return suffix && !name.endsWith(suffix) ? `${name}${suffix}` : name
+}
+
 function kpse_find_file_impl(nameptr, format, _mustexist) {
   const reqname = UTF8ToString(nameptr)
   if (reqname.includes('/')) return 0
@@ -577,7 +589,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   if (hit) {
     // Save under the engine's requested name (e.g. cmr12.tfm) so a re-open by that
     // name hits, even though the CDN served the bare `cmr12`.
-    const savepath = `${TEXCACHEROOT}/${reqname}`
+    const savepath = `${TEXCACHEROOT}/${cacheFileName(format, reqname)}`
     FS.writeFile(savepath, new Uint8Array(hit.response))
     texlive200[cacheKey] = savepath
     texlive200Source[cacheKey] = 'session-cache'
