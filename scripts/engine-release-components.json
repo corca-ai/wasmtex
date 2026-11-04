@@ -39,7 +39,7 @@
         },
         {
           "id": "luahbtex",
-          "runId": 41777480731,
+          "runId": 41796566696,
           "artifacts": [
             "wasm-luatex"
           ]
@@ -101,7 +101,7 @@
         },
         {
           "id": "luahbtex",
-          "runId": 41777480731,
+          "runId": 41796566696,
           "artifacts": [
             "wasm-luatex-2026"
           ]
