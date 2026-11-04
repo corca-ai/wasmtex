@@ -35,6 +35,10 @@ on:
         description: Optional LuaHBTeX run for an uncleared source candidate; leaves other families and original formats pinned
         required: false
         type: string
+      rebuilt_formats:
+        description: Comma-separated families whose candidate run's format replaces the reused one, for a release that changes format bytes
+        required: false
+        type: string
       publish:
         description: >-
           Attach the verified archive to its engine release. Off by default:
@@ -64,6 +68,7 @@ jobs:
         env:
           PDFTEX_RUN: ${{ inputs.pdftex_run }}
           LUATEX_RUN: ${{ inputs.luatex_run }}
+          REBUILT_FORMATS: ${{ inputs.rebuilt_formats }}
         run: node scripts/prepare-engine-source-candidate.mjs
       - name: Download pinned annual engine release
         uses: ./.github/actions/download-engine-release

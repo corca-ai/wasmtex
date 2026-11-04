@@ -29,6 +29,13 @@ build inputs changed; reuse the exact artifact and receipt together for every
 unaffected family. The assembler rejects any receipt whose immutable TeX Live mirror
 differs from the annual mirror pinned beside those run IDs.
 
+A release that deliberately changes a format's bytes drops that family from
+`reusedFormats`, so its new run's format and receipt ship together. A source
+candidate does the same through the `rebuilt_formats` input. Such a release is a
+compatibility change outside the
+[optimization contract](engine-optimization-policy.md#required-outcome), and its
+record must say why.
+
 For a transparent optimization, `reusedFormats` in the same annual component
 manifest pins the original format workflow runs separately. The download action
 verifies both complete generation receipts and composes schema-2 assembly
