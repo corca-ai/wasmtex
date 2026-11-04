@@ -31,10 +31,14 @@ differs from the annual mirror pinned beside those run IDs.
 
 A release that deliberately changes a format's bytes drops that family from
 `reusedFormats`, so its new run's format and receipt ship together. A source
-candidate does the same through the `rebuilt_formats` input. Such a release is a
-compatibility change outside the
+candidate does the same through the `rebuilt_formats` input, which needs a new run
+of that family. Such a release is a compatibility change outside the
 [optimization contract](engine-optimization-policy.md#required-outcome), and its
 record must say why.
+
+Once a family has no reused format, its next candidate run is refused until
+`reusedFormats` pins the shipped format's run, or `rebuilt_formats` names the family
+again. A later optimization therefore cannot change format bytes by accident.
 
 For a transparent optimization, `reusedFormats` in the same annual component
 manifest pins the original format workflow runs separately. The download action

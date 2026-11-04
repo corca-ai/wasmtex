@@ -64,7 +64,7 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - name: Prepare uncleared source candidate
-        if: github.event_name == 'workflow_dispatch' && (inputs.pdftex_run != '' || inputs.luatex_run != '')
+        if: github.event_name == 'workflow_dispatch' && (inputs.pdftex_run != '' || inputs.luatex_run != '' || inputs.rebuilt_formats != '')
         env:
           PDFTEX_RUN: ${{ inputs.pdftex_run }}
           LUATEX_RUN: ${{ inputs.luatex_run }}

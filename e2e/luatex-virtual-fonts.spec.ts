@@ -4,8 +4,8 @@ import { expect, test } from '@playwright/test'
  * LuaTeX looks a found path up again before opening it, and TFM and VF search by suffix
  * alone, so a font cached without its suffix is found and then refused. A virtual font
  * then stays a real one with no outline and asks for a bitmap. Under INITEX the same
- * refusal left `nullfont` in the format for cmex10, which took the large symbols out of
- * any document that does not load amsmath.
+ * refusal left `nullfont` in the format for the fonts preload.ltx loads directly, which
+ * took out large symbols without amsmath, and every `picture` line and circle.
  */
 const SOURCE = [
   '\\documentclass{article}',
@@ -14,11 +14,12 @@ const SOURCE = [
   '\\begin{document}',
   '\\section{Bold heading}',
   'Text with \\textit{italics}, and $\\int_0^1 x\\,dx + \\sum_i a_i$.',
+  '\\begin{picture}(40,20)\\put(0,0){\\line(1,1){10}}\\put(20,10){\\circle{8}}\\end{picture}',
   '\\end{document}',
   '',
 ].join('\n')
 
-test('LuaLaTeX uses virtual fonts and the large math symbols', async ({ page }) => {
+test('LuaLaTeX uses virtual fonts, large math symbols and picture fonts', async ({ page }) => {
   test.setTimeout(240_000)
   await page.goto('/')
   const result = await page.evaluate(async (options) => {
@@ -31,7 +32,7 @@ test('LuaLaTeX uses virtual fonts and the large math symbols', async ({ page }) 
         success,
         pdf: pdf?.length ?? 0,
         errors: errors.filter(({ severity }) => severity === 'error').map(({ message }) => message),
-        missing: /mktexpk|is undefined/.test(log),
+        missing: /mktexpk|is undefined|in font nullfont/.test(log),
       }
     } finally {
       compiler.dispose()

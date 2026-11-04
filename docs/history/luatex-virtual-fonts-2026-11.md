@@ -6,13 +6,15 @@ outside the [optimization contract](../engine-optimization-policy.md).
 
 ## Problem
 
-Two symptoms had one cause.
+Three symptoms had one cause.
 
 - A document using a virtual font failed: `\usepackage[T1]{fontenc}\usepackage{times}`
   stopped with `font ptmb8t at 720 not found`. The heap checkpoint record called this a
   Node host issue. Chromium failed the same way.
 - A document using `\int`, `\sum` or a large delimiter without `amsmath` lost those
   symbols with `\textfont3 is undefined`. `amsmath` redeclares the shape, which hid this.
+- A `picture` lost its lines, circles and arrows with `Missing character … in font
+  nullfont`, with or without `amsmath`.
 
 LuaTeX finds a file, then looks the returned path up again before opening it, and TFM
 and VF search by suffix alone. The worker cached a VF as `/tex/ptmb8t`, and a TFM
@@ -20,8 +22,8 @@ requested by bare name the same way, so the second lookup failed:
 
 - `font.read_vf` returned nil, the font stayed a real one with no outline, and the
   backend asked for a bitmap;
-- under INITEX, `preload.ltx`'s `\font\OMX/cmex/m/n/10=cmex10` failed and `nullfont` was
-  dumped into the format.
+- under INITEX, the fonts `preload.ltx` loads directly failed, and `nullfont` was dumped
+  into the format for `cmex10`, `line10`, `linew10`, `lcircle10` and `lcirclew10`.
 
 XeLaTeX compiled all ten test packages cleanly and needed no change.
 
@@ -37,7 +39,7 @@ XeLaTeX compiled all ten test packages cleanly and needed no change.
 
 The worker fix alone cures virtual fonts and keeps every document that already compiled
 byte-identical. CorTeX's owner chose to rebuild the format too and to apply it to
-existing projects, because a project that lost symbols would otherwise stay broken.
+existing projects, because a project that lost glyphs would otherwise stay broken.
 
 ## Evidence
 
@@ -50,6 +52,10 @@ Ten font packages under LuaLaTeX on the Node host:
 
 The packages are `bookman`, `courier`, `helvet`, `lmodern`, `mathpazo`, `mathptmx`,
 `newtx`, `palatino`, and `times` in OT1 and T1.
+
+A `picture` with `\line`, `\vector`, `\circle` and `\oval` under `amsmath` went from 21
+missing characters to none on the 2026 line, and its PDF now embeds `LINE10` and
+`LCIRCLE10`.
 
 `check-output-preservation.mjs` reports every LuaLaTeX document as changed, because the
 format's extra font shifts internal font numbers. These rendered comparisons replace it
@@ -84,5 +90,7 @@ reused. Against the replaced engines, only `wasmtex-luatex.worker.js`,
 ## Limits
 
 - The rendered comparison covers the corpus above, not every package.
+- A font that exists only as Metafont, such as `bbm`, still fails under LuaLaTeX: this
+  worker has no bitmap path, unlike the pdfTeX worker.
 - The Node host and this corpus can't show every effect of a font number shift on
   tools that read PDF internals.
