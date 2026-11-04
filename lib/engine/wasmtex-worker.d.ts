@@ -16,6 +16,15 @@ export interface WasmTexWorkerMsg {
     errorLog?: string;
     inputFiles?: string[];
     inputFilesComplete?: boolean;
+    /** Ready message: heap-checkpoint support of the loaded build; compile response: the
+     *  checkpoints taken during the run. */
+    heapCheckpoints?: unknown;
+    heapCheckpointRetention?: unknown;
+    heapCheckpointRefusals?: unknown;
+    lineCheckpoints?: boolean;
+    fileCheckpoints?: boolean;
+    resumeRecorder?: boolean;
+    pagePreview?: boolean;
     /** dumpcache response: fetched files + known-missing entries. */
     files?: CachedTexliveFile[];
     notFound?: TexliveFileEntry[];
@@ -24,6 +33,8 @@ export interface WasmTexWorkerMsg {
 export declare abstract class WasmTexWorker<TMsg extends WasmTexWorkerMsg = WasmTexWorkerMsg> extends BaseWorkerEngine<TMsg> {
     onFileDownload?: (filename: string) => void;
     protected version: TexliveVersion;
+    /** What the worker reported when it became ready. */
+    protected capabilities: TMsg | null;
     constructor(enginePath: string, texliveUrl: string | null, version: TexliveVersion);
     init(): Promise<void>;
     protected handleProtocolMessage(_data: TMsg): boolean;
@@ -48,6 +59,8 @@ export interface CompileWorkerResult {
     inputFiles?: string[];
     inputFilesComplete?: boolean;
     resolver?: ResolverEvidenceReport;
+    /** The worker's response, for engine-specific fields such as heap checkpoints. */
+    message?: WasmTexWorkerMsg;
 }
 /**
  * A WasmTex worker with a single-command compile entry point, shared by
@@ -58,9 +71,18 @@ export declare class CompileWorkerDriver extends WasmTexWorker {
     private readonly resolver;
     constructor(enginePath: string, texliveUrl: string | null, version: TexliveVersion, stage?: ResolverStage, profile?: CompletionSnapshotProfile);
     protected handleProtocolMessage(data: WasmTexWorkerMsg): boolean;
-    /** Run `command` (`compilelatex` | `compileformat` | `compilepdf`) and collect
-     *  the output. status 0 (ok) and 1 (warnings) both count as success. */
-    run(command: string): Promise<CompileWorkerResult>;
+    /** Heap-checkpoint support the loaded build reported (the LuaTeX checkpoint build). */
+    get supportsHeapCheckpoints(): boolean;
+    get supportsLineCheckpoints(): boolean;
+    get supportsFileCheckpoints(): boolean;
+    get supportsResumeRecorder(): boolean;
+    get supportsPagePreview(): boolean;
+    /** Free heap checkpoints in the worker (all when `ids` is omitted). */
+    dropHeapCheckpoints(ids?: string[]): Promise<void>;
+    /** Run `command` (`compilelatex` | `compileformat` | `compilepdf`, and on the checkpoint
+     *  build `compileheapcheckpoint` | `compilepagepreview`) with `fields` merged into the
+     *  message, and collect the output. status 0 (ok) and 1 (warnings) both count as success. */
+    run(command: string, fields?: Record<string, unknown>): Promise<CompileWorkerResult>;
     /** Load the CDN bloom filter so the worker skips sync XHR for definitely-
      *  missing files (fire-and-forget; the worker sends no reply). The buffer is
      *  cloned, NOT transferred — it's tiny (~172 KB) and the engine keeps it to

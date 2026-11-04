@@ -234,6 +234,11 @@ export class HeapCheckpointCompiler {
     return this.findValid(source, files, firstDifference(this.lastMain, source))?.id
   }
 
+  /** Forget a checkpoint the worker could not serve; the next full compile arms anew. */
+  forget(id: string): void {
+    this.checkpoints.delete(id)
+  }
+
   /** Select a prepared region before an edit, before its bytes are written. */
   previewCheckpointForEdit(
     source: string,
@@ -276,7 +281,7 @@ export class HeapCheckpointCompiler {
     this.checkpoints.clear()
     this.last = null
     this.lastMain = null
-    void this.engine.dropHeapCheckpoints()
+    this.engine.dropHeapCheckpoints().catch(() => {})
   }
 
   /** Keep a secondary-source edit only when the checkpoint proves it had not
@@ -311,7 +316,7 @@ export class HeapCheckpointCompiler {
         drop.push(id)
       }
     }
-    if (drop.length) void this.engine.dropHeapCheckpoints(drop)
+    if (drop.length) this.engine.dropHeapCheckpoints(drop).catch(() => {})
   }
 
   /**

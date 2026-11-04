@@ -81,6 +81,8 @@ export declare class HeapCheckpointCompiler {
     cloneForEngine(engine: HeapCheckpointEngine, onlyIds?: readonly (string | undefined)[]): HeapCheckpointCompiler;
     /** A preview must not advance the full-result baseline or arm new checkpoints. */
     previewCheckpoint(source: string, files: SourceSet): string | undefined;
+    /** Forget a checkpoint the worker could not serve; the next full compile arms anew. */
+    forget(id: string): void;
     /** Select a prepared region before an edit, before its bytes are written. */
     previewCheckpointForEdit(source: string, files: SourceSet, path: string, offset: number): string | undefined;
     reset(): void;

@@ -51,7 +51,7 @@ const { dirname, resolve } = require('node:path')
 const { fileURLToPath } = require('node:url')
 let __xhrSeq = 0
 globalThis.self = globalThis
-self.location = { href: 'file://' + workerData.workerPath, origin: 'file://' }
+self.location = { href: 'file://' + workerData.workerPath + workerData.search, origin: 'file://', search: workerData.search }
 self.postMessage = (m) => parentPort.postMessage(m)
 self.addEventListener = (t, fn) => { if (t === 'message') self.onmessage = fn }
 parentPort.on('message', (m) => { if (self.onmessage) self.onmessage({ data: m }) })
@@ -126,8 +126,8 @@ const dbg = (...a: unknown[]): void => {
   if (DEBUG) console.error('[node-host]', ...a)
 }
 
-function makeNodeEngineWorker(workerPath: string, wasmPath: string): EngineWorker {
-  const worker = new Worker(BOOTSTRAP, { eval: true, workerData: { workerPath, wasmPath } })
+function makeNodeEngineWorker(workerPath: string, wasmPath: string, search = ''): EngineWorker {
+  const worker = new Worker(BOOTSTRAP, { eval: true, workerData: { workerPath, wasmPath, search } })
   const earlyMessages: unknown[] = []
   let onmessage: ((ev: { data: unknown }) => void) | null = null
   let onerror: ((err: unknown) => void) | null = null
@@ -279,9 +279,19 @@ function createNodeWorkerHost(opts: NodeWorkerHostOptions): NodeWorkerHostInstal
     const route = routeAssetUrl(enginePath, baseUrl, publicRoot)
     const workerPath = route.matched ? readableAssetPath(route.localPath, publicRoot) : null
     if (!workerPath) throw new Error(`worker asset is outside publicDir or missing: ${enginePath}`)
-    const wasmPath = readableAssetPath(workerPath.replace(/\.worker\.js$/, '.wasm'), publicRoot)
+    // A worker loaded with `?engine=checkpoint` imports the checkpoint build when the asset
+    // set has one, and falls back to the plain build otherwise; inject the matching bytes.
+    const search = new URL(enginePath).search
+    const checkpoint =
+      new URLSearchParams(search).get('engine') === 'checkpoint' &&
+      readableAssetPath(workerPath.replace(/\.worker\.js$/, '-checkpoint.js'), publicRoot)
+        ? readableAssetPath(workerPath.replace(/\.worker\.js$/, '-checkpoint.wasm'), publicRoot)
+        : null
+    const wasmPath =
+      checkpoint ?? readableAssetPath(workerPath.replace(/\.worker\.js$/, '.wasm'), publicRoot)
     if (!wasmPath) throw new Error(`WASM asset is outside publicDir or missing: ${enginePath}`)
-    return makeNodeEngineWorker(workerPath, wasmPath)
+    // Without both checkpoint files the worker must load the plain build it gets bytes for.
+    return makeNodeEngineWorker(workerPath, wasmPath, checkpoint ? search : '')
   })
   try {
     globalThis.fetch = assetFetch

@@ -49,8 +49,13 @@ export interface WasmTexEngineOptions {
   texliveUrl?: string
   /** Load the Asyncify engine build that can take resumable mid-run checkpoints (#81).
    *  Roughly 20-30% slower per compile than the plain build, so hosts enable it only for
-   *  interactive incremental sessions. Browser workers only. */
+   *  interactive incremental sessions. The headless compiler asks for it only in browsers;
+   *  the Node host loads it for an engine constructed with it directly. */
   heapCheckpoints?: boolean
+  /** Load the LuaHBTeX checkpoint build, whose Asyncify instrumentation covers only the
+   *  functions on the stack while TeX reads a project line. Separate from
+   *  {@link heapCheckpoints} so a pdfLaTeX setting never loads it. */
+  luatexHeapCheckpoints?: boolean
   /** If true, do not attempt to preload the base .fmt file. */
   skipFormatPreload?: boolean
   /** If true, disable precompiled preamble snapshots and always run a full
@@ -190,7 +195,23 @@ export function mergeWarmupCaches(base: WarmupCache, override: WarmupCache): War
 }
 
 /** Checkpoints the worker took during this run (#81), as reported in the response. */
-function applyHeapCheckpoints(result: CompileResult, data: WorkerMessage): void {
+export function applyHeapCheckpoints(
+  result: CompileResult,
+  data: {
+    heapCheckpointRetention?: unknown
+    heapCheckpoints?: unknown
+    heapCheckpointRefusals?: unknown
+  },
+): void {
+  if (Array.isArray(data.heapCheckpointRefusals)) {
+    result.heapCheckpointRefusals = data.heapCheckpointRefusals.flatMap((entry) => {
+      const r = entry as Record<string, unknown>
+      if (typeof r.id !== 'string' || (r.reason !== 'stack' && r.reason !== 'budget')) return []
+      return [
+        { id: r.id, reason: r.reason, ...(typeof r.bytes === 'number' ? { bytes: r.bytes } : {}) },
+      ]
+    })
+  }
   const retained = data.heapCheckpointRetention
   if (
     typeof retained === 'object' &&

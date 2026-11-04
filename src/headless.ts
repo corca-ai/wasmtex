@@ -188,6 +188,7 @@ export async function compileAccessiblePdf(
     ...options,
     files: { ...options.files, [mainFile]: declaration.source },
     incremental: false,
+    luatexHeapCheckpoints: undefined,
     tikzExternalization: { mode: 'off' },
   })
   try {
@@ -402,6 +403,15 @@ export interface WasmTexCompilerOptions {
     HeapCheckpointOptions,
     'maxCheckpoints' | 'maxBytes' | 'minHeadBytes'
   >
+  /** Heap checkpoints for LuaLaTeX: canonical compiles and page previews resume from the
+   * paragraph before an edit. Loads the LuaHBTeX checkpoint build, which costs each frame a
+   * few percent. A single image over `maxBytes` is refused before it is copied; a new image
+   * that fits is held beside the retained ones until eviction. Omitted values keep the
+   * heap-checkpoint defaults (4 / 320 MiB / 512 head bytes). Off unless set; independent
+   * of `incremental`. */
+  luatexHeapCheckpoints?:
+    | Pick<HeapCheckpointOptions, 'maxCheckpoints' | 'maxBytes' | 'minHeadBytes'>
+    | undefined
   /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
    *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
    *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of
@@ -567,7 +577,10 @@ export class WasmTexCompiler {
   private exportSynced = new Map<string, string | Uint8Array>()
 
   constructor(options: WasmTexCompilerOptions = {}) {
-    for (const value of Object.values(options.heapCheckpointOptions ?? {})) {
+    for (const value of [
+      ...Object.values(options.heapCheckpointOptions ?? {}),
+      ...Object.values(options.luatexHeapCheckpoints ?? {}),
+    ]) {
       if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
         throw new RangeError('Invalid heap checkpoint budget')
       }
@@ -641,6 +654,24 @@ export class WasmTexCompiler {
     return files
   }
 
+  /** The engine and budget for heap checkpoints (#81), if any. LuaLaTeX resumes canonical
+   * compiles and page previews from its own checkpoint build when the host opts in; the
+   * #55 page-break path and preview forks stay pdfTeX-only. */
+  private heapEngine(): {
+    engine: WasmTexPdftexEngine | WasmTexLuatexEngine
+    options: WasmTexCompilerOptions['heapCheckpointOptions']
+  } | null {
+    if (
+      this.opts.incremental &&
+      this.opts.heapCheckpoints !== false &&
+      this.engine instanceof WasmTexPdftexEngine
+    )
+      return { engine: this.engine, options: this.opts.heapCheckpointOptions }
+    if (this.opts.luatexHeapCheckpoints && this.engine instanceof WasmTexLuatexEngine)
+      return { engine: this.engine, options: this.opts.luatexHeapCheckpoints }
+    return null
+  }
+
   /**
    * Ensure `this.engine` matches the engine the current main source requires.
    * On a kind change (or first call) it (re)creates and initializes the engine and
@@ -655,7 +686,11 @@ export class WasmTexCompiler {
     this.tikzPool?.dispose()
     this.tikzPool = null
     this.engineKind = this.detection.engine
-    this.engine = createCompileEngine(this.detection.engine, this.engineBaseOpts())
+    this.engine = createCompileEngine(this.detection.engine, {
+      ...this.engineBaseOpts(),
+      luatexHeapCheckpoints:
+        this.detection.engine === 'lualatex' && !!this.opts.luatexHeapCheckpoints,
+    })
     this.attachLoadProgress(this.engine)
     // The engine options (including warmup inputs) are fixed before notifying hosts.
     // Pass a detached value so a consumer cannot rewrite our selection state.
@@ -676,17 +711,15 @@ export class WasmTexCompiler {
         : null
     // The heap checkpoint controller only matters once compiles run; load it beside the
     // engine so hosts that never enable incremental compiles never ship it (#81).
-    this.heap =
-      this.opts.incremental &&
-      this.opts.heapCheckpoints !== false &&
-      this.engine instanceof WasmTexPdftexEngine
-        ? new ((
-            await this.operations.observe(import('./engine/heap-checkpoints'))
-          ).resume().HeapCheckpointCompiler)(this.engine, {
-            mainFile: this.mainFile,
-            ...this.opts.heapCheckpointOptions,
-          })
-        : null
+    const heapEngine = this.heapEngine()
+    this.heap = heapEngine
+      ? new ((
+          await this.operations.observe(import('./engine/heap-checkpoints'))
+        ).resume().HeapCheckpointCompiler)(heapEngine.engine, {
+          mainFile: this.mainFile,
+          ...heapEngine.options,
+        })
+      : null
     try {
       ;(await this.operations.observe(this.engine.init())).resume()
       this.unavailable = null
@@ -925,9 +958,10 @@ export class WasmTexCompiler {
     return { pdf: result.pdf, synctex: result.synctex, compileTime: result.compileTime, pageLimit }
   }
 
-  /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
-   * stops after the requested pages, so it previews edits to any existing source. With
-   * placement, an edit confined to one chapter typesets that chapter alone. */
+  /** A LuaTeX or XeTeX prefix starts from the format and stops after the requested pages,
+   * so it previews edits to any existing source. With placement, an edit confined to one
+   * chapter typesets that chapter alone. LuaTeX with heap checkpoints first resumes from
+   * the one covering the edit; any refusal falls back to those jobs. */
   private async previewFormatPages(
     engine: WasmTexLuatexEngine | WasmTexXetexEngine,
     pageLimit: number,
@@ -935,6 +969,12 @@ export class WasmTexCompiler {
   ): Promise<PagePreviewResult | null> {
     if (this.pagePreviewRequiresCheckpoint) return null
     ;(await this.operations.observe(this.syncModifiedFilesToEngine())).resume()
+    if (engine instanceof WasmTexLuatexEngine) {
+      const preview = (
+        await this.operations.observe(this.previewFromHeap(engine, pageLimit))
+      ).resume()
+      if (preview) return preview
+    }
     const chapter = placement ? this.previewChapter() : null
     if (chapter) {
       const result = (
@@ -952,6 +992,24 @@ export class WasmTexCompiler {
       (await this.operations.observe(engine.compilePagePreview(pageLimit))).resume(),
       pageLimit,
     )
+  }
+
+  /** A LuaTeX prefix resumed from the heap checkpoint covering the edit, if any. */
+  private async previewFromHeap(
+    engine: WasmTexLuatexEngine,
+    pageLimit: number,
+  ): Promise<PagePreviewResult | null> {
+    const checkpoint = this.heap?.enabled
+      ? this.heap.previewCheckpoint(this.mainSource(), this.projectTexFiles())
+      : undefined
+    if (!checkpoint) return null
+    const result = (
+      await this.operations.observe(engine.compileHeapPreview(pageLimit, checkpoint))
+    ).resume()
+    const preview = this.acceptedPreview(result, pageLimit)
+    // The worker no longer holds it (evicted, or lost with a crash): stop asking.
+    if (!preview && result && !result.success && !result.pdf) this.heap?.forget(checkpoint)
+    return preview
   }
 
   private acceptedPreview(result: CompileResult | null, pageLimit: number) {
@@ -1339,7 +1397,11 @@ export class WasmTexCompiler {
         return (
           sources.has(path) ||
           (!this.fs.getFile(path) &&
-            (path === 'texmf.cnf' || path === 'pdflatex.fmt' || path.endsWith('.aux')))
+            (path === 'texmf.cnf' ||
+              path === 'pdflatex.fmt' ||
+              path === 'wasmtex-luatex.fmt' ||
+              path === 'luaotfload.conf' ||
+              path.endsWith('.aux')))
         )
       })
     )
@@ -1409,16 +1471,19 @@ export class WasmTexCompiler {
     if (existed) this.heap?.invalidateFile(path, content)
     else this.heap?.reset() // A new file can change an earlier negative lookup.
     if (!existed || previewBaseline === null) return
-    // On pdfTeX only a retained checkpoint with complete unread-input proof can carry
-    // a secondary-source preview. Never fall back to the unchecked full prefix.
-    if (this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())) {
+    if (startsFromFormat(this.engine)) {
+      // A LuaLaTeX or XeLaTeX prefix starts from the format and reads every source afresh;
+      // a LuaLaTeX checkpoint only shortens it. A preamble input still needs a full
+      // compile, like the main file's preamble.
+      if (!this.engine.readsInPreamble(path)) {
+        this.pagePreviewBaseline = previewBaseline
+        this.previewEdits.add(path)
+      }
+    } else if (this.heap?.previewCheckpoint(this.mainSource(), this.projectTexFiles())) {
+      // On pdfTeX only a retained checkpoint with complete unread-input proof can carry
+      // a secondary-source preview. Never fall back to the unchecked full prefix.
       this.pagePreviewBaseline = previewBaseline
       this.pagePreviewRequiresCheckpoint = true
-    } else if (startsFromFormat(this.engine) && !this.engine.readsInPreamble(path)) {
-      // A LuaLaTeX or XeLaTeX prefix starts from the format and reads every source afresh.
-      // A preamble input still needs a full compile, like the main file's preamble.
-      this.pagePreviewBaseline = previewBaseline
-      this.previewEdits.add(path)
     }
   }
 
@@ -2060,6 +2125,7 @@ export class WasmTexCompiler {
       mainFile: this.mainFile,
       engine: this.engineKind,
       incremental: false,
+      luatexHeapCheckpoints: undefined,
       tikzExternalization: { mode: 'off' },
     })
   }
@@ -2072,6 +2138,7 @@ export class WasmTexCompiler {
       mainFile: this.mainFile,
       engine: this.engineKind,
       incremental: false,
+      luatexHeapCheckpoints: undefined,
       tikzExternalization: { mode: 'off' },
     })
   }

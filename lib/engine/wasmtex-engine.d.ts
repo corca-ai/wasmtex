@@ -18,8 +18,13 @@ export interface WasmTexEngineOptions {
     texliveUrl?: string;
     /** Load the Asyncify engine build that can take resumable mid-run checkpoints (#81).
      *  Roughly 20-30% slower per compile than the plain build, so hosts enable it only for
-     *  interactive incremental sessions. Browser workers only. */
+     *  interactive incremental sessions. The headless compiler asks for it only in browsers;
+     *  the Node host loads it for an engine constructed with it directly. */
     heapCheckpoints?: boolean;
+    /** Load the LuaHBTeX checkpoint build, whose Asyncify instrumentation covers only the
+     *  functions on the stack while TeX reads a project line. Separate from
+     *  {@link heapCheckpoints} so a pdfLaTeX setting never loads it. */
+    luatexHeapCheckpoints?: boolean;
     /** If true, do not attempt to preload the base .fmt file. */
     skipFormatPreload?: boolean;
     /** If true, disable precompiled preamble snapshots and always run a full
@@ -88,6 +93,12 @@ interface WorkerMessage {
  *  Exported for unit testing — the merge must keep `files` and `notFound`
  *  disjoint (the worker resolves a 404 before a preloaded file). */
 export declare function mergeWarmupCaches(base: WarmupCache, override: WarmupCache): WarmupCache;
+/** Checkpoints the worker took during this run (#81), as reported in the response. */
+export declare function applyHeapCheckpoints(result: CompileResult, data: {
+    heapCheckpointRetention?: unknown;
+    heapCheckpoints?: unknown;
+    heapCheckpointRefusals?: unknown;
+}): void;
 export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> implements CompileEngine {
     private readonly formatCacheIdentity;
     private formatPath;

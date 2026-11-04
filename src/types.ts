@@ -78,6 +78,10 @@ export interface CompileResult {
   /** Actual shared checkpoint backing bytes and retained IDs in a capable worker.
    * Includes checkpoint file snapshots; excludes the live WASM heap and JS metadata. */
   heapCheckpointRetention?: { ids: string[]; bytes: number }
+  /** Requested checkpoints the worker reached but refused: `stack` when uninstrumented
+   * code was on the stack at that line, `budget` when the image exceeded the byte budget.
+   * Arms the run never reached, or passed without stopping, are not listed. */
+  heapCheckpointRefusals?: Array<{ id: string; reason: 'stack' | 'budget'; bytes?: number }>
   /** Time in milliseconds */
   compileTime: number
   /** Raw synctex data (uncompressed or gzipped) from pdfTeX -synctex=1 */
