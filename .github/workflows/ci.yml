@@ -85,6 +85,12 @@ jobs:
           NESTED_OUTPUT_SMOKE: '1'
           WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.year }}
           WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.mirror }}
+      - name: LuaLaTeX heap checkpoints on Node
+        run: npx vitest run src/engine/luatex-heap-checkpoints.smoke.test.ts
+        env:
+          NODE_COMPILE_SMOKE: '1'
+          WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.year }}
+          WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.mirror }}
       - name: Nested output on Chromium (all three engines)
         run: npx playwright test nested-output --workers=1
         env:
