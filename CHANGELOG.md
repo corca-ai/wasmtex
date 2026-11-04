@@ -11,6 +11,13 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ## [Unreleased]
 
+### Added
+
+- LuaLaTeX heap checkpoints (`luatexHeapCheckpoints`): canonical compiles and page
+  previews resume from the paragraph before an edit on a LuaHBTeX build whose
+  Asyncify instrumentation covers only the line-read path. A refused or oversized
+  checkpoint is reported, never kept.
+
 ### Fixed
 
 - Answer ok when the pdfTeX worker is asked to create a directory that already
