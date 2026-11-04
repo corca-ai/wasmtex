@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { CompileWorkerDriver } from './wasmtex-worker'
+import { CompileWorkerDriver, type WasmTexWorkerMsg } from './wasmtex-worker'
 import { type EngineWorker, setWorkerFactory } from './worker-host'
 
 describe('WasmTexWorker init failure recovery', () => {
@@ -186,7 +186,7 @@ describe('CompileWorkerDriver resolver evidence', () => {
             if (fn) {
               queueMicrotask(() => {
                 fn({ data: { cmd: 'resolverready', schemaVersion: 1 } })
-                fn({ data: { result: 'ok' } })
+                fn({ data: { result: 'ok', heapCheckpoints: true } })
               })
             }
           },
@@ -200,11 +200,67 @@ describe('CompileWorkerDriver resolver evidence', () => {
     }
     const driver = new CompileWorkerDriver('/engine.js', '/tl/', '2026', 'luatex', profile)
     await driver.init()
+    expect(driver.supportsHeapCheckpoints).toBe(true)
 
     const result = await driver.run('compilelatex')
     expect(result.resolver).toMatchObject({
       profile,
       entries: [{ stage: 'luatex', requestedName: 'article.cls', outcome: 'resolved' }],
     })
+  })
+})
+
+describe('CompileWorkerDriver heap checkpoints', () => {
+  class Driver extends CompileWorkerDriver {
+    readonly posted: Array<Record<string, unknown>> = []
+    prepare(ready: WasmTexWorkerMsg) {
+      this.capabilities = ready
+      this.status = 'ready'
+      this.worker = {
+        postMessage: (message: Record<string, unknown>) => {
+          this.posted.push(message)
+          if (message.cmd === 'compilelatex')
+            this.deliverResponse('cmd:compile', {
+              cmd: 'compile',
+              result: 'ok',
+              status: 0,
+              log: '',
+              pdf: Uint8Array.of(1).buffer,
+              heapCheckpoints: [{ id: 'a', line: 3, bytes: 4096, ms: 1 }],
+            })
+          if (message.cmd === 'dropheapcheckpoints')
+            this.deliverResponse('cmd:dropheapcheckpoints', { cmd: 'dropheapcheckpoints' })
+        },
+      } as unknown as EngineWorker
+    }
+  }
+
+  it('reports the loaded build and forwards checkpoint fields', async () => {
+    const driver = new Driver('/engine.js', '/tl/', '2026', 'luatex')
+    driver.prepare({
+      result: 'ok',
+      heapCheckpoints: true,
+      lineCheckpoints: true,
+      pagePreview: true,
+    })
+    expect(driver.supportsHeapCheckpoints).toBe(true)
+    expect(driver.supportsLineCheckpoints).toBe(true)
+    expect(driver.supportsFileCheckpoints).toBe(false)
+    expect(driver.supportsPagePreview).toBe(true)
+    const arms = [{ id: 'a', line: 3 }]
+    const run = await driver.run('compilelatex', { checkpoints: arms })
+    expect(driver.posted.at(-1)).toEqual({ cmd: 'compilelatex', checkpoints: arms })
+    expect(run.message?.heapCheckpoints).toEqual([{ id: 'a', line: 3, bytes: 4096, ms: 1 }])
+    await driver.dropHeapCheckpoints(['a'])
+    expect(driver.posted.at(-1)).toEqual({ cmd: 'dropheapcheckpoints', ids: ['a'] })
+  })
+
+  it('sends no checkpoint commands to a plain build', async () => {
+    const driver = new Driver('/engine.js', '/tl/', '2026', 'luatex')
+    driver.prepare({ result: 'ok' })
+    expect(driver.supportsHeapCheckpoints).toBe(false)
+    expect(driver.supportsResumeRecorder).toBe(false)
+    await driver.dropHeapCheckpoints()
+    expect(driver.posted).toEqual([])
   })
 })

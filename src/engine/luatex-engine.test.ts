@@ -212,3 +212,77 @@ describe('LuaTeX page previews', () => {
     expect(main()).toBe('chapter/paper.tex')
   })
 })
+
+describe('LuaTeX heap checkpoints', () => {
+  function heapEngine(supported: boolean, preview = true) {
+    const instance = new WasmTexLuatexEngine({
+      texliveVersion: '2026',
+      luatexHeapCheckpoints: true,
+    })
+    const driver = Reflect.get(instance, 'tex') as CompileWorkerDriver
+    vi.spyOn(driver, 'writeFile').mockResolvedValue()
+    vi.spyOn(driver, 'supportsHeapCheckpoints', 'get').mockReturnValue(supported)
+    vi.spyOn(driver, 'supportsPagePreview', 'get').mockReturnValue(preview)
+    const run = vi.spyOn(driver, 'run').mockResolvedValue({
+      ...output(['./main.tex']),
+      log: 'Output written.\n(\\end occurred inside a group at level 1)',
+      message: {
+        heapCheckpoints: [
+          {
+            id: 'p',
+            line: 9,
+            bytes: 8192,
+            ms: 2,
+            inputs: ['/work/main.tex'],
+            inputsComplete: true,
+          },
+        ],
+        heapCheckpointRefusals: [
+          { id: 'q', reason: 'stack' },
+          { id: 'r', reason: 'other' },
+        ],
+      },
+    } as Run)
+    Reflect.set(instance, 'fmtBytes', new Uint8Array(70000))
+    return { instance, driver, run }
+  }
+
+  it('selects the checkpoint build only for LuaTeX workers that ask for it', () => {
+    const { driver } = heapEngine(true)
+    expect(Reflect.get(driver, 'enginePath')).toMatch(
+      /wasmtex-luatex\.worker\.js\?engine=checkpoint$/,
+    )
+    const plain = Reflect.get(new WasmTexLuatexEngine({ texliveVersion: '2026' }), 'tex')
+    expect(Reflect.get(plain, 'enginePath')).toMatch(/wasmtex-luatex\.worker\.js$/)
+  })
+
+  it('arms, resumes and previews with the budget and reports the worker records', async () => {
+    const { instance, run } = heapEngine(true)
+    instance.setCheckpointBudget(1, 200 * 1024 * 1024)
+    const budget = { maxCount: 1, maxBytes: 200 * 1024 * 1024 }
+    const armed = await instance.compile({ checkpoints: [{ id: 'p', line: 9 }] })
+    expect(run).toHaveBeenLastCalledWith('compilelatex', {
+      checkpoints: [{ id: 'p', line: 9 }],
+      checkpointBudget: budget,
+    })
+    expect(armed.heapCheckpoints?.map((record) => record.id)).toEqual(['p'])
+    expect(armed.heapCheckpointRefusals).toEqual([{ id: 'q', reason: 'stack' }])
+    await instance.compileFromHeapCheckpoint('p')
+    expect(run).toHaveBeenLastCalledWith('compileheapcheckpoint', {
+      id: 'p',
+      checkpointBudget: budget,
+    })
+    const preview = await instance.compileHeapPreview(4, 'p')
+    expect(run).toHaveBeenLastCalledWith('compilepagepreview', { pageLimit: 4, id: 'p' })
+    expect(preview?.log).toBe('Output written.')
+  })
+
+  it('refuses checkpoint commands on the plain build', async () => {
+    const { instance, run } = heapEngine(false)
+    await expect(instance.compileFromHeapCheckpoint('p')).rejects.toThrow(/not supported/)
+    expect(await instance.compileHeapPreview(4, 'p')).toBeNull()
+    expect(run).not.toHaveBeenCalled()
+    const noLimit = heapEngine(true, false)
+    expect(await noLimit.instance.compileHeapPreview(4, 'p')).toBeNull()
+  })
+})
