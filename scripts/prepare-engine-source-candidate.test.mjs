@@ -25,23 +25,41 @@ test('a LuaHBTeX candidate replaces only its own download, alone or with pdfTeX'
   const license = JSON.parse(readFileSync(new URL('../public/wasmtex/2026/LICENSE-MANIFEST.json', import.meta.url)))
   const runOf = (result, id) => result.components.years['2026'].downloads.find((entry) => entry.id === id).runId
   const pinned = (id) => components.years['2026'].downloads.find((entry) => entry.id === id).runId
-  const lua = prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321')
+  const lua = prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['luahbtex'])
   assert.equal(runOf(lua, 'luahbtex'), 987654321)
   assert.equal(runOf(lua, 'pdftex-bibtex'), pinned('pdftex-bibtex'))
-  const both = prepareEngineSourceCandidate(components, license, '2026', '123456789', '987654321')
+  const both = prepareEngineSourceCandidate(components, license, '2026', '123456789', '987654321', ['luahbtex'])
   assert.equal(runOf(both, 'pdftex-bibtex'), 123456789)
   assert.equal(runOf(both, 'luahbtex'), 987654321)
   assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', undefined, 'x'), /luatex run/)
 })
 
-test('a rebuilt format drops only its family from reuse', () => {
+test('a new run keeps its format reused unless the release rebuilds it', () => {
   const license = JSON.parse(readFileSync(new URL('../public/wasmtex/2026/LICENSE-MANIFEST.json', import.meta.url)))
+  const reuse = { family: 'luahbtex', runId: 1, artifact: 'wasm-luatex-2026' }
+  const pinned = structuredClone(components)
+  pinned.years['2026'].reusedFormats.push(reuse)
   const families = (result) => result.components.years['2026'].reusedFormats.map((entry) => entry.family)
-  const rebuilt = prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['luahbtex'])
+
+  const kept = prepareEngineSourceCandidate(pinned, license, '2026', undefined, '987654321')
+  assert.deepEqual(families(kept), ['pdftex', 'xetex', 'luahbtex'])
+  const rebuilt = prepareEngineSourceCandidate(pinned, license, '2026', undefined, '987654321', ['luahbtex'])
   assert.deepEqual(families(rebuilt), ['pdftex', 'xetex'])
+
   assert.throws(
-    () => prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['bibtex']),
-    /no reused format/,
+    () => prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321'),
+    /would change its format bytes/,
+  )
+  assert.doesNotThrow(
+    () => prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['luahbtex']),
+  )
+  assert.throws(
+    () => prepareEngineSourceCandidate(pinned, license, '2026', '123456789', undefined, ['luahbtex']),
+    /needs a new run/,
+  )
+  assert.throws(
+    () => prepareEngineSourceCandidate(pinned, license, '2026', undefined, '987654321', ['xetex']),
+    /needs a new run/,
   )
 })
 

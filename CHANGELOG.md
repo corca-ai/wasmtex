@@ -20,6 +20,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Keep preloaded fonts in the LuaLaTeX format. The same cache-name fault left `nullfont`
+  there, so `\int` and `\sum` without `amsmath` and every `picture` line and circle
+  lost their glyphs. This release changes the format's bytes, unlike an optimization.
 - Load virtual fonts under LuaLaTeX. The worker cached a VF without its suffix, and
   LuaTeX looks up a path it was given before opening it, in a format that searches
   by suffix alone. Times, Helvetica, Palatino, `mathptmx`, `newtx` and the like stayed

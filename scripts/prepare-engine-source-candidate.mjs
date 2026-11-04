@@ -7,11 +7,12 @@ import { fileURLToPath } from 'node:url'
 import { validateEngineReleaseComponents } from './lib/engine-release-components.mjs'
 
 // `run` replaces the paired pdfTeX/BibTeX download and `luatexRun` the LuaHBTeX one;
-// either may be omitted, not both. `rebuiltFormats` names families whose new run's own
-// format ships instead of the reused one: a change of format bytes, never an optimization.
+// either may be omitted, not both. A new run also builds a new format, so its family must
+// keep a reused format or be named in `rebuiltFormats`: a change of format bytes, never
+// an optimization.
 export function prepareEngineSourceCandidate(components, license, year, run, luatexRun, rebuiltFormats = []) {
   if (!['2025', '2026'].includes(year)) throw new Error('unsupported annual engine line')
-  const runs = [['pdftex-bibtex', run, 'pdftex'], ['luahbtex', luatexRun, 'luatex']]
+  const runs = [['pdftex-bibtex', run, 'pdftex', 'pdftex'], ['luahbtex', luatexRun, 'luatex', 'luahbtex']]
     .filter(([, value]) => value !== undefined)
   if (runs.length === 0) throw new Error('pdftex run must be a positive safe integer')
   for (const [, value, name] of runs) {
@@ -23,11 +24,17 @@ export function prepareEngineSourceCandidate(components, license, year, run, lua
   const release = validateEngineReleaseComponents(candidate, year)
   for (const [id, value] of runs) release.downloads.find((entry) => entry.id === id).runId = Number(value)
   for (const family of rebuiltFormats) {
-    if (!release.reusedFormats?.some((entry) => entry.family === family)) {
-      throw new Error(`${family} has no reused format to rebuild`)
+    if (!runs.some(([, , , runFamily]) => runFamily === family)) {
+      throw new Error(`${family} needs a new run to rebuild its format`)
     }
-    release.reusedFormats = release.reusedFormats.filter((entry) => entry.family !== family)
   }
+  for (const [, , , family] of runs) {
+    const reused = release.reusedFormats?.some((entry) => entry.family === family)
+    if (!reused && !rebuiltFormats.includes(family)) {
+      throw new Error(`${family} has no reused format, so this run would change its format bytes`)
+    }
+  }
+  release.reusedFormats = release.reusedFormats?.filter((entry) => !rebuiltFormats.includes(entry.family))
   validateEngineReleaseComponents(candidate, year)
   if (license.texliveVersion !== year) throw new Error('license annual engine line mismatch')
   const candidateLicense = {
