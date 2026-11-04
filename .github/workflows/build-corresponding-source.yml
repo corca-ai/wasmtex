@@ -31,6 +31,10 @@ on:
         description: Optional paired pdftex/bibtex run for an uncleared source candidate; leaves other families and original formats pinned
         required: false
         type: string
+      luatex_run:
+        description: Optional LuaHBTeX run for an uncleared source candidate; leaves other families and original formats pinned
+        required: false
+        type: string
       publish:
         description: >-
           Attach the verified archive to its engine release. Off by default:
@@ -56,9 +60,10 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - name: Prepare uncleared source candidate
-        if: github.event_name == 'workflow_dispatch' && inputs.pdftex_run != ''
+        if: github.event_name == 'workflow_dispatch' && (inputs.pdftex_run != '' || inputs.luatex_run != '')
         env:
           PDFTEX_RUN: ${{ inputs.pdftex_run }}
+          LUATEX_RUN: ${{ inputs.luatex_run }}
         run: node scripts/prepare-engine-source-candidate.mjs
       - name: Download pinned annual engine release
         uses: ./.github/actions/download-engine-release

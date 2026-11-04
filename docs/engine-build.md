@@ -185,3 +185,28 @@ resume it any number of times with an edited tail — see the [API notes on heap
 Asyncify adds code and execution overhead; measure the selected release rather
 than assuming a fixed percentage. The headless compiler loads this build only with `incremental: true` in a browser; Node hosts and the
 format extraction use the plain build. Both builds share `wasmtex-pdftex.fmt`.
+
+## LuaHBTeX checkpoint build (`wasmtex-luatex-checkpoint.*`)
+
+LuaHBTeX also links twice. The checkpoint link adds Asyncify with `fd_read` as the
+only unwinding import, but instruments only the functions listed in
+`wasm-build/luatex-checkpoint-frames.json`: those on the stack while TeX reads a
+project line. Instrumenting the whole engine slowed every frame by 22–38%; the
+list costs 0.1–5% and about 10 KB. The link fails when a listed function is
+missing from a build, for example after an annual source change inlines it.
+
+The checkpoint link keeps function names. The workflow then runs
+`scripts/checkpoint-frames.mjs`, which records the listed functions' indices as
+`self.wasmtexCheckpointFrames` at the end of the generated glue and strips the name
+section. A diagnostic build (`profile_names`) keeps the names. The worker refuses
+a checkpoint whose stack holds any other WebAssembly frame, so a frame missing
+from the list costs speed, never correctness.
+
+`texlive-luatex-preview-limit.patch` stops `ship_out` after a host-set page count,
+the way `tex.finish()` does, and `luatex-entry.c` exports `setPreviewPageLimit`.
+A preview resumed from a checkpoint needs this limit because a checkpoint line can
+sit where catcodes differ, so a stop hook injected there as text is unsafe. The
+patch applies to both annual sources, and the plain build carries it with a limit
+of zero. Both builds share `wasmtex-luatex.fmt`. The worker selects the
+checkpoint build with `?engine=checkpoint`, and the SDK asks for it only through
+`luatexHeapCheckpoints`.

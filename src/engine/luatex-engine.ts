@@ -12,7 +12,7 @@
  * `wasmtex-luatex.worker.js` controller, which in turn loads the generated
  * `wasmtex-luatex.js` core and its `.wasm` binary.
  */
-import type { CompileResult } from '../types'
+import type { CompileResult, HeapCheckpointArm } from '../types'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { LUATEX_KNOWN_404, LUATEX_PRELOAD } from './luatex-manifest'
 import {
@@ -23,7 +23,8 @@ import {
   firstChapterEntry,
   unicodeFormatUrl,
 } from './tex-fmt-engine'
-import type { WasmTexEngineOptions } from './wasmtex-engine'
+import { applyHeapCheckpoints, type WasmTexEngineOptions } from './wasmtex-engine'
+import type { CompileWorkerResult } from './wasmtex-worker'
 
 /** Directory receiving every `\\openout` file a preview writes. */
 export const LUATEX_PREVIEW_OUTPUT_DIR = 'wasmtex-preview-out'
@@ -57,6 +58,8 @@ export function luatexPreviewHook(
 const PREVIEW_STOP_LOG = /^\(\\end occurred (inside a group at level \d+|when .* incomplete)\)$/gm
 
 export class WasmTexLuatexEngine extends BaseTexFmtEngine {
+  private checkpointBudget: { maxCount: number; maxBytes: number } | null = null
+
   constructor(options: WasmTexEngineOptions = {}) {
     const version = options.texliveVersion ?? '2025'
     super(
@@ -84,12 +87,87 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
     await this.initTex()
   }
 
-  async compile(): Promise<CompileResult> {
+  /** True once the worker reported the checkpoint build (see `luatexHeapCheckpoints`). */
+  get supportsHeapCheckpoints(): boolean {
+    return this.tex.supportsHeapCheckpoints
+  }
+
+  get supportsLineCheckpoints(): boolean {
+    return this.tex.supportsLineCheckpoints
+  }
+
+  get supportsFileCheckpoints(): boolean {
+    return this.tex.supportsFileCheckpoints
+  }
+
+  get supportsResumeRecorder(): boolean {
+    return this.tex.supportsResumeRecorder
+  }
+
+  setCheckpointBudget(maxCount: number, maxBytes: number): void {
+    this.checkpointBudget = { maxCount: Math.min(maxCount, 64), maxBytes }
+  }
+
+  /** Compile; on the checkpoint build, `checkpoints` asks the worker to keep a resumable
+   *  state before reading each listed line (reported in `result.heapCheckpoints`). */
+  async compile(options?: { checkpoints?: HeapCheckpointArm[] }): Promise<CompileResult> {
     const start = performance.now()
     // 0. Ensure the LuaLaTeX format is built and present in the work dir.
     const fmtLog = await this.ensureFormat()
     // 1. LuaTeX: main.tex -> main.pdf (single pass; PDF returned in "out").
-    const lua = await this.tex.run('compilelatex')
+    const checkpoints = options?.checkpoints?.length ? options.checkpoints : undefined
+    const lua = await this.tex.run(
+      'compilelatex',
+      this.withBudget(checkpoints ? { checkpoints } : {}),
+    )
+    return this.finishCompile(lua, fmtLog, start)
+  }
+
+  /** Resume a compile from a checkpoint taken earlier: the worker restores that state,
+   *  reads the rest of the project as the host last wrote it, and finishes the run like a
+   *  normal compile. The caller guarantees the checkpoint is still valid. */
+  async compileFromHeapCheckpoint(
+    id: string,
+    checkpoints?: HeapCheckpointArm[],
+  ): Promise<CompileResult> {
+    if (!this.supportsHeapCheckpoints) {
+      throw new Error('heap checkpoints are not supported by this engine')
+    }
+    const start = performance.now()
+    const lua = await this.tex.run(
+      'compileheapcheckpoint',
+      this.withBudget({ id, ...(checkpoints?.length ? { checkpoints } : {}) }),
+    )
+    return this.finishCompile(lua, '', start)
+  }
+
+  /** A disposable prefix of pages 1..`pageLimit` resumed from heap checkpoint `id`; its
+   *  auxiliary files are put back by the worker. Null when this build cannot. */
+  async compileHeapPreview(pageLimit: number, id: string): Promise<CompileResult | null> {
+    if (!this.supportsHeapCheckpoints || !this.tex.supportsPagePreview) return null
+    const start = performance.now()
+    const lua = await this.tex.run('compilepagepreview', { pageLimit, id })
+    return this.result(
+      lua.success && !!lua.out,
+      lua.out,
+      lua.log.replace(PREVIEW_STOP_LOG, '').trim(),
+      start,
+      undefined,
+      undefined,
+      [lua.resolver],
+    )
+  }
+
+  /** Free checkpoints in the worker (all when `ids` is omitted). */
+  dropHeapCheckpoints(ids?: string[]): Promise<void> {
+    return this.tex.dropHeapCheckpoints(ids)
+  }
+
+  private withBudget(fields: Record<string, unknown>): Record<string, unknown> {
+    return this.checkpointBudget ? { ...fields, checkpointBudget: this.checkpointBudget } : fields
+  }
+
+  private finishCompile(lua: CompileWorkerResult, fmtLog: string, start: number): CompileResult {
     const log = `${fmtLog}\n${lua.log}`.trim()
     const result = this.result(
       lua.success && !!lua.out,
@@ -100,6 +178,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
       lua.inputFilesComplete,
       [lua.resolver],
     )
+    if (lua.message) applyHeapCheckpoints(result, lua.message)
     if (result.success) {
       this.recordFullPass(lua.inputFiles, lua.log, 'bytes')
       // After a successful compile that fetched new files, persist the worker's

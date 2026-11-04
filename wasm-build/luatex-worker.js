@@ -43,7 +43,16 @@ Module.preRun = () => {
   FS.mkdir(WORKROOT)
 }
 Module.postRun = () => {
-  self.postMessage({ result: 'ok' })
+  const checkpoints = hcSupported()
+  if (checkpoints) hcEnsureDataBuffer()
+  self.postMessage({
+    result: 'ok',
+    heapCheckpoints: checkpoints,
+    lineCheckpoints: checkpoints,
+    fileCheckpoints: checkpoints,
+    resumeRecorder: checkpoints,
+    pagePreview: typeof _setPreviewPageLimit === 'function',
+  })
   self.initmem = dumpHeapMemory()
 }
 Module.onAbort = () => {
@@ -281,6 +290,7 @@ function postOutput(relPath, status, recorderJobName) {
         cmd: 'compile',
         inputFiles,
         inputFilesComplete: recorderJobName ? inputFiles !== null : undefined,
+        ...hcResponseFields(),
       },
       [buf.buffer],
     )
@@ -292,20 +302,23 @@ function postOutput(relPath, status, recorderJobName) {
       cmd: 'compile',
       inputFiles,
       inputFilesComplete: false,
+      ...hcResponseFields(),
     })
   }
 }
 
-function compileLaTeXRoutine() {
+async function compileLaTeXRoutine(data = {}) {
   prepareExecutionContext()
   cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
-  const status = runEngine(_compileLaTeX)
+  hcArm(data.checkpoints)
+  const status = hc.armed.length ? await runArmedCompile() : runEngine(_compileLaTeX)
   // LuaTeX writes PDF directly — no XDV, no dvipdfmx.
   const jobName = jobNameForMain(self.mainfile)
   postOutput(`${WORKROOT}/${jobName}.pdf`, status, jobName)
 }
 
 function compileFormatRoutine() {
+  hcArm()
   prepareExecutionContext()
   const status = runEngine(_compileFormat)
   postOutput(`${WORKROOT}/lualatex.fmt`, status)
@@ -314,8 +327,15 @@ function compileFormatRoutine() {
 self.onmessage = (ev) => {
   const data = ev.data
   const cmd = data.cmd
-  if (cmd === 'compilelatex') compileLaTeXRoutine()
-  else if (cmd === 'compileformat') compileFormatRoutine()
+  hcApplyBudget(data.checkpointBudget)
+  if (cmd === 'compilelatex') compileLaTeXRoutine(data).catch(hcReportCrash)
+  else if (cmd === 'compileheapcheckpoint') compileFromHeapCheckpointRoutine(data).catch(hcReportCrash)
+  else if (cmd === 'compilepagepreview') compilePagePreviewRoutine(data).catch(hcReportCrash)
+  else if (cmd === 'dropheapcheckpoints') {
+    if (Array.isArray(data.ids)) for (const id of data.ids) delete hc.checkpoints[id]
+    else hc.checkpoints = {}
+    self.postMessage({ result: 'ok', cmd: 'dropheapcheckpoints' })
+  } else if (cmd === 'compileformat') compileFormatRoutine()
   else if (cmd === 'settexliveurl') {
     let url = data.url
     if (url && !url.endsWith('/')) url += '/'
@@ -327,6 +347,7 @@ self.onmessage = (ev) => {
   } else if (cmd === 'writefile') {
     try {
       FS.writeFile(`${WORKROOT}/${data.url}`, data.src)
+      if (hcSupported() && !/\.fmt$/.test(data.url)) hc.hostWrites[data.url] = data.src
       self.postMessage({ result: 'ok', cmd: 'writefile' })
     } catch {
       self.postMessage({ result: 'failed', cmd: 'writefile' })
@@ -399,6 +420,7 @@ self.onmessage = (ev) => {
     self.postMessage({ result: 'ok', cmd: 'dumpcache', msgId: data.msgId, files, notFound }, transfer)
   } else if (cmd === 'flushcache') {
     cleanDir(WORKROOT)
+    hcReset()
   } else if (cmd === 'grace') {
     self.close()
   }
@@ -585,6 +607,635 @@ function fontconfig_search_font_impl(_fontnamePtr, _varStringPtr) {
   return 0
 }
 
+// --- Heap checkpoints ----------------------------------------------------------
+//
+// Only on the checkpoint build (`?engine=checkpoint`). Its Asyncify instrumentation
+// covers just the functions on the stack while TeX reads a project line, listed by
+// index in `self.wasmtexCheckpointFrames`. A read that reaches an armed line offset
+// suspends TeX; the heap and the work directory at that moment form a checkpoint that
+// a later compile restores any number of times, after which TeX reads the edited tail.
+// A stack holding any other WebAssembly frame cannot be unwound safely, so that
+// checkpoint is refused and the read goes on. Modelled on the pdfTeX controller's heap
+// checkpoints; the host decides when a checkpoint is still valid.
+
+const hc = {
+  checkpoints: {}, // id -> snapshot
+  armed: [], // [{id, line, path, offset, node}] sorted by offset, for the run in progress
+  taken: [],
+  refused: [], // [{id, reason}] where reason is 'stack' or 'budget'
+  pending: null, // {wakeUp, cp} of the suspended run
+  resuming: null, // {node} until a resumed run's first read finishes the rewind
+  hostWrites: {}, // path -> latest content the host wrote, re-applied after a restore
+  readInputs: null,
+  readExtents: null,
+  tracking: false,
+  budget: { maxCount: 1, maxBytes: 200 * 1024 * 1024 },
+  tick: 0,
+  lastId: null,
+  dataPtr: 0,
+  hookInstalled: false,
+}
+
+function hcSupported() {
+  return (
+    typeof Asyncify !== 'undefined' &&
+    typeof _asyncify_start_rewind === 'function' &&
+    Array.isArray(self.wasmtexCheckpointFrames) &&
+    self.wasmtexCheckpointFrames.length > 1
+  )
+}
+
+function hcReset() {
+  hc.checkpoints = {}
+  hc.hostWrites = {}
+  hc.lastId = null
+}
+
+function hcApplyBudget(budget) {
+  if (
+    budget &&
+    Number.isSafeInteger(budget.maxCount) &&
+    budget.maxCount >= 0 &&
+    budget.maxCount <= 64 &&
+    Number.isSafeInteger(budget.maxBytes) &&
+    budget.maxBytes >= 0
+  ) {
+    hc.budget = { maxCount: budget.maxCount, maxBytes: budget.maxBytes }
+  }
+}
+
+// Reserve the Asyncify data buffer before the initialization snapshot captures malloc
+// state; otherwise a reset frees it behind the JS pointer and TeX can reuse it.
+function hcEnsureDataBuffer() {
+  if (hc.dataPtr) return
+  const ptr = _malloc(12 + Asyncify.StackSize)
+  hc.dataPtr = ptr
+  Asyncify.allocateData = () => {
+    Asyncify.setDataHeader(ptr, ptr + 12, Asyncify.StackSize)
+    Asyncify.setDataRewindFunc(ptr)
+    return ptr
+  }
+  // Resolve Emscripten's self-replacing lazy export before wrapping it.
+  _free(0)
+  const free = _free
+  _free = (p) => (p === ptr ? undefined : free(p))
+}
+
+// Every WebAssembly frame between the read (innermost) and the entry point (outermost)
+// must be instrumented, with no JavaScript frame between them. Anything unexpected,
+// including a truncated or unparsable trace, refuses the checkpoint.
+function hcStackInstrumented() {
+  const frames = self.wasmtexCheckpointFrames
+  const limit = Error.stackTraceLimit
+  let stack = ''
+  try {
+    Error.stackTraceLimit = 256
+    stack = String(new Error().stack || '')
+  } catch {
+    return false
+  } finally {
+    Error.stackTraceLimit = limit
+  }
+  const allowed = new Set(frames)
+  const sequence = []
+  for (const line of stack.split('\n')) {
+    if (!line.trim() || line.trim() === 'Error') continue
+    const match = /wasm-function\[(\d+)\]/.exec(line)
+    sequence.push(match ? Number(match[1]) : null)
+  }
+  const first = sequence.findIndex((entry) => entry !== null)
+  const last = sequence.findLastIndex((entry) => entry !== null)
+  if (first < 0) return false
+  const wasm = sequence.slice(first, last + 1)
+  if (wasm.includes(null)) return false
+  if (wasm[0] !== frames[0] || wasm[wasm.length - 1] !== frames[frames.length - 1]) return false
+  return wasm.every((index) => allowed.has(index))
+}
+
+// Byte offset of a 1-based line, counted on the file's bytes: decoding first would
+// shift it after an invalid UTF-8 sequence or a NUL.
+function hcLineOffset(bytes, line) {
+  let at = 0
+  for (let n = 1; n < line; n++) {
+    at = bytes.indexOf(10, at) + 1
+    if (at === 0) return -1
+  }
+  return at
+}
+
+// Arm checkpoints for the run about to start: [{id, line, path?}] in host line numbers.
+function hcArm(checkpoints) {
+  hc.armed = []
+  hc.taken = []
+  hc.refused = []
+  hc.readInputs = {}
+  hc.readExtents = {}
+  if (!checkpoints || !checkpoints.length || !hcSupported()) return
+  hcInstallReadHook()
+  const seen = new Set()
+  const sources = {}
+  for (const cp of checkpoints) {
+    const relative = cp.path === undefined ? self.mainfile : cp.path
+    if (
+      typeof relative !== 'string' ||
+      relative[0] === '/' ||
+      relative.split('/').some((part) => !part || part === '.' || part === '..')
+    )
+      continue
+    const path = `${WORKROOT}/${relative}`
+    try {
+      sources[path] ||= { bytes: FS.readFile(path), node: FS.lookupPath(path).node }
+    } catch {
+      continue
+    }
+    const offset = hcLineOffset(sources[path].bytes, cp.line)
+    const key = `${path}:${offset}`
+    if (offset < 0 || seen.has(key)) continue
+    seen.add(key)
+    hc.armed.push({ id: cp.id, line: cp.line, path: relative, offset, node: sources[path].node })
+  }
+  hc.armed.sort((a, b) => a.offset - b.offset)
+}
+
+function hcDisarm() {
+  hc.armed = []
+  hc.resuming = null
+}
+
+function hcInstallReadHook() {
+  if (hc.hookInstalled) return
+  hc.hookInstalled = true
+  const read = FS.read
+  FS.read = function (stream, buffer, offset, length, position) {
+    // While unwinding, serve nothing: fd_read's iov loop would otherwise read on and
+    // move the stream past the checkpoint.
+    if (Asyncify.state === Asyncify.State.Unwinding) return 0
+    if (length === 0) return read.call(FS, stream, buffer, offset, length, position)
+    if (hc.tracking && stream.path) hc.readInputs[stream.path] = true
+    const resuming = hc.resuming
+    if (resuming && Asyncify.state === Asyncify.State.Rewinding && stream.node === resuming.node) {
+      Asyncify.handleSleep(() => {})
+      hc.resuming = null
+    }
+    const pos = position === undefined ? stream.position : position
+    let index
+    while ((index = hc.armed.findIndex((cp) => cp.node === stream.node)) >= 0) {
+      const cp = hc.armed[index]
+      if (pos < cp.offset && pos + length > cp.offset) {
+        length = cp.offset - pos // stop exactly at the checkpoint
+        break
+      }
+      if (pos === cp.offset) {
+        if (Asyncify.state === Asyncify.State.Normal) {
+          if (!hcStackInstrumented()) {
+            hc.armed.splice(index, 1)
+            hc.refused.push({ id: cp.id, reason: 'stack' })
+            continue
+          }
+          Asyncify.handleSleep((wakeUp) => {
+            hc.pending = { wakeUp, cp }
+          })
+          return 0
+        }
+        if (Asyncify.state === Asyncify.State.Rewinding) {
+          Asyncify.handleSleep(() => {}) // completes the rewind
+          hc.armed.splice(index, 1)
+          continue
+        }
+      } else if (pos > cp.offset) {
+        hc.armed.splice(index, 1) // already past it
+        continue
+      }
+      break
+    }
+    const count = read.call(FS, stream, buffer, offset, length, position)
+    if (hc.tracking && count > 0) {
+      const path = FS.getPath(stream.node)
+      hc.readExtents[path] = Math.max(hc.readExtents[path] || 0, pos + count)
+    }
+    return count
+  }
+}
+
+function hcRetention() {
+  const buffers = new Set()
+  const ids = Object.keys(hc.checkpoints)
+  for (const id of ids) {
+    const checkpoint = hc.checkpoints[id]
+    for (const page of checkpoint.image.pages) buffers.add(page.data)
+    for (const data of Object.values(checkpoint.fs.files)) buffers.add(data)
+  }
+  let bytes = 0
+  for (const data of buffers) bytes += data.byteLength
+  return { ids, bytes }
+}
+
+function hcEnforceBudget() {
+  let held = hcRetention()
+  while (held.ids.length > hc.budget.maxCount || held.bytes > hc.budget.maxBytes) {
+    held.ids.sort((a, b) => hc.checkpoints[a].used - hc.checkpoints[b].used)
+    delete hc.checkpoints[held.ids[0]]
+    held = hcRetention()
+  }
+}
+
+// Offsets of nonzero 4 KiB blocks: what a sparse image would keep.
+function hcNonzeroBlocks() {
+  const words = new Int32Array(wasmMemory.buffer)
+  const blocks = []
+  for (let at = 0; at < words.length; at += 1024) {
+    const end = Math.min(words.length, at + 1024)
+    for (let k = at; k < end; k++) {
+      if (words[k]) {
+        blocks.push(at * 4)
+        break
+      }
+    }
+  }
+  return blocks
+}
+
+// Sparse memory image: nonzero blocks, sharing exact bytes with retained snapshots.
+function hcSparseImage(blocks) {
+  const candidates = {}
+  for (const checkpoint of Object.values(hc.checkpoints)) {
+    for (const page of checkpoint.image.pages) (candidates[page.at] ||= []).push(page.data)
+  }
+  const src = new Uint8Array(wasmMemory.buffer)
+  const pages = []
+  for (const at of blocks) {
+    const end = Math.min(src.length, at + 4096)
+    const words = new Int32Array(src.buffer, at, (end - at) >> 2)
+    let data = null
+    for (const prior of candidates[at] || []) {
+      if (prior.length !== end - at) continue
+      const priorWords = new Int32Array(prior.buffer, prior.byteOffset, words.length)
+      let equal = true
+      for (let k = 0; k < words.length; k++) {
+        if (priorWords[k] !== words[k]) {
+          equal = false
+          break
+        }
+      }
+      if (equal) {
+        data = prior
+        break
+      }
+    }
+    pages.push({ at, data: data || src.slice(at, end) })
+  }
+  return { length: src.length, pages }
+}
+
+function hcWorkFiles() {
+  const files = {}
+  const previous = hc.checkpoints[hc.lastId]?.fs.files ?? {}
+  const walk = (dir) => {
+    for (const name of FS.readdir(dir)) {
+      if (name === '.' || name === '..') continue
+      const path = `${dir}/${name}`
+      if (FS.isDir(FS.stat(path).mode)) {
+        walk(path)
+        continue
+      }
+      if (/\.fmt$/.test(name)) continue // read before any checkpoint; multi-MB
+      const node = FS.lookupPath(path).node
+      const prior = previous[path]
+      let same = !!prior && prior.length === node.usedBytes
+      for (let k = 0; same && k < node.usedBytes; k++) same = prior[k] === node.contents[k]
+      files[path] = same ? prior : node.contents ? node.contents.slice(0, node.usedBytes) : new Uint8Array(0)
+    }
+  }
+  walk(WORKROOT)
+  return files
+}
+
+function hcSnapshotStreams() {
+  const streams = []
+  for (let fd = 3; fd < FS.streams.length; fd++) {
+    const s = FS.streams[fd]
+    // A stream keeps the path it was opened with, but web2c renames the open recorder
+    // to <job>.fls; reopening the old name would write a stray file.
+    if (s) streams.push({ fd, path: s.node ? FS.getPath(s.node) : s.path, flags: s.flags, position: s.position })
+  }
+  return streams
+}
+
+// Unterminated terminal lines live in the TTY buffers, outside linear memory.
+function hcTerminal() {
+  return [1, 2].map((fd) => [...(FS.streams[fd]?.tty?.output ?? [])])
+}
+
+function hcRestoreTerminal(saved) {
+  ;[1, 2].forEach((fd, i) => {
+    const tty = FS.streams[fd]?.tty
+    if (tty && saved) tty.output = [...saved[i]]
+  })
+}
+
+// Empty the work directory except the formats the host installed before any run;
+// later fresh compiles load them by name.
+function hcClearWork() {
+  closeFSStreams()
+  for (const name of FS.readdir(WORKROOT)) {
+    if (name === '.' || name === '..') continue
+    const path = `${WORKROOT}/${name}`
+    if (FS.isDir(FS.stat(path).mode)) cleanDir(path)
+    else if (!/\.fmt$/.test(name)) FS.unlink(path)
+  }
+}
+
+function hcRestoreFS(snap) {
+  hcClearWork()
+  for (const [path, data] of Object.entries(snap.files)) {
+    try {
+      FS.mkdirTree(path.substring(0, path.lastIndexOf('/')))
+    } catch {}
+    FS.writeFile(path, data)
+  }
+  // Open outputs belong to the suspended engine; other project files take the host's
+  // latest bytes.
+  const outputs = new Set(snap.streams.filter((s) => (s.flags & 3) !== 0).map((s) => s.path))
+  for (const [relative, content] of Object.entries(hc.hostWrites)) {
+    const full = `${WORKROOT}/${relative}`
+    if (outputs.has(full)) continue
+    try {
+      FS.mkdirTree(full.substring(0, full.lastIndexOf('/')))
+    } catch {}
+    FS.writeFile(full, content)
+  }
+  const placeholders = []
+  for (const st of snap.streams) {
+    let stream = FS.open(st.path, st.flags)
+    while (stream.fd < st.fd) {
+      // keep fd numbering identical to the C side
+      placeholders.push(stream)
+      stream = FS.open(st.path, st.flags)
+    }
+    if (stream.fd !== st.fd) throw new Error(`heap checkpoint: fd ${stream.fd} != ${st.fd}`)
+    stream.position = st.position
+  }
+  for (const stream of placeholders) {
+    try {
+      FS.close(stream)
+    } catch {}
+  }
+}
+
+function hcPrefixSafe(cp) {
+  return (hc.readExtents[`${WORKROOT}/${cp.path}`] || 0) <= cp.offset
+}
+
+// Count first, copy second: an image over the budget is refused without being copied
+// and without evicting checkpoints that fit.
+function hcWorkBytes(dir = WORKROOT) {
+  let bytes = 0
+  for (const name of FS.readdir(dir)) {
+    if (name === '.' || name === '..') continue
+    const path = `${dir}/${name}`
+    if (FS.isDir(FS.stat(path).mode)) bytes += hcWorkBytes(path)
+    else if (!/\.fmt$/.test(name)) bytes += FS.lookupPath(path).node.usedBytes || 0
+  }
+  return bytes
+}
+
+function hcTakeSnapshot(cp) {
+  const start = performance.now()
+  const blocks = hcNonzeroBlocks()
+  const bytes = blocks.length * 4096 + hcWorkBytes()
+  if (hc.budget.maxCount < 1 || bytes > hc.budget.maxBytes) return { refused: 'budget', bytes }
+  const files = hcWorkFiles()
+  const image = hcSparseImage(blocks)
+  const inputs = hc.readInputs ? Object.keys(hc.readInputs) : null
+  return {
+    id: cp.id,
+    line: cp.line,
+    offset: cp.offset,
+    path: cp.path,
+    readExtents: { ...hc.readExtents },
+    prefixSafe: hcPrefixSafe(cp),
+    image,
+    currData: Asyncify.currData,
+    sp: stackSave(),
+    fs: { files, streams: hcSnapshotStreams() },
+    memlog: self.memlog,
+    terminal: hcTerminal(),
+    inputs,
+    inputsComplete: inputs !== null,
+    bytes,
+    ms: performance.now() - start,
+  }
+}
+
+function hcRestoreMemory(snap) {
+  const need = snap.image.length
+  const have = wasmMemory.buffer.byteLength
+  if (need > have) {
+    wasmMemory.grow(Math.ceil((need - have) / 65536))
+    updateMemoryViews()
+  }
+  const dst = new Uint8Array(wasmMemory.buffer)
+  dst.fill(0)
+  for (const page of snap.image.pages) dst.set(page.data, page.at)
+  stackRestore(snap.sp)
+}
+
+// After the entry point returned: if a checkpoint suspended it, keep the state and
+// continue; repeat for every armed checkpoint the run reaches.
+async function hcContinueWhileSuspended(status) {
+  let done = null
+  while (Asyncify.currData && hc.pending) {
+    const pending = hc.pending
+    hc.pending = null
+    const snap = hcTakeSnapshot(pending.cp)
+    if (snap.refused) {
+      hc.refused.push({ id: pending.cp.id, reason: snap.refused, bytes: snap.bytes })
+    } else {
+      snap.used = ++hc.tick
+      hc.checkpoints[snap.id] = snap
+      hc.lastId = snap.id
+      hcEnforceBudget()
+      hc.taken.push({
+        id: snap.id,
+        line: snap.line,
+        path: snap.path === self.mainfile ? undefined : snap.path,
+        prefixSafe: snap.prefixSafe,
+        bytes: snap.bytes,
+        ms: Math.round(snap.ms),
+        inputs: snap.inputs,
+        inputsComplete: snap.inputsComplete,
+      })
+    }
+    if (!done) done = Asyncify.whenDone()
+    try {
+      // wakeUp runs synchronously until the next suspension or completion; waiting for
+      // completion at every checkpoint would deadlock the second one.
+      pending.wakeUp(0)
+      if (!hc.pending) status = await done
+    } catch (e) {
+      if (isExitStatus(e)) status = e.status
+      else throw e
+    }
+  }
+  return status
+}
+
+function isExitStatus(e) {
+  return !!e && (e.name === 'ExitStatus' || typeof e.status === 'number')
+}
+
+// A run that died mid-unwind or mid-rewind leaves Asyncify's state behind; the next
+// compile on this worker must start from Normal. Retained checkpoints stay valid.
+function hcResetAsyncify() {
+  if (typeof Asyncify === 'undefined' || Asyncify.state === Asyncify.State.Normal) return
+  try {
+    if (Asyncify.state === Asyncify.State.Unwinding) _asyncify_stop_unwind()
+    else _asyncify_stop_rewind()
+  } catch {}
+  Asyncify.state = Asyncify.State.Normal
+  Asyncify.currData = null
+  hc.pending = null
+  hcDisarm()
+}
+
+// Every compile request gets exactly one reply. An abort already sent its own.
+function hcReportCrash(e) {
+  hcResetAsyncify()
+  if (typeof ABORT !== 'undefined' && ABORT) return
+  self.memlog += `\n[heap-checkpoint] ${e && e.stack ? e.stack : e}`
+  self.postMessage({ result: 'failed', status: -254, log: self.memlog, cmd: 'compile', ...hcResponseFields() })
+}
+
+// Checkpoint fields for a compile response.
+function hcResponseFields() {
+  if (!hcSupported()) return {}
+  const fields = { heapCheckpointRetention: hcRetention() }
+  const taken = hc.taken.filter((record) => !!hc.checkpoints[record.id])
+  if (taken.length) fields.heapCheckpoints = taken
+  if (hc.refused.length) fields.heapCheckpointRefusals = hc.refused
+  return fields
+}
+
+// The TeX run for compilelatex: armed checkpoints suspend it, the rest is synchronous.
+async function runArmedCompile() {
+  // Blocks above the initial snapshot keep bytes from earlier, larger runs; they would
+  // count against the budget and leak into the image.
+  new Uint8Array(wasmMemory.buffer).fill(0, self.initmem.byteLength)
+  hc.tracking = true
+  let status
+  try {
+    try {
+      status = _compileLaTeX()
+    } catch (e) {
+      if (isExitStatus(e)) status = e.status
+      else throw e
+    }
+    status = await hcContinueWhileSuspended(status)
+  } finally {
+    hc.tracking = false
+    hcDisarm()
+  }
+  return status
+}
+
+// compileheapcheckpoint {id, checkpoints?}: restore a checkpoint on the project files as
+// the host last wrote them and finish like a normal compile. A page preview passes
+// `pageLimit`, which lives in linear memory and so is set after the restore.
+async function compileFromHeapCheckpointRoutine(data, pageLimit = 0) {
+  const snap = hc.checkpoints[data.id]
+  const job = jobNameForMain(self.mainfile)
+  if (!snap || !hcSupported()) {
+    self.postMessage({ result: 'failed', status: -1, log: 'no such heap checkpoint', cmd: 'compile' })
+    return
+  }
+  snap.used = ++hc.tick
+  let status
+  try {
+    hcRestoreFS(snap.fs)
+    hcRestoreMemory(snap)
+    if (typeof _setPreviewPageLimit === 'function') _setPreviewPageLimit(pageLimit)
+    self.memlog = snap.memlog
+    hcRestoreTerminal(snap.terminal)
+    hcArm(pageLimit ? undefined : data.checkpoints)
+    for (const path of snap.inputs || []) hc.readInputs[path] = true
+    hc.readExtents = { ...snap.readExtents }
+    hc.armed = hc.armed.filter((cp) => cp.path !== snap.path || cp.offset > snap.offset)
+    hc.resuming = { node: FS.lookupPath(`${WORKROOT}/${snap.path}`).node }
+    hcInstallReadHook()
+    hc.tracking = true
+    Asyncify.state = Asyncify.State.Rewinding
+    Asyncify.currData = snap.currData
+    _asyncify_start_rewind(snap.currData)
+    try {
+      status = _compileLaTeX()
+    } catch (e) {
+      if (isExitStatus(e)) status = e.status
+      else throw e
+    }
+    status = await hcContinueWhileSuspended(status)
+  } catch (e) {
+    // The restored work directory holds the checkpoint's partial PDF: never report it.
+    hc.tracking = false
+    hcReportCrash(e)
+    return
+  } finally {
+    hc.tracking = false
+    hcDisarm()
+  }
+  postOutput(`${WORKROOT}/${job}.pdf`, status, pageLimit ? undefined : job)
+}
+
+// compilepagepreview {pageLimit, id?}: a disposable prefix. The work directory is put
+// back afterwards, so its auxiliary files never seed a later compile.
+async function compilePagePreviewRoutine(data) {
+  const limit = data.pageLimit
+  if (typeof _setPreviewPageLimit !== 'function' || !Number.isSafeInteger(limit) || limit < 1 || limit > 10000) {
+    self.postMessage({ result: 'failed', status: -1, log: 'unsupported page preview', cmd: 'compile' })
+    return
+  }
+  const saved = hcWorkFiles()
+  const terminal = hcTerminal()
+  try {
+    if (data.id) await compileFromHeapCheckpointRoutine(data, limit)
+    else {
+      hcArm()
+      prepareExecutionContext()
+      cwrap('setMainEntry', 'number', ['string'])(self.mainfile)
+      _setPreviewPageLimit(limit)
+      const status = runEngine(_compileLaTeX)
+      postOutput(`${WORKROOT}/${jobNameForMain(self.mainfile)}.pdf`, status)
+    }
+  } finally {
+    _setPreviewPageLimit(0)
+    hcClearWork()
+    for (const [path, content] of Object.entries(saved)) {
+      try {
+        FS.mkdirTree(path.substring(0, path.lastIndexOf('/')))
+      } catch {}
+      FS.writeFile(path, content)
+    }
+    hcRestoreTerminal(terminal)
+  }
+}
+
 self.kpse_find_file_impl = kpse_find_file_impl
 self.fontconfig_search_font_impl = fontconfig_search_font_impl
-importScripts('wasmtex-luatex.js')
+
+// The engine binary: the plain build, or the checkpoint build when the host loaded this
+// worker with `?engine=checkpoint`. A self-hosted asset set may predate the checkpoint
+// build; the plain engine then boots and reports no checkpoint support.
+;(() => {
+  let wantCheckpoint = false
+  try {
+    wantCheckpoint = new URLSearchParams(self.location.search).get('engine') === 'checkpoint'
+  } catch {}
+  if (wantCheckpoint) {
+    try {
+      importScripts('wasmtex-luatex-checkpoint.js')
+      return
+    } catch (e) {
+      console.warn(`[wasmtex] checkpoint engine unavailable, loading the plain build: ${e}`)
+    }
+  }
+  importScripts('wasmtex-luatex.js')
+})()

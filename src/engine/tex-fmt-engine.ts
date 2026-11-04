@@ -53,8 +53,9 @@ export function createCompileWorker(
     mirrorRevision: null,
   }
   const stage = binary === 'dvipdfm' ? 'dvipdfmx' : binary
+  const worker = engineWorkerUrl(base, version, binary)
   return new CompileWorkerDriver(
-    engineWorkerUrl(base, version, binary),
+    binary === 'luatex' && options.luatexHeapCheckpoints ? `${worker}?engine=checkpoint` : worker,
     url,
     version,
     stage,

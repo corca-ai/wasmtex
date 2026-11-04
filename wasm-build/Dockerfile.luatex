@@ -56,6 +56,7 @@ RUN mkdir -p /build/native /build/wasm /dist
 # configuration. The exact patch must apply without fuzz to the pinned source.
 COPY patches/texlive-wtpdf.patch /src/patches/texlive-wtpdf.patch
 COPY patches/texlive-wtpdf-2026.patch /src/patches/texlive-wtpdf-2026.patch
+COPY patches/texlive-luatex-preview-limit.patch /src/patches/texlive-luatex-preview-limit.patch
 COPY pdf-backend/wtpdf.h /src/pdf-backend/wtpdf.h
 COPY pdf-backend/wtpdf-xpdf.cc /src/pdf-backend/wtpdf-xpdf.cc
 COPY pdf-backend/wtpdf-smoke.cc /src/pdf-backend/wtpdf-smoke.cc
@@ -80,6 +81,8 @@ RUN cd /src/texlive-source && \
       git apply --check /src/patches/texlive-wtpdf.patch && \
       git apply /src/patches/texlive-wtpdf.patch; \
     fi && \
+    git apply --check /src/patches/texlive-luatex-preview-limit.patch && \
+    git apply /src/patches/texlive-luatex-preview-limit.patch && \
     ./reautoconf --force texk/web2c && \
     ! grep -E 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' \
         texk/web2c/luatexdir/image/epdf.h \
@@ -148,6 +151,7 @@ COPY resolver-evidence.js /src/resolver-evidence.js
 COPY luatex-library.js /src/luatex-library.js
 COPY luatex-entry.c /src/luatex-entry.c
 COPY kpse-hook.c /src/kpse-hook.c
+COPY luatex-checkpoint-frames.json /src/luatex-checkpoint-frames.json
 
 RUN chmod +x /src/build-luatex.sh
 

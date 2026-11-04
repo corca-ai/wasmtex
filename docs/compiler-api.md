@@ -77,6 +77,7 @@ edits or disposes the compiler, the normal cancellation contract still applies.
 | `onLoadProgress` | `(event: LoadProgressEvent) => void` | - | Load progress for a host UI: `{ phase: 'format', percent }` while the precompiled format downloads, `{ phase: 'file', file, count }` for every TeX Live file fetched on demand. Pair with `warmup({ onProgress })` for the prefetch phase. |
 | `incremental` | `boolean` | `false` | Enable [incremental compilation](#incremental-compilation) via mid-document checkpoints (pdfLaTeX only); in a browser this loads the checkpoint engine for [heap checkpoints](#heap-checkpoints-arbitrary-line-incremental-compilation). |
 | `heapCheckpointOptions` | `{ maxCheckpoints?: number; maxBytes?: number; minHeadBytes?: number }` | 4 checkpoints / 320 MiB / 512 head bytes | Retained browser pdfLaTeX heap checkpoints, bounded by count and retained image/filesystem backing bytes (shared blocks count once on capable workers). Values must be nonnegative safe integers. `minHeadBytes: 0` permits a checkpoint at the first body line. Oversized checkpoints are dropped; compilation falls back to its full path. Does not bound Wasm extent, temporary snapshot allocation or legacy page-break checkpoints. |
+| `luatexHeapCheckpoints` | `{ maxCheckpoints?: number; maxBytes?: number; minHeadBytes?: number }` | off | Load the LuaHBTeX [checkpoint build](engine-build.md#luahbtex-checkpoint-build-wasmtex-luatex-checkpoint) and resume LuaLaTeX compiles and page previews from [heap checkpoints](#luatex-heap-checkpoints) with this budget. Independent of `incremental`; works in Node hosts. |
 | `tikzExternalization` | `{ mode?: 'document' \| 'auto' \| 'off'; workers?: number; idleMs?: number }` | `{ mode: 'document' }` | [TikZ figure externalization](#tikz-figure-externalization): render `\tikzexternalize`d pictures on a pool of sibling compilers and reuse them across edits. |
 | `completionProfile` | `{ id: string; mirrorRevision: string \| null }` | derived | Stable compile-profile identity for runtime completion snapshots. Bind an immutable mirror revision when available. |
 | `backends` | `BackendRegistry` | - | Per-stage backend registry. Every stage defaults to client/local (nothing leaves the device); register a **server** backend for a stage to offload it. The headless compiler routes `BIBTEX_STAGE`, `BIBER_STAGE`, and `INDEX_STAGE`; engine-pass and export stages are not built-in routes. Biber also accepts a host-provided local executor. See [Server backends](#server-backends). |
@@ -334,6 +335,35 @@ checkpoint bytes take precedence over imported files with the same path, such as
   compiler selects it only with `incremental: true` in browser workers; Node keeps
   the plain build and page-break path. Measure checkpoint preparation, resumed
   edits and total latency separately with the [development probes](engine-testing.md#engine-cpu-diagnostics).
+
+#### LuaTeX heap checkpoints
+
+`luatexHeapCheckpoints` gives LuaLaTeX the same controller with its own budget.
+Canonical compiles take a checkpoint before the edited paragraph and resume from it
+on the next edit. `previewPages()` first resumes from the checkpoint that covers the
+edit, stopping after the requested pages with the engine's page limit, and puts the
+work directory back. Without such a checkpoint, or when that preview fails, it runs
+the prefix or chapter job from the format as before. The page-break path and preview
+forks stay pdfTeX-only.
+
+A LuaTeX image is larger than a pdfTeX one: measured sparse images were 119–155 MiB
+for Latin-script papers and books, and 464 MiB for a kotex paper with its CJK fonts
+loaded. The worker counts an image before copying it and refuses one over
+`maxBytes` without evicting checkpoints that fit. A new image that fits is held
+beside the retained ones until the budget evicts the least recently used, so peak
+memory is the retained images plus one new image. Omitted values keep the defaults
+(4 checkpoints, 320 MiB, 512 head bytes); set `maxCheckpoints: 1` and a `maxBytes`
+the host can afford. `result.heapCheckpointRefusals` reports each requested
+checkpoint the run reached but refused; arms it never reached are not listed:
+
+- `budget`: the image exceeded `maxBytes`.
+- `stack`: code outside the instrumented read path was on the stack at that line,
+  for example a macro scanning an argument across lines.
+
+On measured papers, a preview resumed from the paragraph before an edit took
+34–50 ms, against 380–680 ms for the prefix job. A resumed compile was 55–67%
+faster than a fresh one. The checkpoint build's frames are 0.1–5% slower even
+when no checkpoint is taken.
 
 Set `heapCheckpoints: false` to keep the plain engine while retaining page-break
 checkpoints, preamble reuse and ordinary compilation. This avoids admitting the

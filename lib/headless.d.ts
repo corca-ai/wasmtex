@@ -88,6 +88,13 @@ export interface WasmTexCompilerOptions {
      * Applies to the browser pdfLaTeX heap path, not legacy page-break checkpoints.
      * A checkpoint exceeding the budget is dropped; full compilation still works. */
     heapCheckpointOptions?: Pick<HeapCheckpointOptions, 'maxCheckpoints' | 'maxBytes' | 'minHeadBytes'>;
+    /** Heap checkpoints for LuaLaTeX: canonical compiles and page previews resume from the
+     * paragraph before an edit. Loads the LuaHBTeX checkpoint build, which costs each frame a
+     * few percent. A single image over `maxBytes` is refused before it is copied; a new image
+     * that fits is held beside the retained ones until eviction. Omitted values keep the
+     * heap-checkpoint defaults (4 / 320 MiB / 512 head bytes). Off unless set; independent
+     * of `incremental`. */
+    luatexHeapCheckpoints?: Pick<HeapCheckpointOptions, 'maxCheckpoints' | 'maxBytes' | 'minHeadBytes'> | undefined;
     /** TikZ/pgfplots figure externalization (#82). By default (`mode: 'document'`) a document
      *  that calls `\tikzexternalize` gets its figures rendered by a pool of sibling compilers
      *  and cached by the library's own MD5, so a text edit recompiles no picture — instead of
@@ -194,6 +201,10 @@ export declare class WasmTexCompiler {
     private mainSource;
     /** All project `.tex` sources (path → content), for multi-file incremental compile. */
     private projectTexFiles;
+    /** The engine and budget for heap checkpoints (#81), if any. LuaLaTeX resumes canonical
+     * compiles and page previews from its own checkpoint build when the host opts in; the
+     * #55 page-break path and preview forks stay pdfTeX-only. */
+    private heapEngine;
     /**
      * Ensure `this.engine` matches the engine the current main source requires.
      * On a kind change (or first call) it (re)creates and initializes the engine and
@@ -227,10 +238,13 @@ export declare class WasmTexCompiler {
     previewColdPages(pageLimit: number): Promise<PagePreviewResult | null>;
     private previewColdPagesIdle;
     private previewPagesIdle;
-    /** LuaTeX and XeTeX have no heap checkpoints: each prefix starts from the format and
-     * stops after the requested pages, so it previews edits to any existing source. With
-     * placement, an edit confined to one chapter typesets that chapter alone. */
+    /** A LuaTeX or XeTeX prefix starts from the format and stops after the requested pages,
+     * so it previews edits to any existing source. With placement, an edit confined to one
+     * chapter typesets that chapter alone. LuaTeX with heap checkpoints first resumes from
+     * the one covering the edit; any refusal falls back to those jobs. */
     private previewFormatPages;
+    /** A LuaTeX prefix resumed from the heap checkpoint covering the edit, if any. */
+    private previewFromHeap;
     private acceptedPreview;
     /**
      * The one `\include`d chapter edited since the full pass, when nothing else changed.

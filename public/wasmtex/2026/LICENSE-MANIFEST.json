@@ -67,7 +67,9 @@
       "patterns": [
         "wasmtex-luatex.js",
         "wasmtex-luatex.wasm",
-        "wasmtex-luatex.worker.js"
+        "wasmtex-luatex.worker.js",
+        "wasmtex-luatex-checkpoint.js",
+        "wasmtex-luatex-checkpoint.wasm"
       ],
       "distributionTerms": [
         "GPL-2.0-only",

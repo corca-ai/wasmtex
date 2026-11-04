@@ -26,6 +26,15 @@ export interface WasmTexWorkerMsg {
   errorLog?: string
   inputFiles?: string[]
   inputFilesComplete?: boolean
+  /** Ready message: heap-checkpoint support of the loaded build; compile response: the
+   *  checkpoints taken during the run. */
+  heapCheckpoints?: unknown
+  heapCheckpointRetention?: unknown
+  heapCheckpointRefusals?: unknown
+  lineCheckpoints?: boolean
+  fileCheckpoints?: boolean
+  resumeRecorder?: boolean
+  pagePreview?: boolean
   /** dumpcache response: fetched files + known-missing entries. */
   files?: CachedTexliveFile[]
   notFound?: TexliveFileEntry[]
@@ -57,6 +66,8 @@ export abstract class WasmTexWorker<
 > extends BaseWorkerEngine<TMsg> {
   public onFileDownload?: (filename: string) => void
   protected version: TexliveVersion
+  /** What the worker reported when it became ready. */
+  protected capabilities: TMsg | null = null
 
   constructor(enginePath: string, texliveUrl: string | null, version: TexliveVersion) {
     super(enginePath, texliveUrl)
@@ -72,6 +83,7 @@ export abstract class WasmTexWorker<
         const data = ev.data as TMsg
         if (!data.cmd) {
           if (data.result === 'ok') {
+            this.capabilities = data
             this.status = 'ready'
             resolve()
           } else {
@@ -154,6 +166,8 @@ export interface CompileWorkerResult {
   inputFiles?: string[]
   inputFilesComplete?: boolean
   resolver?: ResolverEvidenceReport
+  /** The worker's response, for engine-specific fields such as heap checkpoints. */
+  message?: WasmTexWorkerMsg
 }
 
 /**
@@ -191,15 +205,46 @@ export class CompileWorkerDriver extends WasmTexWorker {
     return false
   }
 
-  /** Run `command` (`compilelatex` | `compileformat` | `compilepdf`) and collect
-   *  the output. status 0 (ok) and 1 (warnings) both count as success. */
-  async run(command: string): Promise<CompileWorkerResult> {
+  /** Heap-checkpoint support the loaded build reported (the LuaTeX checkpoint build). */
+  get supportsHeapCheckpoints(): boolean {
+    return this.capabilities?.heapCheckpoints === true
+  }
+
+  get supportsLineCheckpoints(): boolean {
+    return this.supportsHeapCheckpoints && this.capabilities?.lineCheckpoints === true
+  }
+
+  get supportsFileCheckpoints(): boolean {
+    return this.supportsHeapCheckpoints && this.capabilities?.fileCheckpoints === true
+  }
+
+  get supportsResumeRecorder(): boolean {
+    return this.supportsHeapCheckpoints && this.capabilities?.resumeRecorder === true
+  }
+
+  get supportsPagePreview(): boolean {
+    return this.capabilities?.pagePreview === true
+  }
+
+  /** Free heap checkpoints in the worker (all when `ids` is omitted). */
+  async dropHeapCheckpoints(ids?: string[]): Promise<void> {
+    if (!this.worker || !this.supportsHeapCheckpoints) return
+    await this.postMessageWithResponse(
+      { cmd: 'dropheapcheckpoints', ids },
+      'cmd:dropheapcheckpoints',
+    )
+  }
+
+  /** Run `command` (`compilelatex` | `compileformat` | `compilepdf`, and on the checkpoint
+   *  build `compileheapcheckpoint` | `compilepagepreview`) with `fields` merged into the
+   *  message, and collect the output. status 0 (ok) and 1 (warnings) both count as success. */
+  async run(command: string, fields?: Record<string, unknown>): Promise<CompileWorkerResult> {
     if (this.status !== 'ready' || !this.worker) {
       return { success: false, log: 'engine not ready', out: null }
     }
     this.status = 'compiling'
     this.resolver.begin()
-    const data = await this.postMessageWithResponse({ cmd: command }, 'cmd:compile')
+    const data = await this.postMessageWithResponse({ ...fields, cmd: command }, 'cmd:compile')
     const resolver = this.resolver.finish()
     this.status = 'ready'
     const log = data.log || ''
@@ -215,6 +260,7 @@ export class CompileWorkerDriver extends WasmTexWorker {
         ? { inputFilesComplete: data.inputFilesComplete }
         : {}),
       ...(resolver ? { resolver } : {}),
+      message: data,
     }
   }
 
