@@ -1,0 +1,29 @@
+diff --git a/texk/web2c/luatexdir/pdf/pdfshipout.c b/texk/web2c/luatexdir/pdf/pdfshipout.c
+index dc759ba..2f50ee9 100644
+--- a/texk/web2c/luatexdir/pdf/pdfshipout.c
++++ b/texk/web2c/luatexdir/pdf/pdfshipout.c
+@@ -21,6 +21,12 @@ with LuaTeX; if not, see <http://www.gnu.org/licenses/>.
+ 
+ #include "ptexlib.h"
+ 
++/*tex
++    WasmTex page-prefix previews stop after this many shipped pages; zero never stops.
++*/
++
++int wasmtex_preview_page_limit = 0;
++
+ scaledpos shipbox_refpos;
+ 
+ /*tex
+@@ -287,4 +293,11 @@ void ship_out(PDF pdf, halfword p, shipping_mode_e shipping_mode)
+     if (synctex_par)
+         synctexteehs();
+     global_shipping_mode = NOT_SHIPPING;
++    if (shipping_mode == SHIPPING_PAGE && wasmtex_preview_page_limit > 0
++        && total_pages >= wasmtex_preview_page_limit) {
++        /*tex As \type {tex.finish}: the prefix is a complete document. */
++        final_cleanup();
++        close_files_and_terminate();
++        do_final_end();
++    }
+ }

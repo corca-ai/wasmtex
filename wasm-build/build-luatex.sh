@@ -186,27 +186,33 @@ elif [ -f libluaharfbuzzsubset.a ]; then
   # introduces the split subset binding before its year-specific gate lands.
   LUATEX_HARFBUZZ_ARCHIVES+=(libluaharfbuzzsubset.a)
 fi
+LUATEX_LINK_INPUTS=(
+  luatex-entry.o kpse-hook.o
+  luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o
+  -Wl,--wrap=kpse_find_file
+  libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a
+  "${LUATEX_HARFBUZZ_ARCHIVES[@]}"
+  "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a
+  "$WB"/libs/zziplib/libzzip.a "$WB"/libs/libpng/libpng.a
+  "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a
+  "$XPDFLIB" "$WB"/libs/zlib/libz.a
+  lib/lib.a "$WB"/texk/kpathsea/.libs/libkpathsea.a libmputil.a libunilib.a libmd5.a
+)
 # Keep the initial heap at 128 MiB to bound snapshot/reset work; larger documents
 # grow it on demand. Qualify changes against existing formats (optimization policy).
+LUATEX_LINK_FLAGS=(
+  -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432
+  -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_setPreviewPageLimit","_malloc","_free"]'
+  -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]'
+  -sINITIAL_MEMORY=134217728
+  -sMEMORY_GROWTH_GEOMETRIC_STEP=0.05 -sMEMORY_GROWTH_GEOMETRIC_CAP=16777216
+  --js-library "$GLUE/luatex-library.js"
+)
 em++ -O3 -flto -Wl,-u,htons,-u,ntohs "${LUATEX_DEBUG_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
-  luatex-entry.o kpse-hook.o \
-  luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o \
-  -Wl,--wrap=kpse_find_file \
-  libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a \
-  "${LUATEX_HARFBUZZ_ARCHIVES[@]}" \
-  "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a \
-  "$WB"/libs/zziplib/libzzip.a "$WB"/libs/libpng/libpng.a \
-  "$WB"/libs/harfbuzz/libharfbuzz.a "$WB"/libs/graphite2/libgraphite2.a \
-  "$XPDFLIB" "$WB"/libs/zlib/libz.a \
-  lib/lib.a "$WB"/texk/kpathsea/.libs/libkpathsea.a libmputil.a libunilib.a libmd5.a \
+  "${LUATEX_LINK_INPUTS[@]}" \
   -Wl,--trace -Wl,-Map="$OUT/wasmtex-luatex.map" \
-  -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=0 -sINVOKE_RUN=0 -sSTACK_SIZE=33554432 \
-  -sEXPORTED_FUNCTIONS='["_compileLaTeX","_compileFormat","_main","_setMainEntry","_malloc","_free"]' \
-  -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
-  -sINITIAL_MEMORY=134217728 \
-  -sMEMORY_GROWTH_GEOMETRIC_STEP=0.05 -sMEMORY_GROWTH_GEOMETRIC_CAP=16777216 \
-  --js-library "$GLUE/luatex-library.js" \
+  "${LUATEX_LINK_FLAGS[@]}" \
   -o "$OUT/wasmtex-luatex.js" > "$OUT/wasmtex-luatex.link-inputs"
 [ -s "$OUT/wasmtex-luatex.map" ] || { echo "LuaHBTeX link map was not generated"; exit 1; }
 if grep -E 'libpplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-luatex.map" "$OUT/wasmtex-luatex.link-inputs"; then
@@ -228,6 +234,32 @@ if grep -aE 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|
   exit 1
 fi
 cat "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
+
+# Heap-checkpoint variant: the same link with Asyncify confined to the functions on the
+# stack when TeX reads a project line (luatex-checkpoint-frames.json); instrumenting the
+# whole engine made every frame 22-38% slower. Names are kept so the release workflow can
+# record those functions' indices (scripts/checkpoint-frames.mjs) and then strip them; the
+# worker refuses a checkpoint whose stack holds any other frame.
+LUATEX_CHECKPOINT_FRAMES=$(node -e 'process.stdout.write(JSON.stringify(require(process.argv[1])))' "$GLUE/luatex-checkpoint-frames.json")
+em++ -O3 -flto -Wl,-u,htons,-u,ntohs --profiling-funcs \
+  -sEMIT_EMSCRIPTEN_LICENSE=1 \
+  "${LUATEX_LINK_INPUTS[@]}" \
+  "${LUATEX_LINK_FLAGS[@]}" \
+  -sASYNCIFY=1 -sASYNCIFY_IMPORTS='["fd_read","wasi_snapshot_preview1.fd_read"]' -sASYNCIFY_STACK_SIZE=1048576 \
+  "-sASYNCIFY_ONLY=$LUATEX_CHECKPOINT_FRAMES" \
+  -o "$OUT/wasmtex-luatex-checkpoint.js" 2> "$OUT/wasmtex-luatex-checkpoint.link-log" || {
+  cat "$OUT/wasmtex-luatex-checkpoint.link-log"; exit 1
+}
+if grep -F 'onlylist contained a non-existing function' "$OUT/wasmtex-luatex-checkpoint.link-log"; then
+  echo "ERROR: a LuaHBTeX checkpoint frame is missing from this build" >&2
+  exit 1
+fi
+rm -f "$OUT/wasmtex-luatex-checkpoint.link-log"
+if grep -aE 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|xref)_' \
+    "$OUT/wasmtex-luatex-checkpoint.js" "$OUT/wasmtex-luatex-checkpoint.wasm"; then
+  echo "ERROR: forbidden pplib or legacy pplib marker remains in the LuaHBTeX checkpoint bytes" >&2
+  exit 1
+fi
 cp "$GLUE/resolver-evidence.js" "$OUT/wasmtex-luatex-resolver-evidence.js"
 
 echo ""

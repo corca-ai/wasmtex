@@ -45,6 +45,9 @@ on:
       - 'wasm-build/build-luatex.sh'
       - 'wasm-build/Dockerfile.luatex'
       - 'wasm-build/patches/texlive-wtpdf*.patch'
+      - 'wasm-build/patches/texlive-luatex-*.patch'
+      - 'wasm-build/luatex-checkpoint-frames.json'
+      - 'scripts/checkpoint-frames.mjs'
       - 'wasm-build/pdf-backend/wtpdf.h'
       - 'wasm-build/pdf-backend/wtpdf-xpdf.cc'
       - 'wasm-build/pdf-backend/wtpdf-smoke.cc'
@@ -95,7 +98,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: /tmp/.buildx-cache-luatex
-          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex', 'wasm-build/patches/texlive-wtpdf*.patch', 'wasm-build/pdf-backend/wtpdf*', 'wasm-build/sha2/*') }}
+          key: luatex-docker-${{ hashFiles('wasm-build/Dockerfile.luatex', 'wasm-build/patches/texlive-wtpdf*.patch', 'wasm-build/patches/texlive-luatex-*.patch', 'wasm-build/pdf-backend/wtpdf*', 'wasm-build/sha2/*') }}
           restore-keys: luatex-docker-
 
       - name: Build image (Phase 1 native, cached)
@@ -126,13 +129,25 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 24 }
 
+      - name: Record LuaHBTeX checkpoint frames
+        # The checkpoint build instruments only these functions; the worker refuses a
+        # checkpoint whose stack holds any other frame. Names are stripped afterwards
+        # unless this is a diagnostic build.
+        run: |
+          node scripts/checkpoint-frames.mjs \
+            wasm-build/dist-luatex/wasmtex-luatex-checkpoint.wasm \
+            wasm-build/dist-luatex/wasmtex-luatex-checkpoint.js \
+            "$(cat wasm-build/luatex-checkpoint-frames.json)" \
+            $([ "$WASMTEX_PROFILE_NAMES" = 1 ] && echo --keep-names)
+
       - name: Record raw 2026 LuaHBTeX build evidence
         if: env.TEXLIVE_YEAR == '2026'
         run: |
-          node -e "const fs=require('fs'); const bytes=fs.readFileSync('wasm-build/dist-luatex/wasmtex-luatex.wasm'); if (!WebAssembly.validate(bytes)) process.exit(1)"
+          node -e "const fs=require('fs'); for (const f of ['wasmtex-luatex.wasm','wasmtex-luatex-checkpoint.wasm']) if (!WebAssembly.validate(fs.readFileSync('wasm-build/dist-luatex/' + f))) process.exit(1)"
           node scripts/gen-engine-build-receipt.mjs \
             luahbtex wasm-build/dist-luatex wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex-raw.json \
             wasmtex-luatex.js wasmtex-luatex.worker.js wasmtex-luatex.wasm \
+            wasmtex-luatex-checkpoint.js wasmtex-luatex-checkpoint.wasm \
             wasmtex-luatex-resolver-evidence.js
 
       - name: Upload raw 2026 LuaHBTeX build evidence
@@ -142,6 +157,7 @@ jobs:
           name: wasm-luatex-2026-raw
           path: |
             wasm-build/dist-luatex/wasmtex-luatex.*
+            wasm-build/dist-luatex/wasmtex-luatex-checkpoint.*
             wasm-build/dist-luatex/wasmtex-luatex-resolver-evidence.js
             wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex-raw.json
           retention-days: 90
@@ -180,9 +196,15 @@ jobs:
           node -e "
             const fs = require('fs');
             const d = 'wasm-build/dist-luatex/';
-            const w = fs.readFileSync(d + 'wasmtex-luatex.wasm');
-            if (!WebAssembly.validate(w)) { console.error('INVALID wasm'); process.exit(1); }
-            console.log('wasmtex-luatex.wasm OK (' + w.length + ' bytes)');
+            for (const f of ['wasmtex-luatex.wasm', 'wasmtex-luatex-checkpoint.wasm']) {
+              const w = fs.readFileSync(d + f);
+              if (!WebAssembly.validate(w)) { console.error('INVALID wasm: ' + f); process.exit(1); }
+              console.log(f + ' OK (' + w.length + ' bytes)');
+            }
+            const checkpoint = fs.readFileSync(d + 'wasmtex-luatex-checkpoint.js', 'utf8');
+            if (!/self\.wasmtexCheckpointFrames=\[\d+(,\d+)*\];\s*$/.test(checkpoint)) {
+              console.error('checkpoint glue has no frame list'); process.exit(1);
+            }
             const js = fs.readFileSync(d + 'wasmtex-luatex.js', 'utf8');
             const controller = fs.readFileSync(d + 'wasmtex-luatex.worker.js', 'utf8');
             const obsoleteHost = ['texlive2', ['swift', 'latex'].join('')].join('.');
@@ -193,8 +215,8 @@ jobs:
               if (!controller.includes(t)) { console.error('controller token missing: ' + t); process.exit(1); }
             }
             // Interposition contract (#50): the C entry exports must survive the build.
-            for (const s of ['_compileLaTeX','_compileFormat','_main','_setMainEntry']) {
-              if (!js.includes(s)) { console.error('missing entry export: ' + s); process.exit(1); }
+            for (const s of ['_compileLaTeX','_compileFormat','_main','_setMainEntry','_setPreviewPageLimit']) {
+              if (!js.includes(s) || !checkpoint.includes(s)) { console.error('missing entry export: ' + s); process.exit(1); }
             }
             console.log('own glue OK');
           "
@@ -204,6 +226,7 @@ jobs:
           node scripts/gen-engine-build-receipt.mjs \
             luahbtex wasm-build/dist-luatex wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json \
             wasmtex-luatex.js wasmtex-luatex.worker.js wasmtex-luatex.wasm \
+            wasmtex-luatex-checkpoint.js wasmtex-luatex-checkpoint.wasm \
             wasmtex-luatex.fmt.gz wasmtex-luatex-resolver-evidence.js
 
       - name: Upload LuaTeX WASM artifacts
@@ -214,6 +237,8 @@ jobs:
             wasm-build/dist-luatex/wasmtex-luatex.js
             wasm-build/dist-luatex/wasmtex-luatex.worker.js
             wasm-build/dist-luatex/wasmtex-luatex.wasm
+            wasm-build/dist-luatex/wasmtex-luatex-checkpoint.js
+            wasm-build/dist-luatex/wasmtex-luatex-checkpoint.wasm
             wasm-build/dist-luatex/wasmtex-luatex.fmt.gz
             wasm-build/dist-luatex/wasmtex-luatex-resolver-evidence.js
             wasm-build/dist-luatex/BUILD-RECEIPT.luahbtex.json

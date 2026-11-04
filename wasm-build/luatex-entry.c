@@ -18,6 +18,14 @@
 
 static char main_entry[1024] = "main.tex";
 extern int main(int argc, char **argv); /* luahbtex web2c main (luatex.c) */
+extern int wasmtex_preview_page_limit; /* texlive-luatex-preview-limit.patch */
+
+/* A page-prefix preview stops after `limit` shipped pages (0: never). The value lives in
+ * linear memory, so a heap restore brings back the one in effect when it was captured. */
+int setPreviewPageLimit(int limit) {
+    wasmtex_preview_page_limit = limit > 0 ? limit : 0;
+    return 0;
+}
 
 int setMainEntry(const char *entry) {
     strncpy(main_entry, entry, sizeof(main_entry) - 1);
