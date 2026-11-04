@@ -141,14 +141,24 @@
       ],
       "javascript": {
         "globals": [
+          "ABORT",
+          "Asyncify",
           "FS",
           "HEAPU8",
           "UTF8ToString",
+          "_asyncify_start_rewind",
+          "_asyncify_stop_rewind",
+          "_asyncify_stop_unwind",
           "_compileFormat",
           "_compileLaTeX",
+          "_free",
           "_malloc",
+          "_setPreviewPageLimit",
           "cwrap",
           "intArrayFromString",
+          "stackRestore",
+          "stackSave",
+          "updateMemoryViews",
           "wasmMemory"
         ]
       }
