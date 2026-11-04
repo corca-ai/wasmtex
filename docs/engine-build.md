@@ -192,7 +192,11 @@ LuaHBTeX also links twice. The checkpoint link adds Asyncify with `fd_read` as t
 only unwinding import, but instruments only the functions listed in
 `wasm-build/luatex-checkpoint-frames.json`: those on the stack while TeX reads a
 project line. Instrumenting the whole engine slowed every frame by 22–38%; the
-list costs 0.1–5% and about 10 KB. The link fails when a listed function is
+list costs 0.1–5% and about 10 KB. It also lists `string_read`, sscanf's reader,
+which is never on that stack: once `__uflow`'s indirect read has called both
+readers, Chromium inlines them and its stack traces report `string_read` between
+`__stdio_read` and `__uflow`. Without it the guard refused every checkpoint in
+Chromium, while Node, which does not inline indirect calls, took them. The link fails when a listed function is
 missing from a build, for example after an annual source change inlines it.
 
 The checkpoint link keeps function names. The workflow then runs

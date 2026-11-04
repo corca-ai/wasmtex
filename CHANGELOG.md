@@ -20,6 +20,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Take LuaLaTeX heap checkpoints in Chromium. Its stack traces report sscanf's
+  reader beside the line read once it inlines that indirect call, and the stack
+  guard refused every checkpoint, so previews kept starting from the format. The
+  checkpoint build now lists that reader too.
 - Answer ok when the pdfTeX worker is asked to create a directory that already
   exists. Hosts sync every parent directory again, so a book with chapter
   folders logged "Not able to mkdir" for every keystroke.

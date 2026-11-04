@@ -48,4 +48,6 @@ test('the LuaHBTeX list runs from the read (innermost) to the entry point (outer
   assert.equal(frames[0], '__stdio_read')
   assert.equal(frames.at(-1), 'compileLaTeX')
   assert.equal(new Set(frames).size, frames.length)
+  // Chromium reports sscanf's reader beside the read when it inlines __uflow's indirect call.
+  assert.equal(frames[1], 'string_read')
 })
