@@ -20,6 +20,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Load virtual fonts under LuaLaTeX. The worker cached a VF without its suffix, and
+  LuaTeX looks up a path it was given before opening it, in a format that searches
+  by suffix alone. Times, Helvetica, Palatino, `mathptmx`, `newtx` and the like stayed
+  real fonts with no outline and failed as a missing bitmap.
 - Take LuaLaTeX heap checkpoints in Chromium. Its stack traces report sscanf's
   reader beside the line read once it inlines that indirect call, and the stack
   guard refused every checkpoint, so previews kept starting from the format. The

@@ -7,6 +7,7 @@ interface ResolverHarness {
   seedPositive(name: string, format: number, source: string): void
   seedNegative(name: string, format: number, source: string): void
   evidence: ReturnType<typeof vi.fn>
+  written: () => string[]
   xhrCount: () => number
 }
 
@@ -16,6 +17,7 @@ function harness(responses: Array<number | 'transport'>): ResolverHarness {
   const end = controller.indexOf('// Font-by-name goes through', start)
   if (start < 0 || end < 0) throw new Error('LuaTeX resolver source boundary changed')
   const evidence = vi.fn()
+  const writeFile = vi.fn()
   const scope = {
     texlive_endpoint: 'https://mirror/',
     wasmtexResolverEvidence: evidence,
@@ -58,17 +60,32 @@ function harness(responses: Array<number | 'transport'>): ResolverHarness {
      }`,
   )(
     scope,
-    { writeFile: vi.fn() },
+    { writeFile },
     FakeXhr,
     (value: string) => value,
     () => 1,
     (value: string) => value,
     '/tex',
-  ) as Omit<ResolverHarness, 'evidence' | 'xhrCount'>
-  return { ...api, evidence, xhrCount: () => xhrCount }
+  ) as Omit<ResolverHarness, 'evidence' | 'written' | 'xhrCount'>
+  return {
+    ...api,
+    evidence,
+    written: () => writeFile.mock.calls.map(([path]) => path as string),
+    xhrCount: () => xhrCount,
+  }
 }
 
 describe('LuaTeX resolver controller evidence', () => {
+  it('caches metrics and virtual fonts under suffixes LuaTeX can look up again', () => {
+    const resolver = harness([200, 200, 200])
+
+    resolver.resolve('ptmb8t', 3)
+    resolver.resolve('ptmb8t', 33)
+    resolver.resolve('cmex10.tfm', 3)
+
+    expect(resolver.written()).toEqual(['/tex/ptmb8t.tfm', '/tex/ptmb8t.vf', '/tex/cmex10.tfm'])
+  })
+
   it('distinguishes a network fetch from its later session-cache hit', () => {
     const worker = harness([200])
     expect(worker.resolve('article.cls', 26)).toBe(1)
