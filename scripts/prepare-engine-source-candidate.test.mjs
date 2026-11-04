@@ -37,8 +37,8 @@ test('a LuaHBTeX candidate replaces only its own download, alone or with pdfTeX'
 test('a rebuilt format drops only its family from reuse', () => {
   const license = JSON.parse(readFileSync(new URL('../public/wasmtex/2026/LICENSE-MANIFEST.json', import.meta.url)))
   const families = (result) => result.components.years['2026'].reusedFormats.map((entry) => entry.family)
-  const rebuilt = prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['luahbtex'])
-  assert.deepEqual(families(rebuilt), ['pdftex', 'xetex'])
+  const rebuilt = prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['xetex'])
+  assert.deepEqual(families(rebuilt), ['pdftex'])
   assert.throws(
     () => prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321', ['bibtex']),
     /no reused format/,

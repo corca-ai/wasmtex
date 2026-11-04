@@ -39,7 +39,7 @@
         },
         {
           "id": "luahbtex",
-          "runId": 41796566696,
+          "runId": 41850257797,
           "artifacts": [
             "wasm-luatex"
           ]
@@ -55,11 +55,6 @@
           "family": "xetex",
           "runId": 33882993816,
           "artifact": "wasm-xetex"
-        },
-        {
-          "family": "luahbtex",
-          "runId": 33882993731,
-          "artifact": "wasm-luatex"
         }
       ]
     },
@@ -101,7 +96,7 @@
         },
         {
           "id": "luahbtex",
-          "runId": 41796566696,
+          "runId": 41850257797,
           "artifacts": [
             "wasm-luatex-2026"
           ]
@@ -117,11 +112,6 @@
           "family": "xetex",
           "runId": 33885502236,
           "artifact": "wasm-xetex-2026"
-        },
-        {
-          "family": "luahbtex",
-          "runId": 33885505118,
-          "artifact": "wasm-luatex-2026"
         }
       ]
     }
