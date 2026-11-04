@@ -1,1 +1,1 @@
-["__stdio_read","__uflow","getc","lua_input_ln","input_line","get_next","get_token","expand","prefixed_command","run_ignore_spaces","start_input","main_control","main","compileLaTeX"]
+["__stdio_read","string_read","__uflow","getc","lua_input_ln","input_line","get_next","get_token","expand","prefixed_command","run_ignore_spaces","start_input","main_control","main","compileLaTeX"]

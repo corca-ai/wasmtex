@@ -236,7 +236,8 @@ fi
 cat "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
 
 # Heap-checkpoint variant: the same link with Asyncify confined to the functions on the
-# stack when TeX reads a project line (luatex-checkpoint-frames.json); instrumenting the
+# stack when TeX reads a project line (luatex-checkpoint-frames.json, which also lists
+# string_read, a frame Chromium's traces report after inlining __uflow); instrumenting the
 # whole engine made every frame 22-38% slower. Names are kept so the release workflow can
 # record those functions' indices (scripts/checkpoint-frames.mjs) and then strip them; the
 # worker refuses a checkpoint whose stack holds any other frame.
