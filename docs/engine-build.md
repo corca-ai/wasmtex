@@ -196,8 +196,9 @@ list costs 0.1–5% and about 10 KB. It also lists `string_read`, sscanf's reade
 which is never on that stack: once `__uflow`'s indirect read has called both
 readers, Chromium inlines them and its stack traces report `string_read` between
 `__stdio_read` and `__uflow`. Without it the guard refused every checkpoint in
-Chromium, while Node, which does not inline indirect calls, took them. The link fails when a listed function is
-missing from a build, for example after an annual source change inlines it.
+Chromium, while Node, which does not inline indirect calls, took them. The link
+fails when a listed function is missing from a build, for example after an annual
+source change inlines it.
 
 The checkpoint link keeps function names. The workflow then runs
 `scripts/checkpoint-frames.mjs`, which records the listed functions' indices as

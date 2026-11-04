@@ -4,7 +4,9 @@ Current behavior belongs to the [compiler API](../compiler-api.md#luatex-heap-ch
 and the [engine build guide](../engine-build.md#luahbtex-checkpoint-build-wasmtex-luatex-checkpoint).
 This record is the qualification evidence for the first engines that ship the
 LuaHBTeX checkpoint build, together with the pdfTeX `mkdir` reply of
-[#223](https://github.com/corca-ai/wasmtex/pull/223).
+[#223](https://github.com/corca-ai/wasmtex/pull/223). Those engines refused every
+checkpoint in Chromium; [their successors](#chromium-correction) are the ones hosts
+should adopt.
 
 ## Problem
 
@@ -136,12 +138,67 @@ What changed against the baselines:
   - the worker;
   - the new checkpoint variant: +10 KB over the plain engine on 2026, +11 KB on 2025.
 
+## Chromium correction
+
+CorTeX's typing bench showed no gain on those engines: Chromium refused every
+checkpoint with `stack`, and previews fell back to the prefix job.
+
+Chromium speculatively inlines WebAssembly indirect calls. Once `__uflow`'s read
+has called both `__stdio_read` and sscanf's `string_read`, its stack traces report
+`string_read` between them. That frame cannot be real: `string_read` calls only
+`memchr` and `memcpy`, so it never reaches `fd_read`. Node 24 ships with
+`--no-wasm-inlining-call-indirect`, so neither the smoke nor the SDK benchmark saw
+it, and enabling the flag in Node did not reproduce it on the smoke's small
+document. Chromium with `--js-flags=--no-wasm-inlining-call-indirect` took
+checkpoints again, which identified the cause.
+
+[#226](https://github.com/corca-ai/wasmtex/pull/226) adds `string_read` to the
+frame list. It and `__stdio_read` are the only libc `FILE` readers in the link, so
+`__uflow`'s indirect call has no other target to report. Against the replaced
+engines only the checkpoint build, its receipt and the manifests change, by
+47 bytes of WebAssembly on both lines.
+
+`e2e/luatex-heap-checkpoints.spec.ts` now takes and resumes a checkpoint on a
+`fontspec` document in a browser, and checks that a line read while a macro scans
+its argument is still refused. Golden Canary runs it on the registered engines.
+
+| Check | 2025 | 2026 |
+| --- | --- | --- |
+| Spec on the replaced engines, Chromium | Refused (`stack`) | Refused (`stack`) |
+| Spec on these engines, Chromium | Passed | Passed |
+| Spec on these engines, Firefox | Passed | Passed |
+| Node smoke | Passed | Passed |
+| Checkpoint build as a plain engine against the baseline | Identical | Identical |
+
+The plain builds are byte-identical to the replaced engines, so their output
+preservation carries over.
+
+CorTeX's bench on Chromium, with default flags, three seeds and 206 keys per side,
+measures input to paint (medians unless noted):
+
+| Document | Key to paint | Keys over 1 s | Last key to canonical paint | Renderer peak |
+| --- | ---: | ---: | ---: | ---: |
+| `fontspec` paper | 915 → 147 ms | 74 → 0 | 2,539 → 714 ms | +176 MiB |
+| 24-chapter book | 883 → 228 ms | 59 → 3 | 8,193 → 4,392 ms | +298 MiB |
+| kotex paper, image refused | 1,176 → 1,200 ms | 141 → 143 | 2,977 → 3,053 ms | +6 MiB |
+
+| Annual line | Replaced | Candidate | LuaHBTeX build | Source publication |
+| --- | --- | --- | --- | --- |
+| 2025 | `2025-060d2a2f96025172` | `2025-8bd02eae82d829b9` | [41796566696](https://github.com/corca-ai/wasmtex/actions/runs/41796566696) | [41809198487](https://github.com/corca-ai/wasmtex/actions/runs/41809198487) |
+| 2026 | `2026-0e90bf793d9d36c3` | `2026-a2ba15ed61241a24` | [41796566696](https://github.com/corca-ai/wasmtex/actions/runs/41796566696) | [41809819097](https://github.com/corca-ai/wasmtex/actions/runs/41809819097) |
+
+The LuaHBTeX build comes from main `e9d54e1`. pdfTeX/BibTeX stay on run
+41777480728.
+
 ## Limits
 
-These are single-machine Node measurements, not field percentiles.
+The SDK measurements are single-machine Node figures and the bench is one
+single-host browser run; none are field percentiles.
 
 - The integrating host decides admission and budget. CorTeX enables one
   checkpoint of 200 MiB on desktop, so kotex-sized images keep the prefix job.
 - A book gains only when the host passes the edit's location as a hint.
-- Firefox and WebKit stack formats are handled by the guard but were not
-  measured here.
+- Firefox was checked for correctness, not speed. WebKit hosts use the plain
+  build.
+- The guard sees only what a trace reports. A browser that hid frames it inlined
+  would pass it, so a new browser needs the spec's macro-argument case.
