@@ -21,6 +21,19 @@ for (const year of ['2025', '2026']) {
   })
 }
 
+test('a LuaHBTeX candidate replaces only its own download, alone or with pdfTeX', () => {
+  const license = JSON.parse(readFileSync(new URL('../public/wasmtex/2026/LICENSE-MANIFEST.json', import.meta.url)))
+  const runOf = (result, id) => result.components.years['2026'].downloads.find((entry) => entry.id === id).runId
+  const pinned = (id) => components.years['2026'].downloads.find((entry) => entry.id === id).runId
+  const lua = prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321')
+  assert.equal(runOf(lua, 'luahbtex'), 987654321)
+  assert.equal(runOf(lua, 'pdftex-bibtex'), pinned('pdftex-bibtex'))
+  const both = prepareEngineSourceCandidate(components, license, '2026', '123456789', '987654321')
+  assert.equal(runOf(both, 'pdftex-bibtex'), 123456789)
+  assert.equal(runOf(both, 'luahbtex'), 987654321)
+  assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', undefined, 'x'), /luatex run/)
+})
+
 test('rejects malformed years, unsafe runs, annual mismatch and invalid component catalogs', () => {
   const license = { texliveVersion: '2026' }
   for (const run of ['', '0', '-1', '1.5', '1e3', '9007199254740992', '$(echo bad)', undefined]) {
