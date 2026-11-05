@@ -24,6 +24,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Keep asset download request IDs distinct across overlapping engine sessions so
+  completion of an old request cannot clear a newer request's network wait.
+
 - Keep progressing format/map downloads alive, retry temporary failures within
   bounded budgets, and cancel active transfers when their engine is terminated.
   Missing formats remain optional; permission, exhausted network and invalid
