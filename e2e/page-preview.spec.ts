@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test'
 
 const year = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
 const mirror = process.env.TEXLIVE_URL ?? (year === '2026'
-  ? 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'
-  : 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/')
+  ? 'https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/'
+  : 'https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/')
 const paragraph = 'The original paragraph keeps precise typography while the author continues to edit. '
 const body = Array.from({ length: 90 }, (_, i) =>
   `Paragraph ${i}. ${paragraph.repeat(14)}\n\n`).join('')

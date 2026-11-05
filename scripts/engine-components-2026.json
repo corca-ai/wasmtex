@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "texliveSourceCommit": "fb6158926661cb7a7246b3a94a0cb170a9624d5a",
-  "linkInventory": "docs/license-evidence/link-inventory-2026-9b43b39.json",
-  "linkInventorySourceRevision": "9b43b3959aba8f3f8b39a4190deb8ac653e2f687",
+  "linkInventory": "docs/license-evidence/link-inventory-2026-a97db8a.json",
+  "linkInventorySourceRevision": "a97db8a62ed86b118bcfcc8784b7752aa8e988ac",
   "sbomCreated": "2026-09-12T11:44:00Z",
   "families": [
     {
@@ -24,6 +24,16 @@
       "family": "makeindex",
       "combinedLicense": "LicenseRef-MakeIndex-Distribution-Notice AND LGPL-2.1-or-later",
       "reason": "The WebAssembly port is a modified MakeIndex work and carries the identical permission notice; kpathsea remains under LGPL-2.1-or-later with relink support."
+    },
+    {
+      "family": "metafont",
+      "combinedLicense": "LicenseRef-Metafont-Distribution-Notice AND LGPL-2.1-or-later",
+      "reason": "Metafont retains its TeX-compatible upstream notice and GFtoPK its public-domain record; statically linked kpathsea is supplied with complete source and relink instructions."
+    },
+    {
+      "family": "gftopk",
+      "combinedLicense": "LicenseRef-Metafont-Distribution-Notice AND LGPL-2.1-or-later",
+      "reason": "GFtoPK ships in the same file as Metafont, and its statically linked kpathsea is supplied with complete source and relink instructions."
     },
     {
       "family": "xetex",
@@ -122,6 +132,8 @@
           "bibtex",
           "bibtex8",
           "makeindex",
+          "metafont",
+          "gftopk",
           "xetex",
           "dvipdfmx",
           "luahbtex"
@@ -133,7 +145,7 @@
       "version": "TeX Live source commit",
       "licenseExpression": "LicenseRef-TeXLive-Web2C-Notices",
       "archivePatterns": [
-        "^lib/lib\\.a$",
+        "^(?:texlive-build/texk/web2c/)?lib/lib\\.a$",
         "^libmd5\\.a$"
       ],
       "noticeFiles": [
@@ -412,5 +424,5 @@
       "procedure": "node scripts/extract-luatex-format.mjs followed by gzip -n -9"
     }
   },
-  "sbomFile": "docs/license-evidence/engine-sbom-2026-lto-7455415.spdx.json"
+  "sbomFile": "docs/license-evidence/engine-sbom-2026-a97db8a.spdx.json"
 }

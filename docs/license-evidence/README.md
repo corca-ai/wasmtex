@@ -37,6 +37,8 @@ source hashes, clean rebuild comparisons, and independent compatibility gates.
 
 | File | What it evidences |
 | --- | --- |
+| `link-inventory-2026-a97db8a.json`, `link-inventory-2025-a97db8a.json` | The 94 and 93 archive occurrences selected by the nine linker maps, with Metafont and GFtoPK |
+| `engine-sbom-2026-a97db8a.spdx.json`, `engine-sbom-2025-a97db8a.spdx.json` | SPDX SBOMs for those inventories |
 | `link-inventory-2026-9b43b39.json` | The 82 archive occurrences selected by the seven 2026 linker maps |
 | `engine-sbom-2026-9b43b39.spdx.json` | The annual component inventory as a freshness-checked SPDX SBOM |
 | `corresponding-source-2026-9b43b39.md` | Native x86_64 source assembly, verification, publication, and public hash binding |

@@ -12,10 +12,10 @@ under ignored `report/` directories.
 
 ```sh
 node scripts/bench-book-edits.mjs --assets /path/to/released/assets \
-  --texlive-url https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+  --texlive-url https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
   --out report/book-synthetic
 node scripts/bench-book-edits.mjs --assets /path/to/released/assets \
-  --texlive-url https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+  --texlive-url https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
   --project /path/to/DaoFP --main DaoFP.tex --edit 12-Coalgebras.tex \
   --from 'Coalgebras are just' --to 'Coalgebras are also' --out report/book-dao
 ```
@@ -220,7 +220,7 @@ PDF date-field normalization does not remove. Release files are untouched.
 WASMTEX_HEAP_BASELINE_DIR=/path/to/baseline-public \
 WASMTEX_SMOKE_PUBLIC_DIR=/path/to/candidate-public \
 WASMTEX_SMOKE_TEXLIVE_VERSION=2026 \
-WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
 npx vitest run src/engine/unicode-heap-restore.smoke.test.ts
 ```
 
@@ -327,11 +327,11 @@ After syncing the pinned annual assets, reproduce one matrix row locally:
 
 ```bash
 TEXLIVE_VERSION=2026 \
-TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
 npx playwright test golden-output --workers=1 --reporter=line,html
 
 CROSS_HOST_PARITY=1 WASMTEX_SMOKE_TEXLIVE_VERSION=2026 \
-WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
 npx vitest run src/engine/cross-host-parity.smoke.test.ts
 ```
 

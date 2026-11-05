@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { PDFDocument } from 'pdf-lib'
 
 const year = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
-const mirror = year === '2026' ? '2026-ba38749b8714505a' : '2025-0d3fc73b65e39905'
+const mirror = year === '2026' ? '2026-d26706764b740276' : '2025-2e1df8aa17d29d66'
 const controller = ['asset-download.js', 'shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js']
   .map(name => readFileSync(new URL(`../wasm-build/${name}`, import.meta.url), 'utf8')).join('\n')
 

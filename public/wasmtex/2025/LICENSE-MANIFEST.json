@@ -10,14 +10,15 @@
   "requirementsPath": "../../../docs/licensing.md",
   "componentInventoryPath": "../../../scripts/engine-components-2025.json",
   "correspondingSource": {
-    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-773e39b19e04472d/wasmtex-2025-773e39b19e04472d-source.tar.xz",
-    "sha256": "ee2bacf998c568c811682953e08db01c7935c7f0f56e5cc438e9467374f5f3ff"
+    "url": "https://github.com/corca-ai/wasmtex/releases/download/engine-2025-3a6c0df0b2b95005/wasmtex-2025-3a6c0df0b2b95005-source.tar.xz",
+    "sha256": "34529fcbdf887731d229fe8e25acacf862d04115cacdc0df0ba244a71017136b"
   },
   "requiredBuildFamilies": [
     "pdftex",
     "bibtex",
     "bibtex8",
     "makeindex",
+    "metafont",
     "xetex",
     "luahbtex"
   ],
@@ -115,6 +116,17 @@
       ],
       "distributionTerms": [
         "LicenseRef-MakeIndex-Distribution-Notice",
+        "LGPL-2.1-or-later",
+        "LicenseRef-Linked-Component-Notices"
+      ]
+    },
+    {
+      "name": "metafont",
+      "patterns": [
+        "wasmtex-metafont.*"
+      ],
+      "distributionTerms": [
+        "LicenseRef-Metafont-Distribution-Notice",
         "LGPL-2.1-or-later",
         "LicenseRef-Linked-Component-Notices"
       ]

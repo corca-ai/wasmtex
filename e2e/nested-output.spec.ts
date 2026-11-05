@@ -11,7 +11,7 @@ for (const engine of ['xelatex', 'pdflatex', 'lualatex'] as const) {
     }, {
       engine,
       texliveVersion: process.env.TEXLIVE_VERSION === '2026' ? '2026' as const : '2025' as const,
-      texliveUrl: process.env.TEXLIVE_URL ?? 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/',
+      texliveUrl: process.env.TEXLIVE_URL ?? 'https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/',
     })
     expect(reports).toHaveLength(engine === 'xelatex' ? 11 : 10)
   })

@@ -65,9 +65,9 @@ jobs:
       matrix:
         include:
           - year: '2025'
-            mirror: https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/
+            mirror: https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/
           - year: '2026'
-            mirror: https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/
+            mirror: https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

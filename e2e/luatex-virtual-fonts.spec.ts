@@ -40,7 +40,7 @@ test('LuaLaTeX uses virtual fonts, large math symbols and picture fonts', async 
   }, {
     files: { 'main.tex': SOURCE },
     texliveVersion: process.env.TEXLIVE_VERSION === '2026' ? '2026' as const : '2025' as const,
-    texliveUrl: process.env.TEXLIVE_URL ?? 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/',
+    texliveUrl: process.env.TEXLIVE_URL ?? 'https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/',
   })
   expect(result.errors).toEqual([])
   expect(result.missing).toBe(false)

@@ -13,7 +13,7 @@ alternating their order over repeated GETs, without changing CDN configuration.
 
 ```bash
 node scripts/profile-http-compression.mjs \
-  --url https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/pdftex/26/amsmath.sty \
+  --url https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/pdftex/26/amsmath.sty \
   --repetitions 3 --out /tmp/http-compression.json
 ```
 
