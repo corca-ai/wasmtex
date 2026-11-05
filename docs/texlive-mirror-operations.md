@@ -1,7 +1,8 @@
 # TeX Live mirror operations
 
 WasmTex publishes immutable TeX Live snapshots to Cloudflare R2 through the
-public custom domain `https://texlive.corca.ai`. Mirror identity remains derived from object bytes and
+public custom domain `https://texlive.corca.ai`. The same publisher can copy a
+verified release to AWS S3 for direct CloudFront delivery. Mirror identity remains derived from object bytes and
 does not contain either the bucket or public hostname.
 
 An [engine-only optimization](engine-optimization-policy.md) reuses these exact
@@ -20,18 +21,30 @@ All publication, audit, bloom, and font-database tools use the same variables:
 |---|---|
 | `TEXLIVE_MIRROR_CONFIG` | pinned annual snapshot configuration |
 | `TEXLIVE_MIRROR_OVERRIDES` | reviewed package ownership, licensing, and collision decisions for that snapshot |
-| `TEXLIVE_OBJECT_BUCKET` | destination bucket |
+| `TEXLIVE_OBJECT_PROVIDER` | `r2` (default) or `s3` |
+| `TEXLIVE_OBJECT_BUCKET` | destination bucket; required explicitly for S3 |
+| `TEXLIVE_OBJECT_REGION` | required AWS region for S3 |
+| `TEXLIVE_OBJECT_PROFILE` | optional local CLI profile for the selected provider |
 | `TEXLIVE_OBJECT_ENDPOINT` | required R2 endpoint, `https://<account-id>.r2.cloudflarestorage.com` |
 | `TEXLIVE_OBJECT_PREFIX` | optional prefix before the year/snapshot |
-| `TEXLIVE_R2_PROFILE` | optional local CLI profile containing R2 credentials |
+| `TEXLIVE_R2_PROFILE` | legacy R2-only profile, used when `TEXLIVE_OBJECT_PROFILE` is absent |
 | `TEXLIVE_DEPLOYED_URL` | public base URL used for byte verification |
 | `TEXLIVE_MIRROR_ROOT` | optional verified local release root used to generate bloom data without listing a remote store |
 
-The publication tools use the AWS CLI only as a client for R2's compatibility
-endpoint. They reject a missing or non-R2 endpoint. The selected profile uses
-region `auto`. Publisher credentials need object
-read/write for the TeX Live bucket; bucket/DNS/CORS administration uses a
-separate administrative credential.
+The publication tools and shell entry point share provider validation. R2 rejects
+a missing or non-R2 endpoint; its selected profile uses region `auto`. S3 rejects
+any endpoint override and requires an explicit bucket and region, so an old R2
+endpoint or profile cannot silently select the wrong destination. Publisher
+credentials need object read/write for the TeX Live bucket; infrastructure
+administration uses a separate administrative credential.
+
+For a byte-identical AWS copy, set `TEXLIVE_OBJECT_PROVIDER=s3`,
+`TEXLIVE_OBJECT_BUCKET`, `TEXLIVE_OBJECT_REGION` and optionally
+`TEXLIVE_OBJECT_PROFILE`. Unset `TEXLIVE_OBJECT_ENDPOINT`. Keep the exact snapshot
+prefix and verify the published bytes with `TEXLIVE_DEPLOYED_URL` pointing at
+the direct CloudFront origin. Do not regenerate a historical mirror to change
+its serving provider. Host applications own CDN choice and qualification;
+publisher credentials do not belong in application or PR Preview builds.
 
 For a release identified by `2025-0123456789abcdef`, set the prefix to the
 immutable snapshot root, for example `snapshots/2025-0123456789abcdef`. Never

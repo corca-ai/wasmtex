@@ -1,4 +1,5 @@
 import { CompileResult, EngineStatus } from '../types.js';
+import { AssetDownloadEvent } from './asset-download.js';
 import { EngineCompletionObservation } from './completion-snapshot.js';
 import { EngineDetection, TexEngine } from './engine-select.js';
 import { WasmTexEngineOptions } from './wasmtex-engine.js';
@@ -28,6 +29,7 @@ export interface CompileEngine {
     setPreambleSnapshot?(enabled: boolean): void;
     /** Latest bounded post-compile engine observation, when this engine can expose one. */
     getCompletionObservation?(): EngineCompletionObservation | null;
+    onAssetDownload?: (event: AssetDownloadEvent) => void;
     onProgress?: (progress: number) => void;
     onFileDownload?: (filename: string) => void;
 }

@@ -271,6 +271,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
   }
 
   terminate(): void {
+    this.downloadAbort.abort()
     this.tex.terminate()
     this.dvipdfm.terminate()
   }

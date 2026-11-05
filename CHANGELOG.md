@@ -13,6 +13,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Headless `onAssetDownload` diagnostics for format/map transfers, including byte
+  progress without Content-Length, retry counts and classified failures.
+- Explicit S3 provider, bucket, region and profile selection in mirror publishing;
+  R2 remains the default and shell publishers share destination validation.
 - LuaLaTeX heap checkpoints (`luatexHeapCheckpoints`): canonical compiles and page
   previews resume from the paragraph before an edit on a LuaHBTeX build whose
   Asyncify instrumentation covers only the line-read path. A refused or oversized
@@ -20,6 +24,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Keep progressing format/map downloads alive, retry temporary failures within
+  bounded budgets, and cancel active transfers when their engine is terminated.
+  Missing formats remain optional; permission, exhausted network and invalid
+  format failures no longer silently trigger format generation.
 - Keep preloaded fonts in the LuaLaTeX format. The same cache-name fault left `nullfont`
   there, so `\int` and `\sum` without `amsmath` and every `picture` line and circle
   lost their glyphs. This release changes the format's bytes, unlike an optimization.

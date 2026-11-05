@@ -1,4 +1,5 @@
 import { CompileResult, CompletionSnapshotProfile, EngineStatus, ResolverEvidenceReport, TexliveVersion, WarmupCache } from '../types.js';
+import { AssetDownloadEvent } from './asset-download.js';
 import { CompileEngine } from './compile-engine.js';
 import { WasmTexEngineOptions } from './wasmtex-engine.js';
 import { CompileWorkerDriver } from './wasmtex-worker.js';
@@ -128,6 +129,9 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
      *  PersistState; inferred so this engine and WasmTexPdftexEngine don't share an import block). */
     private readonly persist;
     protected readonly resolverProfile: CompletionSnapshotProfile;
+    onAssetDownload?: (event: AssetDownloadEvent) => void;
+    protected downloadAbort: AbortController;
+    private downloads;
     onProgress?: (progress: number) => void;
     onFileDownload?: (filename: string) => void;
     protected constructor(tex: CompileWorkerDriver, fmtFile: string, formatUrl?: string, warmup?: TexFmtWarmupPlan, persistentCache?: {
@@ -162,9 +166,10 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     /** Fetch a prebuilt format asset into {@link fmtBytes} so the first compile
      *  skips the expensive per-session `compileformat`. Prefers a gzipped
      *  `<fmt>.gz` (format files are large and compress ~5×), decompressing in the
-     *  browser; falls back to the plain `.fmt`. Best-effort: a missing or failed
-     *  fetch leaves `fmtBytes` null and {@link ensureFormat} builds it. */
+     *  browser; falls back to the plain `.fmt`. Only an absent
+     *  format leaves `fmtBytes` null and {@link ensureFormat} builds it. */
     private preloadFormat;
+    private downloadFormatBytes;
     /** Fetch & decompress the gzipped `<fmt>.gz` variant, or null to fall back to the plain
      *  `.fmt`. Only attempted when DecompressionStream exists: without it, a server serving
      *  `.gz` raw would leave the bytes gzip-compressed, and looksLikeFormat (length + non-'<'
@@ -173,7 +178,7 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     private tryPreloadGzFormat;
     /** Guard against a server returning 200 + an HTML/SPA-fallback page for a
      *  missing format asset: a real `.fmt` is multi-MB and not HTML. Rejecting it
-     *  keeps {@link ensureFormat} on the graceful build-from-source path. */
+     *  fails initialization instead of silently generating a replacement. */
     private looksLikeFormat;
     /** Prefetch the bloom filter and every warmup file in parallel (worker not
      *  needed yet). Best-effort: failures just fall back to on-demand sync XHR. */

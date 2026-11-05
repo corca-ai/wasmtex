@@ -24,29 +24,50 @@ export async function readStreamToBuffer(stream: ReadableStream<Uint8Array>): Pr
 
 /**
  * Read a Response body to bytes, invoking `onProgress` (0→100, clamped) per chunk
- * when a handler is given and a numeric Content-Length is known; otherwise a single
- * `arrayBuffer()` read with no progress. Shared by the pdfTeX and Unicode engines so
- * format-download progress reporting has one implementation.
+ * when a numeric Content-Length is known. Byte progress does not require a
+ * Content-Length and remains meaningful for transparently decoded responses.
+ * Shared by the pdfTeX and Unicode engines.
  */
 export async function readResponseWithProgress(
   resp: Response,
   onProgress?: (pct: number) => void,
+  onBytes?: (received: number) => void,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> {
+  signal?.throwIfAborted()
   const contentLength = Number.parseInt(resp.headers.get('Content-Length') || '0', 10)
-  if (!onProgress || !resp.body || !contentLength) {
-    return new Uint8Array(await resp.arrayBuffer())
+  if (!resp.body) {
+    const bytes = new Uint8Array(await resp.arrayBuffer())
+    if (bytes.length) onBytes?.(bytes.length)
+    return bytes
   }
   const reader = resp.body.getReader()
+  const abort = () => {
+    void reader.cancel(signal?.reason).catch(() => undefined)
+  }
+  signal?.addEventListener('abort', abort, { once: true })
   const chunks: Uint8Array[] = []
   let loaded = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    chunks.push(value)
-    loaded += value.length
-    // Clamp: a transparently gzip-decoded body can exceed the compressed
-    // Content-Length, which would otherwise report >100%.
-    onProgress(Math.min(100, Math.round((loaded / contentLength) * 100)))
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      signal?.throwIfAborted()
+      if (done) break
+      if (!value.length) continue
+      chunks.push(value)
+      loaded += value.length
+      onBytes?.(loaded)
+      // HTTP-decoded bytes can exceed the compressed Content-Length.
+      if (Number.isFinite(contentLength) && contentLength > 0) {
+        onProgress?.(Math.min(100, Math.round((loaded / contentLength) * 100)))
+      }
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined)
+    throw error
+  } finally {
+    signal?.removeEventListener('abort', abort)
+    reader.releaseLock()
   }
   const result = new Uint8Array(loaded)
   let offset = 0
