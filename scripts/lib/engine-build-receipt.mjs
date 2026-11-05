@@ -239,10 +239,20 @@ export function composeFormatReceipt({ engine, formats, config }) {
   if (!['pdftex', 'xetex', 'luahbtex'].includes(engine.family) || formats.family !== engine.family) {
     throw new Error('format composition requires matching format-bearing engine families')
   }
-  for (const key of ['texliveYear', 'texliveSourceCommit', 'mirror', 'toolchain']) {
+  for (const key of ['texliveYear', 'texliveSourceCommit', 'toolchain']) {
     if (JSON.stringify(engine[key]) !== JSON.stringify(formats[key])) {
       throw new Error(`format composition ${key} mismatch`)
     }
+  }
+  // A format made from a mirror stays valid on a successor that kept every file of it;
+  // scripts/check-mirror-successor.mjs proves that before a revision is listed.
+  const formatMirrorOutlived = (config.formatMirrorAncestors ?? []).some(
+    (mirror) =>
+      mirror.revision === formats.mirror?.revision &&
+      mirror.provenanceSha256 === formats.mirror?.provenanceSha256,
+  )
+  if (JSON.stringify(engine.mirror) !== JSON.stringify(formats.mirror) && !formatMirrorOutlived) {
+    throw new Error('format composition mirror mismatch')
   }
   const stem = { pdftex: 'wasmtex-pdftex', xetex: 'wasmtex-xetex', luahbtex: 'wasmtex-luatex' }[engine.family]
   const isFormat = (file) => file.name === `${stem}.fmt` || file.name === `${stem}.fmt.gz`

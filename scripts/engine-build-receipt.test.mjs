@@ -237,10 +237,10 @@ test('rejects a missing or mutable mirror identity', () => {
 for (const [family, formatName] of [['pdftex', 'wasmtex-pdftex.fmt'], ['xetex', 'wasmtex-xetex.fmt.gz'], ['luahbtex', 'wasmtex-luatex.fmt.gz']]) {
 test(`${family} reuses exact formats with both generation histories and rejects a relabelled composition`, () => {
   const { artifacts, config } = fixture()
-  const make = (revision) => createBuildReceipt({
+  const make = (revision, mirror = MIRROR) => createBuildReceipt({
     family, directory: artifacts,
     filenames: ['engine.js', 'engine.wasm', formatName],
-    sourceRevision: revision, texliveSourceCommit: COMMIT, mirror: MIRROR, config,
+    sourceRevision: revision, texliveSourceCommit: COMMIT, mirror, config,
   })
   writeFileSync(join(artifacts, formatName), 'published compressed format')
   const formats = make(COMMIT)
@@ -263,6 +263,12 @@ test(`${family} reuses exact formats with both generation histories and rejects 
   badOrigin.files[0].sha256 = '0'.repeat(64)
   assert.throws(() => composeFormatReceipt({ engine, formats: badOrigin, config }), /buildId/)
   assert.throws(() => composeFormatReceipt({ engine: receipt, formats, config }), /original schema-1/)
+
+  const successor = { ...MIRROR, revision: '2025-fedcba9876543210', url: 'https://tex.example/snapshots/2025-fedcba9876543210/2025/' }
+  const movedEngine = make('f'.repeat(40), successor)
+  assert.throws(() => composeFormatReceipt({ engine: movedEngine, formats, config }), /mirror mismatch/)
+  const ancestorConfig = { ...config, formatMirrorAncestors: [{ revision: MIRROR.revision, provenanceSha256: MIRROR.provenanceSha256 }] }
+  assert.deepEqual(composeFormatReceipt({ engine: movedEngine, formats, config: ancestorConfig }).mirror, successor)
 })
 
 }
