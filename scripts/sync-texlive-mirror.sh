@@ -348,7 +348,15 @@ if [ "$DO_UPLOAD" = true ]; then
       exit 1
     fi
 
+    # The CLI would guess from the operator's machine: a TeX Live file named .html then
+    # reaches the download path as text/html, which it refuses as an error page.
     object_store s3 sync "$RELEASE_ROOT/pdftex/" "$OBJECT_YEAR_ROOT/pdftex/" \
+      --exclude '*' --include '*.lua' --include '*.sty' --include '*.tex' \
+      --no-guess-mime-type --content-type 'text/plain; charset=utf-8' \
+      --cache-control "public, max-age=31536000, immutable"
+    object_store s3 sync "$RELEASE_ROOT/pdftex/" "$OBJECT_YEAR_ROOT/pdftex/" \
+      --exclude '*.lua' --exclude '*.sty' --exclude '*.tex' \
+      --no-guess-mime-type --content-type application/octet-stream \
       --cache-control "public, max-age=31536000, immutable"
   fi
   object_store s3 sync "$RELEASE_ROOT/catalog/" "$OBJECT_YEAR_ROOT/catalog/" \
