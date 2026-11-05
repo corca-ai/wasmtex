@@ -305,7 +305,7 @@ function sharedAccessibilityRule(
 ): RawDiagnostic[] {
   const masked = ctx.content
     .split('')
-    .map((char, offset) => (ctx.isMasked(offset) && char !== '\n' ? ' ' : char))
+    .map((char, offset) => (ctx.isMasked(offset) && char !== '\n' && char !== '\r' ? ' ' : char))
     .join('')
   return accessibilityReviewIssues('', ctx.content, masked)
     .filter((issue) => issue.code === code)

@@ -1,5 +1,6 @@
 import type { Token } from './latex-tokenizer'
 import type { CommandArg } from './package-db'
+import { newlineLength } from './source-position'
 import type { getStructuralSelectionIndex } from './structural-selection'
 
 type SourceIndex = NonNullable<ReturnType<typeof getStructuralSelectionIndex>>
@@ -94,14 +95,22 @@ function skipRepairTrivia(source: string, masked: string, start: number): number
   while (offset < source.length) {
     const char = source[offset]!
     if (char === '%' && masked[offset] === ' ') {
-      const next = source.indexOf('\n', offset)
-      if (next < 0) return source.length
-      offset = next + 1
+      offset = afterCommentLine(source, offset)
       continue
     }
-    if (!/[ \t\r\n]/.test(char)) return source[offset] === masked[offset] ? offset : null
-    if (char === '\n' && ++newlines > 1) return null // a paragraph token, not mere whitespace
+    const newline = newlineLength(source, offset)
+    if (newline) {
+      if (++newlines > 1) return null // a paragraph token, not mere whitespace
+      offset += newline
+      continue
+    }
+    if (!/[ \t]/.test(char)) return source[offset] === masked[offset] ? offset : null
     offset++
   }
   return offset
+}
+
+function afterCommentLine(source: string, offset: number): number {
+  const next = /\r\n|\r|\n/.exec(source.slice(offset))
+  return next ? offset + next.index + next[0].length : source.length
 }

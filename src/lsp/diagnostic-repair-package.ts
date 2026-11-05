@@ -7,6 +7,7 @@ import type {
 } from './diagnostic-repair-types'
 import { getCommandPackage } from './package-db'
 import type { TexResourceRecord } from './resource-catalog'
+import { buildLineStarts, offsetToLineCol } from './source-position'
 import { getStructuralSelectionIndex } from './structural-selection'
 
 export async function getPackageRepairs(
@@ -45,9 +46,7 @@ export async function getPackageRepairs(
     target.slice(site.range.startOffset, site.range.endOffset) !== site.expectedText
   )
     return { ok: false, reason: 'stale' }
-  const before = target.slice(0, site.range.startOffset)
-  const line = before.split('\n').length
-  const column = before.length - before.lastIndexOf('\n')
+  const { line, column } = offsetToLineCol(buildLineStarts(target), site.range.startOffset)
   const proposal: LatexPackageRepairProposal = {
     kind: 'missing-package',
     root: source.root,

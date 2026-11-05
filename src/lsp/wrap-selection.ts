@@ -79,7 +79,9 @@ export function getWrapOptions(
         (definition.kind !== 'command' ||
           (!hasEnvironment &&
             !hasAlignment &&
-            !/\n\s*\n/.test(input.source.slice(range.startOffset, range.endOffset)))),
+            !/\n\s*\n/.test(
+              input.source.slice(range.startOffset, range.endOffset).replace(/\r\n|\r/g, '\n'),
+            ))),
     )
     .map(publicWrapOption)
   return { ok: true, options }

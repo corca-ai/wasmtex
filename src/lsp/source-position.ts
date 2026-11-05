@@ -5,7 +5,10 @@ import type { NeutralPosition, NeutralRange } from './protocol'
 export function buildLineStarts(text: string): number[] {
   const starts = [0]
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === '\n') starts.push(i + 1)
+    if (text[i] === '\r') {
+      if (text[i + 1] === '\n') i++
+      starts.push(i + 1)
+    } else if (text[i] === '\n') starts.push(i + 1)
   }
   return starts
 }
@@ -36,7 +39,8 @@ export function positionToOffset(
 ): number {
   const lineIndex = Math.min(Math.max(position.line - 1, 0), lineStarts.length - 1)
   const lineStart = lineStarts[lineIndex]!
-  const lineEnd = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1]! - 1 : text.length
+  let lineEnd = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1]! - 1 : text.length
+  if (text[lineEnd] === '\n' && text[lineEnd - 1] === '\r') lineEnd--
   return Math.min(Math.max(lineStart + position.column - 1, lineStart), lineEnd)
 }
 
@@ -50,4 +54,15 @@ export function rangeFromOffsets(lineStarts: number[], start: number, end: numbe
     endLine: last.line,
     endColumn: last.column,
   }
+}
+
+/** Preferred physical terminator for newly inserted source lines. */
+export function sourceNewline(text: string): string {
+  return /\r\n|\r|\n/.exec(text)?.[0] ?? '\n'
+}
+
+/** Width of a physical line terminator beginning at a raw UTF-16 offset. */
+export function newlineLength(text: string, offset: number): number {
+  if (text[offset] === '\r') return text[offset + 1] === '\n' ? 2 : 1
+  return text[offset] === '\n' ? 1 : 0
 }

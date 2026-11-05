@@ -775,7 +775,7 @@ export class LatexLanguageService {
 
   private docFor(path: string): NeutralDocument {
     const text = this.textOf(path)
-    const lines = text.split('\n')
+    const lines = text.split(/\r\n|\r|\n/)
     return { path, getText: () => text, lineAt: (line) => lines[line - 1] ?? '' }
   }
 

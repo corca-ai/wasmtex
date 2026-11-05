@@ -247,7 +247,7 @@ function blankSpans(content: string, spans: Array<[number, number]>): string {
     const e = end < content.length ? end : content.length
     if (e <= s) continue
     if (s > cursor) parts.push(content.slice(cursor, s))
-    parts.push(content.slice(s, e).replace(/[^\n]/g, ' '))
+    parts.push(content.slice(s, e).replace(/[^\r\n]/g, ' '))
     cursor = e
   }
   if (cursor < content.length) parts.push(content.slice(cursor))

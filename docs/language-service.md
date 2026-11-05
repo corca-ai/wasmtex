@@ -1,5 +1,11 @@
 # Language service architecture
 
+Source positions use the original UTF-16 string. LF, CRLF and standalone CR each
+terminate one physical line; CRLF contributes two source units and one line.
+Comments, literal masks and neutral document lines share this rule, including
+mixed endings. No query normalizes the source or rewrites its offsets. Clamped
+positions stop before the complete line terminator.
+
 ### Parser & tokenizer
 Language features are backed by a small, error-tolerant LaTeX parser:
 

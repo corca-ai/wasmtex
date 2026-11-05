@@ -105,7 +105,7 @@ function blankMaskedSpans(text: string, spans: Array<[number, number]>): string 
     const end = Math.min(text.length, rawEnd)
     if (end <= start) continue
     if (start > cursor) parts.push(text.slice(cursor, start))
-    parts.push(text.slice(start, end).replace(/[^\n]/g, ' '))
+    parts.push(text.slice(start, end).replace(/[^\r\n]/g, ' '))
     cursor = end
   }
   if (cursor < text.length) parts.push(text.slice(cursor))

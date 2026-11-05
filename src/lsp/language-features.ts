@@ -62,7 +62,7 @@ export function getSignatureHelp(
   column: number,
   metadata?: CompletionCommandMetadataProvider,
 ): SignatureHelp | null {
-  const lines = content.split('\n')
+  const lines = content.split(/\r\n|\r|\n/)
   const context = analyzeCompletionContext(
     { path: '', getText: () => content, lineAt: (number) => lines[number - 1] ?? '' },
     { line, column },
@@ -98,7 +98,7 @@ export interface FoldingRange {
 
 /** Foldable ranges: environments, `% region`/`% endregion`, and section blocks. */
 export function getFoldingRanges(content: string): FoldingRange[] {
-  const lines = content.split('\n')
+  const lines = content.split(/\r\n|\r|\n/)
   const lineStarts = buildLineStarts(content)
   const isMasked = buildIsMasked(content)
   const ranges: FoldingRange[] = []
@@ -420,7 +420,7 @@ export function getCodeActions(
   index: ProjectIndex,
 ): CodeAction[] {
   const actions: CodeAction[] = []
-  const lineText = content.split('\n')[line - 1] ?? ''
+  const lineText = content.split(/\r\n|\r|\n/)[line - 1] ?? ''
   addNbspFix(lineText, file, line, actions)
   addUsepackageFix(lineText, content, file, index, actions)
   addCreateLabelFix(lineText, file, line, index, actions)
@@ -465,7 +465,7 @@ function addUsepackageFix(
 
 function makeUsepackageAction(content: string, file: string, pkg: string): CodeAction {
   // Insert after \documentclass, else at the top of the file.
-  const lines = content.split('\n')
+  const lines = content.split(/\r\n|\r|\n/)
   let insertLine = 1
   for (let i = 0; i < lines.length; i++) {
     if (/\\documentclass/.test(lines[i]!)) {
