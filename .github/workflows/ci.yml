@@ -92,7 +92,7 @@ jobs:
           WASMTEX_SMOKE_TEXLIVE_VERSION: ${{ matrix.year }}
           WASMTEX_SMOKE_TEXLIVE_URL: ${{ matrix.mirror }}
       - name: LuaLaTeX virtual fonts and large math symbols on Chromium
-        run: npx playwright test luatex-virtual-fonts --workers=1
+        run: npx playwright test asset-download luatex-virtual-fonts --workers=1
         env:
           TEXLIVE_VERSION: ${{ matrix.year }}
           TEXLIVE_URL: ${{ matrix.mirror }}

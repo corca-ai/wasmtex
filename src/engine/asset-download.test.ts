@@ -1,9 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 describe('attempt-scoped asset recovery', () => {
+  it('calls the native fetch implementation without binding it to the session', async () => {
+    vi.stubGlobal('fetch', function (this: unknown) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(new Response('ok'))
+    })
+    const bytes = await new AssetDownloadSession().read('data:text/plain,ok', { asset: 'data' })
+    expect(new TextDecoder().decode(bytes!)).toBe('ok')
+  })
+
   it('keeps an unknown-length download alive beyond 180 seconds while bytes arrive', async () => {
     vi.useFakeTimers()
     const events: AssetDownloadEvent[] = []

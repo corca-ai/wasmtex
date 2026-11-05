@@ -47,7 +47,7 @@ export class AssetDownloadSession {
 
   constructor(
     private readonly onEvent?: (event: AssetDownloadEvent) => void,
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = (...args) => fetch(...args),
   ) {}
 
   async read(url: string, input: DownloadInput): Promise<Uint8Array | null> {
