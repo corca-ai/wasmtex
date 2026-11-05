@@ -35,6 +35,12 @@ export function validateSourceConfig(config) {
   if (typeof config.texliveSource?.commitFile !== 'string') {
     throw new Error('source config must declare the TeX Live commit file')
   }
+  for (const mirror of config.formatMirrorAncestors ?? []) {
+    const revision = new RegExp(`^${config.texliveYear}-[a-f0-9]{16}$`)
+    if (!revision.test(mirror.revision) || !revision.test(mirror.successor ?? '') || !SHA256.test(mirror.provenanceSha256)) {
+      throw new Error('source config format mirror ancestors must name a revision and its successor')
+    }
+  }
   if (!/^\d+\.\d+\.\d+$/.test(config.emscripten?.version ?? '')) {
     throw new Error('source config must declare an Emscripten version')
   }
@@ -245,11 +251,12 @@ export function composeFormatReceipt({ engine, formats, config }) {
     }
   }
   // A format made from a mirror stays valid on a successor that kept every file of it;
-  // scripts/check-mirror-successor.mjs proves that before a revision is listed.
+  // scripts/check-mirror-successor.mjs proves that for each pair listed here.
   const formatMirrorOutlived = (config.formatMirrorAncestors ?? []).some(
     (mirror) =>
       mirror.revision === formats.mirror?.revision &&
-      mirror.provenanceSha256 === formats.mirror?.provenanceSha256,
+      mirror.provenanceSha256 === formats.mirror?.provenanceSha256 &&
+      mirror.successor === engine.mirror?.revision,
   )
   if (JSON.stringify(engine.mirror) !== JSON.stringify(formats.mirror) && !formatMirrorOutlived) {
     throw new Error('format composition mirror mismatch')

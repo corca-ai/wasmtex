@@ -267,8 +267,11 @@ test(`${family} reuses exact formats with both generation histories and rejects 
   const successor = { ...MIRROR, revision: '2025-fedcba9876543210', url: 'https://tex.example/snapshots/2025-fedcba9876543210/2025/' }
   const movedEngine = make('f'.repeat(40), successor)
   assert.throws(() => composeFormatReceipt({ engine: movedEngine, formats, config }), /mirror mismatch/)
-  const ancestorConfig = { ...config, formatMirrorAncestors: [{ revision: MIRROR.revision, provenanceSha256: MIRROR.provenanceSha256 }] }
+  const ancestor = { revision: MIRROR.revision, provenanceSha256: MIRROR.provenanceSha256, successor: successor.revision }
+  const ancestorConfig = { ...config, formatMirrorAncestors: [ancestor] }
   assert.deepEqual(composeFormatReceipt({ engine: movedEngine, formats, config: ancestorConfig }).mirror, successor)
+  const later = make('f'.repeat(40), { ...successor, revision: '2025-aaaaaaaaaaaaaaaa', url: 'https://tex.example/snapshots/2025-aaaaaaaaaaaaaaaa/2025/' })
+  assert.throws(() => composeFormatReceipt({ engine: later, formats, config: ancestorConfig }), /mirror mismatch/)
 })
 
 }
