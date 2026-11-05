@@ -145,6 +145,16 @@ download_archive() {
 
 mkdir -p "$WORK_DIR"
 
+# Flattened names can differ only by case (Cherokee, cherokee), and such a volume keeps one.
+case_probe=$(mktemp -d "$WORK_DIR/case.XXXXXX")
+touch "$case_probe/a"
+if [ -e "$case_probe/A" ]; then
+  rm -rf "$case_probe"
+  echo "WORK_DIR must be on a case-sensitive volume: $WORK_DIR" >&2
+  exit 1
+fi
+rm -rf "$case_probe"
+
 if [ "$SOURCE_TYPE" = tlnet-repository ]; then
   if [ -z "${TEXMF_DIST:-}" ] || [ -z "${TEXLIVE_TLPDB:-}" ]; then
     echo "A tlnet snapshot must be materialized before mirror generation." >&2

@@ -1086,6 +1086,20 @@
     }
   },
   "collisions": {
+  "pdftex/26/kinsoku.tex": {
+    "selectedSource": "texmf-dist/tex/platex/base/kinsoku.tex",
+    "rejectedSources": [
+      "texmf-dist/tex/ptex/ptex-base/kinsoku.tex"
+    ],
+    "rationale": "The file kpsewhich finds for pdflatex in the pinned TeX Live 2026 tree."
+  },
+  "pdftex/26/ukinsoku.tex": {
+    "selectedSource": "texmf-dist/tex/uplatex/base/ukinsoku.tex",
+    "rejectedSources": [
+      "texmf-dist/tex/uptex/uptex-base/ukinsoku.tex"
+    ],
+    "rationale": "The file kpsewhich finds for pdflatex in the pinned TeX Live 2026 tree."
+  },
   "pdftex/13/gamma.mf": {
     "selectedSource": "texmf-dist/fonts/source/public/lfb/gamma.mf",
     "rejectedSources": [

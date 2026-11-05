@@ -40,8 +40,8 @@ const MPTOPDF_SUPPORT_FILES = [
 ]
 const CMAP_NOTES = ['Makefile', 'README', 'README.md', 'cid2code.txt', 'cid_mapping.md']
 const OTHER_FORMAT_TREES = [
-  'amstex', 'cslatex', 'csplain', 'eplain', 'fontinst', 'hitex', 'jadetex', 'lambda', 'lollipop',
-  'mex', 'mltex', 'optex', 'platex', 'psizzl', 'ptex', 'startex', 'support', 'texinfo', 'texsis',
+  'amstex', 'cslatex', 'csplain', 'eplain', 'fontinst', 'hitex', 'jadetex', 'lollipop', 'mex',
+  'mltex', 'optex', 'platex', 'psizzl', 'ptex', 'startex', 'support', 'texinfo', 'texsis',
   'uplatex', 'uptex', 'xmltex',
 ]
 
@@ -58,6 +58,9 @@ export const FORMAT_RULES = [
       'tex/lualatex',
     ],
   },
+  // TEXINPUTS ends in an empty element, so LaTeX reaches all of tex/ after the trees above:
+  // `\usepackage[IL2]{fontenc}` loads il2enc.def from tex/cslatex. Earlier trees keep a name.
+  { format: 26, roots: OTHER_FORMAT_TREES.map((tree) => `tex/${tree}`), fallback: true },
   // pdftex.def reads these to place MetaPost figures; the rest of this tree is ConTeXt.
   { format: 26, roots: ['tex/context/base/mkii'], files: MPTOPDF_SUPPORT_FILES },
   { format: 3, roots: ['fonts/tfm'], extensions: ['.tfm'], stripExtension: true },
@@ -91,8 +94,8 @@ export const FORMAT_RULES = [
 // out. A class that is in neither fails mirror generation, so a new gap has to be
 // decided instead of surfacing as a document that compiles wrong.
 export const RUNTIME_EXCLUSIONS = [
-  { reason: 'other TeX formats', roots: OTHER_FORMAT_TREES.map((tree) => `tex/${tree}`) },
   { reason: 'ConTeXt', roots: ['tex/context', 'fonts/cid/context'] },
+  { reason: 'Lambda needs Omega, and has no license metadata', roots: ['tex/lambda'] },
   { reason: 'the development LaTeX format', roots: ['tex/latex-dev'] },
   { reason: 'Omega translation processes', roots: ['omega'] },
   {
@@ -505,6 +508,15 @@ function validateNoticePaths(texmfDist, pkg, noticePaths) {
   }
 }
 
+/** A fallback tree comes last on kpathsea's path, so a name found earlier hides its copy. */
+function withoutShadowedFallbacks(candidatesByKey) {
+  for (const [key, candidates] of candidatesByKey) {
+    const primary = candidates.filter((candidate) => !candidate.fallback)
+    if (primary.length > 0) candidatesByKey.set(key, primary)
+  }
+  return candidatesByKey
+}
+
 function collectCandidates(texmfDist, includeKey = null) {
   const candidatesByKey = new Map()
   for (const rule of FORMAT_RULES) {
@@ -524,12 +536,13 @@ function collectCandidates(texmfDist, includeKey = null) {
           sourcePath,
           bytes: fileStat.size,
           sha256: sha('sha256', path),
+          fallback: rule.fallback === true,
         })
         candidatesByKey.set(key, candidates)
       }
     }
   }
-  return candidatesByKey
+  return withoutShadowedFallbacks(candidatesByKey)
 }
 
 function collectMetadataCandidates(parsed) {
@@ -543,11 +556,16 @@ function collectMetadataCandidates(parsed) {
       const name = outputName(relativePath, rule)
       const key = `pdftex/${rule.format}/${name}`
       const candidates = candidatesByKey.get(key) ?? []
-      candidates.push({ sourcePath, bytes: null, sha256: sourcePath })
+      candidates.push({
+        sourcePath,
+        bytes: null,
+        sha256: sourcePath,
+        fallback: rule.fallback === true,
+      })
       candidatesByKey.set(key, candidates)
     }
   }
-  return candidatesByKey
+  return withoutShadowedFallbacks(candidatesByKey)
 }
 
 function loadPinnedTlpdb(tlpdbPath, config) {
