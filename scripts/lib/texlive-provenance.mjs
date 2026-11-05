@@ -83,7 +83,8 @@ export const FORMAT_RULES = [
     extensions: ['.tec'],
   },
   { format: 45, roots: ['fonts/cmap'], skip: CMAP_NOTES },
-  { format: 46, roots: ['fonts/sfd'], extensions: ['.sfd'] },
+  // DNP.sfd has no license metadata, and no TeX Live font map names it.
+  { format: 46, roots: ['fonts/sfd'], extensions: ['.sfd'], skip: ['DNP.sfd'] },
 ]
 
 // Every TeX Live run file is selected above or named here with the reason it stays
