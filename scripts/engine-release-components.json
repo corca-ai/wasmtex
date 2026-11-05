@@ -3,14 +3,14 @@
   "years": {
     "2025": {
       "mirror": {
-        "revision": "2025-0d3fc73b65e39905",
-        "provenanceSha256": "f43c385400b1f5ecdc8708ee73519ddcd618a13d649dccfde86ceea6f3534697",
-        "url": "https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/"
+        "revision": "2025-2e1df8aa17d29d66",
+        "provenanceSha256": "12e0d8e5d0fa84a3f1ce9d9905f1661474f7c46c81f35eb3400498f33babdd0c",
+        "url": "https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/"
       },
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 41994779218,
+          "runId": 42000941105,
           "artifacts": [
             "wasm-pdftex",
             "wasm-bibtex"
@@ -18,28 +18,35 @@
         },
         {
           "id": "bibtex8",
-          "runId": 41993395059,
+          "runId": 42000955058,
           "artifacts": [
             "wasm-bibtex8"
           ]
         },
         {
           "id": "makeindex",
-          "runId": 41993395116,
+          "runId": 42000961061,
           "artifacts": [
             "wasm-makeindex"
           ]
         },
         {
+          "id": "metafont",
+          "runId": 42000966264,
+          "artifacts": [
+            "wasm-metafont"
+          ]
+        },
+        {
           "id": "xetex",
-          "runId": 41994787262,
+          "runId": 42000945946,
           "artifacts": [
             "wasm-xetex"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 41994795610,
+          "runId": 42000950172,
           "artifacts": [
             "wasm-luatex"
           ]
@@ -65,14 +72,14 @@
     },
     "2026": {
       "mirror": {
-        "revision": "2026-ba38749b8714505a",
-        "provenanceSha256": "7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00",
-        "url": "https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/"
+        "revision": "2026-d26706764b740276",
+        "provenanceSha256": "4ea93f54f4a12530ecf1565b03f6d223ce3434a28c4e3e5c705930e957ff9451",
+        "url": "https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/"
       },
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 41994782923,
+          "runId": 42000911085,
           "artifacts": [
             "wasm-pdftex-2026",
             "wasm-bibtex-2026"
@@ -80,28 +87,35 @@
         },
         {
           "id": "bibtex8",
-          "runId": 41993395059,
+          "runId": 42000925312,
           "artifacts": [
             "wasm-bibtex8-2026"
           ]
         },
         {
           "id": "makeindex",
-          "runId": 41993395116,
+          "runId": 42000931105,
           "artifacts": [
             "wasm-makeindex-2026"
           ]
         },
         {
+          "id": "metafont",
+          "runId": 42000936556,
+          "artifacts": [
+            "wasm-metafont-2026"
+          ]
+        },
+        {
           "id": "xetex",
-          "runId": 41994791218,
+          "runId": 42000916012,
           "artifacts": [
             "wasm-xetex-2026"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 41994799727,
+          "runId": 42000920633,
           "artifacts": [
             "wasm-luatex-2026"
           ]
