@@ -10,7 +10,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 41777480728,
+          "runId": 41994779218,
           "artifacts": [
             "wasm-pdftex",
             "wasm-bibtex"
@@ -18,28 +18,28 @@
         },
         {
           "id": "bibtex8",
-          "runId": 33171940061,
+          "runId": 41993395059,
           "artifacts": [
             "wasm-bibtex8"
           ]
         },
         {
           "id": "makeindex",
-          "runId": 33171940043,
+          "runId": 41993395116,
           "artifacts": [
             "wasm-makeindex"
           ]
         },
         {
           "id": "xetex",
-          "runId": 37566479266,
+          "runId": 41994787262,
           "artifacts": [
             "wasm-xetex"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 41850257797,
+          "runId": 41994795610,
           "artifacts": [
             "wasm-luatex"
           ]
@@ -72,7 +72,7 @@
       "downloads": [
         {
           "id": "pdftex-bibtex",
-          "runId": 41777480728,
+          "runId": 41994782923,
           "artifacts": [
             "wasm-pdftex-2026",
             "wasm-bibtex-2026"
@@ -80,28 +80,28 @@
         },
         {
           "id": "bibtex8",
-          "runId": 33163172428,
+          "runId": 41993395059,
           "artifacts": [
             "wasm-bibtex8-2026"
           ]
         },
         {
           "id": "makeindex",
-          "runId": 33163174571,
+          "runId": 41993395116,
           "artifacts": [
             "wasm-makeindex-2026"
           ]
         },
         {
           "id": "xetex",
-          "runId": 37566487009,
+          "runId": 41994791218,
           "artifacts": [
             "wasm-xetex-2026"
           ]
         },
         {
           "id": "luahbtex",
-          "runId": 41850257797,
+          "runId": 41994799727,
           "artifacts": [
             "wasm-luatex-2026"
           ]
