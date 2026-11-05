@@ -22,6 +22,7 @@
  *
  *   --baseline    engine assets of the release being replaced
  *   --candidate   engine assets of the new release
+ *   --baseline-texlive-url  the old mirror, when the release also moves to a new one
  *
  * Exits non-zero when any document differs, when either side fails to compile,
  * or when the corpus is empty. A zero exit is the evidence a host needs to move
@@ -130,7 +131,7 @@ async function main() {
       assets: baseline,
       document,
       engine,
-      texliveUrl,
+      texliveUrl: arg('baseline-texlive-url', texliveUrl),
       texliveVersion,
     })
     const after = await compileWith({
