@@ -43,6 +43,8 @@ const moduleByFamily = {
   bibtex: 'wasmtex-bibtex.js',
   bibtex8: 'wasmtex-bibtex8.js',
   makeindex: 'wasmtex-makeindex.js',
+  metafont: 'wasmtex-metafont.js',
+  gftopk: 'wasmtex-metafont.js',
   xetex: 'wasmtex-xetex.js',
   dvipdfmx: 'wasmtex-dvipdfm.js',
   luahbtex: 'wasmtex-luatex.js',

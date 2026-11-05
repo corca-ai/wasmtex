@@ -12,7 +12,7 @@ import { validateEngineReleaseComponents } from './lib/engine-release-components
 // an optimization.
 export function prepareEngineSourceCandidate(components, license, year, run, luatexRun, rebuiltFormats = [], extraRuns = {}) {
   if (!['2025', '2026'].includes(year)) throw new Error('unsupported annual engine line')
-  const extraFamilies = ['xetex', 'bibtex8', 'makeindex']
+  const extraFamilies = ['xetex', 'bibtex8', 'makeindex', 'metafont']
   if (Object.keys(extraRuns).some((id) => !extraFamilies.includes(id))) throw new Error('unknown candidate family')
   const runs = [['pdftex-bibtex', run, 'pdftex', 'pdftex'], ['luahbtex', luatexRun, 'luatex', 'luahbtex'],
     ...extraFamilies.map((id) => [id, extraRuns[id], id, id === 'xetex' ? id : null])]
@@ -69,6 +69,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       xetex: process.env.XETEX_RUN || undefined,
       bibtex8: process.env.BIBTEX8_RUN || undefined,
       makeindex: process.env.MAKEINDEX_RUN || undefined,
+      metafont: process.env.METAFONT_RUN || undefined,
     },
   )
   for (const [path, value] of [[componentsPath, candidate.components], [licensePath, candidate.license]]) {

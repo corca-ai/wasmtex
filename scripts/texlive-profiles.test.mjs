@@ -24,7 +24,7 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
   assert.equal(value.texliveYear, '2026')
   assert.deepEqual(
     value.profiles.map((profile) => profile.id),
-    ['2026-initial', '2026-20260826', '2026-20260826-8b79469', '2026-20260826-189e605', '2026-20260826-ef72b73', '2026-20260826-52bd7d6', '2026-20260826-b614b6f', '2026-20260826-6d5129f', '2026-20260826-dce598a', '2026-20260826-76825fe', '2026-20260826-9147f57', '2026-20260826-16ccfa6', '2026-20260826-6ecd87c', '2026-20260826-ba0b219', '2026-20260826-e688469', '2026-20260826-3c2c13b', '2026-20260826-d64ba6b', '2026-20260826-4c355db', '2026-20260826-b6584b4', '2026-20260826-47ff73b', '2026-20260826-0e90bf7', '2026-20260826-a2ba15e', '2026-20260826-dbaca62', '2026-20260826-4dbc8d3'],
+    ['2026-initial', '2026-20260826', '2026-20260826-8b79469', '2026-20260826-189e605', '2026-20260826-ef72b73', '2026-20260826-52bd7d6', '2026-20260826-b614b6f', '2026-20260826-6d5129f', '2026-20260826-dce598a', '2026-20260826-76825fe', '2026-20260826-9147f57', '2026-20260826-16ccfa6', '2026-20260826-6ecd87c', '2026-20260826-ba0b219', '2026-20260826-e688469', '2026-20260826-3c2c13b', '2026-20260826-d64ba6b', '2026-20260826-4c355db', '2026-20260826-b6584b4', '2026-20260826-47ff73b', '2026-20260826-0e90bf7', '2026-20260826-a2ba15e', '2026-20260826-dbaca62', '2026-20260826-4dbc8d3', '2026-20260826-f5d9443'],
   )
   for (const profile of value.profiles) {
     assert.match(profile.mirror.revision, revision)
@@ -46,14 +46,16 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
       assert.match(sourceRevision, /^[a-f0-9]{40}$/)
     }
     assert.match(profile.engine.correspondingSourceSha256, sha256)
-    assert.deepEqual(Object.keys(profile.engine.buildRuns).sort(), [
+    // Profiles from before Metafont stay as published.
+    const families = Object.keys(profile.engine.buildRuns).sort()
+    assert.deepEqual(families.filter((family) => family !== 'metafont'), [
       'bibtex8',
       'luahbtex',
       'makeindex',
       'pdftex-bibtex',
       'xetex',
     ])
-    assert.equal(new Set(Object.values(profile.engine.buildRuns)).size, 5)
+    assert.equal(new Set(Object.values(profile.engine.buildRuns)).size, families.length)
     assert.equal(profile.qualification.browserGoldens, 7)
     assert.equal(profile.qualification.nodeBrowserParity, 7)
     assert.deepEqual(profile.qualification.representativeEngines, [

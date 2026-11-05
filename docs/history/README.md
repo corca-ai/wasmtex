@@ -7,6 +7,7 @@ level up, starting with the [documentation index](../README.md).
 
 | Record | Scope | Current guide |
 | --- | --- | --- |
+| [TeX Live run files and Metafont fonts](tex-runtime-files-2026-11.md) | Why mid-cycle mirrors were published, the comparison with real `mktexpk`, list stages and build traps. | [Mirror operations](../texlive-mirror-operations.md) |
 | [LuaLaTeX heap checkpoints](luatex-heap-checkpoints-2026-11.md) | Selective Asyncify for LuaHBTeX, stack guard, engine page limit, preview/compile timings, annual artifacts and source. | [Compiler API](../compiler-api.md#luatex-heap-checkpoints) |
 | [LuaLaTeX virtual fonts and the rebuilt format](luatex-virtual-fonts-2026-11.md) | The cache-name fault behind failing virtual fonts and missing math symbols, and the one release that changed format bytes | [Engine guide](../engine.md) |
 | [Recorder inputs after a resume](resume-recorder-2026-11.md) | Truncated recorder after a heap-checkpoint resume, stale host reuse, controller fix, annual artifacts and source. | [Headless compiler](../headless.md) |

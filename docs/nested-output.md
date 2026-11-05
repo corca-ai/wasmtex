@@ -28,11 +28,11 @@ For each annual line, set its matching immutable mirror and run:
 
 ```sh
 NESTED_OUTPUT_SMOKE=1 WASMTEX_SMOKE_TEXLIVE_VERSION=2026 \
-WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+WASMTEX_SMOKE_TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
 npx vitest run src/engine/nested-output.smoke.test.ts
 
 TEXLIVE_VERSION=2026 \
-TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/ \
+TEXLIVE_URL=https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/ \
 npx playwright test nested-output --workers=1
 ```
 

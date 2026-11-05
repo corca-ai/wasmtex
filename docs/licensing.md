@@ -76,8 +76,8 @@ this engine family classification:
 Each engine binary is one linked program, so its distribution terms must be
 satisfiable by every statically linked component simultaneously. The actual
 linked set is not assumed: the
-[release link inventory](license-evidence/link-inventory-57ad3e9.json) captures
-81 static archives across 7 executables, and every archive is classified in
+[release link inventory](license-evidence/link-inventory-2025-a97db8a.json) captures
+93 static archives across 9 executables, and every archive is classified in
 the component inventory, which CI re-checks fail-closed.
 
 The reasoning, component class by component class:

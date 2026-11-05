@@ -14,8 +14,8 @@ const texliveVersion = process.env.TEXLIVE_VERSION === '2026' ? ('2026' as const
 const texliveUrl =
   process.env.TEXLIVE_URL ??
   (texliveVersion === '2026'
-    ? 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'
-    : 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/')
+    ? 'https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/'
+    : 'https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/')
 
 const LOREM =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'

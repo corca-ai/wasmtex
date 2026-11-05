@@ -6,8 +6,8 @@ const year = process.env.TEXLIVE_VERSION === '2025' ? ('2025' as const) : ('2026
 // Use the same immutable annual mirror directly, as the other checkpoint specs do.
 // An extra development proxy can stall package requests independently of the engine.
 const texliveUrl = process.env.TEXLIVE_URL ?? (year === '2025'
-  ? 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/'
-  : 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/')
+  ? 'https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/'
+  : 'https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/')
 
 test('unread secondary TikZ edits reuse a proven prefix; preamble edits and new files retire it', async ({ page }) => {
   // Exercise the candidate controller with the pinned native engine and formats.
