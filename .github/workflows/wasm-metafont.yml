@@ -92,6 +92,7 @@ jobs:
             wasm-build/
 
       - name: Run WASM build
+        timeout-minutes: 60
         run: |
           mkdir -p wasm-build/dist-metafont
           docker run --platform linux/amd64 \

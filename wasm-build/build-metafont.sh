@@ -14,7 +14,7 @@ OUT=/dist
 GLUE=/src
 mkdir -p "$OUT"
 
-CONFIGURE_FLAGS="--disable-all-pkgs --enable-web2c --enable-mf --enable-web-progs \
+COMMON_FLAGS="--disable-all-pkgs --enable-web2c \
   --without-x --without-mf-x-toolkit --disable-shared --disable-multiplatform \
   --disable-native-texlive-build --disable-largefile --disable-synctex \
   --disable-tex --disable-etex --disable-pdftex --disable-xetex --disable-luatex \
@@ -22,10 +22,25 @@ CONFIGURE_FLAGS="--disable-all-pkgs --enable-web2c --enable-mf --enable-web-prog
   --disable-mfluajit --disable-mp --disable-pmp --disable-upmp --disable-ptex \
   --disable-eptex --disable-uptex --disable-euptex --disable-aleph --disable-hitex"
 
+# A tool make runs under emscripten can wait forever, and each log below is a file, so
+# without a limit a stall says nothing until the runner gives up six hours later.
+bounded() {
+  local log=$1 status=0
+  shift
+  timeout -k 30 1500 "$@" >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+    echo "timed out: $*"
+    tail -40 "$log"
+    exit 1
+  fi
+  return "$status"
+}
+
 echo "=== Phase A: native tangle of Metafont and GFtoPK ==="
 cd "$NATIVE"
-"$SRC/configure" $CONFIGURE_FLAGS >configure.out 2>&1 || { tail -40 configure.out; exit 1; }
-make MAKEINFO=true -k -j"$(nproc)" >make.out 2>&1 || echo "(native make nonzero: only the generated C below matters)"
+bounded configure.out "$SRC/configure" $COMMON_FLAGS --enable-mf --enable-web-progs \
+  || { tail -40 configure.out; exit 1; }
+bounded make.out make MAKEINFO=true -k -j"$(nproc)" || echo "(native make nonzero: only the generated C below matters)"
 NW="$NATIVE/texk/web2c"
 for generated in mfini.c mf0.c mf-pool.c mfd.h mfcoerce.h gftopk.c gftopk.h; do
   [ -s "$NW/$generated" ] || { echo "native build did not generate $generated"; tail -40 make.out; exit 1; }
@@ -33,15 +48,18 @@ done
 
 echo "=== Phase B: emconfigure, kpathsea and the web2c library ==="
 rm -rf "$WB"; mkdir -p "$WB"; cd "$WB"
-emconfigure "$SRC/configure" $CONFIGURE_FLAGS >emconf.out 2>&1 || { tail -40 emconf.out; exit 1; }
+# Metafont's C comes from Phase A, so this tree builds no WEB program: only the native
+# tools tangle them, and a wasm tangle cannot stand in for one.
+bounded emconf.out emconfigure "$SRC/configure" $COMMON_FLAGS --disable-mf --disable-web-progs \
+  || { tail -40 emconf.out; exit 1; }
 [ -f libs/Makefile ] && sed -i -E '/^(MAKE_SUBDIRS|CONF_SUBDIRS)/ s/\<(freetype2|icu|luajit|mpfr|mpfi|cairo|pixman|potrace|gmp)\>//g' libs/Makefile || true
-emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -k -j"$(nproc)" >emmake.out 2>&1 \
+bounded emmake.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -k -j"$(nproc)" \
   || echo "(recursive make nonzero: web2c's tools cannot run as wasm, the objects are compiled below)"
-emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk/kpathsea -j"$(nproc)" >emmake-kpse.out 2>&1 \
+bounded emmake-kpse.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk/kpathsea -j"$(nproc)" \
   || echo "(kpathsea make nonzero)"
 WW="$WB/texk/web2c"
 [ -f "$WW/c-auto.h" ] || { echo "web2c was not configured"; tail -40 emmake.out; exit 1; }
-emmake make MAKEINFO=true -C "$WW/lib" -j"$(nproc)" >emmake-lib.out 2>&1 || echo "(web2c lib make nonzero)"
+bounded emmake-lib.out emmake make MAKEINFO=true -C "$WW/lib" -j"$(nproc)" || echo "(web2c lib make nonzero)"
 KPSE="$(find "$WB" -name 'libkpathsea.a' 2>/dev/null | head -1)"
 LIBW2C="$WW/lib/lib.a"
 [ -n "$KPSE" ] && [ -f "$LIBW2C" ] || { echo "kpathsea or the web2c library is missing"; tail -40 emmake-lib.out; exit 1; }
