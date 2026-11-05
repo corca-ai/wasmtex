@@ -1,3 +1,5 @@
+import { type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
+
 /**
  * Which bloom filter object a mirror snapshot serves.
  *
@@ -14,12 +16,20 @@ export const BLOOM_FILTER_OBJECTS = ['bloom-filter.v2.bin', 'bloom-filter.bin'] 
 export async function fetchBloomFilter(
   baseUrl: string,
   init?: RequestInit,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = (...args) => fetch(...args),
+  onAssetDownload?: (event: AssetDownloadEvent) => void,
 ): Promise<ArrayBuffer | null> {
+  const downloads = new AssetDownloadSession(onAssetDownload, (url, request) =>
+    fetchImpl(url, { ...init, ...request, ...(init?.cache ? { cache: init.cache } : {}) }),
+  )
   for (const name of BLOOM_FILTER_OBJECTS) {
     try {
-      const resp = await fetchImpl(`${baseUrl}${name}`, init)
-      if (resp.ok) return await resp.arrayBuffer()
+      const bytes = await downloads.read(`${baseUrl}${name}`, {
+        asset: 'data',
+        ...(init?.signal ? { signal: init.signal } : {}),
+        retry: false,
+      })
+      if (bytes) return new Uint8Array(bytes).buffer
     } catch (err) {
       // An aborted warmup must stay observable to the caller; a plain network failure
       // just moves on to the next candidate.

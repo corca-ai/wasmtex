@@ -22,7 +22,6 @@ import type {
   WarmupCache,
 } from '../types'
 import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
-import { isAssetResponse } from './asset-response'
 import { fetchBloomFilter } from './bloom-filter'
 import type { CompileEngine } from './compile-engine'
 import { buildDependencyGraph } from './dependency-graph'
@@ -467,19 +466,21 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     const { texliveUrl, preload, notFound, concurrency = 8 } = this.warmup
     const fetchBuf = async (url: string): Promise<ArrayBuffer | null> => {
       try {
-        const resp = await fetch(url)
-        if (!isAssetResponse(resp)) {
-          await resp.body?.cancel()
-          return null
-        }
-        return await resp.arrayBuffer()
+        const bytes = await this.downloads.read(url, {
+          asset: 'data',
+          signal: this.downloadAbort.signal,
+          retry: false,
+        })
+        return bytes ? new Uint8Array(bytes).buffer : null
       } catch {
         return null
       }
     }
     const bloomP = this.suppliedWarmup?.bloomFilter
       ? Promise.resolve(this.suppliedWarmup.bloomFilter)
-      : fetchBloomFilter(texliveUrl).catch(() => null)
+      : fetchBloomFilter(texliveUrl, { signal: this.downloadAbort.signal }, undefined, (event) =>
+          this.onAssetDownload?.(event),
+        ).catch(() => null)
     const supplied = new Set(
       this.suppliedWarmup?.files.map((file) => `${file.format}/${file.filename}`) ?? [],
     )

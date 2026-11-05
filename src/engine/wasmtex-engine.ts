@@ -428,7 +428,12 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
           : this.fetchGzWithProgress(`${this.effectiveTexliveUrl}pdftex/11/pdftex.map`, false),
         warmup
           ? Promise.resolve(null)
-          : fetchBloomFilter(this.effectiveTexliveUrl).catch(() => null),
+          : fetchBloomFilter(
+              this.effectiveTexliveUrl,
+              { signal: this.downloadAbort.signal },
+              undefined,
+              (event) => this.onAssetDownload?.(event),
+            ).catch(() => null),
       ])
       return { warmup, map, bloom }
     })

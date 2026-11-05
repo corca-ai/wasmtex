@@ -268,10 +268,14 @@ describe('attempt-scoped asset recovery', () => {
   it('cancels a stalled body immediately without retrying or cancelling another consumer', async () => {
     const controller = new AbortController()
     let calls = 0
-    const session = new AssetDownloadSession(undefined, async () => {
-      calls++
-      return calls === 1 ? new Response(new ReadableStream()) : new Response('ok')
-    })
+    const events: AssetDownloadEvent[] = []
+    const session = new AssetDownloadSession(
+      (e) => events.push(e),
+      async () => {
+        calls++
+        return calls === 1 ? new Response(new ReadableStream()) : new Response('ok')
+      },
+    )
     const cancelled = session.read('https://assets.test/a', {
       asset: 'format',
       signal: controller.signal,
@@ -282,5 +286,8 @@ describe('attempt-scoped asset recovery', () => {
     await expect(cancelled).rejects.toBe(reason)
     expect(new TextDecoder().decode((await result)!)).toBe('ok')
     expect(calls).toBe(2)
+    expect(events.filter((e) => e.asset === 'format' && e.phase === 'end')).toMatchObject([
+      { failure: 'cancelled' },
+    ])
   })
 })
