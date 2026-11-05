@@ -1,3 +1,4 @@
+import { deflateSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import {
   detectDocumentLanguage,
@@ -127,5 +128,26 @@ describe('inspectPdfTagging', () => {
     const report = await inspectPdfTagging(bytes)
     expect(report.tagged).toBe(true)
     expect(report.lang).toBe('ko-KR')
+  })
+  it.each([
+    [52, 10],
+    [23, 13],
+  ])('preserves a deflate checksum ending in an EOL byte (padding %i, byte %i)', async (padding, lastByte) => {
+    const compressed = deflateSync(
+      `<< /StructTreeRoot 2 0 R /Marked true /Lang (en-US) /Probe (${'a'.repeat(padding)}) >>`,
+    )
+    expect(compressed.at(-1)).toBe(lastByte)
+    for (const separator of ['', '\n', '\r', '\r\n']) {
+      const bytes = Buffer.concat([
+        Buffer.from(
+          `%PDF-2.0\n9 0 obj << /Type /ObjStm /Length ${compressed.length} /Filter /FlateDecode >>\nstream\n`,
+        ),
+        compressed,
+        Buffer.from(`${separator}endstream\nendobj\n%%EOF`),
+      ])
+      const report = await inspectPdfTagging(bytes)
+      expect(report.tagged).toBe(true)
+      expect(report.lang).toBe('en-US')
+    }
   })
 })

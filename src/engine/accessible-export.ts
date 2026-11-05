@@ -253,12 +253,17 @@ function streamBodyStart(raw: string, dictEnd: number): number {
   return at
 }
 
-/** End of the stream body starting at `start` (the EOL before `endstream` is not data), or -1. */
-function streamBodyEnd(raw: string, start: number): number {
-  let end = raw.indexOf('endstream', start)
-  if (end < 0) return -1
-  while (end > start && (raw[end - 1] === '\n' || raw[end - 1] === '\r')) end--
-  return end
+/** Decode before removing the optional EOL delimiter: compressed checksums can
+ * themselves end in CR or LF. At most one CRLF delimiter follows a PDF stream. */
+async function inflateStream(data: Uint8Array): Promise<Uint8Array | null> {
+  let end = data.length
+  for (let removed = 0; removed <= 2; removed++) {
+    const inflated = await inflate(data.subarray(0, end))
+    if (inflated) return inflated
+    if (end === 0 || (data[end - 1] !== 10 && data[end - 1] !== 13)) break
+    end--
+  }
+  return null
 }
 
 /** Byte ranges of the Flate-encoded stream bodies. Located with indexOf, not a regex: a
@@ -275,7 +280,7 @@ function flateStreamRanges(raw: string): Array<[number, number]> {
     if (dictEnd < 0) break
     const start = streamBodyStart(raw, dictEnd)
     if (start < 0) continue
-    const end = streamBodyEnd(raw, start)
+    const end = raw.indexOf('endstream', start)
     if (end >= 0) ranges.push([start, end])
   }
   return ranges
@@ -287,7 +292,7 @@ async function expandedPdfText(pdf: Uint8Array): Promise<string> {
   const raw = latin1(pdf)
   const parts = [raw]
   for (const [start, end] of flateStreamRanges(raw)) {
-    const inflated = await inflate(pdf.subarray(start, end))
+    const inflated = await inflateStream(pdf.subarray(start, end))
     if (inflated) parts.push(latin1(inflated))
   }
   return parts.join('\n')
