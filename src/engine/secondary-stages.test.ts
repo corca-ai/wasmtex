@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { secondaryAuxBases, secondaryIndexJobs, usesBibunits } from './secondary-stages'
+import {
+  opensListInPreamble,
+  secondaryAuxBases,
+  secondaryIndexJobs,
+  usesBibunits,
+} from './secondary-stages'
 
 describe('secondaryIndexJobs', () => {
   it('runs nomencl with its TeX Live style', () => {
@@ -64,5 +69,51 @@ describe('secondary bibliographies', () => {
   it('recognizes bibunits', () => {
     expect(usesBibunits(['\\begin{bibunit}[plain]'])).toBe(true)
     expect(usesBibunits(['% \\begin{bibunit}'])).toBe(false)
+  })
+})
+
+describe('real package forms', () => {
+  it('reads every form of index.sty', () => {
+    const outputs = (source: string) =>
+      secondaryIndexJobs('main', [source], '').map(({ output }) => output)
+    expect(outputs('\\newindex[section]{a}{adx}{and}{Authors}')).toEqual(['main.and'])
+    expect(outputs('\\newindex*{a}{adx}{and}{Authors}')).toEqual(['main.and'])
+  })
+
+  it('gives a bare makeindex style its suffix', () => {
+    expect(secondaryIndexJobs('main', ['\\makeindex[name=p,options=-s mine]'], '')).toEqual([
+      { input: 'p.idx', output: 'p.ind', style: 'mine.ist' },
+    ])
+  })
+
+  it('leaves xindy to its own stage', () => {
+    const jobs = (source: string) => secondaryIndexJobs('main', [source], '')
+    expect(jobs('\\makeindex[name=p,program=truexindy]')).toEqual([])
+    expect(jobs('\\usepackage[xindy]{imakeidx}\\makeindex[name=p]')).toEqual([])
+  })
+
+  it('keeps names inside the project', () => {
+    expect(secondaryIndexJobs('main', ['\\makeindex{../x}'], '')).toEqual([])
+    expect(secondaryAuxBases(['\\newcites{../x,/y,sec}{T}'], '')).toEqual(['sec'])
+  })
+})
+
+describe('opensListInPreamble', () => {
+  it('finds a list that needs an open stream', () => {
+    for (const source of [
+      '\\makenomenclature',
+      '\\makeglossaries',
+      '\\newcites{sec}{T}',
+      '\\newindex{a}{adx}{and}{T}',
+      '\\makeindex[name=p]',
+      '\\makeindex{p}',
+    ]) {
+      expect(opensListInPreamble([source])).toBe(true)
+    }
+  })
+
+  it('ignores a plain makeindex and a comment', () => {
+    expect(opensListInPreamble(['\\makeindex\n\\index{x}'])).toBe(false)
+    expect(opensListInPreamble(['% \\makenomenclature\n'])).toBe(false)
   })
 })

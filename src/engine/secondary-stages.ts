@@ -18,11 +18,29 @@ export interface IndexJob {
 const NEW_GLOSSARY = /\\@newglossary\{[^}]*\}\{([^}]*)\}\{([^}]*)\}\{([^}]*)\}/g
 const ISTFILE = /\\@istfilename\{([^}]*)\}/
 const LETTER_ORDER = /\\@glsorder\{letter\}/
-const NEW_INDEX = /\\newindex\s*\{[^}]*\}\s*\{([^}]+)\}\s*\{([^}]+)\}/g
+const NEW_INDEX = /\\newindex\*?\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}\s*\{([^}]+)\}\s*\{([^}]+)\}/g
 const MAKE_INDEX_OPTIONS = /\\makeindex\s*\[([^\]]*)\]/g
 const MAKE_INDEX_NAMED = /\\makeindex\s*\{([^}]+)\}/g
 const NEW_CITES = /\\newcites\s*\{([^}]+)\}/g
 const INPUT_AUX = /^\\@input\{([^}]+)\.aux\}/gm
+const XINDY_IMAKEIDX = /\\usepackage\[[^\]]*\b(?:xindy|texindy|truexindy)\b[^\]]*\]\{imakeidx\}/
+const LIST_OPENED_IN_PREAMBLE =
+  /\\(?:makenomenclature|makeglossaries|newcites|newindex)\b|\\makeindex\s*[[{]/
+
+/** Names come from source and aux text, so one must not climb out of the project. */
+function localName(name: string): boolean {
+  return !name.startsWith('/') && !name.split('/').includes('..')
+}
+
+/** `\\makeindex` and friends open a write stream in the preamble, which a precompiled
+ *  preamble cannot carry: the list would come out empty. */
+export function opensListInPreamble(sources: string[]): boolean {
+  return sources.some(
+    (source) =>
+      LIST_OPENED_IN_PREAMBLE.test(source) &&
+      LIST_OPENED_IN_PREAMBLE.test(stripTexComments(source)),
+  )
+}
 
 function option(options: string, key: string): string | undefined {
   const match = new RegExp(`(?:^|,)\\s*${key}\\s*=\\s*(\\{[^}]*\\}|[^,]*)`).exec(options)
@@ -31,9 +49,11 @@ function option(options: string, key: string): string | undefined {
 
 function namedIndexJob(options: string): IndexJob | null {
   const name = option(options, 'name')
-  if (!name || /^(?:xindy|texindy)$/.test(option(options, 'program') ?? '')) return null
+  if (!name || /^(?:xindy|texindy|truexindy)$/.test(option(options, 'program') ?? '')) return null
   const flags = option(options, 'options') ?? ''
-  const style = /(?:^|\s)-s\s*(\S+)/.exec(flags)?.[1]
+  const named = /(?:^|\s)-s\s*(\S+)/.exec(flags)?.[1]
+  // kpathsea appends the suffix when makeindex looks a style up.
+  const style = named && !/\.\w+$/.test(named) ? `${named}.ist` : named
   return {
     input: `${name}.idx`,
     output: `${name}.ind`,
@@ -70,14 +90,17 @@ export function secondaryIndexJobs(mainBase: string, sources: string[], aux: str
   for (const [, input, output] of code.matchAll(NEW_INDEX)) {
     jobs.push({ input: `${mainBase}.${input}`, output: `${mainBase}.${output}` })
   }
-  for (const [, options] of code.matchAll(MAKE_INDEX_OPTIONS)) {
-    const job = namedIndexJob(options ?? '')
-    if (job) jobs.push(job)
+  if (!XINDY_IMAKEIDX.test(code)) {
+    for (const [, options] of code.matchAll(MAKE_INDEX_OPTIONS)) {
+      const job = namedIndexJob(options ?? '')
+      if (job) jobs.push(job)
+    }
   }
   for (const [, name] of code.matchAll(MAKE_INDEX_NAMED)) {
     jobs.push({ input: `${name}.idx`, output: `${name}.ind` })
   }
-  return [...new Map(jobs.map((job) => [job.output, job])).values()]
+  const safe = jobs.filter((job) => localName(job.input) && localName(job.output))
+  return [...new Map(safe.map((job) => [job.output, job])).values()]
 }
 
 /** Aux files BibTeX runs on by name: multibib's lists and chapterbib's chapters. bibunits
@@ -90,7 +113,7 @@ export function secondaryAuxBases(sources: string[], aux: string): string[] {
   if (/\\usepackage(?:\[[^\]]*\])?\{[^}]*\bchapterbib\b/.test(code)) {
     bases.push(...[...aux.matchAll(INPUT_AUX)].map(([, base]) => base ?? ''))
   }
-  return [...new Set(bases.filter(Boolean))]
+  return [...new Set(bases.filter((base) => base && localName(base)))]
 }
 
 export function usesBibunits(sources: string[]): boolean {

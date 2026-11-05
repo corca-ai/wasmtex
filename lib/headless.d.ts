@@ -143,6 +143,9 @@ export declare class WasmTexCompiler {
     private bibliographyRequest;
     /** The request behind each secondary output, by output path. */
     private readonly secondaryRequests;
+    private readonly secondaryBibliographies;
+    /** The `\\bibcite` lines of each extra list's aux, which LaTeX's own rerun check can miss. */
+    private readonly secondaryLabels;
     /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
      *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
     private incremental;
@@ -208,6 +211,11 @@ export declare class WasmTexCompiler {
     /** Current main-file content as a string (for engine detection). */
     private mainSource;
     /** All project `.tex` sources (path → content), for multi-file incremental compile. */
+    /** Every engine writes its job's outputs beside the working directory root, however deep
+     *  the main file is. */
+    private get jobBase();
+    /** The text a document's own macros can come from. */
+    private projectSources;
     private projectTexFiles;
     /** The engine and budget for heap checkpoints (#81), if any. LuaLaTeX resumes canonical
      * compiles and page previews from its own checkpoint build when the host opts in; the
@@ -273,6 +281,7 @@ export declare class WasmTexCompiler {
      *  against the previous pass. */
     private afterPass;
     private trackLists;
+    private hasGeneratedLists;
     /** The job's lists as one comparable value. */
     private readLists;
     private rerunSignature;
@@ -400,6 +409,11 @@ export declare class WasmTexCompiler {
     /** Indexes and bibliographies past the first: nomencl, glossaries, named indexes, multibib,
      *  bibunits and chapterbib. Each keeps its output until its own input changes. */
     private runSecondaryStages;
+    private forgetSecondaryOutput;
+    private forgetSecondaryOutputs;
+    /** One entry per output: a document's lists share a stage, and each may fail alone. */
+    private noteSecondaryStage;
+    private keepSecondaryOutput;
     private runSecondaryIndex;
     private runClientIndexJob;
     private runSecondaryBibliography;

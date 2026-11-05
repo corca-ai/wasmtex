@@ -12,6 +12,9 @@ export interface IndexJob {
     log?: string;
     letterOrder?: boolean;
 }
+/** `\\makeindex` and friends open a write stream in the preamble, which a precompiled
+ *  preamble cannot carry: the list would come out empty. */
+export declare function opensListInPreamble(sources: string[]): boolean;
 export declare function secondaryIndexJobs(mainBase: string, sources: string[], aux: string): IndexJob[];
 /** Aux files BibTeX runs on by name: multibib's lists and chapterbib's chapters. bibunits
  *  numbers its units, so {@link usesBibunits} tells the caller to read until one is missing. */
