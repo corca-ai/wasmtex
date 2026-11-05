@@ -81,4 +81,7 @@ Mirrors, against the revisions they follow:
   first, then web2c serially, and let it stop at the bootstrap.
 - pdfLaTeX's preamble snapshot drops every list opened in the preamble.
 - `icudt68l.dat` is stored gzipped, and its recorded digest is of those bytes.
+- The first R2 upload let the AWS CLI guess content types. `latex-list-css.html` went out
+  as `text/html`, the download path refused it, and CorTeX's accessible-PDF qualification
+  caught that before production. Every object was republished with fixed types.
 - kpathsea passes `1+57/600`, not `magstep(0.5)`, for 657 dpi: real pdfTeX shows it.

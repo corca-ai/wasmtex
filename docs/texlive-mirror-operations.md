@@ -122,6 +122,10 @@ checked against its `snapshot-artifacts.json`, because the fonts they describe d
 change. `icudt68l.dat` is stored gzipped, so request it with `Accept-Encoding: gzip` and
 publish it with `Content-Encoding: gzip`.
 
+Package files carry fixed types: `.lua`, `.sty` and `.tex` are `text/plain; charset=utf-8`
+and everything else `application/octet-stream`. Never let the CLI guess. The download path
+refuses `text/html` as an error page, and TeX Live ships `.html` files that LaTeX reads.
+
 ## R2 serving configuration
 
 Use separate production and non-production buckets. Attach
