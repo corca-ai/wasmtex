@@ -13,6 +13,8 @@
       "wasm-build/luatex-library.js",
       "wasm-build/luatex-worker.js",
       "wasm-build/makeindex-worker.js",
+      "wasm-build/metafont-bridge.js",
+      "wasm-build/metafont-library.js",
       "wasm-build/pdftex-worker.js",
       "wasm-build/resolver-evidence.js",
       "wasm-build/xetex-dvipdfm-library.js",
@@ -61,7 +63,17 @@
     }
   },
   "overrides": [
-    {"includes":["wasm-build/shared-file.js"],"javascript":{"globals":["FS","HEAPU8"]}},
+    {
+      "includes": [
+        "wasm-build/shared-file.js"
+      ],
+      "javascript": {
+        "globals": [
+          "FS",
+          "HEAPU8"
+        ]
+      }
+    },
     {
       "includes": [
         "wasm-build/bibtex-worker.js"
@@ -132,6 +144,7 @@
           "LibraryManager",
           "fontconfig_search_font_impl",
           "kpse_find_file_impl",
+          "kpse_find_pk_impl",
           "mergeInto"
         ]
       }
@@ -182,6 +195,20 @@
     },
     {
       "includes": [
+        "wasm-build/metafont-library.js"
+      ],
+      "javascript": {
+        "globals": [
+          "LibraryManager",
+          "Module",
+          "UTF8ToString",
+          "mergeInto",
+          "stringToNewUTF8"
+        ]
+      }
+    },
+    {
+      "includes": [
         "wasm-build/pdftex-worker.js"
       ],
       "javascript": {
@@ -218,6 +245,7 @@
         "globals": [
           "LibraryManager",
           "kpse_find_file_impl",
+          "kpse_find_pk_impl",
           "mergeInto"
         ]
       }
