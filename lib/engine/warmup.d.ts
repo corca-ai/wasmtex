@@ -1,4 +1,5 @@
 import { TexliveDependency, TexliveDependencySet, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types.js';
+import { AssetDownloadEvent } from './asset-download.js';
 export interface WarmupOptions {
     /** TeX Live version. Defaults to '2025'. */
     texliveVersion?: TexliveVersion;
@@ -20,6 +21,8 @@ export interface WarmupOptions {
     notFound?: TexliveFileEntry[];
     /** AbortSignal for cancellation. */
     signal?: AbortSignal;
+    /** Byte-level observations for this warmup only; no URLs or filenames. */
+    onAssetDownload?: (event: AssetDownloadEvent) => void;
     /** Progress callback: called with (completed, total). */
     onProgress?: (completed: number, total: number) => void;
 }

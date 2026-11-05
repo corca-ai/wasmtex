@@ -90,9 +90,16 @@ interface WarmupOptions {
   files?: TexliveDependency[]       // explicit list; overrides the manifest and `dependencies`
   notFound?: TexliveFileEntry[]     // explicit known-absent list
   signal?: AbortSignal              // cancellation
+  onAssetDownload?: (event: AssetDownloadEvent) => void // byte progress, no paths
   onProgress?: (completed: number, total: number) => void
 }
 ```
+
+Warmup emits per-request byte observations through `onAssetDownload`, including
+Bloom data. Each transfer stops after 30 seconds without bytes; progressing
+transfers have no fixed total deadline. Speculative downloads do not retry or
+record failures as missing files: foreground demand owns recovery. Cancellation
+ends observations as `cancelled` and rejects the warmup promise.
 
 ## Exact dependency prefetch (`dependencies`)
 

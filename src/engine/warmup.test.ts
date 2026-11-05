@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AssetDownloadEvent } from './asset-download'
 import { warmup } from './warmup'
 
 describe('warmup cancellation', () => {
@@ -19,10 +20,14 @@ describe('warmup cancellation', () => {
     ).rejects.toMatchObject({ name: 'AbortError' })
   })
 
-  it('does not install HTML success as a package or font', async () => {
+  it.each([
+    { status: 200, contentType: 'Text/HTML' },
+    { status: 206, contentType: 'application/octet-stream' },
+  ])('does not install invalid success $status/$contentType', async ({ status, contentType }) => {
     vi.stubGlobal(
       'fetch',
-      async () => new Response('<html>error</html>', { headers: { 'content-type': 'text/html' } }),
+      async () =>
+        new Response('<html>error</html>', { status, headers: { 'content-type': contentType } }),
     )
     const result = await warmup({ concurrency: 2, texliveUrl: 'https://example.test/' })
     expect(result.files).toEqual([])
@@ -116,5 +121,66 @@ describe('warmup dependency-set replay', () => {
       'https://m.test/pdftex/26/only.sty',
     ])
     expect(cache.notFound).toEqual([])
+  })
+})
+
+describe('warmup byte progress', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps a slow unknown-length replay alive beyond the compile timeout', async () => {
+    vi.useFakeTimers()
+    const events: AssetDownloadEvent[] = []
+    let stream!: ReadableStreamDefaultController<Uint8Array>
+    vi.stubGlobal('fetch', async (url: string) =>
+      url.includes('/pdftex/')
+        ? new Response(
+            new ReadableStream<Uint8Array>({
+              start(c) {
+                stream = c
+              },
+            }),
+          )
+        : new Response(null, { status: 404 }),
+    )
+    const result = warmup({
+      files: [{ format: 26, filename: 'slow.sty' }],
+      onAssetDownload: (e) => events.push(e),
+      texliveUrl: 'https://m.test/',
+    })
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(20_000)
+      stream.enqueue(new Uint8Array([i]))
+    }
+    stream.close()
+    expect((await result).files[0]?.data.byteLength).toBe(10)
+    expect(events.filter((e) => e.asset === 'package' && e.phase === 'bytes')).toHaveLength(10)
+    expect(events.some((e) => e.phase === 'retry')).toBe(false)
+  })
+
+  it('abandons a stalled speculative file without retries or negative cache entries', async () => {
+    vi.useFakeTimers()
+    const events: AssetDownloadEvent[] = []
+    const fetcher = vi.fn(async (url: string) =>
+      url.includes('/pdftex/')
+        ? new Response(new ReadableStream<Uint8Array>())
+        : new Response(null, { status: 404 }),
+    )
+    vi.stubGlobal('fetch', fetcher)
+    const result = warmup({
+      files: [{ format: 26, filename: 'stalled.sty' }],
+      notFound: [],
+      onAssetDownload: (e) => events.push(e),
+      texliveUrl: 'https://m.test/',
+    })
+    await vi.advanceTimersByTimeAsync(30_001)
+    expect(await result).toMatchObject({ files: [], notFound: [] })
+    expect(fetcher.mock.calls.filter(([url]) => url.includes('/pdftex/'))).toHaveLength(1)
+    expect(events.find((e) => e.asset === 'package' && e.phase === 'end')).toMatchObject({
+      failure: 'stalled',
+      retryCount: 0,
+    })
   })
 })

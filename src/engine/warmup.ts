@@ -10,7 +10,7 @@ import type {
   TexliveVersion,
   WarmupCache,
 } from '../types'
-import { isAssetResponse } from './asset-response'
+import { type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { fetchBloomFilter } from './bloom-filter'
 import { KNOWN_404S, PRELOAD_FILES } from './texlive-manifest'
@@ -36,6 +36,8 @@ export interface WarmupOptions {
   notFound?: TexliveFileEntry[]
   /** AbortSignal for cancellation. */
   signal?: AbortSignal
+  /** Byte-level observations for this warmup only; no URLs or filenames. */
+  onAssetDownload?: (event: AssetDownloadEvent) => void
   /** Progress callback: called with (completed, total). */
   onProgress?: (completed: number, total: number) => void
 }
@@ -56,6 +58,7 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
   const concurrency = options?.concurrency ?? 6
   const signal = options?.signal
   const onProgress = options?.onProgress
+  const downloads = new AssetDownloadSession(options?.onAssetDownload)
 
   const baseUrl = resolveTexliveUrl(options?.texliveUrl ?? null, version)
   const { entries, notFound } = selectPreloadSet(version, options)
@@ -77,11 +80,17 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
       const entry = queue.shift()!
       try {
         const url = `${baseUrl}pdftex/${entry.format}/${entry.candidate ?? entry.filename}`
-        const resp = await fetch(url, signal ? { signal } : {})
-        if (isAssetResponse(resp)) {
-          const data = await resp.arrayBuffer()
-          files.push({ format: entry.format, filename: entry.filename, data })
-        } else await resp.body?.cancel()
+        const bytes = await downloads.read(url, {
+          asset: warmupAssetKind(entry.format),
+          ...(signal ? { signal } : {}),
+          retry: false,
+        })
+        if (bytes)
+          files.push({
+            format: entry.format,
+            filename: entry.filename,
+            data: new Uint8Array(bytes).buffer,
+          })
       } catch {
         // Fetch failed — file will be fetched on demand by the worker
       }
@@ -91,7 +100,12 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
   }
 
   // Fetch bloom filter in parallel with file preloads
-  const bloomPromise = fetchBloomFilter(baseUrl, signal ? { signal } : undefined).catch(() => null)
+  const bloomPromise = fetchBloomFilter(
+    baseUrl,
+    signal ? { signal } : undefined,
+    undefined,
+    options?.onAssetDownload,
+  ).catch(() => null)
 
   const workers = Array.from({ length: Math.min(concurrency, total) }, () => worker())
   await Promise.all(workers)
@@ -155,4 +169,9 @@ function injectPreconnect(baseUrl: string): void {
   } catch {
     // Not in a browser environment
   }
+}
+
+function warmupAssetKind(format: number) {
+  if (format === 26) return 'package'
+  return [3, 4, 32, 33, 36, 47].includes(format) ? 'font' : 'data'
 }

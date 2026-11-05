@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BLOOM_FILTER_OBJECTS, fetchBloomFilter } from './bloom-filter'
 
-const ok = (bytes: number) =>
-  ({ ok: true, arrayBuffer: async () => new ArrayBuffer(bytes) }) as unknown as Response
-const missing = { ok: false, arrayBuffer: async () => new ArrayBuffer(0) } as unknown as Response
+const ok = (bytes: number) => new Response(new Uint8Array(bytes))
+const missing = new Response(null, { status: 404 })
 
 describe('fetchBloomFilter', () => {
   it('prefers the v2 object', async () => {
@@ -34,6 +33,30 @@ describe('fetchBloomFilter', () => {
       'https://m/2026/bloom-filter.v2.bin',
       'https://m/2026/bloom-filter.bin',
     ])
+  })
+
+  it('preserves caller request options while observing bytes and bounding stalls', async () => {
+    const fetchImpl = vi.fn(async () => ok(8))
+    const signal = new AbortController().signal
+    const observe = vi.fn()
+    await fetchBloomFilter(
+      'https://m/2026/',
+      { signal, cache: 'no-store', credentials: 'omit', headers: { 'X-Test': 'value' } },
+      fetchImpl,
+      observe,
+    )
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://m/2026/bloom-filter.v2.bin',
+      expect.objectContaining({
+        cache: 'no-store',
+        credentials: 'omit',
+        headers: { 'X-Test': 'value' },
+        signal: expect.any(AbortSignal),
+      }),
+    )
+    expect(observe).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'bytes', receivedBytes: 8 }),
+    )
   })
 
   it('returns null when neither loads and rethrows an abort', async () => {

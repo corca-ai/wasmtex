@@ -1,5 +1,5 @@
 export type AssetDownloadKind = 'format' | 'package' | 'font' | 'data';
-export type AssetDownloadFailure = 'stalled' | 'network' | 'http' | 'invalid';
+export type AssetDownloadFailure = 'stalled' | 'network' | 'http' | 'invalid' | 'cancelled';
 /** No URL or project filename crosses this diagnostic boundary. */
 export interface AssetDownloadEvent {
     requestId: number;
@@ -19,6 +19,8 @@ export declare class AssetDownloadError extends Error {
 interface DownloadInput {
     asset: AssetDownloadKind;
     signal?: AbortSignal;
+    /** Speculation leaves retries to foreground demand. */
+    retry?: boolean;
     onPercent?: (percent: number) => void;
     validate?: (bytes: Uint8Array) => Uint8Array | Promise<Uint8Array>;
 }
@@ -42,6 +44,7 @@ export declare class AssetDownloadSession {
         settle: (remaining?: unknown) => void;
     };
     read(url: string, input: DownloadInput): Promise<Uint8Array | null>;
+    private canRetry;
     private retryable;
     private emit;
     private validate;

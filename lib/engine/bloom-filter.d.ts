@@ -1,3 +1,4 @@
+import { AssetDownloadEvent } from './asset-download.js';
 /**
  * Which bloom filter object a mirror snapshot serves.
  *
@@ -10,4 +11,4 @@
  */
 export declare const BLOOM_FILTER_OBJECTS: readonly ["bloom-filter.v2.bin", "bloom-filter.bin"];
 /** Fetch the tightest bloom filter the mirror offers, or null when none loads. */
-export declare function fetchBloomFilter(baseUrl: string, init?: RequestInit, fetchImpl?: typeof fetch): Promise<ArrayBuffer | null>;
+export declare function fetchBloomFilter(baseUrl: string, init?: RequestInit, fetchImpl?: typeof fetch, onAssetDownload?: (event: AssetDownloadEvent) => void): Promise<ArrayBuffer | null>;

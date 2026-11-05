@@ -1,7 +1,8 @@
+import { isAssetResponse } from './asset-response'
 import { readResponseWithProgress } from './fetch-gz'
 
 export type AssetDownloadKind = 'format' | 'package' | 'font' | 'data'
-export type AssetDownloadFailure = 'stalled' | 'network' | 'http' | 'invalid'
+export type AssetDownloadFailure = 'stalled' | 'network' | 'http' | 'invalid' | 'cancelled'
 
 /** No URL or project filename crosses this diagnostic boundary. */
 export interface AssetDownloadEvent {
@@ -28,6 +29,8 @@ export class AssetDownloadError extends Error {
 interface DownloadInput {
   asset: AssetDownloadKind
   signal?: AbortSignal
+  /** Speculation leaves retries to foreground demand. */
+  retry?: boolean
   onPercent?: (percent: number) => void
   validate?: (bytes: Uint8Array) => Uint8Array | Promise<Uint8Array>
 }
@@ -133,14 +136,9 @@ export class AssetDownloadSession {
           return await this.transfer(url, input, state)
         } catch (error) {
           input.signal?.throwIfAborted()
-          const failure =
-            error instanceof AssetDownloadError ? error : new AssetDownloadError('network')
-          if (
-            generation !== this.generation ||
-            !this.retryable(failure) ||
-            state.retryCount >= 3 ||
-            !this.remainingRetries
-          ) {
+          if (isAbortError(error)) throw error
+          const failure = downloadFailure(error)
+          if (!this.canRetry(input, generation, failure, state)) {
             this.emit(state, 'end', failure)
             throw failure
           }
@@ -153,9 +151,25 @@ export class AssetDownloadSession {
         }
       }
     } catch (error) {
-      if (input.signal?.aborted) this.emit(state, 'end')
+      if (input.signal?.aborted || isAbortError(error))
+        this.emit(state, 'end', new AssetDownloadError('cancelled'))
       throw error
     }
+  }
+
+  private canRetry(
+    input: DownloadInput,
+    generation: number,
+    failure: AssetDownloadError,
+    state: DownloadState,
+  ) {
+    return (
+      input.retry !== false &&
+      generation === this.generation &&
+      this.retryable(failure) &&
+      state.retryCount < 3 &&
+      this.remainingRetries > 0
+    )
   }
 
   private retryable(error: AssetDownloadError) {
@@ -219,7 +233,7 @@ export class AssetDownloadSession {
         this.emit(state, 'end', new AssetDownloadError('http', 404))
         return null
       }
-      if (!response.ok || response.headers.get('content-type')?.includes('text/html')) {
+      if (!isAssetResponse(response)) {
         await response.body?.cancel()
         throw new AssetDownloadError(response.ok ? 'invalid' : 'http', response.status)
       }
@@ -246,6 +260,14 @@ export class AssetDownloadSession {
       clearTimeout(timer)
     }
   }
+}
+
+function downloadFailure(error: unknown): AssetDownloadError {
+  return error instanceof AssetDownloadError ? error : new AssetDownloadError('network')
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
@@ -287,7 +309,7 @@ export function isAssetDownloadEvent(value: unknown): value is AssetDownloadEven
     event.retryCount >= 0 &&
     event.retryCount <= 3 &&
     (event.failure === undefined ||
-      ['stalled', 'network', 'http', 'invalid'].includes(event.failure)) &&
+      ['stalled', 'network', 'http', 'invalid', 'cancelled'].includes(event.failure)) &&
     (event.status === undefined ||
       (Number.isInteger(event.status) && event.status >= 100 && event.status <= 599))
   )
