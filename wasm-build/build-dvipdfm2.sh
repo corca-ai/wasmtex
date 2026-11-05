@@ -76,7 +76,7 @@ echo "--- dpx objects/libs ---"; find "$DD" -name '*.o' -o -name '*.a' 2>/dev/nu
 
 echo "=== Phase E: final emcc link with own glue ==="
 cd "$DD"
-emcc -O2 -c "$GLUE/kpse-hook.c" -o kpse-hook.o
+emcc -O2 -DWASMTEX_GLYPH_HOOK -c "$GLUE/kpse-hook.c" -o kpse-hook.o
 emcc -O2 -c "$GLUE/dvipdfm-entry.c" -o dvipdfm-entry.o
 emcc -O2 -c "$GLUE/dvipdfm-stubs.c" -o dvipdfm-stubs.o  # libpaper + getpass stubs
 # The texlive program is `xdvipdfmx`, built from many unprefixed objects (agl.o,
@@ -115,7 +115,7 @@ fi
 emcc -O2 "${PROFILE_FLAGS[@]}" \
   -sEMIT_EMSCRIPTEN_LICENSE=1 \
   kpse-hook.o dvipdfm-entry.o dvipdfm-stubs.o $DPXOBJS \
-  -Wl,--wrap=kpse_find_file \
+  -Wl,--wrap=kpse_find_file -Wl,--wrap=kpse_find_glyph \
   -Wl,-Map="$OUT/wasmtex-dvipdfm.map" \
   "$KPSE" \
   -sUSE_FREETYPE=1 -sUSE_LIBPNG=1 -sUSE_ZLIB=1 \

@@ -272,7 +272,6 @@ it('imports both nearby and earlier states with the actual package and font look
       early: { id: 'early', image: { length: 65536, bytes: 4, pages: [{ data: new Uint8Array(4) }] }, fs: { files: {} } }
     };
     texlive404_cache['26/absent.sty'] = 1;
-    pk200_cache['600/font'] = '/tex/font.pk';
   `,
     parent.scope,
   )
@@ -292,7 +291,6 @@ it('imports both nearby and earlier states with the actual package and font look
   ).toMatchObject({ result: 'ok' })
   expect(runInContext('Object.keys(self._hc.checkpoints)', child.scope)).toEqual(['late', 'early'])
   expect(runInContext('texlive404_cache["26/absent.sty"]', child.scope)).toBe(1)
-  expect(runInContext('pk200_cache["600/font"]', child.scope)).toBe('/tex/font.pk')
   expect(await child.command({ cmd: 'compilelatex' })).toMatchObject({ result: 'failed' })
 })
 

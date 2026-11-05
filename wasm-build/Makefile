@@ -219,6 +219,7 @@ EMCC_FLAGS = \
 	-sWASM=1 \
 	--js-library $(JSLIB) \
 	-Wl,--wrap=kpse_find_file \
+	-Wl,--wrap=kpse_find_glyph \
 
 # =============================================================================
 # Phase 1: Native Build
@@ -459,6 +460,7 @@ define PDFTEX_LINK
 		-I$(TEXLIVE_SRC)/libs/xpdf/xpdf-src/xpdf \
 		-I$(BUILD_WASM)/libs/xpdf \
 		-I$(BUILD_NATIVE)/libs/xpdf \
+		-DWASMTEX_GLYPH_HOOK \
 		pdftex0.c \
 		pdftexini.c \
 		pdftex-pool.c \

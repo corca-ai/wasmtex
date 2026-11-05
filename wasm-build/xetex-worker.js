@@ -369,7 +369,26 @@ function resolveCdn(reqname, format) {
   return [String(format), reqname + (FORMAT_EXT[format] || '')]
 }
 
-function kpse_find_file_impl(nameptr, format, _mustexist) {
+function kpse_find_file_impl(nameptr, format, mustexist) {
+  const found = findTexliveFile(nameptr, format, mustexist)
+  if (found || format !== 3) return found
+  const path = generatedFont()?.makeTfm(UTF8ToString(nameptr), {
+    fs: FS, cacheRoot: TEXCACHEROOT, workRoot: WORKROOT,
+  })
+  return path ? _allocate(intArrayFromString(path)) : 0
+}
+
+/** An engine directory from before Metafont has no bridge; the font then stays missing. */
+function generatedFont() {
+  try {
+    if (!self.wasmtexMetafont) importScripts('wasmtex-metafont.js')
+  } catch {
+    return null
+  }
+  return self.wasmtexMetafont
+}
+
+function findTexliveFile(nameptr, format, _mustexist) {
   const reqname = UTF8ToString(nameptr)
   if (reqname.includes('/')) return 0
   const cacheKey = `${format}/${reqname}`

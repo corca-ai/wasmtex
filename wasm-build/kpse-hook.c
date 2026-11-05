@@ -45,3 +45,57 @@ char *__wrap_kpse_find_file(const char *name, int format, int must_exist)
      * original must_exist (the JS impl ignores it today, but keep intent). */
     return kpse_find_file_js(name, format, must_exist);
 }
+
+#ifdef WASMTEX_GLYPH_HOOK
+/* kpathsea would run mktexpk here, which forks. The controller makes the bitmap with
+ * WebAssembly Metafont instead, so a font without an outline loads as it does under
+ * TeX Live. Linked with -Wl,--wrap=kpse_find_glyph by the engines that embed PK. */
+typedef struct {
+    const char *name;
+    unsigned dpi;
+    int format;
+    int source;
+} kpse_glyph_file;
+
+enum { KPSE_PK_FORMAT = 1, KPSE_SOURCE_MAKETEX = 2, KPSE_SRC_COMPILE = 1 };
+
+extern char *__real_kpse_find_glyph(const char *name, unsigned dpi, int format,
+                                    kpse_glyph_file *glyph);
+extern void kpse_set_program_enabled(int format, int value, int level);
+extern char *kpse_find_pk_js(const char *name, unsigned dpi);
+
+char *__wrap_kpse_find_glyph(const char *name, unsigned dpi, int format, kpse_glyph_file *glyph)
+{
+    kpse_set_program_enabled(KPSE_PK_FORMAT, 0, KPSE_SRC_COMPILE);
+    char *result = __real_kpse_find_glyph(name, dpi, format, glyph);
+    if (result)
+        return result;
+
+    result = kpse_find_pk_js(name, dpi);
+    if (result && glyph) {
+        glyph->name = name;
+        glyph->dpi = dpi;
+        glyph->format = KPSE_PK_FORMAT;
+        glyph->source = KPSE_SOURCE_MAKETEX;
+    }
+    return result;
+}
+#endif
+
+#ifdef WASMTEX_INSTANCE_HOOK
+/* kpse.new() searches through its own instance and never reaches kpse_find_file, so
+ * luamplib could not load plain.mp. Only those instances take the JS fallback here;
+ * kpse_def keeps the route above. Linked with -Wl,--wrap=kpathsea_find_file. */
+extern void *kpse_def;
+extern char *__real_kpathsea_find_file(void *kpse, const char *name, int format, int must_exist);
+
+char *__wrap_kpathsea_find_file(void *kpse, const char *name, int format, int must_exist)
+{
+    if (kpse == kpse_def)
+        return __real_kpathsea_find_file(kpse, name, format, must_exist);
+    char *result = __real_kpathsea_find_file(kpse, name, format, 0);
+    if (result)
+        return result;
+    return kpse_find_file_js(name, format, must_exist);
+}
+#endif

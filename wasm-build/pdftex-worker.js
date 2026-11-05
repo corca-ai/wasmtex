@@ -562,7 +562,14 @@ function cacheFileName(format, name) {
     return name;
 }
 
-function kpse_find_file_impl(nameptr, format, _mustexist) {
+function kpse_find_file_impl(nameptr, format, mustexist) {
+    var found = findTexliveFile(nameptr, format, mustexist);
+    if (found || format !== 3) return found;
+    var path = generatedFont("tfm", UTF8ToString(nameptr));
+    return path ? allocateString(path) : 0;
+}
+
+function findTexliveFile(nameptr, format, _mustexist) {
     var reqname = UTF8ToString(nameptr);
 
     // Strip leading '*' or '&' — INITEX/fmt loader prefixes.
@@ -702,46 +709,27 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
     }
 }
 
-// --- PK font fetching --------------------------------------------------------
+// --- Fonts made from Metafont source ----------------------------------------
 //
-// Similar to kpse_find_file_impl but for PK (packed bitmap) fonts.
-// These are fetched from a separate endpoint.
+// A font without an outline exists only as Metafont source; see metafont-bridge.js.
 
-var pk404_cache = {};
-var pk200_cache = {};
+function generatedFont(kind, name, dpi) {
+    // An engine directory from before Metafont has no bridge; the font then stays missing.
+    try {
+        if (!self.wasmtexMetafont) importScripts("wasmtex-metafont.js");
+    } catch (err) {
+        return null;
+    }
+    if (!self.wasmtexMetafont) return null;
+    var host = { "fs": FS, "cacheRoot": TEXCACHEROOT, "workRoot": WORKROOT };
+    return kind === "pk"
+        ? self.wasmtexMetafont.makePk(name, dpi, host)
+        : self.wasmtexMetafont.makeTfm(name, host);
+}
 
 function kpse_find_pk_impl(nameptr, dpi) {
-    var reqname = UTF8ToString(nameptr);
-
-    if (reqname.includes("/")) {
-        return 0;
-    }
-
-    var cacheKey = dpi + "/" + reqname;
-
-    if (cacheKey in pk404_cache) {
-        return 0;
-    }
-    if (cacheKey in pk200_cache) {
-        var savepath = pk200_cache[cacheKey];
-        return allocateString(savepath);
-    }
-
-    var remote_url = self.texlive_endpoint + "pdftex/pk/" + cacheKey;
-    var xhr = self.wasmtexDownloadAsset(remote_url, 'font');
-
-    if (xhr.status === 200) {
-        var arraybuffer = xhr.response;
-        // pkid header comes from texlive server; static hosting won't have it
-        var fileid = xhr.getResponseHeader("pkid") || reqname;
-        savepath = TEXCACHEROOT + "/" + fileid;
-        FS.writeFile(savepath, new Uint8Array(arraybuffer));
-        pk200_cache[cacheKey] = savepath;
-        return allocateString(savepath);
-    } else {
-        pk404_cache[cacheKey] = 1;
-        return 0;
-    }
+    var path = generatedFont("pk", UTF8ToString(nameptr), dpi);
+    return path ? allocateString(path) : 0;
 }
 
 // --- Compilation routines ----------------------------------------------------
@@ -1681,7 +1669,6 @@ function exportPagePreviewRoutine(data) {
         hostWrites: self._hc.hostWrites, cacheFiles: snapshotDirectory(TEXCACHEROOT),
         positive: texlive200_cache, negative: texlive404_cache,
         positiveSources: texlive200_source, negativeSources: texlive404_source,
-        pkPositive: pk200_cache, pkNegative: pk404_cache,
         bloom: { bits: bloom_bits, k: bloom_k, m: bloom_m }
     } });
 }
@@ -1724,8 +1711,6 @@ function importPagePreviewRoutine(data) {
         texlive404_cache = state.negative;
         texlive200_source = state.positiveSources;
         texlive404_source = state.negativeSources;
-        pk200_cache = state.pkPositive;
-        pk404_cache = state.pkNegative;
         bloom_bits = state.bloom.bits;
         bloom_k = state.bloom.k;
         bloom_m = state.bloom.m;

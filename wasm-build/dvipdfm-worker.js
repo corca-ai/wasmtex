@@ -410,5 +410,19 @@ function kpse_find_file_impl(nameptr, format) {
   return 0
 }
 
+function kpse_find_pk_impl(nameptr, dpi) {
+  // An engine directory from before Metafont has no bridge; the font then stays missing.
+  try {
+    if (!self.wasmtexMetafont) importScripts('wasmtex-metafont.js')
+  } catch {
+    return 0
+  }
+  const path = self.wasmtexMetafont?.makePk(UTF8ToString(nameptr), dpi, {
+    fs: FS, cacheRoot: TEXCACHEROOT, workRoot: WORKROOT,
+  })
+  return path ? _allocate(intArrayFromString(path)) : 0
+}
+
 self.kpse_find_file_impl = kpse_find_file_impl
+self.kpse_find_pk_impl = kpse_find_pk_impl
 importScripts('wasmtex-dvipdfm.js')
