@@ -117,6 +117,12 @@ content-addressed cache.
 > registered for `index` (`createMakeindexBackend` / `createXindyBackend`) offloads it.
 > See the [execution model](execution-model.md#pluggable-stages-available-today).
 
+Lists past the first run client-side too, with the rules latexmk users write by hand:
+nomencl, glossaries, imakeidx and `index` lists through makeindex, and multibib, bibunits
+and chapterbib through BibTeX. A document using one of them keeps the full preamble,
+because a precompiled preamble cannot carry the write stream the list opens there. A
+glossary built by xindy stays a server stage.
+
 Generated indexes validate the actual `.idx` after each TeX pass. Ordinary prose
 edits retain the previous `.ind`; identical requests skip makeindex, and changed
 requests force another TeX pass only when their output changes. Page-number and

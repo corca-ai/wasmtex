@@ -209,6 +209,26 @@ fetch to the right format dir by extension (XeTeX's `createFont` always resolves
 > `\setCJKmainfont{Harano Aji Gothic}` document each compile to a PDF by name
 > against the live CDN.
 
+## Fonts made from Metafont source
+
+About 1,300 TeX Live fonts, such as `bbm` and `dancers`, exist only as Metafont source.
+TeX Live turns them into bitmaps by forking `mktexpk`, which a worker cannot do, so
+`wasmtex-metafont.js` runs WebAssembly Metafont and GFtoPK inside the engine's
+synchronous lookup instead. It is imported only when a document asks for such a font.
+
+- `--wrap=kpse_find_glyph` reaches the controller for a PK file in pdfTeX, LuaTeX and
+  dvipdfmx. The TFM fallback in each controller covers a metric file with no TFM in the
+  mirror, such as `cmr13`, and runs only for a lookup that must succeed, as in kpathsea.
+- The bridge (`wasm-build/metafont-bridge.js`) follows `mktexpk`, `mktextfm` and `mktexmf`:
+  mode `ljfour`, base 600 dpi, magnification `N+R/600`, the same generated sources, and the
+  same three tolerated errors. A fixed date keeps fonts that use random numbers repeatable.
+- A font built only from the mirror is kept for the worker's life. A font built from
+  project source is rebuilt on each lookup outside kpathsea's paths, so an edit reaches
+  the next compile. A failure is never kept.
+- XeTeX makes a TFM in its own filesystem and only the XDV reaches dvipdfmx, so dvipdfmx
+  makes the same font again. Both are deterministic.
+- `\pdfpkresolution` other than 600 still runs mode `ljfour`, at the matching magnification.
+
 ## Runtime completion observation
 
 The pdfTeX build exports an authored, read-only post-pass hook. After the normal TeX
