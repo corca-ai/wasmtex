@@ -249,10 +249,18 @@ describe('CompileWorkerDriver heap checkpoints', () => {
     expect(driver.supportsPagePreview).toBe(true)
     const arms = [{ id: 'a', line: 3 }]
     const run = await driver.run('compilelatex', { checkpoints: arms })
-    expect(driver.posted.at(-1)).toEqual({ cmd: 'compilelatex', checkpoints: arms })
+    expect(driver.posted.at(-1)).toEqual({
+      cmd: 'compilelatex',
+      checkpoints: arms,
+      assetRetryBudget: 8,
+    })
     expect(run.message?.heapCheckpoints).toEqual([{ id: 'a', line: 3, bytes: 4096, ms: 1 }])
     await driver.dropHeapCheckpoints(['a'])
-    expect(driver.posted.at(-1)).toEqual({ cmd: 'dropheapcheckpoints', ids: ['a'] })
+    expect(driver.posted.at(-1)).toEqual({
+      cmd: 'dropheapcheckpoints',
+      ids: ['a'],
+      assetRetryBudget: 8,
+    })
   })
 
   it('sends no checkpoint commands to a plain build', async () => {

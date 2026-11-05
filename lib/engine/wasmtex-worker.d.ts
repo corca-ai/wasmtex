@@ -37,7 +37,7 @@ export declare abstract class WasmTexWorker<TMsg extends WasmTexWorkerMsg = Wasm
     protected capabilities: TMsg | null;
     constructor(enginePath: string, texliveUrl: string | null, version: TexliveVersion);
     init(): Promise<void>;
-    protected handleProtocolMessage(_data: TMsg): boolean;
+    protected handleProtocolMessage(data: TMsg): boolean;
     /** Tear down a worker that failed to initialize and settle any in-flight request. The
      *  worker reference MUST be cleared (only terminate() did this before): otherwise the
      *  `if (this.worker) return` re-entry guard would let a later init() resolve silently

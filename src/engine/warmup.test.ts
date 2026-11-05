@@ -19,6 +19,15 @@ describe('warmup cancellation', () => {
     ).rejects.toMatchObject({ name: 'AbortError' })
   })
 
+  it('does not install HTML success as a package or font', async () => {
+    vi.stubGlobal(
+      'fetch',
+      async () => new Response('<html>error</html>', { headers: { 'content-type': 'text/html' } }),
+    )
+    const result = await warmup({ concurrency: 2, texliveUrl: 'https://example.test/' })
+    expect(result.files).toEqual([])
+  })
+
   it('resolves normally (does not over-throw) when not aborted', async () => {
     vi.stubGlobal('fetch', () => Promise.resolve(new Response(null, { status: 404 })))
     const result = await warmup({ concurrency: 2, texliveUrl: 'https://example.test/' })

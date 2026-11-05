@@ -8,6 +8,7 @@ function resolver() {
   const messages: unknown[] = []
   const scope = createContext({
     importScripts() {},
+    addEventListener() {},
     postMessage: (message: unknown) => messages.push(message),
     UTF8ToString: (value: string) => value,
     FS: { writeFile: (path: string, data: Uint8Array) => files.set(path, data) },
@@ -24,7 +25,12 @@ function resolver() {
     },
   })
   scope.self = scope
-  for (const name of ['kpse-resolve.cjs', 'resolver-evidence.js', 'pdftex-worker.js']) {
+  for (const name of [
+    'asset-download.js',
+    'kpse-resolve.cjs',
+    'resolver-evidence.js',
+    'pdftex-worker.js',
+  ]) {
     runInContext(readFileSync(new URL(`../../wasm-build/${name}`, import.meta.url), 'utf8'), scope)
   }
   scope.allocateString = (value: string) => value

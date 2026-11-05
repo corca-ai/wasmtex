@@ -22,6 +22,7 @@ import type {
   WarmupCache,
 } from '../types'
 import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
+import { isAssetResponse } from './asset-response'
 import { fetchBloomFilter } from './bloom-filter'
 import type { CompileEngine } from './compile-engine'
 import { buildDependencyGraph } from './dependency-graph'
@@ -276,7 +277,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   protected readonly resolverProfile: CompletionSnapshotProfile
   public onAssetDownload?: (event: AssetDownloadEvent) => void
   protected downloadAbort = new AbortController()
-  private downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
+  protected downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
   public onProgress?: (progress: number) => void
   public onFileDownload?: (filename: string) => void
 
@@ -291,6 +292,7 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   ) {
     this.suppliedWarmup = suppliedWarmup ? collisionSafeWarmup(suppliedWarmup) : undefined
     this.tex = tex
+    this.tex.setAssetDownloadSession(this.downloads)
     this.fmtFile = fmtFile
     this.formatUrl = formatUrl
     this.warmup = warmup
@@ -305,6 +307,12 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     }
   }
 
+  /** @internal Share the compiler's allowance with its synchronous Worker. */
+  setAssetDownloadSession(session: AssetDownloadSession): void {
+    this.downloads = session
+    this.tex.setAssetDownloadSession(session)
+  }
+
   abstract init(): Promise<void>
   abstract compile(): Promise<CompileResult>
   abstract flushCache(): Promise<void>
@@ -316,7 +324,6 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
    *  over a CDN prefetch, so return visits do ~zero network. */
   protected async initTex(): Promise<TexFmtWarmSet[]> {
     this.downloadAbort = new AbortController()
-    this.downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
     this.tex.onFileDownload = (f) => {
       this.persist.downloadCount++
       this.onFileDownload?.(f)
@@ -461,7 +468,11 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     const fetchBuf = async (url: string): Promise<ArrayBuffer | null> => {
       try {
         const resp = await fetch(url)
-        return resp.ok ? await resp.arrayBuffer() : null
+        if (!isAssetResponse(resp)) {
+          await resp.body?.cancel()
+          return null
+        }
+        return await resp.arrayBuffer()
       } catch {
         return null
       }

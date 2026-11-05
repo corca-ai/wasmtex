@@ -198,6 +198,9 @@ export declare class WasmTexCompiler {
     /** Engine options shared by every engine kind (binary-specific bits are set
      *  by the factory). */
     /** Forward the engine's load callbacks to the host as `LoadProgressEvent`s. */
+    private assetCompileAttemptStarted;
+    private ownsAssetAttempt;
+    private assetDownloads;
     private attachLoadProgress;
     private engineBaseOpts;
     /** Current main-file content as a string (for engine detection). */

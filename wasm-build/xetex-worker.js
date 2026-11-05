@@ -53,13 +53,8 @@ self.icuRegistered = false
 function ensureIcuData() {
   if (self.icuRegistered) return // already captured in the re-snapshotted initmem
   if (!self.icuData) {
-    try {
-      const xhr = new XMLHttpRequest()
-      xhr.open('GET', `${self.texlive_endpoint}${ICU_DATA_FILE}`, false)
-      xhr.responseType = 'arraybuffer'
-      xhr.send()
-      if (xhr.status === 200 || xhr.status === 0) self.icuData = new Uint8Array(xhr.response)
-    } catch {}
+    const xhr = self.wasmtexDownloadAsset(`${self.texlive_endpoint}${ICU_DATA_FILE}`, 'data')
+    if (xhr.status === 200) self.icuData = new Uint8Array(xhr.response)
   }
   if (!self.icuData) {
     self.memlog += '[icu] data unavailable (font-by-name will fail)\n'
@@ -393,16 +388,14 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
 
   const [dir, filename] = resolveCdn(reqname, format)
   const url = `${self.texlive_endpoint}pdftex/${dir}/${filename}`
-  const xhr = new XMLHttpRequest()
-  xhr.open('GET', url, false)
-  xhr.responseType = 'arraybuffer'
+  let xhr
   try {
-    xhr.send()
-  } catch {
+    xhr = self.wasmtexDownloadAsset(url, format)
+  } catch (error) {
     self.wasmtexResolverEvidence(reqname, format, 'transport-error', [{
       source: 'network', outcome: 'transport-error', candidate: filename,
     }])
-    return 0
+    throw error
   }
   if (xhr.status === 200) {
     const savepath = `${TEXCACHEROOT}/${reqname}`

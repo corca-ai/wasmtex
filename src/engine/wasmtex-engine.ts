@@ -7,7 +7,7 @@ import type {
   TexliveVersion,
   WarmupCache,
 } from '../types'
-import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
+import { AssetDownloadError } from './asset-download'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
 import { fetchBloomFilter } from './bloom-filter'
 import type { CompileEngine } from './compile-engine'
@@ -303,9 +303,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   public onFileDownload?: (filename: string) => void
 
-  onAssetDownload?: (event: AssetDownloadEvent) => void
   private downloadAbort = new AbortController()
-  private downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
 
   constructor(options?: WasmTexEngineOptions) {
     const base = options?.assetBaseUrl ?? import.meta.env.BASE_URL
@@ -362,7 +360,6 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     }
 
     this.downloadAbort = new AbortController()
-    this.downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
     this.status = 'loading'
     this.transportPrefetchSupported = false
     this.transportPrefetchAttempted = false
@@ -371,6 +368,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       this.worker = createEngineWorker(this.enginePath)
 
       this.worker.onmessage = (ev) => {
+        if (this.handleAssetDownloadMessage(ev.data)) return
         this.dispatchWorkerMessage(ev.data as WorkerMessage, resolve, reject)
       }
 
@@ -636,7 +634,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
    * Fetch a URL with optional download-progress tracking for the .fmt preload.
    */
   private async fetchGzWithProgress(url: string, progress = true): Promise<ArrayBuffer | null> {
-    const bytes = await this.downloads.read(url, {
+    const bytes = await this.assetDownloads.read(url, {
       asset: progress ? 'format' : 'data',
       signal: this.downloadAbort.signal,
       ...(progress && this.onProgress ? { onPercent: this.onProgress } : {}),

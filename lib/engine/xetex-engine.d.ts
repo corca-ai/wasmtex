@@ -1,4 +1,5 @@
 import { CompileResult } from '../types.js';
+import { AssetDownloadSession } from './asset-download.js';
 import { BaseTexFmtEngine, ChapterPreviewResult } from './tex-fmt-engine.js';
 import { WasmTexEngineOptions } from './wasmtex-engine.js';
 import { CompileWorkerDriver } from './wasmtex-worker.js';
@@ -20,6 +21,7 @@ export declare class WasmTexXetexEngine extends BaseTexFmtEngine {
      *  them. XeTeX cannot redirect a preview's writes, so each preview restores them. */
     private chapterAux;
     constructor(options?: WasmTexEngineOptions);
+    setAssetDownloadSession(session: AssetDownloadSession): void;
     init(): Promise<void>;
     /** dvipdfmx fetches+embeds fonts the primary XeTeX worker never caches — persist them too. */
     protected extraCacheDrivers(): CompileWorkerDriver[];

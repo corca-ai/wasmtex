@@ -82,23 +82,19 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   function tryFetch(name) {
     var url = self.texlive_endpoint + "pdftex/" + format + "/" + name;
     self.postMessage({ "cmd": "downloading", "file": name });
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, false);
-    xhr.timeout = 30000;
-    xhr.responseType = "arraybuffer";
-    try { xhr.send(); return xhr; } catch (err) { return null; }
+    return self.wasmtexDownloadAsset(url, format);
   }
 
   var xhr = tryFetch(reqname);
 
   // Some object stores answer a missing key with 403, not 404 — retry on any >=400.
-  if (xhr && xhr.status >= 400) {
+  if (xhr && xhr.status === 404) {
     if (reqname.includes(".")) {
       var bare = reqname.substring(0, reqname.lastIndexOf("."));
       var retryXhr = tryFetch(bare);
       if (retryXhr && retryXhr.status === 200) { xhr = retryXhr; reqname = bare; }
     }
-    if (xhr.status >= 400) {
+    if (xhr.status === 404) {
       var exts = [];
       if (format === 26) exts = [".tex", ".sty", ".cls"];
       if (format === 6) exts = [".bib"];

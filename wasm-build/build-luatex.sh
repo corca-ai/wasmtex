@@ -233,7 +233,7 @@ if grep -aE 'pplib|utilsha|sha(256|384|512)_digest|pp(doc|dict|array|stream|ref|
   echo "ERROR: forbidden pplib or legacy pplib marker remains in the LuaHBTeX release bytes" >&2
   exit 1
 fi
-cat "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
+cat "$GLUE/asset-download.js" "$GLUE/heap-snapshot.js" "$GLUE/luatex-worker.js" > "$OUT/wasmtex-luatex.worker.js"
 
 # Heap-checkpoint variant: the same link with Asyncify confined to the functions on the
 # stack when TeX reads a project line (luatex-checkpoint-frames.json, which also lists

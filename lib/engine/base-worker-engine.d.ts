@@ -1,4 +1,5 @@
 import { EngineStatus, TexliveVersion } from '../types.js';
+import { AssetDownloadEvent, AssetDownloadSession } from './asset-download.js';
 import { EngineWorker } from './worker-host.js';
 /** Shared base for WASM worker engines (pdfTeX, BibTeX). */
 export declare abstract class BaseWorkerEngine<TMsg = unknown> {
@@ -16,6 +17,12 @@ export declare abstract class BaseWorkerEngine<TMsg = unknown> {
         reject: (reason: Error) => void;
     }[]>;
     onProgress?: (progress: number) => void;
+    onAssetDownload?: (event: AssetDownloadEvent) => void;
+    private assetDownloadFailure;
+    protected assetDownloads: AssetDownloadSession;
+    /** @internal One compiler owns the allowance across main and auxiliary engines. */
+    setAssetDownloadSession(session: AssetDownloadSession): void;
+    protected handleAssetDownloadMessage(data: unknown): boolean;
     constructor(enginePath: string, texliveUrl: string | null);
     getStatus(): EngineStatus;
     terminate(): void;

@@ -22,12 +22,16 @@ function harness(responses: Array<number | 'transport'>): ResolverHarness {
     texlive_endpoint: 'https://mirror/',
     wasmtexResolverEvidence: evidence,
     postMessage: vi.fn(),
+    addEventListener() {},
   }
   let xhrCount = 0
   class FakeXhr {
     status = 0
     response: ArrayBuffer | null = null
     open(): void {}
+    getResponseHeader(): string {
+      return 'application/octet-stream'
+    }
     set responseType(_value: string) {}
     send(): void {
       const response = responses[xhrCount++] ?? 'transport'
@@ -44,7 +48,8 @@ function harness(responses: Array<number | 'transport'>): ResolverHarness {
     '_allocate',
     'intArrayFromString',
     'TEXCACHEROOT',
-    `${controller.slice(start, end)}
+    `${readFileSync(resolve('wasm-build/asset-download.js'), 'utf8')}
+     ${controller.slice(start, end)}
      return {
        resolve: kpse_find_file_impl,
        seedPositive(name, format, source) {
@@ -109,7 +114,7 @@ describe('LuaTeX resolver controller evidence', () => {
 
   it('does not poison the negative cache after a transient transport failure', () => {
     const worker = harness(['transport', 200])
-    expect(worker.resolve('retry.sty', 26)).toBe(0)
+    expect(() => worker.resolve('retry.sty', 26)).toThrow(/TeX asset download failed/)
     expect(worker.resolve('retry.sty', 26)).toBe(1)
     expect(worker.xhrCount()).toBe(2)
     expect(worker.evidence.mock.calls.map((call) => call[2])).toEqual([

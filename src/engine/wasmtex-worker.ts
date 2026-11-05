@@ -112,8 +112,8 @@ export abstract class WasmTexWorker<
     })
   }
 
-  protected handleProtocolMessage(_data: TMsg): boolean {
-    return false
+  protected handleProtocolMessage(data: TMsg): boolean {
+    return this.handleAssetDownloadMessage(data)
   }
 
   /** Tear down a worker that failed to initialize and settle any in-flight request. The
@@ -194,6 +194,7 @@ export class CompileWorkerDriver extends WasmTexWorker {
   }
 
   protected override handleProtocolMessage(data: WasmTexWorkerMsg): boolean {
+    if (super.handleProtocolMessage(data)) return true
     if (data.cmd === 'resolverready') {
       this.resolver.markSupported()
       return true

@@ -39,6 +39,7 @@ RUN mkdir -p /build /dist
 COPY kpse-hook.c                   /src/kpse-hook.c
 COPY library.js                    /src/library.js
 COPY makeindex-entry.c             /src/makeindex-entry.c
+COPY asset-download.js /src/asset-download.js
 COPY makeindex-worker.js           /src/makeindex-worker.js
 COPY build-makeindex.sh            /src/build-makeindex.sh
 

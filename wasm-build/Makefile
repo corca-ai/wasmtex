@@ -489,7 +489,7 @@ wasm-compile:
 	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-pdftex.map; then \
 		echo "ERROR: forbidden pplib archive or symbol remains in the pdfTeX link map" >&2; exit 1; \
 	fi
-	cat /src/shared-file.js /src/resolver-evidence.js $(KPSE_RESOLVE) $(PDFTEX_WORKER) > $(DIST)/wasmtex-pdftex.worker.js
+	cat /src/asset-download.js /src/shared-file.js /src/resolver-evidence.js $(KPSE_RESOLVE) $(PDFTEX_WORKER) > $(DIST)/wasmtex-pdftex.worker.js
 	cp $(KPSE_RESOLVE) $(DIST)/wasmtex-kpse-resolve.js
 	cp /src/resolver-evidence.js $(DIST)/wasmtex-pdftex-resolver-evidence.js
 	@echo ""
@@ -603,7 +603,7 @@ bibtex-wasm-compile: bibtex-wasm-prep
 	@if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' $(DIST)/wasmtex-bibtex.map; then \
 		echo "ERROR: forbidden pplib archive or symbol remains in the BibTeX link map" >&2; exit 1; \
 	fi
-	cp $(BIBTEX_WORKER) $(DIST)/wasmtex-bibtex.worker.js
+	cat /src/asset-download.js $(BIBTEX_WORKER) > $(DIST)/wasmtex-bibtex.worker.js
 	@echo "BibTeX WASM compilation complete."
 
 # =============================================================================

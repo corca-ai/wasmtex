@@ -171,19 +171,14 @@ function injectLuaotfloadNames() {
   // texlive200 so dumpcache persists it for the next visit.
   let path = texlive200[NAMES_CK]
   if (!path && self.texlive_endpoint && !(NAMES_CK in texlive404)) {
-    try {
-      const xhr = new XMLHttpRequest()
-      xhr.open('GET', `${self.texlive_endpoint}pdftex/51/luaotfload-names.lua`, false)
-      xhr.responseType = 'arraybuffer'
-      xhr.send()
-      if (xhr.status === 200) {
-        path = `${TEXCACHEROOT}/luaotfload-names.lua`
-        FS.writeFile(path, new Uint8Array(xhr.response))
-        texlive200[NAMES_CK] = path
-      } else {
-        texlive404[NAMES_CK] = 1
-      }
-    } catch {}
+    const xhr = self.wasmtexDownloadAsset(`${self.texlive_endpoint}pdftex/51/luaotfload-names.lua`, 'data')
+    if (xhr.status === 200) {
+      path = `${TEXCACHEROOT}/luaotfload-names.lua`
+      FS.writeFile(path, new Uint8Array(xhr.response))
+      texlive200[NAMES_CK] = path
+    } else {
+      texlive404[NAMES_CK] = 1
+    }
   }
   if (!path) return // DB not deployed → graceful fallback (by-filename only)
   try {
@@ -553,14 +548,13 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
       attempts.push({ source: 'bloom-filter', outcome: 'not-found', candidate: cdnName })
       continue
     }
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', `${self.texlive_endpoint}pdftex/${dir}/${cdnName}`, false)
-    xhr.responseType = 'arraybuffer'
+    let xhr
     try {
-      xhr.send()
-    } catch {
+      xhr = self.wasmtexDownloadAsset(`${self.texlive_endpoint}pdftex/${dir}/${cdnName}`, format)
+    } catch (error) {
       attempts.push({ source: 'network', outcome: 'transport-error', candidate: cdnName })
-      continue
+      self.wasmtexResolverEvidence(reqname, format, 'transport-error', attempts)
+      throw error
     }
     attempts.push({
       source: 'network',

@@ -2,6 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/2.4.3/schema.json",
   "files": {
     "includes": [
+      "wasm-build/asset-download.js",
       "wasm-build/bibtex-worker.js",
       "wasm-build/bibtex8-worker.js",
       "wasm-build/dvipdfm-worker.js",

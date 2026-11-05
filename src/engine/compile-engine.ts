@@ -9,7 +9,7 @@
  * ("this document requires XeLaTeX …") rather than a cryptic pdfTeX error.
  */
 import type { CompileResult, EngineStatus } from '../types'
-import type { AssetDownloadEvent } from './asset-download'
+import type { AssetDownloadEvent, AssetDownloadSession } from './asset-download'
 import type { EngineCompletionObservation } from './completion-snapshot'
 import type { EngineDetection, TexEngine } from './engine-select'
 import { WasmTexLuatexEngine } from './luatex-engine'
@@ -38,6 +38,7 @@ export interface CompileEngine {
   setPreambleSnapshot?(enabled: boolean): void
   /** Latest bounded post-compile engine observation, when this engine can expose one. */
   getCompletionObservation?(): EngineCompletionObservation | null
+  setAssetDownloadSession?(session: AssetDownloadSession): void
   onAssetDownload?: (event: AssetDownloadEvent) => void
   onProgress?: (progress: number) => void
   onFileDownload?: (filename: string) => void

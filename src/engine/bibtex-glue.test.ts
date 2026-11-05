@@ -32,9 +32,8 @@ function publishedControllerIsFromCurrentCheckout(): boolean {
 const INVARIANTS: Array<[string, RegExp]> = [
   // Don't wrap .bbl output — long `%%%` .bst banners must stay on one line (acmart). #152
   ['max_print_line = 1000', /max_print_line = 1000/],
-  // Retry kpse lookups on any >=400 so `ACM-Reference-Format` resolves to `.bst`
-  // even when a mirror uses a non-404 missing-object response.
-  ['status >= 400 retry', /status\s*>=\s*400/],
+  // Missing bare names may resolve with a .bst suffix; permission failures must surface.
+  ['status === 404 retry', /status\s*===\s*404/],
 ]
 
 describe('published BibTeX worker controller (#152)', () => {
@@ -49,7 +48,10 @@ describe('published BibTeX worker controller (#152)', () => {
   it.runIf(publishedControllerIsFromCurrentCheckout())(
     'the published 2025 controller exactly matches its authored source',
     () => {
-      expect(readFileSync(PUBLISHED_2025)).toEqual(readFileSync(CONTROLLER))
+      expect(readFileSync(PUBLISHED_2025, 'utf8')).toBe(
+        readFileSync(join(ROOT, 'wasm-build', 'asset-download.js'), 'utf8') +
+          readFileSync(CONTROLLER, 'utf8'),
+      )
     },
   )
 })

@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import type { AssetDownloadSession } from './engine/asset-download'
 import * as factory from './engine/compile-engine'
 import { WasmTexLuatexEngine } from './engine/luatex-engine'
 import { WasmTexCompiler, type WasmTexCompilerOptions } from './headless'
@@ -161,4 +162,24 @@ it('stops resuming previews from a checkpoint the worker no longer holds', async
   expect(heapPreview).toHaveBeenCalledTimes(1)
   expect(prefix).toHaveBeenCalledTimes(2)
   compiler.dispose()
+})
+
+it('shares the owning attempt with repeated automatic figure compiles', async () => {
+  const { compiler } = await fixture({})
+  const session = Reflect.get(compiler, 'assetDownloads') as AssetDownloadSession
+  session.reserveRetries().settle(0)
+  const figure = (Reflect.get(compiler, 'spawnFigureCompiler') as () => WasmTexCompiler).call(
+    compiler,
+  )
+  figure.setFile('main.tex', source())
+  try {
+    await figure.init()
+    expect(Reflect.get(figure, 'assetDownloads')).toBe(session)
+    await figure.compile()
+    await figure.compile()
+    expect(session.reserveRetries().limit).toBe(0)
+  } finally {
+    figure.dispose()
+    compiler.dispose()
+  }
 })

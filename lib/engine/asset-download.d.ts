@@ -27,11 +27,26 @@ export declare class AssetDownloadSession {
     private readonly onEvent?;
     private readonly fetchImpl;
     private remainingRetries;
+    private generation;
+    private workerRequests;
     constructor(onEvent?: ((event: AssetDownloadEvent) => void) | undefined, fetchImpl?: typeof fetch);
+    /** Start another explicit compile attempt after the host has serialized prior work.
+     * Late completions from the previous attempt cannot refill or spend its allowance. */
+    beginAttempt(): void;
+    /** Worker-local IDs are translated into the same host-wide request namespace. */
+    recordWorkerEvent(owner: object, event: AssetDownloadEvent): void;
+    /** Reserve retries before a synchronous Worker operation; concurrent fetches
+     * cannot spend the same allowance. Legacy Workers return no budget field. */
+    reserveRetries(): {
+        limit: number;
+        settle: (remaining?: unknown) => void;
+    };
     read(url: string, input: DownloadInput): Promise<Uint8Array | null>;
     private retryable;
     private emit;
     private validate;
     private transfer;
 }
+/** Closed worker protocol: ignore malformed counters and unrecognized classifications. */
+export declare function isAssetDownloadEvent(value: unknown): value is AssetDownloadEvent;
 export {};

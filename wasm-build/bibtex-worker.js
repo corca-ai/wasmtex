@@ -86,23 +86,13 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   function tryFetch(name) {
     var url = self.texlive_endpoint + "pdftex/" + format + "/" + name;
     self.postMessage({ "cmd": "downloading", "file": name });
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, false);
-    xhr.timeout = 30000;
-    xhr.responseType = "arraybuffer";
-    try {
-      xhr.send();
-      return xhr;
-    } catch(err) { return null; }
+    return self.wasmtexDownloadAsset(url, format);
   }
 
   var xhr = tryFetch(reqname);
 
-  // Smart extension retry. Some object stores answer a missing key with 403,
-  // so the retry must trigger on any >=400 status (matches the pdfTeX
-  // worker). With ===404 the bst lookup (e.g. ACM-Reference-Format -> .bst)
-  // never retried and bibtex aborted with "I couldn't open style file".
-  if (xhr && xhr.status >= 400) {
+  // Try another spelling only for a genuine missing key.
+  if (xhr && xhr.status === 404) {
     if (reqname.includes(".")) {
       var bare = reqname.substring(0, reqname.lastIndexOf("."));
       var retryXhr = tryFetch(bare);
@@ -112,7 +102,7 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
       }
     }
 
-    if (xhr.status >= 400) {
+    if (xhr.status === 404) {
       var exts = [];
       if (format === 26) exts = [".tex", ".sty", ".cls"];
       if (format === 6) exts = [".bib"];

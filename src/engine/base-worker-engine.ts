@@ -1,4 +1,10 @@
 import type { EngineStatus, TexliveVersion } from '../types'
+import {
+  AssetDownloadError,
+  type AssetDownloadEvent,
+  AssetDownloadSession,
+  isAssetDownloadEvent,
+} from './asset-download'
 import { defaultTexliveUrl } from './default-texlive-mirrors'
 import type { EngineWorker } from './worker-host'
 
@@ -78,6 +84,30 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
   >()
 
   public onProgress?: (progress: number) => void
+  public onAssetDownload?: (event: AssetDownloadEvent) => void
+  private assetDownloadFailure: AssetDownloadError | null = null
+  protected assetDownloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
+
+  /** @internal One compiler owns the allowance across main and auxiliary engines. */
+  setAssetDownloadSession(session: AssetDownloadSession): void {
+    this.assetDownloads = session
+  }
+
+  protected handleAssetDownloadMessage(data: unknown): boolean {
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      !('cmd' in data) ||
+      data.cmd !== 'assetdownload'
+    )
+      return false
+    if (isAssetDownloadEvent(data)) {
+      this.assetDownloads.recordWorkerEvent(this, data)
+      if (data.phase === 'end' && data.failure && data.status !== 404)
+        this.assetDownloadFailure = new AssetDownloadError(data.failure, data.status)
+    }
+    return true
+  }
 
   constructor(enginePath: string, texliveUrl: string | null) {
     this.enginePath = enginePath
@@ -97,6 +127,7 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
       // a compile() in progress — settle with an AbortError instead of hanging
       // forever (e.g. when a consumer disposes mid-compile to switch engines).
       this.rejectAllPending('Engine disposed while a request was in flight')
+      this.assetDownloadFailure = null
     }
   }
 
@@ -107,17 +138,38 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
     transferables?: Transferable[],
   ): Promise<TMsg> {
     return new Promise<TMsg>((resolve, reject) => {
-      const entry = { resolve, reject }
+      const reservation = this.assetDownloads.reserveRetries()
+      const entry = {
+        resolve: (data: TMsg) => {
+          reservation.settle(
+            typeof data === 'object' && data !== null && 'assetRetriesRemaining' in data
+              ? data.assetRetriesRemaining
+              : undefined,
+          )
+          if (this.assetDownloadFailure) {
+            const error = this.assetDownloadFailure
+            this.assetDownloadFailure = null
+            if (this.status === 'compiling') this.status = 'ready'
+            reject(error)
+          } else resolve(data)
+        },
+        reject,
+      }
+      const payload =
+        typeof msg === 'object' && msg !== null
+          ? { ...msg, assetRetryBudget: reservation.limit }
+          : msg
       const queue = this.pendingResponses.get(responseKey) ?? []
       queue.push(entry)
       this.pendingResponses.set(responseKey, queue)
       try {
         if (transferables?.length) {
-          this.worker!.postMessage(msg, transferables)
+          this.worker!.postMessage(payload, transferables)
         } else {
-          this.worker!.postMessage(msg)
+          this.worker!.postMessage(payload)
         }
       } catch (error) {
+        reservation.settle()
         // A rejected send has no future response. Remove only its waiter so it
         // cannot consume the next successful request's reply under the same key.
         const index = queue.indexOf(entry)
@@ -161,7 +213,8 @@ export abstract class BaseWorkerEngine<TMsg = unknown> {
    *  `compile()` — with a real error so it rejects instead of hanging forever (which would
    *  wedge the scheduler with `compiling` stuck true). Returns the surfaced Error. */
   protected handleWorkerError(err: unknown): Error {
-    const e = normalizeWorkerError(err)
+    const e = this.assetDownloadFailure ?? normalizeWorkerError(err)
+    this.assetDownloadFailure = null
     this.status = 'error'
     this.rejectAllPending(e)
     return e
