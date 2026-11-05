@@ -103,7 +103,13 @@ jobs:
         with: { node-version: 24 }
 
       - name: Smoke test (make a font in a worker scope against the mirror)
-        run: node scripts/smoke-metafont.mjs wasm-build/dist-metafont/wasmtex-metafont.js "$TEXLIVE_URL"
+        run: |
+          # A pull request builds against the registered mirror, which may predate Metafont source.
+          if curl -fsI "${TEXLIVE_URL}pdftex/13/plain.mf" > /dev/null; then
+            node scripts/smoke-metafont.mjs wasm-build/dist-metafont/wasmtex-metafont.js "$TEXLIVE_URL"
+          else
+            node -e "new Function(require('fs').readFileSync(process.argv[1], 'utf8'))" wasm-build/dist-metafont/wasmtex-metafont.js
+          fi
 
       - name: Record exact Metafont build inputs and outputs
         run: |
