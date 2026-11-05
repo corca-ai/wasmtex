@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installNodeWorkerHost, type NodeWorkerHostInstallation } from './node-host'
+import { createEngineWorker } from './worker-host'
 
 // installNodeWorkerHost replaces globalThis.fetch with a shim that serves
 // assetBaseUrl resources from publicDir and passes everything else through.
@@ -73,6 +75,44 @@ describe('installNodeWorkerHost fetch shim asset routing', () => {
     expect(resp.status).toBe(404)
     expect(await resp.text()).toBe('')
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('runs budget listeners before the controller and performs exactly one HTTP attempt per retry', async () => {
+    let requests = 0
+    const server = createServer((_request, response) => {
+      requests++
+      response.writeHead(requests === 1 ? 503 : 200, { 'content-type': 'application/octet-stream' })
+      response.end('asset')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('missing listener address')
+    writeFileSync(
+      join(publicDir, 'wasmtex/2025/x.worker.js'),
+      readFileSync(new URL('../../wasm-build/asset-download.js', import.meta.url), 'utf8') +
+        `
+        self.onmessage = function (event) {
+          const xhr = self.wasmtexDownloadAsset(event.data.url, 'data')
+          self.postMessage({ result: 'ok', status: xhr.status })
+        }
+      `,
+    )
+    host = installNodeWorkerHost({ publicDir, assetBaseUrl: base })
+    const worker = createEngineWorker(`${base}wasmtex/2025/x.worker.js`)
+    try {
+      const result = new Promise<unknown>((resolve, reject) => {
+        worker.onerror = reject
+        worker.onmessage = ({ data }) => {
+          if (typeof data === 'object' && data !== null && 'result' in data) resolve(data)
+        }
+      })
+      worker.postMessage({ assetRetryBudget: 8, url: `http://127.0.0.1:${address.port}/file` })
+      await expect(result).resolves.toEqual({ result: 'ok', status: 200, assetRetriesRemaining: 7 })
+      expect(requests).toBe(2)
+    } finally {
+      worker.terminate()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
   })
 
   it('restores the previous global fetch when disposed', () => {

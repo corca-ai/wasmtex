@@ -38,6 +38,7 @@ on:
     branches: [main]
     paths:
       - 'wasm-build/luatex-worker.js'
+      - 'wasm-build/asset-download.js'
       - 'wasm-build/resolver-evidence.js'
       - 'wasm-build/heap-snapshot.js'
       - 'wasm-build/luatex-library.js'

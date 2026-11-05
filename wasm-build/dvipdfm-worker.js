@@ -351,14 +351,13 @@ function kpse_find_file_impl(nameptr, format) {
   const attempts = []
   for (const [dir, filename] of cdnCandidates(reqname, format)) {
     const url = `${self.texlive_endpoint}pdftex/${dir}/${filename}`
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', url, false)
-    xhr.responseType = 'arraybuffer'
+    let xhr
     try {
-      xhr.send()
-    } catch {
+      xhr = self.wasmtexDownloadAsset(url, format)
+    } catch (error) {
       attempts.push({ source: 'network', outcome: 'transport-error', candidate: filename })
-      continue
+      self.wasmtexResolverEvidence(reqname, format, 'transport-error', attempts)
+      throw error
     }
     attempts.push({
       source: 'network',

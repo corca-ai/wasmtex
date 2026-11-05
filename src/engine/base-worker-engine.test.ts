@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AssetDownloadSession } from './asset-download'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
 import type { EngineWorker } from './worker-host'
 
@@ -21,6 +22,12 @@ class TestEngine extends BaseWorkerEngine {
   }
   request(key: string, transfer?: Transferable[]): Promise<unknown> {
     return this.postMessageWithResponse({ cmd: key }, `cmd:${key}`, transfer)
+  }
+  download(data: unknown): boolean {
+    return this.handleAssetDownloadMessage(data)
+  }
+  crash(error: unknown): Error {
+    return this.handleWorkerError(error)
   }
   deliver(key: string, data: unknown): boolean {
     return this.deliverResponse(`cmd:${key}`, data)
@@ -147,5 +154,67 @@ describe('Worker send failure and response ordering', () => {
     } finally {
       engine.terminate()
     }
+  })
+})
+
+describe('Worker asset failure propagation', () => {
+  it.each([
+    'reply',
+    'crash',
+  ] as const)('preserves the typed transport failure through a %s', async (terminal) => {
+    const engine = new TestEngine()
+    engine.attachFakeWorker()
+    const pending = engine.request('compile')
+    engine.download({
+      cmd: 'assetdownload',
+      requestId: 1,
+      asset: 'font',
+      phase: 'start',
+      receivedBytes: 0,
+      lastByteAgeMs: null,
+      retryCount: 0,
+    })
+    engine.download({
+      cmd: 'assetdownload',
+      requestId: 1,
+      asset: 'font',
+      phase: 'end',
+      receivedBytes: 0,
+      lastByteAgeMs: null,
+      retryCount: 0,
+      failure: 'http',
+      status: 403,
+    })
+    if (terminal === 'reply')
+      engine.deliver('compile', { result: 'error', assetRetriesRemaining: 8 })
+    else engine.crash(new Error('unreachable'))
+    await expect(pending).rejects.toMatchObject({
+      name: 'AssetDownloadError',
+      failure: 'http',
+      status: 403,
+    })
+  })
+
+  it('allows a real optional 404 and returns only the unused shared allowance', async () => {
+    const engine = new TestEngine()
+    const session = new AssetDownloadSession()
+    engine.setAssetDownloadSession(session)
+    engine.attachFakeWorker()
+    const pending = engine.request('compile')
+    expect(session.reserveRetries().limit).toBe(0)
+    engine.download({
+      cmd: 'assetdownload',
+      requestId: 1,
+      asset: 'data',
+      phase: 'end',
+      receivedBytes: 0,
+      lastByteAgeMs: null,
+      retryCount: 2,
+      failure: 'http',
+      status: 404,
+    })
+    engine.deliver('compile', { result: 'ok', assetRetriesRemaining: 6 })
+    await expect(pending).resolves.toMatchObject({ result: 'ok' })
+    expect(session.reserveRetries().limit).toBe(6)
   })
 })

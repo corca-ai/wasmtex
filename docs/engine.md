@@ -228,7 +228,22 @@ the pdfTeX controller/module/WASM set together before relying on this capability
 
 ## TeX Live & R2
 
-Packages are fetched via synchronous XHR inside the WASM worker.
+Packages are fetched via synchronous XHR inside the WASM worker. Controllers built
+with `asset-download.js` distinguish a genuine 404 from permission, transport and
+HTML-response failures. Transient network/408/429/5xx failures retry the same file
+at most three times. Main, converter and auxiliary Workers reserve retries from
+the compiler's shared allowance of eight; they return unused retries with their
+terminal reply. Initialization and the first compile share that allowance; a new
+public compile call renews it after prior operations settle. Automatic passes do
+not renew it. Legacy controllers retain their previous behavior.
+
+Synchronous XHR cannot reliably report intermediate bytes. It retains a bounded
+150-second request timeout and emits start/retry/end events, reporting response
+bytes only after completion. It makes bounded immediate retries without a busy
+wait. Async format/map reads use a 30-second byte-idle timeout and 2/8/20-second
+retry delays; received bytes keep a slow unknown-length response alive. Transport
+failure does not trigger local format generation. Hosts must retain a bounded
+watchdog for paths without byte-progress evidence.
 
 - **Mirror**: Immutable snapshots are served from Cloudflare R2 through `texlive.corca.ai`; no configuration is needed for basic usage.
 - **Structure**: Files are organized by mirror revision, TeX Live version, and format IDs (for example, `snapshots/<revision>/2025/pdftex/26/` for `.sty` files).

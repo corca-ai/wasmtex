@@ -1,4 +1,5 @@
 import type { TexliveFileEntry } from '../types'
+import { isAssetResponse } from './asset-response'
 import { PRELOAD_FILES } from './texlive-manifest'
 
 /** A response candidate, not a resolved TeX file. Installation must not create MEMFS aliases. */
@@ -78,7 +79,10 @@ export async function prefetchTexliveResponses(
   const accepting = () => !signal.aborted && bytes < MAX_BYTES
   async function fetchEntry(entry: TexliveFileEntry): Promise<void> {
     const response = await fetch(`${baseUrl}pdftex/${entry.format}/${entry.filename}`, { signal })
-    if (response.status !== 200) return
+    if (!isAssetResponse(response)) {
+      await response.body?.cancel()
+      return
+    }
     const data = await response.arrayBuffer()
     if (!accepting() || data.byteLength > MAX_FILE_BYTES || bytes + data.byteLength > MAX_BYTES)
       return

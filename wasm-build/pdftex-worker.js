@@ -625,12 +625,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
             };
         }
         var url = self.texlive_endpoint + "pdftex/" + format + "/" + name;
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", url, false);
-        xhr.timeout = 150000;
-        xhr.responseType = "arraybuffer";
         try {
-            xhr.send();
+            var xhr = self.wasmtexDownloadAsset(url, format);
             resolverAttempts.push({
                 "source": "network",
                 "outcome": xhr.status === 200 ? "hit" : "not-found",
@@ -642,7 +638,8 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
             resolverAttempts.push({
                 "source": "network", "outcome": "transport-error", "candidate": name
             });
-            return null;
+            self.wasmtexResolverEvidence(reqname, format, "transport-error", resolverAttempts);
+            throw err;
         }
     }
 
@@ -731,16 +728,7 @@ function kpse_find_pk_impl(nameptr, dpi) {
     }
 
     var remote_url = self.texlive_endpoint + "pdftex/pk/" + cacheKey;
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", remote_url, false);
-    xhr.timeout = 150000;
-    xhr.responseType = "arraybuffer";
-
-    try {
-        xhr.send();
-    } catch(err) {
-        return 0;
-    }
+    var xhr = self.wasmtexDownloadAsset(remote_url, 'font');
 
     if (xhr.status === 200) {
         var arraybuffer = xhr.response;

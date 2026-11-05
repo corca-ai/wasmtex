@@ -10,6 +10,7 @@ import type {
   TexliveVersion,
   WarmupCache,
 } from '../types'
+import { isAssetResponse } from './asset-response'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { fetchBloomFilter } from './bloom-filter'
 import { KNOWN_404S, PRELOAD_FILES } from './texlive-manifest'
@@ -77,10 +78,10 @@ export async function warmup(options?: WarmupOptions): Promise<WarmupCache> {
       try {
         const url = `${baseUrl}pdftex/${entry.format}/${entry.candidate ?? entry.filename}`
         const resp = await fetch(url, signal ? { signal } : {})
-        if (resp.ok) {
+        if (isAssetResponse(resp)) {
           const data = await resp.arrayBuffer()
           files.push({ format: entry.format, filename: entry.filename, data })
-        }
+        } else await resp.body?.cancel()
       } catch {
         // Fetch failed — file will be fetched on demand by the worker
       }

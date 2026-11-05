@@ -47,6 +47,7 @@ on:
       - 'wasm-build/pdf-backend/**'
       - 'wasm-build/xetex-entry.c'
       - 'wasm-build/xetex-worker.js'
+      - 'wasm-build/asset-download.js'
       - 'wasm-build/xetex-library.js'
       - 'wasm-build/icu-data-loader.c'
       - 'wasm-build/fontconfig-shim.c'

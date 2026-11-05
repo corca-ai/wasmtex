@@ -84,7 +84,7 @@ if grep -E 'libpplib|pp(doc|dict|array|stream|ref|xref)_' "$OUT/wasmtex-bibtex8.
   echo "ERROR: forbidden pplib archive or symbol remains in the BibTeX8 link map" >&2
   exit 1
 fi
-cp "$GLUE/bibtex8-worker.js" "$OUT/wasmtex-bibtex8.worker.js"
+cat "$GLUE/asset-download.js" "$GLUE/bibtex8-worker.js" > "$OUT/wasmtex-bibtex8.worker.js"
 
 echo "=== Output ==="
 ls -lh "$OUT"/wasmtex-bibtex8.* || { echo "no output"; exit 1; }

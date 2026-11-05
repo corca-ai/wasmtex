@@ -95,6 +95,25 @@ describe('transport prefetch', () => {
     expect(files.reduce((sum, file) => sum + file.data.byteLength, 0)).toBe(8 * 1024 * 1024)
   })
 
+  it('never admits an HTML error page as a prefetched package', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<html>unavailable</html>', {
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+          }),
+      ),
+    )
+    expect(
+      await prefetchTexliveResponses(
+        [String.raw`\usepackage{broken}`],
+        'https://mirror/',
+        new AbortController().signal,
+      ),
+    ).toEqual([])
+  })
+
   it('does no work after cancellation', async () => {
     const fetcher = vi.fn()
     vi.stubGlobal('fetch', fetcher)

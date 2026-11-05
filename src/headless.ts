@@ -1,4 +1,8 @@
-import { AssetDownloadError, type AssetDownloadEvent } from './engine/asset-download'
+import {
+  AssetDownloadError,
+  type AssetDownloadEvent,
+  AssetDownloadSession,
+} from './engine/asset-download'
 
 export type { AssetDownloadEvent } from './engine/asset-download'
 
@@ -606,7 +610,12 @@ export class WasmTexCompiler {
   /** Engine options shared by every engine kind (binary-specific bits are set
    *  by the factory). */
   /** Forward the engine's load callbacks to the host as `LoadProgressEvent`s. */
+  private assetCompileAttemptStarted = false
+  private ownsAssetAttempt = true
+  private assetDownloads = new AssetDownloadSession((event) => this.opts.onAssetDownload?.(event))
+
   private attachLoadProgress(engine: CompileEngine): void {
+    engine.setAssetDownloadSession?.(this.assetDownloads)
     engine.onAssetDownload = (event) => this.opts.onAssetDownload?.(event)
     const listener = this.opts.onLoadProgress
     if (!listener) return
@@ -820,6 +829,7 @@ export class WasmTexCompiler {
     const filesystem = this.fs
     const detection = { ...this.detection }
     const options = { ...this.opts }
+    delete options.onAssetDownload
     delete options.onLoadProgress
     delete options.onEngineSelected
     const files: Record<string, string | Uint8Array> = {}
@@ -1082,7 +1092,14 @@ export class WasmTexCompiler {
       // Reserve this call before waiting: another compile must not queue behind it.
       if (this.prebuildInFlight) await this.prebuildInFlight
       this.assertRevision(revision)
-      const result = await this.operations.run(() => this.compileIdle(preview, options))
+      const result = await this.operations.run(() => {
+        // Initialization and the first compile share one allowance. Only a new
+        // public call renews it; automatic passes and auxiliary tools never do.
+        if (this.ownsAssetAttempt && this.assetCompileAttemptStarted)
+          this.assetDownloads.beginAttempt()
+        this.assetCompileAttemptStarted = true
+        return this.compileIdle(preview, options)
+      })
       this.assertRevision(revision)
       this.compiled = true
       this.pagePreviewBaseline = result.success && result.pdf ? this.mainSource() : null
@@ -2139,7 +2156,7 @@ export class WasmTexCompiler {
   /** A sibling compiler for figure jobs: same profile, no externalization of its own. */
   private spawnFigureCompiler(): WasmTexCompiler {
     const { files: _files, backends: _backends, ...base } = this.opts
-    return new WasmTexCompiler({
+    const compiler = new WasmTexCompiler({
       ...base,
       mainFile: this.mainFile,
       engine: this.engineKind,
@@ -2147,6 +2164,9 @@ export class WasmTexCompiler {
       luatexHeapCheckpoints: undefined,
       tikzExternalization: { mode: 'off' },
     })
+    compiler.assetDownloads = this.assetDownloads
+    compiler.ownsAssetAttempt = false
+    return compiler
   }
 
   private async syncModifiedFilesToEngine(): Promise<void> {
@@ -2609,6 +2629,7 @@ export class WasmTexCompiler {
       key === 'bibtexEngine'
         ? new BibtexEngine(this.auxEngineOpts())
         : new MakeindexEngine(this.auxEngineOpts())
+    engine.setAssetDownloadSession(this.assetDownloads)
     // Own it during initialization so cancellation can terminate its worker.
     this[key] = engine
     try {

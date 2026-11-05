@@ -17,6 +17,7 @@
  * `compile*` protocol via {@link CompileWorkerDriver}.
  */
 import type { CompileResult } from '../types'
+import type { AssetDownloadSession } from './asset-download'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import {
@@ -82,6 +83,12 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
       options.warmupCache,
     )
     this.dvipdfm = createCompileWorker('dvipdfm', options)
+    this.dvipdfm.setAssetDownloadSession(this.downloads)
+  }
+
+  override setAssetDownloadSession(session: AssetDownloadSession): void {
+    super.setAssetDownloadSession(session)
+    this.dvipdfm.setAssetDownloadSession(session)
   }
 
   async init(): Promise<void> {

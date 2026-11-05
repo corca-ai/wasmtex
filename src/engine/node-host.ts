@@ -53,8 +53,14 @@ let __xhrSeq = 0
 globalThis.self = globalThis
 self.location = { href: 'file://' + workerData.workerPath + workerData.search, origin: 'file://', search: workerData.search }
 self.postMessage = (m) => parentPort.postMessage(m)
-self.addEventListener = (t, fn) => { if (t === 'message') self.onmessage = fn }
-parentPort.on('message', (m) => { if (self.onmessage) self.onmessage({ data: m }) })
+const messageListeners = new Set()
+self.addEventListener = (t, fn) => { if (t === 'message') messageListeners.add(fn) }
+self.removeEventListener = (t, fn) => { if (t === 'message') messageListeners.delete(fn) }
+parentPort.on('message', (m) => {
+  const event = { data: m }
+  for (const listener of messageListeners) listener(event)
+  if (self.onmessage) self.onmessage(event)
+})
 globalThis.importScripts = (...sources) => {
   for (const source of sources) {
     const path = source.startsWith('file:')
@@ -81,7 +87,7 @@ globalThis.XMLHttpRequest = class {
       // ("cannot read font names") and XeLaTeX can't resolve fonts by name.
       const body = execFileSync(
         'curl',
-        ['-fsSL', '--compressed', '--retry', '3', '--retry-delay', '1', '-D', hf, this._url],
+        ['-fsSL', '--compressed', '--max-time', String(this.timeout > 0 ? this.timeout / 1000 : 150), '-D', hf, this._url],
         { maxBuffer: 512 * 1024 * 1024 },
       )
       this.status = 200
@@ -110,6 +116,7 @@ globalThis.XMLHttpRequest = class {
         this.status = httpStatus
         this.response = null
       } else {
+        if (error.status === 28) error.name = 'TimeoutError'
         throw error
       }
     } finally {

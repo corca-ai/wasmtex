@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
+import {
+  AssetDownloadError,
+  type AssetDownloadEvent,
+  AssetDownloadSession,
+  isAssetDownloadEvent,
+} from './asset-download'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -57,6 +62,87 @@ describe('attempt-scoped asset recovery', () => {
     second.close()
     await newDownload
     expect(active.size).toBe(0)
+  })
+
+  it('reserves a single allowance across synchronous work and async fetches', async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    const session = new AssetDownloadSession(undefined, async () => {
+      calls++
+      return new Response('', { status: 503 })
+    })
+    const worker = session.reserveRetries()
+    const concurrent = session.reserveRetries()
+    expect(worker.limit).toBe(8)
+    expect(concurrent.limit).toBe(0)
+    await expect(session.read('https://assets.test/a', { asset: 'font' })).rejects.toBeInstanceOf(
+      AssetDownloadError,
+    )
+    expect(calls).toBe(1)
+    concurrent.settle(8) // An invalid reply cannot mint retries.
+    worker.settle(2)
+    worker.settle(8) // Duplicate terminal replies cannot mint retries either.
+    const result = session.read('https://assets.test/b', { asset: 'font' })
+    const rejection = expect(result).rejects.toBeInstanceOf(AssetDownloadError)
+    await vi.runAllTimersAsync()
+    await rejection
+    expect(calls).toBe(4)
+    expect(session.reserveRetries().limit).toBe(0)
+  })
+
+  it('renews a new attempt without accepting a late refund from the previous one', () => {
+    const session = new AssetDownloadSession()
+    const old = session.reserveRetries()
+    session.beginAttempt()
+    const current = session.reserveRetries()
+    expect(current.limit).toBe(8)
+    old.settle(8)
+    expect(session.reserveRetries().limit).toBe(0)
+    current.settle(3)
+    expect(session.reserveRetries().limit).toBe(3)
+  })
+
+  it('maps overlapping Worker IDs into distinct host requests and strips extra fields', () => {
+    const events: AssetDownloadEvent[] = []
+    const session = new AssetDownloadSession((event) => events.push(event))
+    const first = {},
+      second = {}
+    const start = {
+      requestId: 1,
+      asset: 'font',
+      phase: 'start',
+      receivedBytes: 0,
+      lastByteAgeMs: null,
+      retryCount: 0,
+    } as const
+    session.recordWorkerEvent(first, { ...start, url: 'private' } as AssetDownloadEvent)
+    session.recordWorkerEvent(second, start)
+    session.recordWorkerEvent(first, { ...start, phase: 'retry', retryCount: 1 })
+    session.recordWorkerEvent(first, { ...start, phase: 'end', retryCount: 1 })
+    session.recordWorkerEvent(first, { ...start, phase: 'end', retryCount: 1 })
+    expect(events).toHaveLength(4)
+    expect(events[0]?.requestId).not.toBe(events[1]?.requestId)
+    expect(events[2]?.requestId).toBe(events[0]?.requestId)
+    expect(events[3]?.requestId).toBe(events[0]?.requestId)
+    expect(events.every((event) => !('url' in event))).toBe(true)
+    expect(isAssetDownloadEvent(start)).toBe(true)
+    for (const extra of [
+      { retryCount: 4 },
+      { asset: 'url' },
+      { receivedBytes: NaN },
+      { lastByteAgeMs: -1 },
+      { status: 0 },
+      { requestId: 0 },
+    ]) {
+      expect(isAssetDownloadEvent({ ...start, ...extra })).toBe(false)
+    }
+  })
+
+  it('returns an unused reservation for a legacy Worker reply', () => {
+    const session = new AssetDownloadSession()
+    const worker = session.reserveRetries()
+    worker.settle()
+    expect(session.reserveRetries().limit).toBe(8)
   })
 
   it('keeps an unknown-length download alive beyond 180 seconds while bytes arrive', async () => {

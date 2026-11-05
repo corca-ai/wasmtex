@@ -35,6 +35,7 @@ RUN mkdir -p /build /dist
 COPY kpse-hook.c                 /src/kpse-hook.c
 COPY library.js                  /src/library.js
 COPY bibtex8-entry.c             /src/bibtex8-entry.c
+COPY asset-download.js /src/asset-download.js
 COPY bibtex8-worker.js           /src/bibtex8-worker.js
 COPY build-bibtex8.sh            /src/build-bibtex8.sh
 

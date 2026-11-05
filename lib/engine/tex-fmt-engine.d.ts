@@ -1,5 +1,5 @@
 import { CompileResult, CompletionSnapshotProfile, EngineStatus, ResolverEvidenceReport, TexliveVersion, WarmupCache } from '../types.js';
-import { AssetDownloadEvent } from './asset-download.js';
+import { AssetDownloadEvent, AssetDownloadSession } from './asset-download.js';
 import { CompileEngine } from './compile-engine.js';
 import { WasmTexEngineOptions } from './wasmtex-engine.js';
 import { CompileWorkerDriver } from './wasmtex-worker.js';
@@ -131,13 +131,15 @@ export declare abstract class BaseTexFmtEngine implements CompileEngine {
     protected readonly resolverProfile: CompletionSnapshotProfile;
     onAssetDownload?: (event: AssetDownloadEvent) => void;
     protected downloadAbort: AbortController;
-    private downloads;
+    protected downloads: AssetDownloadSession;
     onProgress?: (progress: number) => void;
     onFileDownload?: (filename: string) => void;
     protected constructor(tex: CompileWorkerDriver, fmtFile: string, formatUrl?: string, warmup?: TexFmtWarmupPlan, persistentCache?: {
         version: TexliveVersion;
         texliveUrl: string;
     }, resolverProfile?: CompletionSnapshotProfile, suppliedWarmup?: WarmupCache);
+    /** @internal Share the compiler's allowance with its synchronous Worker. */
+    setAssetDownloadSession(session: AssetDownloadSession): void;
     abstract init(): Promise<void>;
     abstract compile(): Promise<CompileResult>;
     abstract flushCache(): Promise<void>;

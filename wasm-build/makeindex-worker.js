@@ -87,16 +87,12 @@ function kpse_find_file_impl(nameptr, format, _mustexist) {
   function tryFetch(name) {
     var url = self.texlive_endpoint + "pdftex/" + format + "/" + name;
     self.postMessage({ "cmd": "downloading", "file": name });
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, false);
-    xhr.timeout = 30000;
-    xhr.responseType = "arraybuffer";
-    try { xhr.send(); return xhr; } catch (err) { return null; }
+    return self.wasmtexDownloadAsset(url, format);
   }
 
   var xhr = tryFetch(reqname);
   // Some object stores answer a missing key with 403 (not 404); retry the bare name.
-  if (xhr && xhr.status >= 400 && reqname.includes(".")) {
+  if (xhr && xhr.status === 404 && reqname.includes(".")) {
     var bare = reqname.substring(0, reqname.lastIndexOf("."));
     var retryXhr = tryFetch(bare);
     if (retryXhr && retryXhr.status === 200) { xhr = retryXhr; reqname = bare; }
