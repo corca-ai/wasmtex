@@ -1,3 +1,4 @@
+import { AssetDownloadEvent } from './engine/asset-download.js';
 import { AccessibleExportOptions } from './engine/accessible-export.js';
 import { BackendRegistry } from './engine/backend-registry.js';
 import { EngineDetection, EngineOption } from './engine/engine-select.js';
@@ -5,6 +6,7 @@ import { HeapCheckpointOptions } from './engine/heap-checkpoints.js';
 import { TikzExternalizationOptions } from './engine/tikz-externalization.js';
 import { ProjectIndex } from './lsp/project-index.js';
 import { AccessibleExportResult, CompileResult, CompilerRetentionStats, CompletionSnapshotState, LoadProgressEvent, PagePreviewResult, PreviewCompileResult, TexliveVersion, WarmupCache } from './types.js';
+export type { AssetDownloadEvent } from './engine/asset-download.js';
 export type { BackendStageContract, ToolBackend, WasmTexBackendStages } from './backend-api.js';
 export * from './backend-api.js';
 export { BackendRegistry, BIBER_STAGE, BIBTEX_STAGE, INDEX_STAGE } from './backend-api.js';
@@ -65,6 +67,7 @@ export interface WasmTexCompilerOptions {
     /** Called as the engine loads: the format download percentage and every TeX Live
      *  file fetched on demand. Hosts render a progress bar or the current file name
      *  instead of a blank wait. Warmup has its own `onProgress` (files done / total). */
+    onAssetDownload?: (event: AssetDownloadEvent) => void;
     onLoadProgress?: (event: LoadProgressEvent) => void;
     /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
      *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),

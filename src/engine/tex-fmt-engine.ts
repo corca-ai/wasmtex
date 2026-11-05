@@ -21,8 +21,8 @@ import type {
   TexliveVersion,
   WarmupCache,
 } from '../types'
+import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
 import { fetchBloomFilter } from './bloom-filter'
-
 import type { CompileEngine } from './compile-engine'
 import { buildDependencyGraph } from './dependency-graph'
 import { engineFormatUrl, engineWorkerUrl, formatAssetBase } from './engine-assets'
@@ -274,6 +274,9 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
    *  PersistState; inferred so this engine and WasmTexPdftexEngine don't share an import block). */
   private readonly persist = { downloadCount: 0, lastPersisted: -1, inFlight: false }
   protected readonly resolverProfile: CompletionSnapshotProfile
+  public onAssetDownload?: (event: AssetDownloadEvent) => void
+  protected downloadAbort = new AbortController()
+  private downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
   public onProgress?: (progress: number) => void
   public onFileDownload?: (filename: string) => void
 
@@ -312,6 +315,8 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
    *  worker is ready. A populated durable cache (a prior session) is preferred
    *  over a CDN prefetch, so return visits do ~zero network. */
   protected async initTex(): Promise<TexFmtWarmSet[]> {
+    this.downloadAbort = new AbortController()
+    this.downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
     this.tex.onFileDownload = (f) => {
       this.persist.downloadCount++
       this.onFileDownload?.(f)
@@ -322,13 +327,12 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
     // Kick off network/IndexedDB reads immediately; they need no worker.
     const fmtP = this.preloadFormat()
     const initP = this.tex.init()
-    const durable = await this.loadDurable()
-    const assets =
+    const assetsP = this.loadDurable().then((durable) =>
       durable && durable.files.length > 0
         ? this.durableToAssets(durable)
-        : await this.fetchWarmupAssets()
-    await initP
-    await fmtP
+        : this.fetchWarmupAssets(),
+    )
+    const [, , assets] = await Promise.all([fmtP, initP, assetsP])
     const warmSets = [assets]
     if (this.suppliedWarmup) {
       warmSets.push({
@@ -394,8 +398,8 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
   /** Fetch a prebuilt format asset into {@link fmtBytes} so the first compile
    *  skips the expensive per-session `compileformat`. Prefers a gzipped
    *  `<fmt>.gz` (format files are large and compress ~5×), decompressing in the
-   *  browser; falls back to the plain `.fmt`. Best-effort: a missing or failed
-   *  fetch leaves `fmtBytes` null and {@link ensureFormat} builds it. */
+   *  browser; falls back to the plain `.fmt`. Only an absent
+   *  format leaves `fmtBytes` null and {@link ensureFormat} builds it. */
   private async preloadFormat(): Promise<void> {
     if (!this.formatUrl || this.fmtBytes) return
     const gzBytes = await this.tryPreloadGzFormat()
@@ -403,14 +407,33 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
       this.fmtBytes = gzBytes
       return
     }
-    try {
-      const resp = await fetch(this.formatUrl)
-      if (!resp.ok) return
-      const bytes = await readResponseWithProgress(resp, this.onProgress)
-      if (this.looksLikeFormat(bytes)) this.fmtBytes = bytes
-    } catch {
-      // No prebuilt format available — ensureFormat() builds one on first compile.
-    }
+    const bytes = await this.downloadFormatBytes(this.formatUrl)
+    if (bytes === null) return
+    this.fmtBytes = bytes
+  }
+
+  private downloadFormatBytes(url: string, compressed = false) {
+    return this.downloads.read(url, {
+      asset: 'format',
+      signal: this.downloadAbort.signal,
+      validate: async (bytes) => {
+        if (compressed && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+          const stream = new Response(bytes as BodyInit).body?.pipeThrough(
+            new DecompressionStream('gzip'),
+          )
+          if (stream)
+            bytes = await readResponseWithProgress(
+              new Response(stream),
+              undefined,
+              undefined,
+              this.downloadAbort.signal,
+            )
+        }
+        if (!this.looksLikeFormat(bytes)) throw new AssetDownloadError('invalid')
+        return bytes
+      },
+      ...(this.onProgress ? { onPercent: this.onProgress } : {}),
+    })
   }
 
   /** Fetch & decompress the gzipped `<fmt>.gz` variant, or null to fall back to the plain
@@ -420,28 +443,12 @@ export abstract class BaseTexFmtEngine implements CompileEngine {
    *  and suppressing the plain-.fmt fallback. Mirrors fetchGzWithFallback's gate. */
   private async tryPreloadGzFormat(): Promise<Uint8Array | null> {
     if (!this.formatUrl || typeof DecompressionStream === 'undefined') return null
-    try {
-      const gz = await fetch(`${this.formatUrl}.gz`)
-      if (!gz.ok) return null
-      // Progress reflects the (compressed) transfer; decompress after.
-      let bytes = await readResponseWithProgress(gz, this.onProgress)
-      // The server may serve `.gz` raw (gzip magic 1f 8b) or already decode it via
-      // Content-Encoding; only decompress when it's still gzip.
-      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        const stream = new Response(bytes as BodyInit).body?.pipeThrough(
-          new DecompressionStream('gzip'),
-        )
-        if (stream) bytes = new Uint8Array(await new Response(stream).arrayBuffer())
-      }
-      return this.looksLikeFormat(bytes) ? bytes : null
-    } catch {
-      return null // fall through to the uncompressed format
-    }
+    return this.downloadFormatBytes(`${this.formatUrl}.gz`, true)
   }
 
   /** Guard against a server returning 200 + an HTML/SPA-fallback page for a
    *  missing format asset: a real `.fmt` is multi-MB and not HTML. Rejecting it
-   *  keeps {@link ensureFormat} on the graceful build-from-source path. */
+   *  fails initialization instead of silently generating a replacement. */
   private looksLikeFormat(bytes: Uint8Array): boolean {
     return bytes.length > 65536 && bytes[0] !== 0x3c /* '<' */
   }

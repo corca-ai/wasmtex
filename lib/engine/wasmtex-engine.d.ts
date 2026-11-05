@@ -1,4 +1,5 @@
 import { CachedTexliveFile, CompileResult, CompletionSnapshotProfile, TexliveFileEntry, TexliveVersion, WarmupCache } from '../types.js';
+import { AssetDownloadEvent } from './asset-download.js';
 import { BaseWorkerEngine } from './base-worker-engine.js';
 import { CompileEngine } from './compile-engine.js';
 import { EngineCompletionObservation } from './completion-snapshot.js';
@@ -149,6 +150,9 @@ export declare class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage>
     private readonly persist;
     private readonly resolver;
     onFileDownload?: (filename: string) => void;
+    onAssetDownload?: (event: AssetDownloadEvent) => void;
+    private downloadAbort;
+    private downloads;
     constructor(options?: WasmTexEngineOptions);
     init(): Promise<void>;
     private prepareInitInputs;

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WasmTexPdftexEngine } from './wasmtex-engine'
 import { type EngineWorker, setWorkerFactory } from './worker-host'
 
-function boot() {
+function boot(formatResult = 'ok') {
   const commands: string[] = []
   const worker: EngineWorker = {
     onmessage: null,
@@ -15,7 +15,7 @@ function boot() {
         data: {
           ...message,
           cmd: message.cmd === 'compilelatex' ? 'compile' : message.cmd,
-          result: 'ok',
+          result: message.cmd === 'loadformat' ? formatResult : 'ok',
           status: 0,
         },
       })
@@ -25,7 +25,10 @@ function boot() {
   return { worker, restore, commands }
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 
 describe('pdfTeX startup scheduling', () => {
   it('downloads format, map and bloom while WASM boots, but installs only after ready', async () => {
@@ -71,9 +74,12 @@ describe('pdfTeX startup scheduling', () => {
     }
   })
 
-  it('allows demand loading when startup downloads fail', async () => {
+  it('allows demand loading when optional startup assets are absent', async () => {
     const host = boot()
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 404 })),
+    )
     const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/' })
     try {
       const initializing = engine.init()
@@ -85,6 +91,24 @@ describe('pdfTeX startup scheduling', () => {
       host.restore()
     }
   })
+})
+
+it('does not turn an exhausted network retry into a missing format', async () => {
+  vi.useFakeTimers()
+  const host = boot()
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
+  const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/' })
+  try {
+    const initializing = engine.init()
+    const rejected = expect(initializing).rejects.toMatchObject({ failure: 'network' })
+    host.worker.onmessage?.({ data: { result: 'ok' } })
+    await vi.runAllTimersAsync()
+    await rejected
+    expect(host.commands).toEqual([])
+  } finally {
+    engine.terminate()
+    host.restore()
+  }
 })
 
 describe('pdfTeX speculative preparation lifetime', () => {
@@ -145,4 +169,23 @@ describe('pdfTeX speculative preparation lifetime', () => {
       host.restore()
     }
   })
+})
+
+it('rejects an explicit engine format-installation error response', async () => {
+  const host = boot('error')
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(new Uint8Array([1, 2, 3]))),
+  )
+  const engine = new WasmTexPdftexEngine({ assetBaseUrl: '/' })
+  try {
+    const initializing = engine.init()
+    host.worker.onmessage?.({ data: { result: 'ok' } })
+    await expect(initializing).rejects.toMatchObject({ failure: 'invalid' })
+    expect(host.commands).toContain('loadformat')
+    expect(host.commands).not.toContain('compileformat')
+  } finally {
+    engine.terminate()
+    host.restore()
+  }
 })

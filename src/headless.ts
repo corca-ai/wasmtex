@@ -1,3 +1,7 @@
+import { AssetDownloadError, type AssetDownloadEvent } from './engine/asset-download'
+
+export type { AssetDownloadEvent } from './engine/asset-download'
+
 import type { AccessibleExportOptions, DocumentMetadataInjection } from './engine/accessible-export'
 import {
   type BackendRegistry,
@@ -377,6 +381,7 @@ export interface WasmTexCompilerOptions {
   /** Called as the engine loads: the format download percentage and every TeX Live
    *  file fetched on demand. Hosts render a progress bar or the current file name
    *  instead of a blank wait. Warmup has its own `onProgress` (files done / total). */
+  onAssetDownload?: (event: AssetDownloadEvent) => void
   onLoadProgress?: (event: LoadProgressEvent) => void
   /** Which TeX engine to use. `'auto'` (default) detects the engine from the main
    *  file (a `% !TEX program` comment, or fontspec/unicode-math/CJK/lua packages),
@@ -602,6 +607,7 @@ export class WasmTexCompiler {
    *  by the factory). */
   /** Forward the engine's load callbacks to the host as `LoadProgressEvent`s. */
   private attachLoadProgress(engine: CompileEngine): void {
+    engine.onAssetDownload = (event) => this.opts.onAssetDownload?.(event)
     const listener = this.opts.onLoadProgress
     if (!listener) return
     let count = 0
@@ -726,7 +732,7 @@ export class WasmTexCompiler {
       ;(await this.operations.observe(this.syncAllFilesToEngine())).resume()
     } catch (err) {
       this.operations.assertCurrent()
-      if (this.detection.engine === 'pdflatex') throw err
+      if (this.detection.engine === 'pdflatex' || err instanceof AssetDownloadError) throw err
       // Unicode engine artifact missing/broken — surface an actionable result.
       this.unavailable = this.detection
     }

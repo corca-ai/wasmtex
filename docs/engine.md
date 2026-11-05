@@ -119,7 +119,12 @@ a PDF); when the artifact is absent, routing to it degrades gracefully.
 
 **Prebuilt format (cold-start fast path).** Initialization fetches the selected
 format in parallel with worker boot. A valid prebuilt format avoids generating
-one on the first compile. Missing or invalid data falls back to format generation;
+one on the first compile. Only a missing prebuilt format permits format generation;
+network, permission and corrupt-format failures reject initialization. Format/map
+transfers use a byte-progress idle deadline and bounded same-URL retries. Healthy
+transfers have no fixed total-duration cap in the SDK reader. The host must use
+`onAssetDownload` to distinguish these waits from its own engine watchdog.
+Synchronous on-demand worker requests retain their separate transport boundary;
 optimization qualification must verify that the original format was actually used.
 
 Build workflows can generate formats for a new annual source. Transparent engine

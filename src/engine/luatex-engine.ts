@@ -238,6 +238,7 @@ export class WasmTexLuatexEngine extends BaseTexFmtEngine {
   }
 
   terminate(): void {
+    this.downloadAbort.abort()
     this.tex.terminate()
   }
 }

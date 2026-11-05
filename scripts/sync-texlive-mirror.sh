@@ -16,7 +16,10 @@
 #   TEXMF_ARCHIVE             Exact texmf archive used for TEXMF_DIST
 #   TEXLIVE_TLPDB             Existing texlive.tlpdb (optional)
 #   TEXLIVE_METADATA_ARCHIVE  Exact extra archive containing TEXLIVE_TLPDB
-#   TEXLIVE_OBJECT_BUCKET     R2 destination bucket
+#   TEXLIVE_OBJECT_PROVIDER   r2 (default) or s3
+#   TEXLIVE_OBJECT_BUCKET     Destination bucket (required for s3)
+#   TEXLIVE_OBJECT_REGION     AWS region (required for s3)
+#   TEXLIVE_OBJECT_PROFILE    Optional local CLI profile for the selected provider
 #   TEXLIVE_OBJECT_ENDPOINT   R2 endpoint; required for upload
 #   TEXLIVE_OBJECT_PREFIX     Optional immutable prefix before the snapshot
 #   TEXLIVE_R2_PROFILE        Optional local CLI profile containing R2 credentials
@@ -59,9 +62,7 @@ elif [ "$SOURCE_TYPE" != tlnet-repository ]; then
 fi
 
 OBJECT_BUCKET="${TEXLIVE_OBJECT_BUCKET:-corca-texlive-production}"
-OBJECT_ENDPOINT="${TEXLIVE_OBJECT_ENDPOINT:-}"
 OBJECT_PREFIX="${TEXLIVE_OBJECT_PREFIX:-}"
-OBJECT_PROFILE="${TEXLIVE_R2_PROFILE:-}"
 WORK_DIR="${WORK_DIR:-/tmp/texlive-r2}"
 RELEASE_ROOT="$WORK_DIR/release"
 OBJECT_PREFIX="${OBJECT_PREFIX#/}"
@@ -74,16 +75,7 @@ fi
 DEPLOYED_TEXLIVE_URL="${TEXLIVE_DEPLOYED_URL:-}"
 
 object_store() {
-  if [ -z "$OBJECT_ENDPOINT" ]; then
-    echo "TEXLIVE_OBJECT_ENDPOINT is required for R2 access" >&2
-    return 1
-  fi
-  case "$OBJECT_ENDPOINT" in
-    https://*.r2.cloudflarestorage.com|https://*.r2.cloudflarestorage.com/) ;;
-    *) echo "TEXLIVE_OBJECT_ENDPOINT must be a Cloudflare R2 endpoint" >&2; return 1 ;;
-  esac
-  set -- aws ${OBJECT_PROFILE:+--profile "$OBJECT_PROFILE"} --endpoint-url "$OBJECT_ENDPOINT" "$@"
-  "$@"
+  node "$SCRIPT_DIR/object-store.mjs" "$@"
 }
 
 DO_UPLOAD=false

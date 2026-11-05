@@ -7,6 +7,7 @@ import type {
   TexliveVersion,
   WarmupCache,
 } from '../types'
+import { AssetDownloadError, type AssetDownloadEvent, AssetDownloadSession } from './asset-download'
 import { BaseWorkerEngine, resolveTexliveUrl } from './base-worker-engine'
 import { fetchBloomFilter } from './bloom-filter'
 import type { CompileEngine } from './compile-engine'
@@ -23,7 +24,6 @@ import {
   formatAssetBase,
   normalizedFormatUrl,
 } from './engine-assets'
-import { readResponseWithProgress } from './fetch-gz'
 import { enrichGlyphSuggestions } from './glyph-suggestions'
 import { buildDiagnostics, parseGlyphGaps, parseTexErrors } from './parse-errors'
 import { type PersistState, persistIfNeeded } from './persist-watermark'
@@ -303,6 +303,10 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   public onFileDownload?: (filename: string) => void
 
+  onAssetDownload?: (event: AssetDownloadEvent) => void
+  private downloadAbort = new AbortController()
+  private downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
+
   constructor(options?: WasmTexEngineOptions) {
     const base = options?.assetBaseUrl ?? import.meta.env.BASE_URL
     const version = options?.texliveVersion ?? '2025'
@@ -357,6 +361,8 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
       throw new Error('Engine already initialized')
     }
 
+    this.downloadAbort = new AbortController()
+    this.downloads = new AssetDownloadSession((event) => this.onAssetDownload?.(event))
     this.status = 'loading'
     this.transportPrefetchSupported = false
     this.transportPrefetchAttempted = false
@@ -417,15 +423,19 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
     const format = this.skipFormatPreload
       ? Promise.resolve(null)
       : this.fetchGzWithProgress(this.formatPath)
-    const warmup = await this.resolveWarmupCache()
-    const [formatBytes, map, bloom] = await Promise.all([
-      format,
-      this.warmupPositiveSources.has('11/pdftex.map')
-        ? Promise.resolve(null)
-        : this.fetchGzWithProgress(`${this.effectiveTexliveUrl}pdftex/11/pdftex.map`, false),
-      warmup ? Promise.resolve(null) : fetchBloomFilter(this.effectiveTexliveUrl).catch(() => null),
-    ])
-    return { warmup, format: formatBytes, map, bloom }
+    const assets = this.resolveWarmupCache().then(async (warmup) => {
+      const [map, bloom] = await Promise.all([
+        this.warmupPositiveSources.has('11/pdftex.map')
+          ? Promise.resolve(null)
+          : this.fetchGzWithProgress(`${this.effectiveTexliveUrl}pdftex/11/pdftex.map`, false),
+        warmup
+          ? Promise.resolve(null)
+          : fetchBloomFilter(this.effectiveTexliveUrl).catch(() => null),
+      ])
+      return { warmup, map, bloom }
+    })
+    const [formatBytes, prepared] = await Promise.all([format, assets])
+    return { ...prepared, format: formatBytes }
   }
 
   private async loadEngineBuildId(): Promise<void> {
@@ -518,11 +528,14 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
 
   private async preloadFormat(buf: ArrayBuffer | null): Promise<void> {
     if (!buf) return
-    try {
-      await this.postMessageWithResponse({ cmd: 'loadformat', data: buf }, 'cmd:loadformat', [buf])
-    } catch {
-      // Format not available — worker will try building one at compile time
-    }
+    // Absence was handled before this point. A rejected supplied format is a
+    // corrupt/incompatible input, not permission to generate a replacement.
+    const response = await this.postMessageWithResponse(
+      { cmd: 'loadformat', data: buf },
+      'cmd:loadformat',
+      [buf],
+    )
+    if (response.result !== 'ok') throw new AssetDownloadError('invalid')
   }
 
   /** Pre-load a texlive file into the worker's MEMFS cache. */
@@ -623,14 +636,12 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
    * Fetch a URL with optional download-progress tracking for the .fmt preload.
    */
   private async fetchGzWithProgress(url: string, progress = true): Promise<ArrayBuffer | null> {
-    try {
-      const resp = await fetch(url)
-      if (!resp.ok) return null
-      const bytes = await readResponseWithProgress(resp, progress ? this.onProgress : undefined)
-      return bytes.buffer as ArrayBuffer
-    } catch {
-      return null
-    }
+    const bytes = await this.downloads.read(url, {
+      asset: progress ? 'format' : 'data',
+      signal: this.downloadAbort.signal,
+      ...(progress && this.onProgress ? { onPercent: this.onProgress } : {}),
+    })
+    return bytes ? (bytes.buffer as ArrayBuffer) : null
   }
 
   async mkdir(path: string): Promise<void> {
@@ -830,6 +841,7 @@ export class WasmTexPdftexEngine extends BaseWorkerEngine<WorkerMessage> impleme
   }
 
   override terminate(): void {
+    this.downloadAbort.abort()
     this.transportPrefetchAbort?.abort()
     super.terminate()
   }

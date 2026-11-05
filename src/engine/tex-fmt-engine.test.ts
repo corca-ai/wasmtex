@@ -1,7 +1,99 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { WasmTexCompiler } from '../headless'
+import type { AssetDownloadEvent } from './asset-download'
 import { WasmTexLuatexEngine } from './luatex-engine'
 import { setWorkerFactory } from './worker-host'
 import { WasmTexXetexEngine } from './xetex-engine'
+
+describe('prebuilt format failure classification', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it.each([
+    403, 200,
+  ])('refuses a failed gzip representation (%s) without a raw-format fallback', async (status) => {
+    installStubWorkerFactory()
+    const requested: string[] = []
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requested.push(url)
+      return url.endsWith('.fmt.gz')
+        ? new Response('<html>not a format</html>', {
+            status,
+            headers: { 'content-type': 'text/html' },
+          })
+        : new Response(null, { status: 404 })
+    })
+    const engine = new WasmTexLuatexEngine({ assetBaseUrl: 'https://x/', texliveVersion: '2025' })
+    try {
+      await expect(engine.init()).rejects.toMatchObject({
+        failure: status === 403 ? 'http' : 'invalid',
+      })
+      expect(requested.filter((url) => url.endsWith('.fmt.gz'))).toHaveLength(1)
+      expect(requested.some((url) => url.endsWith('.fmt'))).toBe(false)
+    } finally {
+      engine.terminate()
+    }
+  })
+
+  it.each([
+    'raw',
+    'gzip',
+  ])('reports corrupt %s bytes as one classified terminal failure through headless init', async (representation) => {
+    installStubWorkerFactory()
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (representation === 'raw' && url.endsWith('.fmt'))
+        return new Response(new Uint8Array([1, 2, 3]))
+      if (representation === 'gzip' && url.endsWith('.fmt.gz'))
+        return new Response(new Uint8Array([0x1f, 0x8b, 0]))
+      return new Response(null, { status: 404 })
+    })
+    const events: AssetDownloadEvent[] = []
+    const compiler = new WasmTexCompiler({
+      engine: 'lualatex',
+      assetBaseUrl: 'https://x/',
+      texliveVersion: '2025',
+      files: { 'main.tex': '\\documentclass{article}\\begin{document}Hi\\end{document}' },
+      onAssetDownload: (event) => events.push(event),
+    })
+    try {
+      await expect(compiler.init()).rejects.toMatchObject({ failure: 'invalid' })
+      const failure = events.find((event) => event.phase === 'end' && event.failure === 'invalid')
+      expect(failure).toBeDefined()
+      expect(
+        events.filter((event) => event.requestId === failure?.requestId && event.phase === 'end'),
+      ).toEqual([failure])
+      expect(events.some((event) => event.phase === 'retry')).toBe(false)
+    } finally {
+      compiler.dispose()
+    }
+  })
+
+  it('reports byte progress to its compiler even when the format has no Content-Length', async () => {
+    installStubWorkerFactory()
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      if (!String(input).endsWith('.fmt')) return new Response(null, { status: 404 })
+      const response = streamingFormatResponse(131072)
+      response.headers.delete('content-length')
+      return response
+    })
+    const events: AssetDownloadEvent[] = []
+    const engine = new WasmTexLuatexEngine({ assetBaseUrl: 'https://x/', texliveVersion: '2025' })
+    engine.onAssetDownload = (event) => events.push(event)
+    try {
+      await engine.init()
+      expect(
+        events.filter((event) => event.phase === 'bytes').map((event) => event.receivedBytes),
+      ).toEqual([32768, 65536, 98304, 131072])
+      expect(events.every((event) => !('url' in event) && !('file' in event))).toBe(true)
+    } finally {
+      engine.terminate()
+    }
+  })
+})
 
 // Stub worker: as soon as the driver assigns `onmessage`, deliver the WASM
 // postRun `{ result: 'ok' }` so init() resolves. postMessage is a no-op.
