@@ -84,9 +84,10 @@ a tag already carries, because a published release is immutable.
 The release ID and the archive hash come from the build and the archive; the
 commands above only record them consistently.
 
-For a newly built pdfTeX/controller candidate, dispatch *Build corresponding
-source* with `texlive_year` and `pdftex_run` before registration. This changes
-only the paired pdfTeX/BibTeX download in the ephemeral workflow checkout;
+For newly built engine/controller candidates, dispatch *Build corresponding
+source* with `texlive_year` and the applicable `pdftex_run`, `luatex_run`,
+`xetex_run`, `bibtex8_run`, or `makeindex_run` before registration. These inputs
+replace only the named component runs in the ephemeral workflow checkout;
 unaffected families, mirrors and original format origins remain pinned. The
 candidate is marked `development-only`, with a promotion blocker and no stale
 corresponding-source binding. `publish` may attach the verified source-only

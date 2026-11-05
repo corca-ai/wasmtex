@@ -21,6 +21,12 @@ for (const [receipt, actualDirectory] of [[engine, assets], [formats, baseline]]
   const failures = validateBuildReceipt(receipt, { config, actualDirectory })
   if (failures.length) throw new Error(failures.join('\n'))
 }
+// A pinned baseline may be the engine run itself. Both directories have been
+// verified above; preserve its original receipt bytes and registered identity.
+if (JSON.stringify(engine) === JSON.stringify(formats)) {
+  console.log(`${args['--year']} ${engine.family}: format already belongs to this engine receipt`)
+  process.exit(0)
+}
 const composed = composeFormatReceipt({ engine, formats, config })
 for (const file of composed.files) {
   if (/\.fmt(?:\.gz)?$/.test(file.name)) copyFileSync(join(baseline, file.name), join(assets, file.name))

@@ -38,6 +38,8 @@ test('a new run keeps its format reused unless the release rebuilds it', () => {
   const license = JSON.parse(readFileSync(new URL('../public/wasmtex/2026/LICENSE-MANIFEST.json', import.meta.url)))
   const reuse = { family: 'luahbtex', runId: 1, artifact: 'wasm-luatex-2026' }
   const pinned = structuredClone(components)
+  pinned.years['2026'].reusedFormats = pinned.years['2026'].reusedFormats.filter(entry => entry.family !== 'luahbtex')
+  const withoutReuse = structuredClone(pinned)
   pinned.years['2026'].reusedFormats.push(reuse)
   const families = (result) => result.components.years['2026'].reusedFormats.map((entry) => entry.family)
 
@@ -47,7 +49,7 @@ test('a new run keeps its format reused unless the release rebuilds it', () => {
   assert.deepEqual(families(rebuilt), ['pdftex', 'xetex'])
 
   assert.throws(
-    () => prepareEngineSourceCandidate(components, license, '2026', undefined, '987654321'),
+    () => prepareEngineSourceCandidate(withoutReuse, license, '2026', undefined, '987654321'),
     /would change its format bytes/,
   )
   assert.doesNotThrow(
@@ -73,4 +75,19 @@ test('rejects malformed years, unsafe runs, annual mismatch and invalid componen
   assert.throws(() => prepareEngineSourceCandidate({}, license, '2026', '123'), /schemaVersion/)
   const conflicting = String(components.years['2026'].downloads.find((entry) => entry.id === 'xetex').runId)
   assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', conflicting), /five independently/)
+})
+
+
+test('all worker families can be sourced together without changing mirror or formats', () => {
+  const license = { texliveVersion: '2026' }
+  const result = prepareEngineSourceCandidate(components, license, '2026', '101', '102', [], { xetex: '103', bibtex8: '104', makeindex: '105' })
+  const release = result.components.years['2026']
+  assert.deepEqual(release.downloads.map(x => x.runId).sort(), [101, 102, 103, 104, 105])
+  assert.deepEqual(release.reusedFormats, components.years['2026'].reusedFormats)
+  assert.deepEqual(release.mirror, components.years['2026'].mirror)
+  assert.equal(result.license.releaseStatus, 'development-only')
+  assert.equal(result.license.correspondingSource, undefined)
+  assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', undefined, undefined, [], { xetex: 'invalid' }), /positive safe integer/)
+  assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', undefined, undefined, [], { unknown: '123' }), /unknown candidate family/)
+  assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', undefined, undefined, ['bibtex8'], { bibtex8: '123' }), /needs a new run/)
 })

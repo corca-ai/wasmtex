@@ -7,12 +7,15 @@ import { fileURLToPath } from 'node:url'
 import { validateEngineReleaseComponents } from './lib/engine-release-components.mjs'
 
 // `run` replaces the paired pdfTeX/BibTeX download and `luatexRun` the LuaHBTeX one;
-// either may be omitted, not both. A new run also builds a new format, so its family must
+// either may be omitted when another family is supplied. A new run also builds a new format, so its family must
 // keep a reused format or be named in `rebuiltFormats`: a change of format bytes, never
 // an optimization.
-export function prepareEngineSourceCandidate(components, license, year, run, luatexRun, rebuiltFormats = []) {
+export function prepareEngineSourceCandidate(components, license, year, run, luatexRun, rebuiltFormats = [], extraRuns = {}) {
   if (!['2025', '2026'].includes(year)) throw new Error('unsupported annual engine line')
-  const runs = [['pdftex-bibtex', run, 'pdftex', 'pdftex'], ['luahbtex', luatexRun, 'luatex', 'luahbtex']]
+  const extraFamilies = ['xetex', 'bibtex8', 'makeindex']
+  if (Object.keys(extraRuns).some((id) => !extraFamilies.includes(id))) throw new Error('unknown candidate family')
+  const runs = [['pdftex-bibtex', run, 'pdftex', 'pdftex'], ['luahbtex', luatexRun, 'luatex', 'luahbtex'],
+    ...extraFamilies.map((id) => [id, extraRuns[id], id, id === 'xetex' ? id : null])]
     .filter(([, value]) => value !== undefined)
   if (runs.length === 0) throw new Error('pdftex run must be a positive safe integer')
   for (const [, value, name] of runs) {
@@ -29,6 +32,7 @@ export function prepareEngineSourceCandidate(components, license, year, run, lua
     }
   }
   for (const [, , , family] of runs) {
+    if (family === null) continue
     const reused = release.reusedFormats?.some((entry) => entry.family === family)
     if (!reused && !rebuiltFormats.includes(family)) {
       throw new Error(`${family} has no reused format, so this run would change its format bytes`)
@@ -61,7 +65,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const luatexRun = process.env.LUATEX_RUN || undefined
   const rebuiltFormats = (process.env.REBUILT_FORMATS || '').split(',').filter(Boolean)
   const candidate = prepareEngineSourceCandidate(
-    read(componentsPath), read(licensePath), year, pdftexRun, luatexRun, rebuiltFormats,
+    read(componentsPath), read(licensePath), year, pdftexRun, luatexRun, rebuiltFormats, {
+      xetex: process.env.XETEX_RUN || undefined,
+      bibtex8: process.env.BIBTEX8_RUN || undefined,
+      makeindex: process.env.MAKEINDEX_RUN || undefined,
+    },
   )
   for (const [path, value] of [[componentsPath, candidate.components], [licensePath, candidate.license]]) {
     writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)

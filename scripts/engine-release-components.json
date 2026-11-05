@@ -55,6 +55,11 @@
           "family": "xetex",
           "runId": 33882993816,
           "artifact": "wasm-xetex"
+        },
+        {
+          "family": "luahbtex",
+          "runId": 41850257797,
+          "artifact": "wasm-luatex"
         }
       ]
     },
@@ -112,6 +117,11 @@
           "family": "xetex",
           "runId": 33885502236,
           "artifact": "wasm-xetex-2026"
+        },
+        {
+          "family": "luahbtex",
+          "runId": 41850257797,
+          "artifact": "wasm-luatex-2026"
         }
       ]
     }
