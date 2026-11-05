@@ -1,0 +1,140 @@
+name: WASM Metafont (from source)
+
+# Builds Metafont and GFtoPK to WASM from the pinned texlive-source. The build tangles
+# both natively inside the Docker image, then compiles the generated C with emcc.
+on:
+  workflow_dispatch:
+    inputs:
+      texlive_year:
+        description: TeX Live engine year
+        required: true
+        type: choice
+        default: '2025'
+        options: ['2025', '2026']
+      mirror_revision:
+        description: Byte-derived immutable mirror revision
+        required: false
+        type: string
+      provenance_sha256:
+        description: SHA-256 of the mirror provenance manifest
+        required: false
+        type: string
+      texlive_url:
+        description: Exact immutable package-mirror URL qualified with this build
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'wasm-build/Dockerfile.metafont'
+      - 'wasm-build/build-metafont.sh'
+      - 'wasm-build/metafont-screen.c'
+      - 'wasm-build/metafont-bridge.js'
+      - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/metafont-library.js'
+      - 'wasm-build/texlive-source-*.ref'
+      - 'scripts/gen-engine-build-receipt.mjs'
+      - 'scripts/lib/engine-build-receipt.mjs'
+      - 'scripts/corresponding-source-2025.json'
+      - 'scripts/corresponding-source-2026.json'
+      - 'scripts/check-annual-engine-source.mjs'
+  pull_request:
+    paths:
+      - 'wasm-build/Dockerfile.metafont'
+      - 'wasm-build/build-metafont.sh'
+      - 'wasm-build/metafont-screen.c'
+      - 'wasm-build/metafont-bridge.js'
+      - 'wasm-build/kpse-hook.c'
+      - 'wasm-build/metafont-library.js'
+      - 'wasm-build/texlive-source-*.ref'
+
+jobs:
+  build-metafont:
+    runs-on: ubuntu-latest
+    # A dispatch builds the year it was asked for. A push builds every
+    # supported year, because a change to `wasm-build/` belongs to all of them
+    # and a default would silently build one: the job-name output fix (#107)
+    # was merged, built 2025 alone, and would have released an engine that
+    # still had the bug for every 2026 project.
+    strategy:
+      fail-fast: false
+      matrix:
+        texlive_year: ${{ fromJSON(inputs.texlive_year && format('["{0}"]', inputs.texlive_year) || '["2025","2026"]') }}
+    env:
+      TEXLIVE_YEAR: ${{ matrix.texlive_year }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve immutable build mirror
+        env:
+          INPUT_TEXLIVE_URL: ${{ inputs.texlive_url }}
+          INPUT_MIRROR_REVISION: ${{ inputs.mirror_revision }}
+          INPUT_PROVENANCE_SHA256: ${{ inputs.provenance_sha256 }}
+        run: node scripts/configure-engine-build-mirror.mjs
+
+      - name: Verify source licensing policy
+        run: node scripts/check-annual-engine-source.mjs "$TEXLIVE_YEAR"
+
+      - name: Verify release policy for the established 2025 line
+        if: env.TEXLIVE_YEAR == '2025' && github.event.repository.visibility == 'public'
+        run: node scripts/check-license-compliance.mjs 2025 --release
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --load \
+            -f wasm-build/Dockerfile.metafont \
+            --build-arg TEXLIVE_REF=$(cat "wasm-build/texlive-source-$TEXLIVE_YEAR.ref") \
+            -t metafont-wasm \
+            wasm-build/
+
+      - name: Run WASM build
+        timeout-minutes: 60
+        run: |
+          mkdir -p wasm-build/dist-metafont
+          docker run --platform linux/amd64 \
+            -v ${{ github.workspace }}/wasm-build/dist-metafont:/dist \
+            metafont-wasm
+
+      - uses: actions/setup-node@v7
+        with: { node-version: 24 }
+
+      - name: Smoke test (make a font in a worker scope against the mirror)
+        run: |
+          # A pull request builds against the registered mirror, which may predate Metafont source.
+          if curl -fsI "${TEXLIVE_URL}pdftex/13/plain.mf" > /dev/null; then
+            node scripts/smoke-metafont.mjs wasm-build/dist-metafont/wasmtex-metafont.js "$TEXLIVE_URL"
+          else
+            node -e "new Function(require('fs').readFileSync(process.argv[1], 'utf8'))" wasm-build/dist-metafont/wasmtex-metafont.js
+          fi
+
+      - name: Record exact Metafont build inputs and outputs
+        run: |
+          node scripts/gen-engine-build-receipt.mjs \
+            metafont wasm-build/dist-metafont wasm-build/dist-metafont/BUILD-RECEIPT.metafont.json \
+            wasmtex-metafont.js
+
+      - name: Upload Metafont WASM artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-metafont-2026' || 'wasm-metafont' }}
+          path: |
+            wasm-build/dist-metafont/wasmtex-metafont.js
+            wasm-build/dist-metafont/BUILD-RECEIPT.metafont.json
+          retention-days: 90
+
+      - name: Upload non-release Metafont link-map evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TEXLIVE_YEAR == '2026' && 'wasm-metafont-2026-link-map' || 'wasm-metafont-link-map' }}
+          path: |
+            wasm-build/dist-metafont/wasmtex-metafont.map
+            wasm-build/dist-metafont/wasmtex-gftopk.map
+          retention-days: 90
+
+      - name: List build outputs
+        if: always()
+        run: ls -lh wasm-build/dist-metafont/ 2>/dev/null || echo "No dist files"

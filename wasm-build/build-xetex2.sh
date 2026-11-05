@@ -158,6 +158,13 @@ WW="$WB/texk/web2c"
 NW="$NB/texk/web2c"
 [ -d "$WW" ] || { echo "web2c not configured"; tail -40 emmake-top.out; exit 1; }
 
+# XeTeX reads every font on disk as a last resort when a name matches nothing. Here
+# each read is a download, and xetexfontlist.txt already names every font, so a name
+# it lacks stops the search instead of fetching the whole library.
+FONT_MANAGER="$SRC/texk/web2c/xetexdir/XeTeXFontMgr_FC.cpp"
+grep -q '^        cachedAll = true;$' "$FONT_MANAGER" || { echo "XeTeXFontMgr_FC.cpp no longer has the last-resort scan"; exit 1; }
+sed -i 's/^        cachedAll = true;$/        break;/' "$FONT_MANAGER"
+
 echo "=== Phase 2e: point codegen at NATIVE tools, build xetex objects ==="
 # xetex's web2c/convert execs ./web2c/{web2c,fixwrites,splitup} by HARDCODED relative
 # path (ignoring make vars), and make rebuilds those as wasm — so rewrite convert to

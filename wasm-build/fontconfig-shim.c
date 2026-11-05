@@ -141,7 +141,12 @@ static void load_fontlist(void) {
     p->style = read_list(&cur, p->nstyle);
     p->nfull = read_int(&cur);
     p->full = read_list(&cur, p->nfull);
-    next_line(&cur); /* psName (XeTeX reads it from FreeType) */
+    /* A PostScript name matches like a full name, or only XeTeX's full scan would find it. */
+    char *psName = next_line(&cur);
+    if (psName && *psName) {
+      p->full = (char **)realloc(p->full, (size_t)(p->nfull + 1) * sizeof(char *));
+      p->full[p->nfull++] = strdup(psName);
+    }
     next_line(&cur); /* subFamily */
     p->weight = read_int(&cur);
     p->width = read_int(&cur);

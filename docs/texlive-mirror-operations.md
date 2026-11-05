@@ -76,6 +76,16 @@ export WORK_DIR=/verified/texlive-2025-final
 ./scripts/prepare-tlnet-snapshot.sh
 ```
 
+`WORK_DIR` must be on a case-sensitive volume. Flattened names can differ only by case
+(`Cherokee`, `cherokee`), so generation refuses any other, and on macOS it needs a
+case-sensitive APFS image.
+
+Every TeX Live run file is selected by `FORMAT_RULES` or named in `RUNTIME_EXCLUSIONS`
+with a reason, and generation fails on one that is neither: a new gap has to be decided
+instead of surfacing as a document that compiles wrong. Trees that kpathsea reaches only
+through the empty element of `TEXINPUTS` are marked `fallback`, so a name found in
+`tex/latex` or `tex/generic` keeps that file.
+
 The preparation installs source and documentation as evidence as well as runtime
 files and emits a materialization receipt for the exact installed tree. Export the
 printed `TEXMF_DIST`, `TEXLIVE_TLPDB`, and `TEXLIVE_MATERIALIZATION_RECEIPT`
@@ -103,6 +113,14 @@ the artifact checker owns these five generated/runtime files. When that artifact
 manifest is present, the provenance checker accepts its three `pdftex/` supplemental
 files only after checking their declared size and digest; any other unrecorded
 file still fails the exact-inventory gate.
+
+A revision that replaces a current one must keep every file of it. Run
+`node scripts/check-mirror-successor.mjs <old provenance> <new provenance>`, which also
+lists what the successor adds. When it passes, the snapshot's font databases, ICU data
+and `pdftex.map` may be copied byte for byte from the old snapshot, with their digests
+checked against its `snapshot-artifacts.json`, because the fonts they describe did not
+change. `icudt68l.dat` is stored gzipped, so request it with `Accept-Encoding: gzip` and
+publish it with `Content-Encoding: gzip`.
 
 ## R2 serving configuration
 

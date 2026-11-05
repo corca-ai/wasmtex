@@ -52,6 +52,12 @@ annual source config, and MIT license are additionally bundled under `assembly/`
 with verified hashes; those tools may be newer than either engine generation. Schema-1 receipts remain valid for ordinary
 builds; an assembly receipt never claims copied formats were newly generated.
 
+A successor mirror keeps every file of the one before it, so a format made from the
+old mirror stays valid. `formatMirrorAncestors` in the annual source config lists each
+proven pair, with the ancestor's revision and provenance digest and its `successor`
+revision, and `composeFormatReceipt` accepts only an exact pair. Prove one with
+`scripts/check-mirror-successor.mjs` before adding it.
+
 ## Release an engine, end to end
 
 For a transparent performance release, also follow the

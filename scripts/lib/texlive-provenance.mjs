@@ -31,6 +31,20 @@ const COMPLETION_METADATA_EXTENSIONS = new Set([
 ])
 const COMPLETION_METADATA_EXTRA_FILES = new Set(['dvipsnam.def', 'svgnam.def', 'x11nam.def'])
 
+const METAFONT_INPUT_EXTENSIONS = [
+  '.cal', '.cmn', '.def', '.gen', '.mac', '.map', '.mf', '.uni', '.xtr',
+]
+const MPTOPDF_SUPPORT_FILES = [
+  'supp-mis.mkii', 'supp-mis.tex', 'supp-mpe.mkii', 'supp-mpe.tex', 'supp-pdf.mkii', 'supp-pdf.tex',
+  'syst-tex.mkii',
+]
+const CMAP_NOTES = ['Makefile', 'README', 'README.md', 'cid2code.txt', 'cid_mapping.md']
+const OTHER_FORMAT_TREES = [
+  'amstex', 'cslatex', 'csplain', 'eplain', 'fontinst', 'hitex', 'jadetex', 'lollipop', 'mex',
+  'mltex', 'optex', 'platex', 'psizzl', 'ptex', 'startex', 'support', 'texinfo', 'texsis',
+  'uplatex', 'uptex', 'xmltex',
+]
+
 export const FORMAT_RULES = [
   {
     format: 26,
@@ -44,8 +58,13 @@ export const FORMAT_RULES = [
       'tex/lualatex',
     ],
   },
+  // TEXINPUTS ends in an empty element, so LaTeX reaches all of tex/ after the trees above:
+  // `\usepackage[IL2]{fontenc}` loads il2enc.def from tex/cslatex. Earlier trees keep a name.
+  { format: 26, roots: OTHER_FORMAT_TREES.map((tree) => `tex/${tree}`), fallback: true },
+  // pdftex.def reads these to place MetaPost figures; the rest of this tree is ConTeXt.
+  { format: 26, roots: ['tex/context/base/mkii'], files: MPTOPDF_SUPPORT_FILES },
   { format: 3, roots: ['fonts/tfm'], extensions: ['.tfm'], stripExtension: true },
-  { format: 32, roots: ['fonts/type1'], extensions: ['.pfb'] },
+  { format: 32, roots: ['fonts/type1'], extensions: ['.pfb', '.pfa'] },
   { format: 33, roots: ['fonts/vf'], extensions: ['.vf'], stripExtension: true },
   { format: 11, roots: ['fonts/map'], extensions: ['.map'] },
   { format: 11, roots: ['fonts/map/glyphlist'], extensions: ['.txt'] },
@@ -56,6 +75,58 @@ export const FORMAT_RULES = [
   { format: 51, roots: ['tex', 'scripts'], extensions: ['.lua'] },
   { format: 7, roots: ['bibtex/bst'], extensions: ['.bst'] },
   { format: 6, roots: ['bibtex/bib'], extensions: ['.bib'] },
+  { format: 13, roots: ['fonts/source', 'metafont'], extensions: METAFONT_INPUT_EXTENSIONS },
+  { format: 16, roots: ['metapost'] },
+  { format: 20, roots: ['fonts/ofm'], extensions: ['.ofm'], stripExtension: true },
+  { format: 23, roots: ['fonts/ovf'], extensions: ['.ovf'], stripExtension: true },
+  { format: 35, roots: ['makeindex'] },
+  {
+    format: 41,
+    roots: ['fonts/misc/xetex/fontmapping', 'fonts/map/dvips/greektonoi'],
+    extensions: ['.tec'],
+  },
+  { format: 45, roots: ['fonts/cmap'], skip: CMAP_NOTES },
+  // DNP.sfd has no license metadata, and no TeX Live font map names it.
+  { format: 46, roots: ['fonts/sfd'], extensions: ['.sfd'], skip: ['DNP.sfd'] },
+]
+
+// Every TeX Live run file is selected above or named here with the reason it stays
+// out. A class that is in neither fails mirror generation, so a new gap has to be
+// decided instead of surfacing as a document that compiles wrong.
+export const RUNTIME_EXCLUSIONS = [
+  { reason: 'ConTeXt', roots: ['tex/context', 'fonts/cid/context'] },
+  { reason: 'Lambda needs Omega, and has no license metadata', roots: ['tex/lambda'] },
+  { reason: 'the development LaTeX format', roots: ['tex/latex-dev'] },
+  { reason: 'Omega translation processes', roots: ['omega'] },
+  {
+    reason: 'host programs that do not run in the browser',
+    roots: ['scripts', 'asymptote', 'chktex', 'dvips', 'hbf2gf', 'psutils', 'tex4ht', 'texconfig',
+      'texdoc', 'texdoctk', 'ttf2pk', 'web2c', 'xdvi', 'xindy', 'mft'],
+  },
+  { reason: 'pTeX bibliography styles', roots: ['pbibtex'] },
+  // dvipdfmx.cfg sets the PDF version, paper and permissions of every XeLaTeX PDF.
+  { reason: 'dvipdfmx configuration the worker owns', roots: ['dvipdfmx'] },
+  { reason: 'BibTeX8 runs without a code page', roots: ['bibtex/csf'] },
+  { reason: 'documentation and sources shipped as run files', roots: ['doc', 'source', 'tlpkg'] },
+  {
+    reason: 'font data no engine here reads',
+    roots: ['fonts/type3', 'fonts/lig', 'fonts/ovp', 'fonts/opl', 'fonts/pk', 'fonts/cid',
+      'fonts/misc/cjk-gs-integrate', 'fonts/misc/cns', 'fonts/misc/xetex/fontmapping'],
+    extensions: ['.t3', '.lig', '.ovp', '.opl', '.pk', '.cidmap', '.dat', '.bin', '.hbf', '.map',
+      '.lua'],
+  },
+  {
+    reason: 'alternate font encodings for other tools',
+    roots: ['fonts'],
+    extensions: ['.afm.gz', '.aft', '.ali', '.eot', '.inf', '.org', '.pfm', '.ps', '.woff', '.woff2'],
+  },
+  {
+    reason: 'build scripts and notes kept beside fonts',
+    roots: ['fonts', 'metafont'],
+    extensions: ['.cnf', '.dat', '.entry', '.fea', '.ini', '.ltx', '.md', '.mft', '.mp', '.ofl',
+      '.pe', '.perl', '.pl', '.py', '.sfd', '.tex', '.txt', '.zip', '.600pk', 'authors', 'copying',
+      'fontlog', 'license', 'makefile', 'readme', 'tcfmgr'],
+  },
 ]
 
 function normalizePath(value) {
@@ -118,9 +189,10 @@ export function parseTlpdb(text) {
     if (!current.name) throw new Error('TLPDB record is missing a package name')
     if (packages.has(current.name)) throw new Error(`duplicate TLPDB package: ${current.name}`)
     if (current.relocated) {
-      current.files = current.files.map((path) =>
-        path.startsWith('RELOC/') ? `texmf-dist/${path.slice('RELOC/'.length)}` : path,
-      )
+      const relocate = (path) =>
+        path.startsWith('RELOC/') ? `texmf-dist/${path.slice('RELOC/'.length)}` : path
+      current.files = current.files.map(relocate)
+      current.runFiles = current.runFiles.map(relocate)
     }
     current.noticePaths = [
       ...new Set(current.files.filter((path) => NOTICE_BASENAME.test(basename(path)))),
@@ -143,12 +215,16 @@ export function parseTlpdb(text) {
         catalogueLicenses: [],
         relocated: false,
         files: [],
+        runFiles: [],
         noticePaths: [],
       }
     }
     if (line.startsWith(' ') && section) {
       const path = parseFileEntry(line)
-      if (path) current.files.push(path)
+      if (path) {
+        current.files.push(path)
+        if (section === 'runfiles') current.runFiles.push(path)
+      }
       continue
     }
     section = null
@@ -198,6 +274,8 @@ function walkFiles(root) {
 }
 
 function matchesRule(path, rule) {
+  if (rule.skip?.includes(basename(path))) return false
+  if (rule.files) return rule.files.includes(basename(path))
   if (!rule.extensions) return true
   return rule.extensions.some((extension) => path.toLowerCase().endsWith(extension))
 }
@@ -207,6 +285,26 @@ function outputName(path, rule) {
   if (!rule.stripExtension) return name
   const extension = rule.extensions.find((candidate) => name.toLowerCase().endsWith(candidate))
   return extension ? name.slice(0, -extension.length) : name
+}
+
+function classifiedBy(relativePath, rule) {
+  return rule.roots.some((root) => relativePath.startsWith(`${root}/`)) && matchesRule(relativePath, rule)
+}
+
+/** Run files that no rule selects and no exclusion explains. */
+export function unclassifiedRunFiles(parsed) {
+  const unclassified = []
+  for (const pkg of parsed.packages.values()) {
+    for (const path of pkg.runFiles) {
+      if (!path.startsWith('texmf-dist/')) continue
+      const relativePath = path.slice('texmf-dist/'.length)
+      if (!relativePath.includes('/')) continue
+      if (FORMAT_RULES.some((rule) => classifiedBy(relativePath, rule))) continue
+      if (RUNTIME_EXCLUSIONS.some((exclusion) => classifiedBy(relativePath, exclusion))) continue
+      unclassified.push(path)
+    }
+  }
+  return unclassified.sort()
 }
 
 function isCompletionMetadataKey(key) {
@@ -410,6 +508,15 @@ function validateNoticePaths(texmfDist, pkg, noticePaths) {
   }
 }
 
+/** A fallback tree comes last on kpathsea's path, so a name found earlier hides its copy. */
+function withoutShadowedFallbacks(candidatesByKey) {
+  for (const [key, candidates] of candidatesByKey) {
+    const primary = candidates.filter((candidate) => !candidate.fallback)
+    if (primary.length > 0) candidatesByKey.set(key, primary)
+  }
+  return candidatesByKey
+}
+
 function collectCandidates(texmfDist, includeKey = null) {
   const candidatesByKey = new Map()
   for (const rule of FORMAT_RULES) {
@@ -429,12 +536,13 @@ function collectCandidates(texmfDist, includeKey = null) {
           sourcePath,
           bytes: fileStat.size,
           sha256: sha('sha256', path),
+          fallback: rule.fallback === true,
         })
         candidatesByKey.set(key, candidates)
       }
     }
   }
-  return candidatesByKey
+  return withoutShadowedFallbacks(candidatesByKey)
 }
 
 function collectMetadataCandidates(parsed) {
@@ -448,11 +556,16 @@ function collectMetadataCandidates(parsed) {
       const name = outputName(relativePath, rule)
       const key = `pdftex/${rule.format}/${name}`
       const candidates = candidatesByKey.get(key) ?? []
-      candidates.push({ sourcePath, bytes: null, sha256: sourcePath })
+      candidates.push({
+        sourcePath,
+        bytes: null,
+        sha256: sourcePath,
+        fallback: rule.fallback === true,
+      })
       candidatesByKey.set(key, candidates)
     }
   }
-  return candidatesByKey
+  return withoutShadowedFallbacks(candidatesByKey)
 }
 
 function loadPinnedTlpdb(tlpdbPath, config) {
@@ -743,6 +856,13 @@ export function generateMirror({
     throw new Error(`texmf-dist directory does not exist: ${texmfDist}`)
   }
   const { tlpdbSha256, parsed } = loadPinnedTlpdb(tlpdbPath, config)
+  const unclassified = unclassifiedRunFiles(parsed)
+  if (scope === 'full-mirror' && unclassified.length > 0) {
+    throw new Error(
+      `${unclassified.length} TeX Live run files are neither mirrored nor excluded: ` +
+        unclassified.slice(0, 10).join(', '),
+    )
+  }
   const materializationReceipt =
     config.sourceType === 'tlnet-repository'
       ? (() => {

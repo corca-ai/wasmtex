@@ -10,6 +10,7 @@ import {
   checkMirror,
   generateMirror,
   parseTlpdb,
+  unclassifiedRunFiles,
 } from './lib/texlive-provenance.mjs'
 import { createMaterializationReceipt } from './lib/tlnet-materialization.mjs'
 
@@ -538,4 +539,20 @@ test('fails closed on a differing flattened-name collision', () => {
       }),
     /differing basename collision/,
   )
+})
+
+test('names every run file a mirror leaves out', () => {
+  const parsed = parseTlpdb(
+    [
+      'name example',
+      'revision 1',
+      'runfiles size=4',
+      ' texmf-dist/fonts/source/public/example/example.mf',
+      ' texmf-dist/fonts/misc/xetex/fontmapping/base/tex-text.tec',
+      ' texmf-dist/tex4ht/ht-fonts/example.htf',
+      ' texmf-dist/newtree/example.dat',
+      '',
+    ].join('\n'),
+  )
+  assert.deepEqual(unclassifiedRunFiles(parsed), ['texmf-dist/newtree/example.dat'])
 })

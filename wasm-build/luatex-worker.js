@@ -497,7 +497,7 @@ function resolveCdn(reqname, format) {
  *  only ever needed this bare fallback. */
 const BARE_STORED_FORMATS = new Set([3, 33]) // tfm, vf
 
-const CACHE_SUFFIXES = { 3: '.tfm', 33: '.vf' }
+const CACHE_SUFFIXES = { 3: '.tfm', 20: '.ofm', 23: '.ovf', 33: '.vf' }
 
 /** The name a file is cached under. TEXCACHEROOT is flat, so a TFM and a VF requested
  *  under one bare name (`ptmb8t`) must not overwrite each other. LuaTeX also looks up
@@ -509,7 +509,33 @@ function cacheFileName(format, name) {
   return suffix && !name.endsWith(suffix) ? `${name}${suffix}` : name
 }
 
-function kpse_find_file_impl(nameptr, format, _mustexist) {
+function generatedFont(kind, name, dpi) {
+  // An engine directory from before Metafont has no bridge; the font then stays missing.
+  try {
+    if (!self.wasmtexMetafont) importScripts('wasmtex-metafont.js')
+  } catch {
+    return null
+  }
+  if (!self.wasmtexMetafont) return null
+  const host = { fs: FS, cacheRoot: TEXCACHEROOT, workRoot: WORKROOT }
+  return kind === 'pk'
+    ? self.wasmtexMetafont.makePk(name, dpi, host)
+    : self.wasmtexMetafont.makeTfm(name, host)
+}
+
+function kpse_find_pk_impl(nameptr, dpi) {
+  const path = generatedFont('pk', UTF8ToString(nameptr), dpi)
+  return path ? _allocate(intArrayFromString(path)) : 0
+}
+
+function kpse_find_file_impl(nameptr, format, mustexist) {
+  const found = findTexliveFile(nameptr, format, mustexist)
+  if (found || format !== 3 || !mustexist) return found
+  const path = generatedFont('tfm', UTF8ToString(nameptr))
+  return path ? _allocate(intArrayFromString(path)) : 0
+}
+
+function findTexliveFile(nameptr, format, _mustexist) {
   const reqname = UTF8ToString(nameptr)
   if (reqname.includes('/')) return 0
   const cacheKey = `${format}/${reqname}`
@@ -1225,6 +1251,7 @@ async function compilePagePreviewRoutine(data) {
 }
 
 self.kpse_find_file_impl = kpse_find_file_impl
+self.kpse_find_pk_impl = kpse_find_pk_impl
 self.fontconfig_search_font_impl = fontconfig_search_font_impl
 
 // The engine binary: the plain build, or the checkpoint build when the host loaded this

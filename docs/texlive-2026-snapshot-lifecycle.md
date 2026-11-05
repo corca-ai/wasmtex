@@ -9,12 +9,22 @@ exact `mirrorRevision`; it never reads a mutable `/latest/` package path.
 | --- | --- | --- | --- |
 | Initial | TeX Live 2026 release archives dated 2026-03-01 | `2026-b4f6befbe7732169` | `https://texlive.corca.ai/snapshots/2026-b4f6befbe7732169/2026/` |
 | 2026-08-26 | Frozen `tlnet-archive` repository | `2026-ba38749b8714505a` | `https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/` |
+| 2026-08-26, every run file | The same repository with the wider selection | `2026-d26706764b740276` | `https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/` |
 
 The initial snapshot contains 164,849 objects. The dated snapshot contains
 168,942 objects. Exact object inventories were checked by key, byte length, and
 SHA-256 after R2 publication. Their provenance SHA-256 values are respectively
 `e3de2b970525f1a39e5d97da4ce1c3bbee4c16ecc78b9cc6fe1131c3020f5307`
 and `7c5ef0a46b6a52cd8aa4e4ad2256eb58d6bb2062c45dfa43e48def1dfa9faf00`.
+
+The third snapshot exists for a severe compatibility reason: the selection omitted run
+files a LaTeX document reaches, so XeLaTeX never converted quotes and dashes, and
+Metafont-only fonts, `luamplib` and MetaPost figures failed. It contains 177,317 objects,
+its provenance SHA-256 is
+`4ea93f54f4a12530ecf1565b03f6d223ce3434a28c4e3e5c705930e957ff9451`, and it keeps every
+file of the dated snapshot byte for byte. The 2025 line gained
+`2025-2e1df8aa17d29d66` the same way, with 173,142 objects and provenance SHA-256
+`12e0d8e5d0fa84a3f1ce9d9905f1661474f7c46c81f35eb3400498f33babdd0c`.
 
 CorTeX may expose a logical `2026-latest` discovery profile, but that profile is
 only an application-level pointer to one qualified immutable profile. Moving it

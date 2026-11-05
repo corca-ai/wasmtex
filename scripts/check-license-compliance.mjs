@@ -219,6 +219,7 @@ if (sourceConfig) {
     'wasm-build/Dockerfile.bibtex8',
     'wasm-build/Dockerfile.luatex',
     'wasm-build/Dockerfile.makeindex',
+    'wasm-build/Dockerfile.metafont',
     'wasm-build/Dockerfile.xetex',
   ]) {
     const text = readFileSync(resolve(root, dockerfile), 'utf8')
@@ -532,6 +533,7 @@ for (const [relativePath, requiredMaps] of [
   ['wasm-build/Makefile', ['wasmtex-pdftex.map', 'wasmtex-bibtex.map']],
   ['wasm-build/build-bibtex8.sh', ['wasmtex-bibtex8.map']],
   ['wasm-build/build-makeindex.sh', ['wasmtex-makeindex.map']],
+  ['wasm-build/build-metafont.sh', ['wasmtex-metafont.map', 'wasmtex-gftopk.map']],
   ['wasm-build/build-dvipdfm2.sh', ['wasmtex-dvipdfm.map']],
 ]) {
   const text = readFileSync(resolve(root, relativePath), 'utf8')
@@ -638,6 +640,7 @@ for (const workflow of [
   '.github/workflows/wasm-bibtex8.yml',
   '.github/workflows/wasm-luatex.yml',
   '.github/workflows/wasm-makeindex.yml',
+  '.github/workflows/wasm-metafont.yml',
   '.github/workflows/wasm-xetex.yml',
 ]) {
   const text = readFileSync(resolve(root, workflow), 'utf8')

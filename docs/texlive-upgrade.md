@@ -38,6 +38,12 @@ flattened structure based on kpathsea format IDs:
 - `pdftex/32/`: Type1 fonts (`.pfb`)
 - `pdftex/10/`: Format files (`.fmt`)
 - `pdftex/7/`: BibTeX styles (`.bst`)
+- `pdftex/13/`: Metafont source, including `.gen`, `.map` and `.mac` inputs
+- `pdftex/16/`: MetaPost source (`.mp`)
+- `pdftex/20/`, `pdftex/23/`: Omega metrics and virtual fonts (`.ofm`, `.ovf`)
+- `pdftex/35/`: makeindex styles (`.ist`)
+- `pdftex/41/`: TECkit mappings (`.tec`)
+- `pdftex/45/`, `pdftex/46/`: CMaps and subfont definitions (`.sfd`)
 
 The URL pattern is `${texliveUrl}pdftex/${formatId}/${filename}` (the resolved
 `texliveUrl` always ends in `/` — `resolveTexliveUrl` in

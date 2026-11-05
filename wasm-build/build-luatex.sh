@@ -144,7 +144,7 @@ emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc \
 echo "=== Phase 2f: final emcc link with WasmTex's own glue ==="
 cd "$WW"
 emcc -O3 -flto -c "$GLUE/luatex-entry.c" -o luatex-entry.o
-emcc -O3 -flto -c "$GLUE/kpse-hook.c"    -o kpse-hook.o
+emcc -O3 -flto -DWASMTEX_GLYPH_HOOK -DWASMTEX_INSTANCE_HOOK -c "$GLUE/kpse-hook.c" -o kpse-hook.o
 # Interposition contract (#50): kpse_find_file must be defined in libkpathsea, else
 # -Wl,--wrap=kpse_find_file below silently no-ops and the CDN file-lookup hook never
 # fires. Fail loud on upstream drift. (docs/texlive-upgrade.md interpose-don't-patch)
@@ -189,7 +189,7 @@ fi
 LUATEX_LINK_INPUTS=(
   luatex-entry.o kpse-hook.o
   luatexdir/luahbtex-luatex.o mplibdir/luahbtex-lmplib.o
-  -Wl,--wrap=kpse_find_file
+  -Wl,--wrap=kpse_find_file -Wl,--wrap=kpse_find_glyph -Wl,--wrap=kpathsea_find_file
   libluahbtexspecific.a libluatex.a libff.a libluamisc.a libluasocket.a libluaffi.a
   "${LUATEX_HARFBUZZ_ARCHIVES[@]}"
   "$WB"/libs/lua53/.libs/libtexlua53.a libmplibcore.a

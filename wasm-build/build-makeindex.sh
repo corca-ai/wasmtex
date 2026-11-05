@@ -96,7 +96,7 @@ emcc -O2 -g0 \
   -Wl,-Map="$OUT/wasmtex-makeindex.map" \
   "$KPSE" \
   -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXIT_RUNTIME=0 -sINVOKE_RUN=0 -sMODULARIZE=0 \
-  -sEXPORTED_FUNCTIONS='["_compileMakeindex","_setMainEntry","_main","_malloc","_free"]' \
+  -sEXPORTED_FUNCTIONS='["_compileMakeindex","_setMainEntry","_setMakeindexJob","_main","_malloc","_free"]' \
   -sEXPORTED_RUNTIME_METHODS='["cwrap","FS","UTF8ToString","stringToUTF8","lengthBytesUTF8","intArrayFromString"]' \
   -sINITIAL_MEMORY=67108864 \
   --js-library "$GLUE/library.js" \

@@ -119,7 +119,7 @@ function writeTexmfCnf() {
   FS.writeFile(WORKROOT + "/texmf.cnf", cnf);
 }
 
-function compileMakeindexRoutine() {
+function compileMakeindexRoutine(job) {
   self.memlog = "";
   restoreHeapMemory();
 
@@ -133,6 +133,15 @@ function compileMakeindexRoutine() {
 
   writeTexmfCnf();
   _setMainEntry(allocateString(self.mainfile));
+  if (job) {
+    _setMakeindexJob(
+      allocateString(job.input),
+      allocateString(job.output),
+      allocateString(job.style || ""),
+      allocateString(job.log || ""),
+      job.letterOrder ? 1 : 0
+    );
+  }
 
   var status = 2;
   try {
@@ -167,7 +176,7 @@ self["onmessage"] = function(ev) {
 
   if (cmd === "compilemakeindex") {
     self.mainfile = data.url || "main";
-    compileMakeindexRoutine();
+    compileMakeindexRoutine(data.job);
   } else if (cmd === "writefile") {
     try {
       FS.writeFile(WORKROOT + "/" + data.url, data.src);

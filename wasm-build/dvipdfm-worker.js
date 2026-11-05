@@ -327,7 +327,17 @@ function cdnCandidates(reqname, format) {
   return [[String(format), `${reqname}${FORMAT_EXT[format] || ''}`]]
 }
 
-function kpse_find_file_impl(nameptr, format) {
+function kpse_find_file_impl(nameptr, format, mustexist) {
+  const found = findTexliveFile(nameptr, format)
+  if (found || format !== 3 || !mustexist) return found
+  // XeTeX made this TFM in its own filesystem, and only the XDV crosses over.
+  const path = generatedFont()?.makeTfm(UTF8ToString(nameptr), {
+    fs: FS, cacheRoot: TEXCACHEROOT, workRoot: WORKROOT,
+  })
+  return path ? _allocate(intArrayFromString(path)) : 0
+}
+
+function findTexliveFile(nameptr, format) {
   let reqname = UTF8ToString(nameptr)
   // dvipdfmx re-resolves a font by the FULL path we returned (e.g.
   // `/tex/lmroman10-regular`) to open it — strip the cache-root prefix so the
@@ -410,5 +420,23 @@ function kpse_find_file_impl(nameptr, format) {
   return 0
 }
 
+/** An engine directory from before Metafont has no bridge; the font then stays missing. */
+function generatedFont() {
+  try {
+    if (!self.wasmtexMetafont) importScripts('wasmtex-metafont.js')
+  } catch {
+    return null
+  }
+  return self.wasmtexMetafont
+}
+
+function kpse_find_pk_impl(nameptr, dpi) {
+  const path = generatedFont()?.makePk(UTF8ToString(nameptr), dpi, {
+    fs: FS, cacheRoot: TEXCACHEROOT, workRoot: WORKROOT,
+  })
+  return path ? _allocate(intArrayFromString(path)) : 0
+}
+
 self.kpse_find_file_impl = kpse_find_file_impl
+self.kpse_find_pk_impl = kpse_find_pk_impl
 importScripts('wasmtex-dvipdfm.js')

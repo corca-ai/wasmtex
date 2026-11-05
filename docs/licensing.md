@@ -68,6 +68,7 @@ this engine family classification:
 | BibTeX | `LicenseRef-BibTeX-Web2C-Notices AND LGPL-2.1-or-later` |
 | BibTeX8 | `GPL-2.0-or-later` plus linked-component notices |
 | makeindex | `LicenseRef-MakeIndex-Distribution-Notice AND LGPL-2.1-or-later` |
+| Metafont | `LicenseRef-Metafont-Distribution-Notice AND LGPL-2.1-or-later` |
 | `.fmt`/`.fmt.gz`, ICU data | Terms of their recorded generation inputs; ICU 68.2 license for the data file |
 
 ## Why the combination is compatible

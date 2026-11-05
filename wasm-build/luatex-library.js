@@ -11,6 +11,9 @@ mergeInto(LibraryManager.library, {
     kpse_find_file_impl(nameptr, format, mustexist),
   kpse_find_file_js__sig: 'iiii',
 
+  kpse_find_pk_js: (nameptr, dpi) => kpse_find_pk_impl(nameptr, dpi),
+  kpse_find_pk_js__sig: 'iii',
+
   fontconfig_search_font_js: (nameptr, varptr) => fontconfig_search_font_impl(nameptr, varptr),
   fontconfig_search_font_js__sig: 'iii',
 })

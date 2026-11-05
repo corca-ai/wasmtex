@@ -1033,6 +1033,48 @@
     }
   },
   "collisions": {
+  "pdftex/26/kinsoku.tex": {
+    "selectedSource": "texmf-dist/tex/platex/base/kinsoku.tex",
+    "rejectedSources": [
+      "texmf-dist/tex/ptex/ptex-base/kinsoku.tex"
+    ],
+    "rationale": "The file kpsewhich finds for pdflatex in the pinned TeX Live 2025 tree."
+  },
+  "pdftex/26/ukinsoku.tex": {
+    "selectedSource": "texmf-dist/tex/uplatex/base/ukinsoku.tex",
+    "rejectedSources": [
+      "texmf-dist/tex/uptex/uptex-base/ukinsoku.tex"
+    ],
+    "rationale": "The file kpsewhich finds for pdflatex in the pinned TeX Live 2025 tree."
+  },
+  "pdftex/13/gamma.mf": {
+    "selectedSource": "texmf-dist/fonts/source/public/lfb/gamma.mf",
+    "rejectedSources": [
+      "texmf-dist/fonts/source/public/wnri/gamma.mf"
+    ],
+    "rationale": "The file kpsewhich finds for this name in the pinned TeX Live 2025 tree, so Metafont reads what a full installation reads."
+  },
+  "pdftex/13/ligature.mf": {
+    "selectedSource": "texmf-dist/fonts/source/public/lfb/ligature.mf",
+    "rejectedSources": [
+      "texmf-dist/fonts/source/public/wnri/ligature.mf"
+    ],
+    "rationale": "The file kpsewhich finds for this name in the pinned TeX Live 2025 tree, so Metafont reads what a full installation reads."
+  },
+  "pdftex/13/local.mf": {
+    "selectedSource": "texmf-dist/fonts/source/public/knuth-local/local.mf",
+    "rejectedSources": [
+      "texmf-dist/fonts/source/public/phonetic/local.mf"
+    ],
+    "rationale": "The file kpsewhich finds for this name in the pinned TeX Live 2025 tree, so Metafont reads what a full installation reads."
+  },
+  "pdftex/13/ps2mfbas.mf": {
+    "selectedSource": "texmf-dist/metafont/misc/ps2mfbas.mf",
+    "rejectedSources": [
+      "texmf-dist/fonts/source/public/armenian/ps2mfbas.mf"
+    ],
+    "rationale": "The file kpsewhich finds for this name in the pinned TeX Live 2025 tree, so Metafont reads what a full installation reads."
+  },
   "pdftex/11/lm-ec.map": {
     "selectedSource": "texmf-dist/fonts/map/dvipdfm/lm/lm-ec.map",
     "rejectedSources": [

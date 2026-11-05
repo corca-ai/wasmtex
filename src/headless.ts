@@ -65,6 +65,13 @@ import { buildDiagnostics, isOverfullBox, parseTexErrors } from './engine/parse-
 import { extractPreamble } from './engine/preamble-utils'
 import { previewErrorsCovered } from './engine/preview-diagnostics'
 import { RerunController, signatureOf } from './engine/rerun-controller'
+import {
+  type IndexJob,
+  opensListInPreamble,
+  secondaryAuxBases,
+  secondaryIndexJobs,
+  usesBibunits,
+} from './engine/secondary-stages'
 import { stripTexComments } from './engine/tex-comments'
 import {
   buildTexliveDependencySet,
@@ -465,6 +472,7 @@ const GENERATED_AUX_EXTENSIONS = [
   'gls',
   'acn',
   'acr',
+  'nls',
   'loa',
   'thm',
   'xdy',
@@ -473,6 +481,7 @@ const GENERATED_AUX_EXTENSIONS = [
 /** Files LaTeX writes at the end of a pass and reads back at the next, without a
  *  rerun warning when they change. */
 const LATEX_LIST_EXTENSIONS = ['toc', 'lof', 'lot', 'loa', 'thm', 'nav', 'snm'] as const
+const MAX_BIBUNITS = 200
 
 /** The bibliography request behind a generated `.bbl`. */
 interface BibliographyRequest {
@@ -528,6 +537,11 @@ export class WasmTexCompiler {
   } | null = null
   /** Last generated bibliography request; a pass asking for the same one keeps its `.bbl`. */
   private bibliographyRequest: BibliographyRequest | null = null
+  /** The request behind each secondary output, by output path. */
+  private readonly secondaryRequests = new Map<string, string>()
+  private readonly secondaryBibliographies = new Map<string, BibliographyInput>()
+  /** The `\\bibcite` lines of each extra list's aux, which LaTeX's own rerun check can miss. */
+  private readonly secondaryLabels = new Map<string, string>()
   /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
    *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
   private incremental: IncrementalCompiler | null = null
@@ -563,10 +577,7 @@ export class WasmTexCompiler {
    *  one root's bibliography/index request to another root's derived artifact. */
   private generatedDependencyObservations = new Map<string, AuxiliaryDependencyObservation>()
   /** Stages attempted in the current compile, including failures with no output. */
-  private currentAuxiliaryDependencies = new Map<
-    AuxiliaryDependencyObservation['stage'],
-    AuxiliaryDependencyObservation
-  >()
+  private currentAuxiliaryDependencies = new Map<string, AuxiliaryDependencyObservation>()
   /** The last successful full result's manifest seeds only the informational input
    *  list on an incremental result; the incremental manifest remains incomplete. */
   private lastFullDependencyManifest: DependencyManifest | undefined
@@ -659,6 +670,21 @@ export class WasmTexCompiler {
   }
 
   /** All project `.tex` sources (path → content), for multi-file incremental compile. */
+  /** Every engine writes its job's outputs beside the working directory root, however deep
+   *  the main file is. */
+  private get jobBase(): string {
+    return this.mainFile.replace(/\.tex$/i, '').slice(this.mainFile.lastIndexOf('/') + 1)
+  }
+
+  /** The text a document's own macros can come from. */
+  private projectSources(): string[] {
+    return this.fs
+      .listFiles()
+      .filter((path) => /\.(?:tex|sty|cls)$/.test(path))
+      .map((path) => this.fs.readFile(path))
+      .filter((content) => typeof content === 'string')
+  }
+
   private projectTexFiles(): Map<string, string> {
     const files = new Map<string, string>()
     for (const path of this.fs.listFiles()) {
@@ -1146,7 +1172,11 @@ export class WasmTexCompiler {
     // `.idx` is silently never written and the index comes out empty. Disable the snapshot
     // for index documents (set per-compile, since the engine is reused across edits).
     if (engine.setPreambleSnapshot) {
-      const wantSnapshot = !this.opts.disablePreambleSnapshot && !detectIndexUse(this.mainSource())
+      const sources = this.projectSources()
+      const wantSnapshot =
+        !this.opts.disablePreambleSnapshot &&
+        !detectIndexUse(sources.join('\n')) &&
+        !opensListInPreamble(sources)
       engine.setPreambleSnapshot(wantSnapshot)
     }
 
@@ -1262,13 +1292,22 @@ export class WasmTexCompiler {
       const next = (await this.operations.observe(this.readLists(engine))).resume()
       const changed = next !== lists
       lists = next
-      return changed && !!this.bibliographyRequest
+      return changed && this.hasGeneratedLists()
     }
+  }
+
+  private hasGeneratedLists(): boolean {
+    return (
+      !!this.bibliographyRequest ||
+      !!this.indexInput ||
+      this.secondaryRequests.size > 0 ||
+      this.secondaryBibliographies.size > 0
+    )
   }
 
   /** The job's lists as one comparable value. */
   private async readLists(engine: CompileEngine): Promise<string> {
-    const mainBase = this.mainFile.replace(/\.tex$/, '')
+    const mainBase = this.jobBase
     const lists = await Promise.all(
       LATEX_LIST_EXTENSIONS.map((extension) => engine.readFile(`${mainBase}.${extension}`)),
     )
@@ -1281,7 +1320,7 @@ export class WasmTexCompiler {
     // Label/ref command names do not describe PDF bookmarks. Include the
     // actual outline state before declaring an outline rerun to be stuck.
     const out = (
-      await this.operations.observe(this.engine?.readFile(this.mainFile.replace(/\.tex$/, '.out')))
+      await this.operations.observe(this.engine?.readFile(`${this.jobBase}.out`))
     ).resume()
     return signatureOf(`${trace}\n${out ?? ''}`)
   }
@@ -1467,6 +1506,7 @@ export class WasmTexCompiler {
     this.generatedDependencyObservations.delete(dependencyPath)
     if (this.indexInput?.path === path) this.indexInput = null
     if (this.bibliographyRequest?.path === path) this.bibliographyRequest = null
+    this.forgetSecondaryOutput(path)
     // Generated `.bbl`/`.ind` files stay: each stage compares its actual request after
     // every TeX pass and reruns, forcing another pass, only when its output changes.
     this.currentAuxiliaryDependencies.clear()
@@ -1533,6 +1573,7 @@ export class WasmTexCompiler {
     this.generatedFiles.clear()
     this.indexInput = null
     this.bibliographyRequest = null
+    this.forgetSecondaryOutputs()
     this.generatedDependencyObservations.clear()
     this.currentAuxiliaryDependencies.clear()
     this.lastFullDependencyManifest = undefined
@@ -1589,6 +1630,7 @@ export class WasmTexCompiler {
     if (changed) {
       this.indexInput = null
       this.bibliographyRequest = null
+      this.forgetSecondaryOutputs()
       // Re-point (not just reset) the incremental compiler: its mainFile is wired into the
       // diff baseline / snapshot bookkeeping, so a bare reset() would leave it diffing the
       // wrong file after the active main changes. Hosts that re-assert the same main file
@@ -1687,6 +1729,7 @@ export class WasmTexCompiler {
   private dropGeneratedFile(path: string): void {
     if (this.indexInput?.path === path) this.indexInput = null
     if (this.bibliographyRequest?.path === path) this.bibliographyRequest = null
+    this.forgetSecondaryOutput(path)
     this.fs.deleteFile(path)
     const dependencyPath = normalizeProjectDependencyPath(path) ?? path
     this.generatedFiles.delete(dependencyPath)
@@ -1694,12 +1737,27 @@ export class WasmTexCompiler {
   }
 
   private auxiliaryDependencyObservations(result: CompileResult): AuxiliaryDependencyObservation[] {
-    const byStage = new Map(this.currentAuxiliaryDependencies)
+    const observations = [...this.currentAuxiliaryDependencies.values()]
     for (const input of result.inputFiles ?? []) {
       const path = normalizeProjectDependencyPath(input)
       if (!path) continue
       const observation = this.generatedDependencyObservations.get(path)
-      if (observation) byStage.set(observation.stage, observation)
+      if (observation) observations.push(observation)
+    }
+    // A document's extra lists share a stage, so one observation must not hide another.
+    const byStage = new Map<
+      AuxiliaryDependencyObservation['stage'],
+      AuxiliaryDependencyObservation
+    >()
+    for (const observation of observations) {
+      const known = byStage.get(observation.stage)
+      byStage.set(observation.stage, {
+        stage: observation.stage,
+        projectInputs: [
+          ...new Set([...(known?.projectInputs ?? []), ...observation.projectInputs]),
+        ],
+        complete: (known?.complete ?? true) && observation.complete,
+      })
     }
     return [...byStage.values()]
   }
@@ -1715,7 +1773,7 @@ export class WasmTexCompiler {
   ): void {
     const excludeNames = new Set<string>()
     for (const path of this.fs.listFiles()) excludeNames.add(path.slice(path.lastIndexOf('/') + 1))
-    const mainBase = this.mainFile.replace(/\.tex$/i, '').slice(this.mainFile.lastIndexOf('/') + 1)
+    const mainBase = this.jobBase
     for (const ext of GENERATED_AUX_EXTENSIONS) excludeNames.add(`${mainBase}.${ext}`)
     const set = buildTexliveDependencySet(
       this.opts.texliveVersion ?? '2025',
@@ -1970,7 +2028,7 @@ export class WasmTexCompiler {
   } | null> {
     const engine = this.engine
     if (!engine) return null
-    const mainBase = this.mainFile.replace(/\.tex$/i, '')
+    const mainBase = this.jobBase
     const listed = (
       await this.operations.observe(this.readTikzFigureList(mainBase, snapshot))
     ).resume()
@@ -2228,7 +2286,7 @@ export class WasmTexCompiler {
       this.projectIndex.updateSemanticTrace(parseTraceFile(''))
       return
     }
-    const base = this.mainFile.replace(/\.tex$/, '')
+    const base = this.jobBase
     const engine = this.engine
     const aux = (
       await this.operations.observe(
@@ -2266,7 +2324,146 @@ export class WasmTexCompiler {
       (await this.operations.observe(this.maybeRunBibtex(result))).resume() ||
       (await this.operations.observe(this.maybeRunBiblatex(result))).resume()
     const idx = (await this.operations.observe(this.maybeRunMakeindex(result))).resume()
-    return bib || idx
+    const secondary = (await this.operations.observe(this.runSecondaryStages(result))).resume()
+    return bib || idx || secondary
+  }
+
+  /** Indexes and bibliographies past the first: nomencl, glossaries, named indexes, multibib,
+   *  bibunits and chapterbib. Each keeps its output until its own input changes. */
+  private async runSecondaryStages(result: CompileResult): Promise<boolean> {
+    const engine = this.engine
+    if (!engine || (!result.success && !result.pdf)) return false
+    const mainBase = this.jobBase
+    const sources = this.projectSources()
+    const read = async (path: string) =>
+      (await this.operations.observe(engine.readFile(path))).resume()
+    const aux = (await read(`${mainBase}.aux`)) ?? ''
+    let injected = false
+    for (const job of secondaryIndexJobs(mainBase, sources, aux)) {
+      if (await this.runSecondaryIndex(engine, job, read)) injected = true
+    }
+    const bases = secondaryAuxBases(sources, aux)
+    if (usesBibunits(sources)) {
+      for (let unit = 1; unit <= MAX_BIBUNITS && (await read(`bu${unit}.aux`)) !== null; unit++) {
+        bases.push(`bu${unit}`)
+      }
+    }
+    for (const base of bases) {
+      if (await this.runSecondaryBibliography(engine, base, read)) injected = true
+    }
+    return injected
+  }
+
+  private forgetSecondaryOutput(path: string): void {
+    this.secondaryRequests.delete(path)
+    this.secondaryBibliographies.delete(path)
+  }
+
+  private forgetSecondaryOutputs(): void {
+    this.secondaryRequests.clear()
+    this.secondaryBibliographies.clear()
+    this.secondaryLabels.clear()
+  }
+
+  /** One entry per output: a document's lists share a stage, and each may fail alone. */
+  private noteSecondaryStage(output: string, observation: AuxiliaryDependencyObservation): void {
+    this.currentAuxiliaryDependencies.set(`${observation.stage}:${output}`, observation)
+  }
+
+  private keepSecondaryOutput(output: string): false {
+    const observation = this.generatedDependencyObservations.get(
+      normalizeProjectDependencyPath(output) ?? output,
+    )
+    if (observation) this.noteSecondaryStage(output, observation)
+    return false
+  }
+
+  private async runSecondaryIndex(
+    engine: CompileEngine,
+    job: IndexJob,
+    read: (path: string) => Promise<string | null>,
+  ): Promise<boolean> {
+    if (this.authoredOutput(job.output)) return false
+    const input = await read(job.input)
+    if (input === null) return false
+    if (!input.trim() && this.fs.readFile(job.output) === null) return false
+    const style = job.style ? await read(job.style) : null
+    const request = JSON.stringify([job, input, style])
+    if (this.secondaryRequests.get(job.output) === request) {
+      return this.keepSecondaryOutput(job.output)
+    }
+    const output = input.trim() ? await this.runClientIndexJob(job, input, style) : ''
+    const observation: AuxiliaryDependencyObservation = {
+      stage: 'index',
+      projectInputs: job.style && this.fs.readFile(job.style) !== null ? [job.style] : [],
+      complete: output !== null,
+    }
+    this.noteSecondaryStage(job.output, observation)
+    if (output === null) return false
+    this.secondaryRequests.set(job.output, request)
+    return this.injectGeneratedOutput(engine, job.output, output, observation)
+  }
+
+  private async runClientIndexJob(
+    job: IndexJob,
+    input: string,
+    style: string | null,
+  ): Promise<string | null> {
+    const aux = (await this.operations.observe(this.ensureAuxEngine('makeindexEngine'))).resume()
+    ;(await this.operations.observe(aux.writeFile(job.input, input))).resume()
+    if (job.style && style !== null) {
+      ;(await this.operations.observe(aux.writeFile(job.style, style))).resume()
+    }
+    const base = job.input.replace(/\.[^.]*$/, '')
+    const { success } = (
+      await this.operations.observe((aux as MakeindexEngine).compile(base, job))
+    ).resume()
+    if (!success) return null
+    return (await this.operations.observe(aux.readFile(job.output))).resume() ?? null
+  }
+
+  private async runSecondaryBibliography(
+    engine: CompileEngine,
+    base: string,
+    read: (path: string) => Promise<string | null>,
+  ): Promise<boolean> {
+    const outputPath = `${base}.bbl`
+    if (this.authoredOutput(outputPath)) return false
+    const aux = await read(`${base}.aux`)
+    if (!aux?.includes('\\bibdata{')) return false
+    // multibib reads this aux itself, so LaTeX's end-of-document check never compares it.
+    const labels = (aux.match(/^\\bibcite\{[^\n]*/gm) ?? []).join('\n')
+    const labelsChanged = (this.secondaryLabels.get(base) ?? '') !== labels
+    this.secondaryLabels.set(base, labels)
+    const cites = aux.includes('\\citation{')
+    if (!cites && this.fs.readFile(outputPath) === null) return labelsChanged
+    const projectBibFiles = this.collectBibFiles()
+    const { bibFiles } = (
+      await this.operations.observe(collectBibliographyInputs(aux, projectBibFiles, read))
+    ).resume()
+    const bst = this.resolveProjectBst(aux)
+    const input: BibliographyInput = {
+      control: bibtexControl(aux),
+      files: { ...bibFiles, ...(bst ? { [bst.path]: bst.content } : {}) },
+    }
+    const known = this.secondaryBibliographies.get(outputPath)
+    if (known && sameBibliographyInput(known, input)) {
+      this.keepSecondaryOutput(outputPath)
+      return labelsChanged
+    }
+    const bbl = cites
+      ? (await this.operations.observe(this.runClientBibtex(base, aux, bibFiles))).resume()
+      : ''
+    const observation: AuxiliaryDependencyObservation = {
+      stage: 'bibliography',
+      projectInputs: [...Object.keys(projectBibFiles), ...(bst ? [bst.path] : [])],
+      complete: bbl !== null,
+    }
+    this.noteSecondaryStage(outputPath, observation)
+    if (bbl === null) return labelsChanged
+    this.secondaryBibliographies.set(outputPath, input)
+    const injected = await this.injectGeneratedOutput(engine, outputPath, bbl, observation)
+    return injected || labelsChanged
   }
 
   /** @returns whether a changed `.bbl` was injected this pass (forces one more LaTeX pass). */
@@ -2274,7 +2471,7 @@ export class WasmTexCompiler {
     const mainEngine = this.engine
     if (!mainEngine) return false
     if (!result.success && !result.pdf) return false
-    const mainBase = this.mainFile.replace(/\.tex$/, '')
+    const mainBase = this.jobBase
     const outputPath = `${mainBase}.bbl`
     const auxContent = (
       await this.operations.observe(this.bibtexAux(mainEngine, mainBase, outputPath))
@@ -2368,7 +2565,7 @@ export class WasmTexCompiler {
     const biber = detectBiblatexBackend(source) === 'biber'
     if (!biber) return false
 
-    const mainBase = this.mainFile.replace(/\.tex$/, '')
+    const mainBase = this.jobBase
     const outputPath = `${mainBase}.bbl`
     if (this.authoredOutput(outputPath)) return false
     // biblatex emits the `.bcf` only once `\usepackage{biblatex}` ran; bail until it exists so
@@ -2504,9 +2701,9 @@ export class WasmTexCompiler {
     const mainEngine = this.engine
     if (!mainEngine) return false
     if (!result.success && !result.pdf) return false
-    if (!detectIndexUse(this.mainSource())) return false
+    if (!detectIndexUse(this.projectSources().join('\n'))) return false
 
-    const mainBase = this.mainFile.replace(/\.tex$/, '')
+    const mainBase = this.jobBase
     const outputPath = `${mainBase}.ind`
     if (this.authoredOutput(outputPath)) return false
     const idx = (await this.operations.observe(mainEngine.readFile(`${mainBase}.idx`))).resume()
