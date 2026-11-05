@@ -132,13 +132,7 @@
     tool.FS.writeFile(`${TOOL_DIR}/mf`, '')
     tool.FS.writeFile(`${TOOL_DIR}/texmf.cnf`, CONFIG)
     for (const [name, bytes] of inputs) tool.FS.writeFile(`${TOOL_DIR}/${name}`, bytes)
-    tool.exitStatus = 0
-    try {
-      tool.callMain(args)
-    } catch (error) {
-      if (error?.name !== 'ExitStatus') throw error
-      tool.exitStatus = error.status
-    }
+    tool.exitStatus = tool.callMain(args)
     return tool
   }
 
@@ -228,8 +222,9 @@
         return remember(`pk/${dpi}/${name}`, host, (used) => {
           const mag = `${Math.floor(dpi / BASE_DPI)}+${dpi % BASE_DPI}/${BASE_DPI}`
           const font = runFont(name, mag, host, used)
-          const gf = font?.FS.readdir(TOOL_DIR).find((file) => /\.\d+gf$/.test(file))
-          if (!gf) return null
+          // A font can scale itself past the size asked for; mktexpk refuses that result too.
+          const gf = `${name}.${dpi}gf`
+          if (!font?.FS.analyzePath(`${TOOL_DIR}/${gf}`).exists) return null
           const converted = runTool(
             self.createWasmtexGftopk,
             [`./${gf}`, 'font.pk'],

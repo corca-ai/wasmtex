@@ -28,7 +28,11 @@ export function metafontWorkerScope(scriptPath, mirror) {
       }
     }
   }
-  const scope = { XMLHttpRequest: MirrorRequest, TextEncoder, TextDecoder, WebAssembly, console, performance }
+  const scope = {
+    XMLHttpRequest: MirrorRequest, TextEncoder, TextDecoder, WebAssembly, console, performance, atob,
+    importScripts() {},
+    location: { href: 'file:///wasmtex-metafont.js' },
+  }
   scope.self = scope
   scope.texlive_endpoint = mirror.endsWith('/') ? mirror : `${mirror}/`
   vm.runInNewContext(readFileSync(scriptPath, 'utf8'), scope)
