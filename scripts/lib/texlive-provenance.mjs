@@ -38,6 +38,7 @@ const MPTOPDF_SUPPORT_FILES = [
   'supp-mis.mkii', 'supp-mis.tex', 'supp-mpe.mkii', 'supp-mpe.tex', 'supp-pdf.mkii', 'supp-pdf.tex',
   'syst-tex.mkii',
 ]
+const CMAP_NOTES = ['Makefile', 'README', 'README.md', 'cid2code.txt', 'cid_mapping.md']
 const OTHER_FORMAT_TREES = [
   'amstex', 'cslatex', 'csplain', 'eplain', 'fontinst', 'hitex', 'jadetex', 'lambda', 'lollipop',
   'mex', 'mltex', 'optex', 'platex', 'psizzl', 'ptex', 'startex', 'support', 'texinfo', 'texsis',
@@ -81,7 +82,7 @@ export const FORMAT_RULES = [
     roots: ['fonts/misc/xetex/fontmapping', 'fonts/map/dvips/greektonoi'],
     extensions: ['.tec'],
   },
-  { format: 45, roots: ['fonts/cmap'] },
+  { format: 45, roots: ['fonts/cmap'], skip: CMAP_NOTES },
   { format: 46, roots: ['fonts/sfd'], extensions: ['.sfd'] },
 ]
 
@@ -269,6 +270,7 @@ function walkFiles(root) {
 }
 
 function matchesRule(path, rule) {
+  if (rule.skip?.includes(basename(path))) return false
   if (rule.files) return rule.files.includes(basename(path))
   if (!rule.extensions) return true
   return rule.extensions.some((extension) => path.toLowerCase().endsWith(extension))
@@ -281,11 +283,8 @@ function outputName(path, rule) {
   return extension ? name.slice(0, -extension.length) : name
 }
 
-function classifiedBy(relativePath, { roots, extensions, files }) {
-  return (
-    roots.some((root) => relativePath.startsWith(`${root}/`)) &&
-    matchesRule(relativePath, { extensions, files })
-  )
+function classifiedBy(relativePath, rule) {
+  return rule.roots.some((root) => relativePath.startsWith(`${root}/`)) && matchesRule(relativePath, rule)
 }
 
 /** Run files that no rule selects and no exclusion explains. */
