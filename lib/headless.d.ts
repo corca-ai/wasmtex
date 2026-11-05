@@ -141,6 +141,8 @@ export declare class WasmTexCompiler {
     private indexInput;
     /** Last generated bibliography request; a pass asking for the same one keeps its `.bbl`. */
     private bibliographyRequest;
+    /** The request behind each secondary output, by output path. */
+    private readonly secondaryRequests;
     /** Incremental (checkpoint) compiler, set when `incremental` is on and the active
      *  engine is pdfLaTeX. Null otherwise (XeLaTeX/LuaLaTeX always do a full compile). */
     private incremental;
@@ -395,6 +397,12 @@ export declare class WasmTexCompiler {
      *  is classic-BibTeX *or* biblatex (never both), so the two bibliography paths gate on
      *  mutually exclusive triggers and at most one fires. */
     private runAuxStages;
+    /** Indexes and bibliographies past the first: nomencl, glossaries, named indexes, multibib,
+     *  bibunits and chapterbib. Each keeps its output until its own input changes. */
+    private runSecondaryStages;
+    private runSecondaryIndex;
+    private runClientIndexJob;
+    private runSecondaryBibliography;
     /** @returns whether a changed `.bbl` was injected this pass (forces one more LaTeX pass). */
     private maybeRunBibtex;
     /** The aux content BibTeX would read, or null when this stage has nothing to do. */

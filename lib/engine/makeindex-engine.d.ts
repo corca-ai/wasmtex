@@ -1,4 +1,5 @@
 import { TexliveVersion } from '../types.js';
+import { IndexJob } from './secondary-stages.js';
 import { WasmTexWorker } from './wasmtex-worker.js';
 /**
  * The bundled from-source makeindex (#115), driving the WasmTex worker protocol. Turns a
@@ -12,9 +13,10 @@ export declare class MakeindexEngine extends WasmTexWorker {
         texliveUrl?: string;
         texliveVersion?: TexliveVersion;
     });
-    /** Process `<idxBaseName>.idx` → `<idxBaseName>.ind` (+ `.ilg` log). The worker reads the
-     *  `.idx` from its MEMFS (write it first) and replies under the shared `cmd:compile` key. */
-    compile(idxBaseName: string): Promise<{
+    /** Process `<idxBaseName>.idx` → `<idxBaseName>.ind` (+ `.ilg` log), or `job` when another
+     *  file or style is involved. The worker reads its input from MEMFS (write it first) and
+     *  replies under the shared `cmd:compile` key. */
+    compile(idxBaseName: string, job?: IndexJob): Promise<{
         success: boolean;
         log: string;
     }>;
