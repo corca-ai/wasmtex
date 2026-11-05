@@ -40,10 +40,13 @@ interface DownloadState {
   retryCount: number
 }
 
+// Sessions can overlap while a compiler changes engines. Their events share
+// one host observer, so IDs must remain unique across those sessions.
+let nextRequestId = 0
+
 /** One recovery budget shared by one compiler attempt's asset requests. */
 export class AssetDownloadSession {
   private remainingRetries = 8
-  private sequence = 0
 
   constructor(
     private readonly onEvent?: (event: AssetDownloadEvent) => void,
@@ -52,7 +55,7 @@ export class AssetDownloadSession {
 
   async read(url: string, input: DownloadInput): Promise<Uint8Array | null> {
     const state: DownloadState = {
-      requestId: ++this.sequence,
+      requestId: ++nextRequestId,
       asset: input.asset,
       receivedBytes: 0,
       lastByteAt: null,

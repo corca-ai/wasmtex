@@ -16,6 +16,49 @@ describe('attempt-scoped asset recovery', () => {
     expect(new TextDecoder().decode(bytes!)).toBe('ok')
   })
 
+  it('keeps overlapping engine sessions distinct when the older session ends', async () => {
+    const active = new Set<number>()
+    const observe = (event: AssetDownloadEvent) => {
+      if (event.phase === 'end') active.delete(event.requestId)
+      else active.add(event.requestId)
+    }
+    let first!: ReadableStreamDefaultController<Uint8Array>
+    let second!: ReadableStreamDefaultController<Uint8Array>
+    const a = new AssetDownloadSession(
+      observe,
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              first = controller
+            },
+          }),
+        ),
+    )
+    const b = new AssetDownloadSession(
+      observe,
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              second = controller
+            },
+          }),
+        ),
+    )
+    const oldDownload = a.read('https://assets.test/a', { asset: 'format' })
+    const newDownload = b.read('https://assets.test/b', { asset: 'format' })
+    expect(active.size).toBe(2)
+    first.enqueue(new Uint8Array([1]))
+    first.close()
+    await oldDownload
+    expect(active.size).toBe(1)
+    second.enqueue(new Uint8Array([2]))
+    second.close()
+    await newDownload
+    expect(active.size).toBe(0)
+  })
+
   it('keeps an unknown-length download alive beyond 180 seconds while bytes arrive', async () => {
     vi.useFakeTimers()
     const events: AssetDownloadEvent[] = []

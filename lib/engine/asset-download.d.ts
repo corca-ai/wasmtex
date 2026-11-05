@@ -27,7 +27,6 @@ export declare class AssetDownloadSession {
     private readonly onEvent?;
     private readonly fetchImpl;
     private remainingRetries;
-    private sequence;
     constructor(onEvent?: ((event: AssetDownloadEvent) => void) | undefined, fetchImpl?: typeof fetch);
     read(url: string, input: DownloadInput): Promise<Uint8Array | null>;
     private retryable;
