@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const year = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
-const mirror = process.env.TEXLIVE_URL ?? `https://texlive.corca.ai/snapshots/${year === '2026' ? '2026-ba38749b8714505a' : '2025-0d3fc73b65e39905'}/${year}/`
+const mirror = process.env.TEXLIVE_URL ?? `https://texlive.corca.ai/snapshots/${year === '2026' ? '2026-d26706764b740276' : '2025-2e1df8aa17d29d66'}/${year}/`
 
 test('a full pass prepares the cursor without another compile and preserves canonical output', async ({ page }) => {
   test.setTimeout(180_000)

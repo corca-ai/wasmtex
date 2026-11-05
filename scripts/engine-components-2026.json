@@ -26,6 +26,16 @@
       "reason": "The WebAssembly port is a modified MakeIndex work and carries the identical permission notice; kpathsea remains under LGPL-2.1-or-later with relink support."
     },
     {
+      "family": "metafont",
+      "combinedLicense": "LicenseRef-Metafont-Distribution-Notice AND LGPL-2.1-or-later",
+      "reason": "Metafont retains its TeX-compatible upstream notice and GFtoPK its public-domain record; statically linked kpathsea is supplied with complete source and relink instructions."
+    },
+    {
+      "family": "gftopk",
+      "combinedLicense": "LicenseRef-Metafont-Distribution-Notice AND LGPL-2.1-or-later",
+      "reason": "GFtoPK ships in the same file as Metafont, and its statically linked kpathsea is supplied with complete source and relink instructions."
+    },
+    {
       "family": "xetex",
       "combinedLicense": "GPL-2.0-only AND LicenseRef-XeTeX",
       "reason": "Xpdf 4.06 and FreeType are both selected under GPL-2.0-only; the XeTeX-specific notice is retained."
@@ -122,6 +132,8 @@
           "bibtex",
           "bibtex8",
           "makeindex",
+          "metafont",
+          "gftopk",
           "xetex",
           "dvipdfmx",
           "luahbtex"

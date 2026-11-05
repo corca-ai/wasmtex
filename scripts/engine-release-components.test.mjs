@@ -40,7 +40,7 @@ test('builds default to the promoted mirror and require a complete candidate ove
 
 test('requires every composed receipt to bind the pinned mirror', () => {
   const release = validateEngineReleaseComponents(config, '2026')
-  const receipts = ['pdftex', 'bibtex', 'bibtex8', 'makeindex', 'xetex', 'luahbtex'].map(
+  const receipts = ['pdftex', 'bibtex', 'bibtex8', 'makeindex', 'metafont', 'xetex', 'luahbtex'].map(
     (family) => ({ name: `BUILD-RECEIPT.${family}.json`, value: { family, mirror: release.mirror } }),
   )
   assert.deepEqual(validateComposedEngineRelease({ receipts }, release), [])

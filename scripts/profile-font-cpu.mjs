@@ -23,7 +23,7 @@ const cacheProbe = arg('cache-probe', 'false') === 'true'
 const initPhases = arg('init-phases', 'false') === 'true'
 const controlMode = arg('control-mode', 'none')
 if (!['none', 'baseline-assets'].includes(controlMode)) throw Error('Invalid control mode')
-const mirror = new URL(arg('texlive-url', 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'))
+const mirror = new URL(arg('texlive-url', 'https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/'))
 if (!mirror.pathname.endsWith('/')) throw Error('Mirror URL must end in /')
 const year = arg('year', '2026')
 const latencyMs = Number(arg('latency-ms', '0'))

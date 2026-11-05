@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test'
 
 const year = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
 const texliveUrl = process.env.TEXLIVE_URL ?? (year === '2026'
-  ? 'https://texlive.corca.ai/snapshots/2026-ba38749b8714505a/2026/'
-  : 'https://texlive.corca.ai/snapshots/2025-0d3fc73b65e39905/2025/')
+  ? 'https://texlive.corca.ai/snapshots/2026-d26706764b740276/2026/'
+  : 'https://texlive.corca.ai/snapshots/2025-2e1df8aa17d29d66/2025/')
 // Exercise authored controller changes against pinned native engines before a
 // release exists. Distribution qualification separately uses the built receipt.
 const controller = ['asset-download.js', 'shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js'].map((name) =>

@@ -46,14 +46,16 @@ test('2026 profiles expose only exact immutable mirror and engine identities', (
       assert.match(sourceRevision, /^[a-f0-9]{40}$/)
     }
     assert.match(profile.engine.correspondingSourceSha256, sha256)
-    assert.deepEqual(Object.keys(profile.engine.buildRuns).sort(), [
+    // Profiles from before Metafont stay as published.
+    const families = Object.keys(profile.engine.buildRuns).sort()
+    assert.deepEqual(families.filter((family) => family !== 'metafont'), [
       'bibtex8',
       'luahbtex',
       'makeindex',
       'pdftex-bibtex',
       'xetex',
     ])
-    assert.equal(new Set(Object.values(profile.engine.buildRuns)).size, 5)
+    assert.equal(new Set(Object.values(profile.engine.buildRuns)).size, families.length)
     assert.equal(profile.qualification.browserGoldens, 7)
     assert.equal(profile.qualification.nodeBrowserParity, 7)
     assert.deepEqual(profile.qualification.representativeEngines, [

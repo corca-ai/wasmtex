@@ -1,5 +1,5 @@
 const SHA256 = /^[a-f0-9]{64}$/i
-const EXPECTED_FAMILIES = ['bibtex', 'bibtex8', 'luahbtex', 'makeindex', 'pdftex', 'xetex']
+const EXPECTED_FAMILIES = ['bibtex', 'bibtex8', 'luahbtex', 'makeindex', 'metafont', 'pdftex', 'xetex']
 
 function validateMirror(mirror, year, label) {
   const revision = mirror?.revision ?? ''
@@ -49,7 +49,7 @@ export function validateEngineReleaseComponents(config, year) {
       artifactNames.add(artifact)
     }
   }
-  const expectedDownloadIds = ['bibtex8', 'luahbtex', 'makeindex', 'pdftex-bibtex', 'xetex']
+  const expectedDownloadIds = ['bibtex8', 'luahbtex', 'makeindex', 'metafont', 'pdftex-bibtex', 'xetex']
   if (JSON.stringify([...downloadIds].sort()) !== JSON.stringify(expectedDownloadIds)) {
     throw new Error(`${year}: component downloads do not cover each workflow family exactly`)
   }
@@ -59,13 +59,14 @@ export function validateEngineReleaseComponents(config, year) {
     `wasm-bibtex${suffix}`,
     `wasm-bibtex8${suffix}`,
     `wasm-makeindex${suffix}`,
+    `wasm-metafont${suffix}`,
     `wasm-xetex${suffix}`,
     `wasm-luatex${suffix}`,
   ].sort()
   if (JSON.stringify([...artifactNames].sort()) !== JSON.stringify(expectedArtifacts)) {
     throw new Error(`${year}: component artifacts do not cover the annual engine set exactly`)
   }
-  if (runIds.size !== 5) throw new Error(`${year}: expected five independently pinned workflow runs`)
+  if (runIds.size !== 6) throw new Error(`${year}: expected six independently pinned workflow runs`)
   const formatFamilies = new Set()
   for (const origin of release.reusedFormats ?? []) {
     if (!['pdftex', 'xetex', 'luahbtex'].includes(origin.family) || formatFamilies.has(origin.family)) {
