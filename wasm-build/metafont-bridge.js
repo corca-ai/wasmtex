@@ -33,18 +33,14 @@
   const made = new Map()
   let base = null
 
-  /** The mirror is immutable, so its answer stands; a failed request says nothing. */
+  /** The mirror is immutable, so a missing file stays missing. A failed download throws,
+   *  as for any other lookup, so the host can recover the compile. */
   function mirrorSource(file) {
     if (mirrorSources.has(file)) return mirrorSources.get(file)
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', `${self.texlive_endpoint}pdftex/${MF_FORMAT}/${encodeURIComponent(file)}`, false)
-    xhr.responseType = 'arraybuffer'
-    try {
-      xhr.send()
-    } catch {
-      return null
-    }
-    if (![200, 403, 404].includes(xhr.status)) return null
+    const xhr = self.wasmtexDownloadAsset(
+      `${self.texlive_endpoint}pdftex/${MF_FORMAT}/${encodeURIComponent(file)}`,
+      'font',
+    )
     const bytes = xhr.status === 200 ? new Uint8Array(xhr.response) : null
     mirrorSources.set(file, bytes)
     return bytes
@@ -209,7 +205,8 @@
     if (name.includes('/')) return null
     try {
       return make()
-    } catch {
+    } catch (error) {
+      if (error?.name === 'AssetDownloadError') throw error
       return null
     }
   }

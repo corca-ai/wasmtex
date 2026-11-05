@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Make a bitmap font and metrics with a built wasmtex-metafont.js, as a worker would: the
- * script runs in a scope with a synchronous XMLHttpRequest over the given mirror.
+ * script runs in a scope whose synchronous download reads the given mirror.
  *
  * Usage: node scripts/smoke-metafont.mjs <wasmtex-metafont.js> <mirror url or directory>
  */
@@ -12,24 +12,18 @@ import { join } from 'node:path'
 import vm from 'node:vm'
 
 export function metafontWorkerScope(scriptPath, mirror) {
-  class MirrorRequest {
-    open(_method, url) {
-      this.url = url
-    }
-
-    send() {
-      try {
-        this.response = /^https?:/.test(this.url)
-          ? execFileSync('curl', ['-fsSL', this.url], { maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] })
-          : readFileSync(decodeURIComponent(this.url))
-        this.status = 200
-      } catch {
-        this.status = 404
-      }
+  function wasmtexDownloadAsset(url) {
+    try {
+      const response = /^https?:/.test(url)
+        ? execFileSync('curl', ['-fsSL', url], { maxBuffer: 1 << 26, stdio: ['ignore', 'pipe', 'ignore'] })
+        : readFileSync(decodeURIComponent(url))
+      return { status: 200, response }
+    } catch {
+      return { status: 404 }
     }
   }
   const scope = {
-    XMLHttpRequest: MirrorRequest, TextEncoder, TextDecoder, WebAssembly, console, performance, atob,
+    wasmtexDownloadAsset, TextEncoder, TextDecoder, WebAssembly, console, performance, atob,
     importScripts() {},
     location: { href: 'file:///wasmtex-metafont.js' },
   }
