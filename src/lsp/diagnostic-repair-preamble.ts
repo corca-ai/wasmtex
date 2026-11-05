@@ -1,6 +1,7 @@
 import { consumeRepairArguments } from './diagnostic-repair-arguments'
 import type { LatexDiagnosticRepairEdit } from './diagnostic-repair-types'
 import { isConditionalOpener } from './latex-parser'
+import { newlineLength, sourceNewline } from './source-position'
 import { getStructuralSelectionIndex } from './structural-selection'
 import type { FileSymbols } from './types'
 
@@ -50,8 +51,8 @@ export function packagePreambleEdit(
     Math.min(boundary.start, beforeOffset ?? Infinity),
   )
   if (insertion === null) return null
-  const newline = text.includes('\r\n') ? '\r\n' : '\n'
-  const prefix = insertion === 0 || text[insertion - 1] === '\n' ? '' : newline
+  const newline = sourceNewline(text)
+  const prefix = insertion === 0 || /[\r\n]/.test(text[insertion - 1]!) ? '' : newline
   return {
     file: root,
     range: { startOffset: insertion, endOffset: insertion },
@@ -80,8 +81,7 @@ function afterPackageOptions(
     if (!topLevel(index, token.start)) return null
     insertion = Math.max(insertion, args.insertOffset)
   }
-  if (text.slice(insertion, insertion + 2) === '\r\n') insertion += 2
-  else if (text[insertion] === '\n') insertion++
+  insertion += newlineLength(text, insertion)
   return insertion <= before ? insertion : null
 }
 
@@ -105,8 +105,7 @@ function classInsertion(
   if (!argumentsRead || argumentsRead.missing.length || argumentsRead.insertOffset > documentStart)
     return null
   let offset = argumentsRead.insertOffset
-  if (text.slice(offset, offset + 2) === '\r\n') offset += 2
-  else if (text[offset] === '\n') offset++
+  offset += newlineLength(text, offset)
   return offset
 }
 

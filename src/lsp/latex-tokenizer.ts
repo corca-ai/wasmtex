@@ -79,7 +79,7 @@ class Tokenizer {
   private advance(): string {
     const ch = this.src[this.pos]!
     this.pos++
-    if (ch === '\n') {
+    if (ch === '\n' || (ch === '\r' && this.src[this.pos] !== '\n')) {
       this.line++
       this.col = 1
     } else {
@@ -99,7 +99,7 @@ class Tokenizer {
     const from = this.pos
     let lastNewline = -1
     for (let i = from; i < end; i++) {
-      if (src.charCodeAt(i) === 10 /* \n */) {
+      if (src.charCodeAt(i) === 10 || (src.charCodeAt(i) === 13 && src.charCodeAt(i + 1) !== 10)) {
         this.line++
         lastNewline = i
       }
@@ -194,7 +194,7 @@ class Tokenizer {
     const src = this.src
     const len = src.length
     let i = this.pos
-    while (i < len && src[i] !== delim && src[i] !== '\n') i++
+    while (i < len && src[i] !== delim && src[i] !== '\n' && src[i] !== '\r') i++
     const value = this.consumeTo(i)
     if (this.pos < len && src[this.pos] === delim) this.advance()
     this.push('verb', value, start, line, column)
@@ -212,7 +212,7 @@ class Tokenizer {
     let i = this.pos
     while (i < len) {
       const c = src[i]!
-      if (c === '\n') break
+      if (c === '\n' || c === '\r') break
       if (c === open) depth++
       else if (c === close && --depth === 0) {
         i++
@@ -235,7 +235,7 @@ class Tokenizer {
     let i = this.pos
     while (i < len) {
       const c = src[i]!
-      if (c === '\n') break
+      if (c === '\n' || c === '\r') break
       if (c === '{') depth++
       else if (c === '}' && --depth === 0) break
       i++
@@ -252,7 +252,7 @@ class Tokenizer {
     const src = this.src
     const len = src.length
     let i = this.pos
-    while (i < len && src[i] !== '\n') i++
+    while (i < len && src[i] !== '\n' && src[i] !== '\r') i++
     const value = this.consumeTo(i)
     this.push('comment', value, start, line, column)
   }
@@ -298,13 +298,13 @@ class Tokenizer {
     while (i < len) {
       const c = src.charCodeAt(i)
       if (c === 92 || c === 123 || c === 125 || c === 37 || c === 36 || c === 35) break
-      if (c === 10) {
+      if (c === 10 || (c === 13 && src.charCodeAt(i + 1) !== 10)) {
         newlines++
         lastNewline = i
       }
       i++
     }
-    if (newlines > 0) {
+    if (lastNewline >= 0) {
       this.line += newlines
       this.col = i - lastNewline
     } else {

@@ -2,6 +2,7 @@ import type { DiagnosticRepairSource } from './diagnostic-repair'
 import { consumeRepairArguments } from './diagnostic-repair-arguments'
 import { packagePreambleEdit, topLevel } from './diagnostic-repair-preamble'
 import type { LatexPdfMetadataRepairProposal } from './diagnostic-repair-types'
+import { sourceNewline } from './source-position'
 import { getStructuralSelectionIndex } from './structural-selection'
 
 type SourceIndex = NonNullable<ReturnType<typeof getStructuralSelectionIndex>>
@@ -28,11 +29,11 @@ export function getPdfMetadataRepairs(
   if (!evidence) return []
   const metadata = missingMetadata(text, index, start, evidence.code)
   if (!Object.keys(metadata).length) return []
-  const newline = text.includes('\r\n') ? '\r\n' : '\n'
+  const newline = sourceNewline(text)
   const keys = Object.entries(metadata)
     .map(([key, value]) => `${key}={${value}}`)
     .join(', ')
-  const prefix = start > 0 && text[start - 1] !== '\n' ? newline : ''
+  const prefix = start > 0 && !/[\r\n]/.test(text[start - 1]!) ? newline : ''
   const packageLine = evidence.hyperref ? '' : `\\usepackage{hyperref}${newline}`
   return [
     {

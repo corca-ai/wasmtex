@@ -2,6 +2,7 @@ import { CLASS_SUPPORT } from '../engine/accessible-export'
 import type { CompletionSnapshotEngine } from '../types'
 import type { Diagnostic } from './diagnostic-provider'
 import { maskSpans } from './latex-parser'
+import { buildLineStarts, offsetToLineCol } from './source-position'
 
 export type AccessiblePdfEngine = CompletionSnapshotEngine | 'auto'
 export interface AccessiblePdfProject {
@@ -67,7 +68,7 @@ const HEADING_LEVEL = {
 function maskNonCode(source: string) {
   const chars = source.split('')
   for (const [start, end] of maskSpans(source)) {
-    for (let i = start; i < end; i++) if (chars[i] !== '\n') chars[i] = ' '
+    for (let i = start; i < end; i++) if (chars[i] !== '\n' && chars[i] !== '\r') chars[i] = ' '
   }
   return chars.join('')
 }
@@ -154,12 +155,13 @@ function normalizedLinkText(value: string) {
 function ignoredIssueKeys(source: string, directive = 'wasmtex-ignore') {
   const ignored = new Set<string>()
   if (!/^[a-z][a-z0-9-]*$/.test(directive)) return ignored
-  const maskedLines = maskNonCode(source).split('\n')
+  const maskedLines = maskNonCode(source).split(/\r\n|\r|\n/)
   const spans = maskSpans(source)
-  const lines = source.split('\n')
-  let offset = 0
+  const lines = source.split(/\r\n|\r|\n/)
+  const starts = buildLineStarts(source)
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index] ?? ''
+    const offset = starts[index]!
     const match = new RegExp(`^[ \t]*%[ \t]*${directive}[ \t]+(a11y-[a-z0-9-]+)[ \t\r]*$`).exec(
       line,
     )
@@ -172,7 +174,6 @@ function ignoredIssueKeys(source: string, directive = 'wasmtex-ignore') {
         break
       }
     }
-    offset += line.length + 1
   }
   return ignored
 }
@@ -253,11 +254,7 @@ function commandArgument(source: string, command: string) {
 }
 
 function lineAt(source: string, offset: number) {
-  let line = 1
-  for (let index = 0; index < offset; index += 1) {
-    if (source[index] === '\n') line += 1
-  }
-  return line
+  return offsetToLineCol(buildLineStarts(source), offset).line
 }
 
 function metadataIssue(path: string, source: string, masked: string) {
@@ -285,7 +282,7 @@ function metadataIssue(path: string, source: string, masked: string) {
 
 function sourceHasMath(source: string) {
   return (
-    /\$(?!\$)[^\n$]+\$/.test(source) ||
+    /\$(?!\$)[^\r\n$]+\$/.test(source) ||
     source.includes('\\(') ||
     source.includes('\\[') ||
     /\\begin\{(?:equation\*?|align\*?|gather\*?|multline\*?|math|displaymath)\}/.test(source)

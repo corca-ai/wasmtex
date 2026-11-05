@@ -1429,15 +1429,14 @@ function isParagraphPiece(
 }
 
 function sourceLines(source: string): SourceLine[] {
-  const lines: SourceLine[] = []
-  let start = 0
-  for (let index = 0; index <= source.length; index++) {
-    if (index !== source.length && source[index] !== '\n') continue
-    const contentEnd = index > start && source[index - 1] === '\r' ? index - 1 : index
-    lines.push({ start, end: Math.min(source.length, index + 1), contentEnd })
-    start = index + 1
-  }
-  return lines
+  const starts = buildLineStarts(source)
+  return starts.map((start, index) => {
+    const end = starts[index + 1] ?? source.length
+    let contentEnd = end
+    if (contentEnd > start && source[contentEnd - 1] === '\n') contentEnd--
+    if (contentEnd > start && source[contentEnd - 1] === '\r') contentEnd--
+    return { start, end, contentEnd }
+  })
 }
 
 function lineAt(lines: readonly SourceLine[], offset: number): SourceLine | undefined {
@@ -1562,7 +1561,7 @@ function mergeParagraphPieces(
     }
     const gap = { startOffset: previous.endOffset, endOffset: piece.startOffset }
     const separated =
-      /\n[ \t\r]*\n/u.test(source.slice(gap.startOffset, gap.endOffset)) ||
+      /\n[ \t]*\n/u.test(source.slice(gap.startOffset, gap.endOffset).replace(/\r\n|\r/g, '\n')) ||
       explicit.some((block) => rangesOverlap(block.range, gap))
     if (separated) output.push({ ...piece })
     else previous.endOffset = piece.endOffset
@@ -1770,14 +1769,15 @@ function markdownExcludedSpans(source: string): Array<readonly [number, number]>
 
 function markdownFenceSpans(source: string): Array<readonly [number, number]> {
   const spans: Array<readonly [number, number]> = []
-  const fence = /^\s*(`{3,}|~{3,})/gm
+  const fence = /^[^\S\r\n]*(`{3,}|~{3,})/gm
+  const lineEnds = new Map(sourceLines(source).map((line) => [line.start, line.end]))
   let opened: { marker: string; start: number } | null = null
   for (const match of source.matchAll(fence)) {
     const marker = match[1]!
     if (!opened) opened = { marker: marker[0]!, start: match.index }
     else if (marker[0] === opened.marker) {
-      const lineEnd = source.indexOf('\n', match.index)
-      spans.push([opened.start, lineEnd < 0 ? source.length : lineEnd + 1])
+      const lineEnd = lineEnds.get(match.index) ?? source.length
+      spans.push([opened.start, lineEnd])
       opened = null
     }
   }
@@ -1786,9 +1786,9 @@ function markdownFenceSpans(source: string): Array<readonly [number, number]> {
 }
 
 function markdownFrontmatterSpans(source: string): Array<readonly [number, number]> {
-  if (!/^(?:---|\+\+\+)\s*(?:\r?\n|$)/.test(source)) return []
+  if (!/^(?:---|\+\+\+)[ \t]*(?:\r\n|\r|\n|$)/.test(source)) return []
   const end = /^(?:---|\.\.\.|\+\+\+)\s*$/gm
-  end.lastIndex = source.indexOf('\n') + 1
+  end.lastIndex = buildLineStarts(source)[1] ?? source.length
   const match = end.exec(source)
   return [[0, match ? match.index + match[0].length : source.length]]
 }
@@ -1801,13 +1801,7 @@ function markdownCommentSpans(source: string): Array<readonly [number, number]> 
 }
 
 function markdownLines(source: string): Array<readonly [number, string]> {
-  const lines: Array<readonly [number, string]> = []
-  let start = 0
-  for (const line of source.split('\n')) {
-    lines.push([start, line])
-    start += line.length + 1
-  }
-  return lines
+  return sourceLines(source).map((line) => [line.start, source.slice(line.start, line.contentEnd)])
 }
 
 function inside(offset: number, spans: readonly (readonly [number, number])[]): boolean {
