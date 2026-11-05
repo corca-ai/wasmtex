@@ -52,15 +52,17 @@ rm -rf "$WB"; mkdir -p "$WB"; cd "$WB"
 # tools tangle them, and a wasm tangle cannot stand in for one.
 bounded emconf.out emconfigure "$SRC/configure" $COMMON_FLAGS --disable-mf --disable-web-progs \
   || { tail -40 emconf.out; exit 1; }
-# Only texk: the Metafont link needs no libs/. web2c's own bootstrap comes last and cannot
-# run as wasm, so this make stops there, on that first failure: run in parallel, the
-# sibling tangle steps wait forever on the one that failed.
-bounded emmake.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk \
-  || echo "(texk make nonzero: web2c's tools cannot run as wasm, the objects are compiled below)"
-bounded emmake-kpse.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk/kpathsea -j"$(nproc)" \
-  || echo "(kpathsea make nonzero)"
+# texk alone: the Metafont link needs nothing from libs/. kpathsea goes first because
+# web2c's library reads its generated headers, and web2c's own bootstrap comes last and
+# cannot run as wasm. That make must stop on the failure: run in parallel, the sibling
+# tangle steps wait forever on the one that failed.
+TEXK_MAKE="make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk"
+bounded emmake-kpse.out emmake $TEXK_MAKE CONF_SUBDIRS=kpathsea MAKE_SUBDIRS=kpathsea -j"$(nproc)" \
+  || { echo "kpathsea did not build"; tail -40 emmake-kpse.out; exit 1; }
+bounded emmake.out emmake $TEXK_MAKE CONF_SUBDIRS=web2c MAKE_SUBDIRS=web2c \
+  || echo "(web2c make nonzero: its tools cannot run as wasm, the objects are compiled below)"
 WW="$WB/texk/web2c"
-[ -f "$WW/c-auto.h" ] || { echo "web2c was not configured"; tail -40 emmake.out; exit 1; }
+[ -f "$WW/w2c/c-auto.h" ] || { echo "web2c was not configured"; tail -40 emmake.out; exit 1; }
 bounded emmake-lib.out emmake make MAKEINFO=true -C "$WW/lib" -j"$(nproc)" || echo "(web2c lib make nonzero)"
 KPSE="$(find "$WB" -name 'libkpathsea.a' 2>/dev/null | head -1)"
 LIBW2C="$WW/lib/lib.a"
