@@ -189,6 +189,7 @@
           "_compileMakeindex",
           "_malloc",
           "_setMainEntry",
+          "_setMakeindexJob",
           "wasmMemory"
         ]
       }

@@ -30,6 +30,43 @@ int setMainEntry(const char *entry) {
     return 0;
 }
 
+/* A job names its own files, for nomencl, glossaries and every index past the first. */
+static char job_input[1024];
+static char job_output[1024];
+static char job_style[1024];
+static char job_log[1024];
+static int job_letter_order;
+
+int setMakeindexJob(const char *input, const char *output, const char *style, const char *log,
+                    int letter_order) {
+    snprintf(job_input, sizeof(job_input), "%s", input ? input : "");
+    snprintf(job_output, sizeof(job_output), "%s", output ? output : "");
+    snprintf(job_style, sizeof(job_style), "%s", style ? style : "");
+    snprintf(job_log, sizeof(job_log), "%s", log ? log : "");
+    job_letter_order = letter_order;
+    return 0;
+}
+
+static int compileJob(void) {
+    char *argv[10];
+    int argc = 0;
+    argv[argc++] = "makeindex";
+    if (job_letter_order) argv[argc++] = "-l";
+    if (job_style[0]) {
+        argv[argc++] = "-s";
+        argv[argc++] = job_style;
+    }
+    if (job_log[0]) {
+        argv[argc++] = "-t";
+        argv[argc++] = job_log;
+    }
+    argv[argc++] = "-o";
+    argv[argc++] = job_output;
+    argv[argc++] = job_input;
+    argv[argc] = NULL;
+    return main(argc, argv);
+}
+
 /*
  * Run makeindex on <main_entry>.idx.
  * Expects <main_entry>.idx to exist in WORKROOT (/work/).
@@ -38,6 +75,7 @@ int setMainEntry(const char *entry) {
  * default-extension logic, and pass the .idx input explicitly.
  */
 int compileMakeindex(void) {
+    if (job_input[0]) return compileJob();
     static char idx[1030];
     static char ind[1030];
     snprintf(idx, sizeof(idx), "%s.idx", main_entry);

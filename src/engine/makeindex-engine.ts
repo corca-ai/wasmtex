@@ -1,5 +1,6 @@
 import type { TexliveVersion } from '../types'
 import { engineWorkerUrl } from './engine-assets'
+import type { IndexJob } from './secondary-stages'
 import { WasmTexWorker } from './wasmtex-worker'
 
 /**
@@ -19,9 +20,10 @@ export class MakeindexEngine extends WasmTexWorker {
     super(engineWorkerUrl(base, version, 'makeindex'), options?.texliveUrl ?? null, version)
   }
 
-  /** Process `<idxBaseName>.idx` → `<idxBaseName>.ind` (+ `.ilg` log). The worker reads the
-   *  `.idx` from its MEMFS (write it first) and replies under the shared `cmd:compile` key. */
-  async compile(idxBaseName: string): Promise<{ success: boolean; log: string }> {
+  /** Process `<idxBaseName>.idx` → `<idxBaseName>.ind` (+ `.ilg` log), or `job` when another
+   *  file or style is involved. The worker reads its input from MEMFS (write it first) and
+   *  replies under the shared `cmd:compile` key. */
+  async compile(idxBaseName: string, job?: IndexJob): Promise<{ success: boolean; log: string }> {
     if (this.status !== 'ready' || !this.worker) {
       return { success: false, log: 'makeindex engine not ready' }
     }
@@ -35,7 +37,7 @@ export class MakeindexEngine extends WasmTexWorker {
     this.status = 'compiling'
 
     const data = await this.postMessageWithResponse(
-      { cmd: 'compilemakeindex', url: idxBaseName },
+      { cmd: 'compilemakeindex', url: idxBaseName, job },
       'cmd:compile',
     )
 
