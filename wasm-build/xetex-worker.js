@@ -371,7 +371,7 @@ function resolveCdn(reqname, format) {
 
 function kpse_find_file_impl(nameptr, format, mustexist) {
   const found = findTexliveFile(nameptr, format, mustexist)
-  if (found || format !== 3) return found
+  if (found || format !== 3 || !mustexist) return found
   const path = generatedFont()?.makeTfm(UTF8ToString(nameptr), {
     fs: FS, cacheRoot: TEXCACHEROOT, workRoot: WORKROOT,
   })

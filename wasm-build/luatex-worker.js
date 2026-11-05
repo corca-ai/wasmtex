@@ -530,7 +530,7 @@ function kpse_find_pk_impl(nameptr, dpi) {
 
 function kpse_find_file_impl(nameptr, format, mustexist) {
   const found = findTexliveFile(nameptr, format, mustexist)
-  if (found || format !== 3) return found
+  if (found || format !== 3 || !mustexist) return found
   const path = generatedFont('tfm', UTF8ToString(nameptr))
   return path ? _allocate(intArrayFromString(path)) : 0
 }

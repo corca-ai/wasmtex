@@ -52,12 +52,11 @@ rm -rf "$WB"; mkdir -p "$WB"; cd "$WB"
 # tools tangle them, and a wasm tangle cannot stand in for one.
 bounded emconf.out emconfigure "$SRC/configure" $COMMON_FLAGS --disable-mf --disable-web-progs \
   || { tail -40 emconf.out; exit 1; }
-[ -f libs/Makefile ] && sed -i -E '/^(MAKE_SUBDIRS|CONF_SUBDIRS)/ s/\<(freetype2|icu|luajit|mpfr|mpfi|cairo|pixman|potrace|gmp)\>//g' libs/Makefile || true
-# web2c's own bootstrap comes last and cannot run as wasm, which is why this make stops
-# there. It must stop on that first failure: run in parallel, the sibling tangle steps
-# wait forever on the one that failed.
-bounded emmake.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc \
-  || echo "(recursive make nonzero: web2c's tools cannot run as wasm, the objects are compiled below)"
+# Only texk: the Metafont link needs no libs/. web2c's own bootstrap comes last and cannot
+# run as wasm, so this make stops there, on that first failure: run in parallel, the
+# sibling tangle steps wait forever on the one that failed.
+bounded emmake.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk \
+  || echo "(texk make nonzero: web2c's tools cannot run as wasm, the objects are compiled below)"
 bounded emmake-kpse.out emmake make MAKEINFO=true CC_FOR_BUILD=gcc BUILD_CC=gcc -C texk/kpathsea -j"$(nproc)" \
   || echo "(kpathsea make nonzero)"
 WW="$WB/texk/web2c"

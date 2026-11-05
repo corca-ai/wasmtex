@@ -57,7 +57,7 @@ typedef struct {
     int source;
 } kpse_glyph_file;
 
-enum { KPSE_PK_FORMAT = 1, KPSE_SOURCE_MAKETEX = 2, KPSE_SRC_COMPILE = 1 };
+enum { KPSE_PK_FORMAT = 1, KPSE_SOURCE_MAKETEX = 2, KPSE_SRC_CMDLINE = 6 };
 
 extern char *__real_kpse_find_glyph(const char *name, unsigned dpi, int format,
                                     kpse_glyph_file *glyph);
@@ -66,7 +66,8 @@ extern char *kpse_find_pk_js(const char *name, unsigned dpi);
 
 char *__wrap_kpse_find_glyph(const char *name, unsigned dpi, int format, kpse_glyph_file *glyph)
 {
-    kpse_set_program_enabled(KPSE_PK_FORMAT, 0, KPSE_SRC_COMPILE);
+    /* LuaTeX enables mktexpk at command-line level, and a lower level would be ignored. */
+    kpse_set_program_enabled(KPSE_PK_FORMAT, 0, KPSE_SRC_CMDLINE);
     char *result = __real_kpse_find_glyph(name, dpi, format, glyph);
     if (result)
         return result;

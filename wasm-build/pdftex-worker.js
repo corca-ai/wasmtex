@@ -564,7 +564,7 @@ function cacheFileName(format, name) {
 
 function kpse_find_file_impl(nameptr, format, mustexist) {
     var found = findTexliveFile(nameptr, format, mustexist);
-    if (found || format !== 3) return found;
+    if (found || format !== 3 || !mustexist) return found;
     var path = generatedFont("tfm", UTF8ToString(nameptr));
     return path ? allocateString(path) : 0;
 }

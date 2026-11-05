@@ -14,11 +14,16 @@
  * ========================================================================== */
 ;(() => {
   const TOOL_DIR = '/mf'
+  // Outside every kpathsea path: a font built from project source is rebuilt on each lookup,
+  // because a copy TeX could find would outlive an edit to that source.
+  const PROJECT_FONTS = '/mf-project'
   const BASE_DPI = 600
   const MODE = 'ljfour'
   const MF_FORMAT = 13
   const FIXED_EPOCH = '1577836800'
   const CONFIG = 'MFINPUTS=.\nMFBASES=.\nTFMFONTS=.\nGFFONTS=.\n'
+  // mktexpk and mktextfm keep a font whose only errors are these.
+  const TOLERATED_ERROR = /^! (?:Strange path|bad pos\.|angle\(0,0\) is taken as zero\.)/
   // mktexmf's short names for the magsteps.
   const MAGSTEP_SIZES = {
     11: '10.95', 14: '14.4', 17: '17.28', 20: '20.74', 25: '24.88', 30: '29.86', 36: '35.83',
@@ -28,6 +33,7 @@
   const made = new Map()
   let base = null
 
+  /** The mirror is immutable, so its answer stands; a failed request says nothing. */
   function mirrorSource(file) {
     if (mirrorSources.has(file)) return mirrorSources.get(file)
     const xhr = new XMLHttpRequest()
@@ -38,6 +44,7 @@
     } catch {
       return null
     }
+    if (![200, 403, 404].includes(xhr.status)) return null
     const bytes = xhr.status === 200 ? new Uint8Array(xhr.response) : null
     mirrorSources.set(file, bytes)
     return bytes
@@ -87,8 +94,12 @@
     return `design_size := ${size};\ninput ${sauter ?? family};\n`
   }
 
+  function sourceName(name) {
+    return name.includes('.') ? name : `${name}.mf`
+  }
+
   function resolveSource(name, host, used) {
-    const file = name.includes('.') ? name : `${name}.mf`
+    const file = sourceName(name)
     const local = projectFile(file, host)
     if (local) {
       used.project = true
@@ -121,91 +132,129 @@
     tool.FS.writeFile(`${TOOL_DIR}/mf`, '')
     tool.FS.writeFile(`${TOOL_DIR}/texmf.cnf`, CONFIG)
     for (const [name, bytes] of inputs) tool.FS.writeFile(`${TOOL_DIR}/${name}`, bytes)
+    tool.exitStatus = 0
     try {
       tool.callMain(args)
     } catch (error) {
       if (error?.name !== 'ExitStatus') throw error
+      tool.exitStatus = error.status
     }
     return tool
   }
 
-  function runMetafont(args, inputs, host, used) {
+  function runMetafont(args, inputs, resolve) {
     return runTool(self.createWasmtexMetafont, args, inputs, (tool, name, format) => {
       if (format !== MF_FORMAT) return null
-      const found = resolveSource(name, host, used)
+      const found = resolve(name)
       if (!found) return null
       const path = `${TOOL_DIR}/${found[0]}`
+      tool.FS.mkdirTree(path.slice(0, path.lastIndexOf('/')))
       tool.FS.writeFile(path, found[1])
       return path
     })
   }
 
-  function baseFile(host) {
+  /** The base outlives one project, so it reads only the mirror. */
+  function baseFile() {
     if (base) return base
-    const tool = runMetafont(
-      ['-ini', '-jobname=mf', '\\input plain; input modes; dump'],
-      [],
-      host,
-      {},
-    )
+    const tool = runMetafont(['-ini', '-jobname=mf', '\\input plain; input modes; dump'], [], (name) => {
+      const bytes = mirrorSource(sourceName(name))
+      return bytes ? [sourceName(name), bytes] : null
+    })
     if (tool.FS.analyzePath(`${TOOL_DIR}/mf.base`).exists) {
       base = tool.FS.readFile(`${TOOL_DIR}/mf.base`)
     }
     return base
   }
 
-  function runFont(name, mag, host, used) {
-    const baseBytes = baseFile(host)
-    if (!baseBytes) return null
-    return runMetafont(
-      ['-base=mf', `\\mode:=${MODE}; mag:=${mag}; nonstopmode; input ${name}`],
-      [['mf.base', baseBytes]],
-      host,
-      used,
-    )
+  function metafontSucceeded(tool, name) {
+    if (tool.exitStatus === 0) return true
+    const log = `${TOOL_DIR}/${name}.log`
+    if (!tool.FS.analyzePath(log).exists) return false
+    return tool.FS.readFile(log, { encoding: 'utf8' })
+      .split('\n')
+      .every((line) => !line.startsWith('!') || TOLERATED_ERROR.test(line))
   }
 
-  /** Runs `build` once per key unless a project source may have changed the answer. A
-   *  restored heap can drop the cache directory, so a remembered path must still exist. */
+  function runFont(name, mag, host, used) {
+    if (!resolveSource(name, host, used)) return null
+    const baseBytes = baseFile()
+    if (!baseBytes) return null
+    const font = runMetafont(
+      ['-base=mf', `\\mode:=${MODE}; mag:=${mag}; nonstopmode; input ${name}`],
+      [['mf.base', baseBytes]],
+      (file) => resolveSource(file, host, used),
+    )
+    return metafontSucceeded(font, name) ? font : null
+  }
+
+  function projectHasSource(host) {
+    return host.fs.readdir(host.workRoot).some((file) => file.endsWith('.mf'))
+  }
+
+  /** Runs `build` once per key unless project source may change the answer. A failure is
+   *  never kept: the source may arrive later, or the mirror recover. A restored heap can drop
+   *  the cache directory, so a remembered path must still exist. */
   function remember(key, host, build) {
     const known = made.get(key)
-    if (known === null || (known && host.fs.analyzePath(known).exists)) return known
+    if (known && host.fs.analyzePath(known).exists && !projectHasSource(host)) return known
     const used = { project: false }
     const path = build(used)
-    if (!used.project) made.set(key, path)
+    if (path && !used.project) made.set(key, path)
     return path
+  }
+
+  function outputPath(file, host, used) {
+    if (!used.project) return `${host.cacheRoot}/${file}`
+    if (!host.fs.analyzePath(PROJECT_FONTS).exists) host.fs.mkdir(PROJECT_FONTS)
+    return `${PROJECT_FONTS}/${file}`
+  }
+
+  /** TeX treats a missing font as an error it can report; an exception would end the job. */
+  function guarded(name, make) {
+    if (name.includes('/')) return null
+    try {
+      return make()
+    } catch {
+      return null
+    }
   }
 
   self.wasmtexMetafont = {
     makePk(name, dpi, host) {
-      const stored = `${name}.${dpi}pk`
-      if (projectFile(stored, host)) return `${host.workRoot}/${stored}`
-      return remember(`pk/${dpi}/${name}`, host, (used) => {
-        const mag = `${Math.floor(dpi / BASE_DPI)}+${dpi % BASE_DPI}/${BASE_DPI}`
-        const font = runFont(name, mag, host, used)
-        const gf = font?.FS.readdir(TOOL_DIR).find((file) => /\.\d+gf$/.test(file))
-        if (!gf) return null
-        const converted = runTool(
-          self.createWasmtexGftopk,
-          [`./${gf}`, 'font.pk'],
-          [[gf, font.FS.readFile(`${TOOL_DIR}/${gf}`)]],
-        )
-        if (!converted.FS.analyzePath(`${TOOL_DIR}/font.pk`).exists) return null
-        const path = `${host.cacheRoot}/${stored}`
-        host.fs.writeFile(path, converted.FS.readFile(`${TOOL_DIR}/font.pk`))
-        return path
+      return guarded(name, () => {
+        const stored = `${name}.${dpi}pk`
+        if (projectFile(stored, host)) return `${host.workRoot}/${stored}`
+        return remember(`pk/${dpi}/${name}`, host, (used) => {
+          const mag = `${Math.floor(dpi / BASE_DPI)}+${dpi % BASE_DPI}/${BASE_DPI}`
+          const font = runFont(name, mag, host, used)
+          const gf = font?.FS.readdir(TOOL_DIR).find((file) => /\.\d+gf$/.test(file))
+          if (!gf) return null
+          const converted = runTool(
+            self.createWasmtexGftopk,
+            [`./${gf}`, 'font.pk'],
+            [[gf, font.FS.readFile(`${TOOL_DIR}/${gf}`)]],
+          )
+          if (converted.exitStatus !== 0) return null
+          const path = outputPath(stored, host, used)
+          host.fs.writeFile(path, converted.FS.readFile(`${TOOL_DIR}/font.pk`))
+          return path
+        })
       })
     },
 
-    makeTfm(name, host) {
-      return remember(`tfm/${name}`, host, (used) => {
-        const font = runFont(name, '1', host, used)
-        const tfm = `${TOOL_DIR}/${name}.tfm`
-        if (!font?.FS.analyzePath(tfm).exists) return null
-        const path = `${host.cacheRoot}/${name}.tfm`
-        host.fs.writeFile(path, font.FS.readFile(tfm))
-        return path
-      })
+    makeTfm(requested, host) {
+      const name = requested.replace(/\.tfm$/, '')
+      return guarded(name, () =>
+        remember(`tfm/${name}`, host, (used) => {
+          const font = runFont(name, '1', host, used)
+          const tfm = `${TOOL_DIR}/${name}.tfm`
+          if (!font?.FS.analyzePath(tfm).exists) return null
+          const path = outputPath(`${name}.tfm`, host, used)
+          host.fs.writeFile(path, font.FS.readFile(tfm))
+          return path
+        }),
+      )
     },
   }
 })()
