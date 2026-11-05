@@ -32,6 +32,7 @@ not covered solely by the WasmTex MIT license.
 | BibTeX | The BibTeX 0.99d/TeX notice in `LICENSES/BibTeX.txt`, Web2C notices, and LGPL-2.1-or-later kpathsea with complete-source relink support. |
 | BibTeX8 | GPL-2.0-or-later source in `texk/bibtex-x`, plus kpathsea and linked-library terms. |
 | makeindex | The identical MakeIndex Distribution Notice, plus LGPL-2.1-or-later kpathsea with complete-source relink support. The WebAssembly port is a modified version and the release notice says how to obtain its source. |
+| Metafont | The Metafont and GFtoPK notices in `LICENSES/Metafont.txt`, Web2C notices, and LGPL-2.1-or-later kpathsea with complete-source relink support. |
 | XeTeX | **GPL-2.0-only for this combined release**, plus the XeTeX notice. Xpdf 4.04 and FreeType are selected under GPL-2.0-only. The MIT WTPDF adapter, LGPL kpathsea/Graphite2/TECkit, ICU, HarfBuzz, libpng, zlib, and other notices are retained. |
 | dvipdfmx | GPL-2.0-or-later terms, plus kpathsea, FreeType, libpng, zlib, and other linked-library terms. |
 | LuaHBTeX | **GPL-2.0-only for this combined release**: LuaHBTeX permits GPL-2.0-or-later and Xpdf 4.04 is selected under GPL-2.0-only. The MIT WTPDF/SHA-2 code, LGPL kpathsea/Graphite2/zziplib, Lua and other embedded-library notices are retained. |
@@ -42,6 +43,7 @@ Relevant license texts included here are:
 - [`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt)
 - [`LICENSES/LGPL-2.1.txt`](LICENSES/LGPL-2.1.txt)
 - [`LICENSES/MakeIndex.txt`](LICENSES/MakeIndex.txt)
+- [`LICENSES/Metafont.txt`](LICENSES/Metafont.txt)
 - [`LICENSES/BibTeX.txt`](LICENSES/BibTeX.txt)
 - [`LICENSES/XeTeX.txt`](LICENSES/XeTeX.txt)
 - [`LICENSES/SyncTeX.txt`](LICENSES/SyncTeX.txt)

@@ -1,0 +1,24 @@
+Metafont and GFtoPK distribution notices
+========================================
+
+Metafont, from the head of `mf.web`:
+
+  This program is copyright (C) 1984 by D. E. Knuth; all rights are reserved.
+  Unlimited copying and redistribution of this file are permitted as long
+  as this file is not modified. Modifications are permitted, but only if
+  the resulting file is not named mf.web. (The WEB system provides
+  for alterations via an auxiliary file; the master file should stay intact.)
+  In other words, METAFONT is under essentially the same ground rules as TeX.
+
+  TeX is a trademark of the American Mathematical Society.
+  METAFONT is a trademark of Addison-Wesley Publishing Company.
+
+GFtoPK is by Tomas Rokicki, and `gftopk.web` states no terms of its own. The
+TeX Live package database records `mfware`, the package that ships it, as public
+domain (`catalogue-license pd`), and this release relies on that record.
+
+The WasmTex build does not edit either master file. It applies the Web2C change
+files of the pinned TeX Live source and adds a screen stub and a file-lookup
+interposition layer. The result is distributed as `wasmtex-metafont`, not as an
+unmodified upstream binary. The exact masters, change files, generated C, glue, and
+build scripts are provided in the corresponding-source archive.

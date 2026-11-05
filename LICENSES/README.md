@@ -22,6 +22,7 @@ They do not change the license of any component.
 | `LuaHBTeX-embedded.txt` | Index of retained notices for LuaHBTeX's embedded libraries. |
 | LPPL 1.3c | LaTeX formats and packages that identify LPPL 1.3c as their license. Use the exact package notice; authoritative text: <https://www.latex-project.org/lppl/lppl-1-3c/>. |
 | `MakeIndex.txt` | The makeindex source and WasmTex WebAssembly port. |
+| `Metafont.txt` | Metafont, GFtoPK and the WasmTex WebAssembly port. |
 | `Monaco-Editor.txt` | Monaco Editor when bundled by the demo application. |
 | `musl.txt` | musl libc linked from the Emscripten sysroot; the complete component notice is also in corresponding source. |
 | `pdf-lib.txt` | pdf-lib when the optional peer is bundled. |
