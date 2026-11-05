@@ -4,7 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 
 const year = process.env.TEXLIVE_VERSION === '2026' ? '2026' : '2025'
 const mirror = year === '2026' ? '2026-ba38749b8714505a' : '2025-0d3fc73b65e39905'
-const controller = ['shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js']
+const controller = ['asset-download.js', 'shared-file.js', 'resolver-evidence.js', 'kpse-resolve.cjs', 'pdftex-worker.js']
   .map(name => readFileSync(new URL(`../wasm-build/${name}`, import.meta.url), 'utf8')).join('\n')
 
 test('an imported PDF cannot overwrite the checkpoint output prefix after a prose edit', async ({ page }) => {
@@ -41,11 +41,12 @@ test('an imported PDF cannot overwrite the checkpoint output prefix after a pros
       await fresh.init()
       const canonical = await fresh.compile()
       return { success: [baseline.success, resumed.success, canonical.success],
+        logs: [baseline.log, resumed.log, canonical.log],
         resumed: resumed.phaseTimings?.checkpointResume,
-        equal: normalize(resumed.pdf!) === normalize(canonical.pdf!) }
+        equal: !!resumed.pdf && !!canonical.pdf && normalize(resumed.pdf) === normalize(canonical.pdf) }
     } finally { fresh.dispose(); compiler.dispose() }
   }, { importedPdf, year, mirror })
-  expect(result.success).toEqual([true, true, true])
+  expect(result.success, result.logs.join('\n')).toEqual([true, true, true])
   expect(result.resumed).toBe(true)
   expect(result.equal).toBe(true)
 })
