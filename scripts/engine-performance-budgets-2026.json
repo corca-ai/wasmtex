@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "texliveYear": "2026",
   "artifactBytes": {
+    "wasmtex-metafont.js": 1050000,
     "wasmtex-pdftex.js": 150000,
     "wasmtex-pdftex.wasm": 2100000,
     "wasmtex-pdftex-checkpoint.js": 160000,

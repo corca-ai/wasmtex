@@ -12,8 +12,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 test('the exact release link inventory has complete component coverage', () => {
   const result = loadAndValidateEngineLicenseInventory(root, 'scripts/engine-components-2025.json')
-  assert.equal(result.coverage.length, 81)
-  assert.equal(new Set(result.coverage.map((entry) => entry.family)).size, 7)
+  assert.equal(result.coverage.length, 93)
+  assert.equal(new Set(result.coverage.map((entry) => entry.family)).size, 9)
 })
 
 test('an unknown linked archive fails closed', () => {

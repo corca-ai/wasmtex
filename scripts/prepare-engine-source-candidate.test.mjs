@@ -74,15 +74,15 @@ test('rejects malformed years, unsafe runs, annual mismatch and invalid componen
   assert.throws(() => prepareEngineSourceCandidate(components, license, '2025', '123'), /mismatch/)
   assert.throws(() => prepareEngineSourceCandidate({}, license, '2026', '123'), /schemaVersion/)
   const conflicting = String(components.years['2026'].downloads.find((entry) => entry.id === 'xetex').runId)
-  assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', conflicting), /five independently/)
+  assert.throws(() => prepareEngineSourceCandidate(components, license, '2026', conflicting), /six independently/)
 })
 
 
 test('all worker families can be sourced together without changing mirror or formats', () => {
   const license = { texliveVersion: '2026' }
-  const result = prepareEngineSourceCandidate(components, license, '2026', '101', '102', [], { xetex: '103', bibtex8: '104', makeindex: '105' })
+  const result = prepareEngineSourceCandidate(components, license, '2026', '101', '102', [], { xetex: '103', bibtex8: '104', makeindex: '105', metafont: '106' })
   const release = result.components.years['2026']
-  assert.deepEqual(release.downloads.map(x => x.runId).sort(), [101, 102, 103, 104, 105])
+  assert.deepEqual(release.downloads.map(x => x.runId).sort(), [101, 102, 103, 104, 105, 106])
   assert.deepEqual(release.reusedFormats, components.years['2026'].reusedFormats)
   assert.deepEqual(release.mirror, components.years['2026'].mirror)
   assert.equal(result.license.releaseStatus, 'development-only')

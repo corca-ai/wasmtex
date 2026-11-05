@@ -52,6 +52,7 @@ test('all engine workflows bind builds and receipts to the selected annual sourc
     'wasm-build.yml',
     'wasm-bibtex8.yml',
     'wasm-makeindex.yml',
+    'wasm-metafont.yml',
     'wasm-xetex.yml',
     'wasm-luatex.yml',
   ]) {
@@ -78,7 +79,7 @@ test('all engine workflows bind builds and receipts to the selected annual sourc
     assert.match(workflow, /check-annual-engine-source\.mjs "\$TEXLIVE_YEAR"/, name)
   }
 
-  for (const name of ['wasm-bibtex8.yml', 'wasm-makeindex.yml']) {
+  for (const name of ['wasm-bibtex8.yml', 'wasm-makeindex.yml', 'wasm-metafont.yml']) {
     const workflow = readFileSync(resolve(root, '.github/workflows', name), 'utf8')
     assert.match(workflow, /texlive-source-\$TEXLIVE_YEAR\.ref/, name)
     assert.match(workflow, /env\.TEXLIVE_YEAR == '2026'/, name)

@@ -21,11 +21,12 @@
  *     --source-sha256 <sha> \
  *     --run pdftex-bibtex=33885489901 --run xetex=33885502236 \
  *     --run luahbtex=33885505118 \
- *     [--from 2026-20260826] [--source-revision <sha> ...]
+ *     [--from 2026-20260826] [--source-revision <sha> ...] [--mirror-objects 177317]
  *
  * `--from` names the published profile this one is derived from; families with
  * no `--run` keep that profile's pinned run, which is what the corresponding
- * source rules require for a family whose inputs did not change.
+ * source rules require for a family whose inputs did not change. `--mirror-objects`
+ * moves the profile to the mirror pinned in the components, with its object count.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -108,8 +109,11 @@ const buildRuns = {
       (components0.years[year]?.downloads ?? []).map((entry) => [entry.id, entry.runId]),
     )),
 }
+const pinnedFamilies = (components0.years[year]?.downloads ?? []).map((entry) => entry.id)
 for (const [family, runId] of Object.entries(runs)) {
-  if (!(family in buildRuns)) fail(`unknown build family: ${family}`)
+  if (!(family in buildRuns) && !pinnedFamilies.includes(family)) {
+    fail(`unknown build family: ${family}`)
+  }
   buildRuns[family] = runId
 }
 
@@ -117,6 +121,9 @@ const registered = base === undefined || base === null ? null : {
   ...JSON.parse(JSON.stringify(base)),
   id: single['profile-id'],
   label: single.label ?? base.label,
+  ...(single['mirror-objects']
+    ? { mirror: { ...components0.years[year].mirror, objects: Number(single['mirror-objects']) } }
+    : {}),
   engine: {
     releaseId,
     tag: `engine-${releaseId}`,

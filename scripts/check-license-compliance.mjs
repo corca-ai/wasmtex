@@ -239,6 +239,8 @@ if (linkInventory) {
     'bibtex',
     'bibtex8',
     'makeindex',
+    'metafont',
+    'gftopk',
     'xetex',
     'dvipdfmx',
     'luahbtex',
@@ -429,7 +431,7 @@ if (packageJson && manifest) {
   const requiredBuildFamilies = Array.isArray(manifest.requiredBuildFamilies)
     ? manifest.requiredBuildFamilies
     : null
-  const expectedBuildFamilies = ['pdftex', 'bibtex', 'bibtex8', 'makeindex', 'xetex', 'luahbtex']
+  const expectedBuildFamilies = ['pdftex', 'bibtex', 'bibtex8', 'makeindex', 'metafont', 'xetex', 'luahbtex']
   if (
     !requiredBuildFamilies ||
     JSON.stringify([...new Set(requiredBuildFamilies)].sort()) !==

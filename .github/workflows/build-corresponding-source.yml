@@ -47,6 +47,10 @@ on:
         description: Optional makeindex candidate run
         required: false
         type: string
+      metafont_run:
+        description: Optional Metafont candidate run
+        required: false
+        type: string
       rebuilt_formats:
         description: Comma-separated families whose candidate run's format replaces the reused one, for a release that changes format bytes
         required: false
@@ -76,13 +80,14 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - name: Prepare uncleared source candidate
-        if: github.event_name == 'workflow_dispatch' && (inputs.pdftex_run != '' || inputs.luatex_run != '' || inputs.xetex_run != '' || inputs.bibtex8_run != '' || inputs.makeindex_run != '' || inputs.rebuilt_formats != '')
+        if: github.event_name == 'workflow_dispatch' && (inputs.pdftex_run != '' || inputs.luatex_run != '' || inputs.xetex_run != '' || inputs.bibtex8_run != '' || inputs.makeindex_run != '' || inputs.metafont_run != '' || inputs.rebuilt_formats != '')
         env:
           PDFTEX_RUN: ${{ inputs.pdftex_run }}
           LUATEX_RUN: ${{ inputs.luatex_run }}
           XETEX_RUN: ${{ inputs.xetex_run }}
           BIBTEX8_RUN: ${{ inputs.bibtex8_run }}
           MAKEINDEX_RUN: ${{ inputs.makeindex_run }}
+          METAFONT_RUN: ${{ inputs.metafont_run }}
           REBUILT_FORMATS: ${{ inputs.rebuilt_formats }}
         run: node scripts/prepare-engine-source-candidate.mjs
       - name: Download pinned annual engine release
