@@ -73,7 +73,6 @@ try {
   run('npm', [
     'install',
     '--ignore-scripts',
-    '--legacy-peer-deps',
     '--no-audit',
     '--no-fund',
     join(temp, packed.filename),

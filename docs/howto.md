@@ -29,9 +29,9 @@ bun add github:corca-ai/wasmtex#main
 **Notes:**
 - `monaco-editor` and `pdfjs-dist` are peer dependencies and must be installed
   separately for the built-in editor and viewer (see [Worker Setup](#worker-setup-required)).
-  `pdfjs-dist` is optional for headless and SyncTeX consumers using their own renderer.
-  `monaco-editor` remains a required package-level peer, so npm can install it even
-  for a headless-only application. The neutral/headless/Node runtime entries do not
+  Both are optional for headless and SyncTeX consumers using their own editor and
+  renderer. A standard package install does not add Monaco to a headless application.
+  The neutral/headless/Node runtime entries do not
   import Monaco, PDF.js or pdf-lib eagerly. `pdf-lib` is an optional peer used for
   incremental PDF splicing; peer metadata and runtime import boundaries are separate.
 - The repository commits the prebuilt `lib/` bundle. A GitHub install may also
