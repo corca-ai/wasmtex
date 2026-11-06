@@ -112,13 +112,8 @@ export function checkpointLineForEdit(
   minHeadBytes = 512,
   lineFallback = false,
 ): number | null {
-  const split = extractPreamble(source)
-  const bodyStart = split ? source.indexOf('\\begin{document}') : -1
-  if (bodyStart < 0) return null
-  // First line after \begin{document}'s line is the earliest usable checkpoint.
-  const floor = source.indexOf('\n', bodyStart)
-  if (floor < 0) return null
-  const earliest = floor + 1
+  const earliest = firstBodyLineOffset(source)
+  if (earliest === null) return null
   if (offset < earliest + minHeadBytes) return null
   const currentLineStart = source.lastIndexOf('\n', Math.min(offset, source.length) - 1) + 1
   // A chapter list often has no blank lines. Paragraph slack there would put
@@ -134,6 +129,13 @@ export function checkpointLineForEdit(
   const candidate = previousParagraphStart(source, offset, earliest) ?? fallback
   if (candidate < earliest + minHeadBytes) return null
   return lineOfOffset(source, candidate)
+}
+
+/** The parsed preamble already excludes commented document markers. */
+function firstBodyLineOffset(source: string): number | null {
+  const split = extractPreamble(source)
+  const newline = split ? source.indexOf('\n', split.preamble.length) : -1
+  return newline < 0 ? null : newline + 1
 }
 
 function standaloneInputLine(source: string, start: number): boolean {
@@ -401,6 +403,10 @@ export class HeapCheckpointCompiler {
     }
     if (this.engine.supportsSharedCheckpoints && this.maxCheckpoints > 1) {
       const target = offsets[0] ?? source.length
+      // Keep a proven state before early edits too, including the first body
+      // paragraph. It shares the existing allowance and survives rerun planning.
+      const firstBody = this.minHeadBytes === 0 ? firstBodyLineOffset(source) : null
+      if (firstBody !== null) offsets.push(firstBody)
       const chapters = [...includePositions(source).values()].filter((offset) =>
         standaloneInputLine(source, source.lastIndexOf('\n', offset - 1) + 1),
       )

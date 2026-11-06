@@ -42,6 +42,13 @@ describe('checkpointLineForEdit', () => {
     expect(checkpointLineForEdit(DOC, PRE.length - 1, 0)).toBeNull()
     expect(checkpointLineForEdit(DOC, PRE.length + 5)).toBeNull()
   })
+  it('uses the actual document boundary after a commented example marker', () => {
+    const source = `% Example: \\begin{document}\n${PRE}First paragraph.\n\nSecond paragraph.\n`
+    const offset = source.indexOf('First paragraph.')
+    expect(checkpointLineForEdit(source, offset, 0, true)).toBe(lineOfOffset(source, offset))
+    expect(checkpointLineForEdit(source, source.indexOf('documentclass'), 0, true)).toBeNull()
+  })
+
   it('picks the paragraph boundary before the edited paragraph', () => {
     const editAt = DOC.indexOf('Paragraph 8')
     const line = checkpointLineForEdit(DOC, editAt, 0)!
@@ -141,6 +148,54 @@ describe('HeapCheckpointCompiler', () => {
     expect(hc.armsForFullCompile(source, new Map(), offset)).toEqual([])
     engine.supportsLineCheckpoints = false
     expect(hc.armsForFullCompile(source, sources, offset)).toEqual([])
+  })
+
+  for (const newline of ['\n', '\r\n']) {
+    it(`keeps an earlier body state when preparing a later paragraph (${JSON.stringify(newline)})`, async () => {
+      const source = DOC.replaceAll('\n', newline)
+      const engine = Object.assign(new FakeEngine(), { supportsSharedCheckpoints: true })
+      const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0, maxCheckpoints: 2 })
+      const input = files()
+      const arms = hc.armsForFullCompile(source, input, source.indexOf('Paragraph 8'))
+      hc.noteFull(source, input, await engine.compile({ checkpoints: arms }))
+      const edited = source.replace('Paragraph 1 text', 'Revised first paragraph text')
+      const checkpoint = hc.previewCheckpoint(edited, input)
+      expect(checkpoint).toBeDefined()
+      expect(arms.find((arm) => arm.id === checkpoint)?.line).toBe(3)
+      expect(arms).toHaveLength(2)
+      // Reference settling can retire every earlier image before another full pass.
+      hc.reset()
+      const rerun = hc.armsForFullCompile(source, input, source.indexOf('Paragraph 8'))
+      hc.noteFull(source, input, await engine.compile({ checkpoints: rerun }))
+      expect(hc.previewCheckpoint(edited, input)).toBeDefined()
+      expect(hc.previewCheckpoint(source.replace('article', 'book'), input)).toBeUndefined()
+    })
+  }
+
+  it('reserves the bounded fallback before filling the chapter checkpoint allowance', () => {
+    const source = `${PRE}${Array.from({ length: 8 }, (_, i) => `\\input{chapter${i}}`).join('\n')}\n\\end{document}`
+    const engine = Object.assign(new FakeEngine(), { supportsSharedCheckpoints: true })
+    const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0, maxCheckpoints: 2 })
+    const offset = source.indexOf('{chapter7}')
+    const arms = hc.armsForFullCompile(source, files(), offset)
+    expect(arms.map((arm) => arm.line)).toEqual([lineOfOffset(source, offset), 3])
+  })
+
+  it('keeps the requested region alone when body-start retention is not allowed', () => {
+    const engine = Object.assign(new FakeEngine(), { supportsSharedCheckpoints: true })
+    for (const options of [
+      { minHeadBytes: 0, maxCheckpoints: 1 },
+      { minHeadBytes: 512, maxCheckpoints: 2 },
+    ]) {
+      const hc = new HeapCheckpointCompiler(engine, options)
+      expect(hc.armsForFullCompile(DOC, files(), DOC.indexOf('Paragraph 10'))).toHaveLength(1)
+    }
+  })
+
+  it('does not duplicate the body checkpoint when it is already the requested region', () => {
+    const engine = Object.assign(new FakeEngine(), { supportsSharedCheckpoints: true })
+    const hc = new HeapCheckpointCompiler(engine, { minHeadBytes: 0, maxCheckpoints: 2 })
+    expect(hc.armsForFullCompile(DOC, files(), PRE.length)).toHaveLength(1)
   })
 
   it('prepares only the requested cursor region within a one-checkpoint budget', async () => {
