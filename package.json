@@ -111,6 +111,9 @@
     "pdfjs-dist": "^5.4.624"
   },
   "peerDependenciesMeta": {
+    "monaco-editor": {
+      "optional": true
+    },
     "pdf-lib": {
       "optional": true
     },
