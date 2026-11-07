@@ -150,6 +150,15 @@ the minimum useful head, so a short main file can still qualify. Older workers
 keep paragraph placement. Input proof, invalidation and memory budgets remain
 authoritative; a chapter-loading line is not a portable chapter cache.
 
+Shared-checkpoint pdfTeX workers also retain the first body line when the host
+allows body-start states (`minHeadBytes: 0`) and at least two checkpoints. The
+requested edit region takes priority, then this earlier fallback, then nearby
+chapter boundaries, all inside the existing count and byte allowance. This keeps
+backward edits to the abstract or opening paragraph from reloading the preamble
+when only a later paragraph had been prepared. Reference-settling reruns arm the
+fallback again; main-prefix and consumed-input proofs still govern every reuse.
+Commented document markers do not move the body boundary into the preamble.
+
 On capable pdfTeX workers, sources without an earlier blank paragraph separator
 use the previous source line for checkpoint placement. Existing paragraph
 placement and prefix/dependency invalidation remain unchanged. Older workers
