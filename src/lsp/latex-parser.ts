@@ -1397,6 +1397,54 @@ function macroDefinitionSpans(
   return spans
 }
 
+/** Definition targets are control-sequence arguments, not invocations. Keep the
+ * replacement text visible: it may contain concrete labels, references or cites. */
+function definitionNameSpans(ctx: Ctx): Array<[number, number]> {
+  const names = new Set([
+    ...NEWCMD_CMDS.split('|'),
+    'DeclareRobustCommand',
+    'DeclareMathOperator',
+    'def',
+    'gdef',
+    'edef',
+    'xdef',
+    'let',
+    'futurelet',
+  ])
+  const spans: Array<[number, number]> = []
+  let consumedEnd = 0
+  for (const command of ctx.commandOccurrences) {
+    if (command.start < consumedEnd) continue
+    if (
+      !names.has(command.name) &&
+      !/^(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand$/.test(command.name)
+    )
+      continue
+    let start = command.end
+    if (ctx.masked[start] === '*') start++
+    start = skipSpace(ctx.masked, start)
+    const end = declarationNameEnd(ctx.masked, start, ctx.groupEnds)
+    if (end === null) continue
+    spans.push([start, end])
+    consumedEnd = end
+    if (command.name === 'let') {
+      const operand = letSourceSpan(ctx.masked, end)
+      if (operand) {
+        consumedEnd = operand[1]
+        spans.push(operand)
+      }
+    }
+  }
+  return spans
+}
+
+function letSourceSpan(masked: string, start: number): [number, number] | null {
+  let operand = skipSpace(masked, start)
+  if (masked[operand] === '=') operand = skipSpace(masked, operand + 1)
+  const token = /^\\(?:[A-Za-z@]+|[^A-Za-z@\r\n])/.exec(masked.slice(operand))
+  return token ? [operand, operand + token[0].length] : null
+}
+
 function definitionEnd(
   masked: string,
   start: number,
@@ -1829,7 +1877,10 @@ export function parseLatexFile(
   // The literal label/ref/cite extractors must not see symbols inside the body of a
   // *called* user macro — those are emitted at call sites by extractMacroExpansions.
   // Blanking preserves length/newlines, so lineStarts stays valid for the same ctx.
-  const literalMasked = blankSpans(masked, calledMacroBodySpans(masked))
+  const literalMasked = blankSpans(masked, [
+    ...calledMacroBodySpans(masked),
+    ...definitionNameSpans(ctx),
+  ])
   const literalCtx: Ctx = {
     ...ctx,
     masked: literalMasked,
@@ -1858,7 +1909,7 @@ export function parseLatexFile(
   )
 
   extractLabels(literalCtx, symbols)
-  attachLabelContexts(literalCtx, symbols)
+  attachLabelContexts(ctx, symbols)
   extractRefs(literalCtx, symbols)
   extractCitations(literalCtx, symbols)
   extractSections(ctx, symbols)

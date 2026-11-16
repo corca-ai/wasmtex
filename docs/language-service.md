@@ -25,6 +25,13 @@ Language features are backed by a small, error-tolerant LaTeX parser:
   are **shallow-expanded** (bounded depth, cycle-guarded) so the symbols they
   generate are indexed at their call sites.
 
+Definition target arguments (braced or bare control sequences) are excluded from
+literal label, reference and citation extraction. Replacement bodies remain
+available to the existing literal/call-site indexing policy, so concrete missing
+bibliography keys are still diagnosed. This applies to LaTeX command declarations,
+xparse document commands and TeX primitive definitions without template-specific
+exceptions.
+
 ### Diagnostic repair evidence
 
 The diagnostic repair modules reuse the parser's masked command and group index.

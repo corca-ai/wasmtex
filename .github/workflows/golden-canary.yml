@@ -54,7 +54,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.required == 'true'
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    # Playwright Chromium does not yet support Ubuntu 26.04.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
