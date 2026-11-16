@@ -24,6 +24,9 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Fixed
 
+- Ignore command-definition targets when indexing citations and references, avoiding
+  false undefined-citation warnings for style aliases such as `\renewcommand\cite{\citep}`.
+
 - Publish 2025 `773e39b19e04472d` and 2026 `4dbc8d3bf3a6f4ca` engines with
   bounded same-origin file recovery in main and auxiliary Workers. Existing
   annual formats and mirrors are reused with their original build receipts.

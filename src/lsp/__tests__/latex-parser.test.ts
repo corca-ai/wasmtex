@@ -650,3 +650,64 @@ describe('parseLatexFile — macro shallow expansion', () => {
     expect(cites.citations.some((c) => c.key === '#1')).toBe(false)
   })
 })
+
+describe('definition targets versus reference invocations', () => {
+  it.each([
+    'newcommand',
+    'renewcommand',
+    'providecommand',
+    'DeclareRobustCommand',
+    'NewDocumentCommand',
+    'RenewDocumentCommand',
+    'ProvideDocumentCommand',
+    'DeclareDocumentCommand',
+    'DeclareExpandableDocumentCommand',
+  ])('does not interpret the unbraced target of %s as a citation', (command) => {
+    const signature = command.includes('DocumentCommand') ? '{}' : ''
+    const source = `\\${command}* \\cite${signature}{\\citep}\n\\citep{real}`
+    expect(parseLatexFile(source, 'template.sty').citations.map((c) => c.key)).toEqual(['real'])
+  })
+
+  it('keeps concrete citations in replacement text and real missing keys', () => {
+    const source = String.raw`\renewcommand\cite{\citep{existing}}
+\newcommand{\priorwork}{\citep{missing}}
+\citep{outside}`
+    expect(parseLatexFile(source, 'template.sty').citations.map((c) => c.key)).toEqual([
+      'existing',
+      'missing',
+      'outside',
+    ])
+  })
+
+  it('does not interpret reference targets as invocations', () => {
+    const source = String.raw`\renewcommand\ref{\autoref}
+\providecommand\label{\customlabel}
+\ref{actual}`
+    const symbols = parseLatexFile(source, 'template.sty')
+    expect(symbols.labelRefs.map((r) => r.name)).toEqual(['actual'])
+    expect(symbols.labels).toEqual([])
+  })
+})
+
+it('retains label title context following a command definition', () => {
+  const symbols = parseLatexFile(
+    String.raw`\newcommand{\hello}{Hello}
+\section{Introduction}\label{sec:intro}`,
+    'main.tex',
+  )
+  expect(symbols.labels[0]?.context?.title).toBe('Introduction')
+})
+
+it('does not parse an already consumed declaration target as a definition', () => {
+  const symbols = parseLatexFile(String.raw`\renewcommand\def{\cite{missing}}`, 'main.tex')
+  expect(symbols.citations.map((c) => c.key)).toEqual(['missing'])
+})
+
+it('consumes the unexpanded source operand of let', () => {
+  const symbols = parseLatexFile(
+    String.raw`\let\foo = \cite{not-a-citation}
+\cite{real}`,
+    'main.tex',
+  )
+  expect(symbols.citations.map((c) => c.key)).toEqual(['real'])
+})
