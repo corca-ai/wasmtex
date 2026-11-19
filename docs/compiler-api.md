@@ -429,6 +429,35 @@ imports), so a host's startup bundle carries only the headless compiler itself.
 `inspectPdfTagging(pdf)` (exported) produces the `tagging` report for any PDF bytes — it
 inflates object streams itself, so hosts need no PDF library for an accessibility summary.
 
+#### EPS figures
+
+Set `WasmTexCompilerOptions.epsConverter` to supply an EPS-to-PDF tool. The
+callback receives `{ path, bytes, signal }` and returns a cropped single-page
+PDF as `Uint8Array` or throws. `signal` is aborted when the compile is
+cancelled or its inputs are replaced. Keep expensive work in a separate worker
+and abort that worker when a request is cancelled. The SDK ships no EPS
+interpreter. Pin the converter and include the notices for its runtime, fonts
+and dependencies when serving it to browsers.
+
+With the standard pdfLaTeX and LuaLaTeX graphics drivers, the SDK prepares
+missing default `epstopdf` companions after TeX identifies them and reruns
+the document. A user-supplied companion remains the driver's input. For
+XeLaTeX, the SDK prepares the EPS figures named in the XDV before its PDF
+conversion pass, keeping the original EPS bytes available for XeTeX geometry.
+The generated PDF stays in the engine filesystem for subsequent compiles;
+the project files and their names stay intact. Changing an EPS or its
+companion retires an engine holding that conversion. Existing companion PDF
+files owned by the project remain untouched. Custom graphics conversion rules
+are outside this stage.
+
+A successful result's optional `convertedEps` lists EPS paths used through
+this stage. Conversion errors return `eps-conversion-failed` with the EPS
+path and no PDF. Input size is bounded at 16 MiB per EPS. Each engine retains
+at most 64 converted graphics and 32 MiB of conversion output in total.
+Projects with the converter configured and EPS assets use canonical compilation
+instead of disposable prefix previews or page-break splices. Compiles with
+no EPS keep the same paths and do not invoke the tool.
+
 #### TikZ figure externalization
 
 `tikzExternalization` (default `{ mode: 'document' }`) makes the TikZ/pgfplots

@@ -103,6 +103,12 @@ jobs:
           TEXLIVE_VERSION: ${{ matrix.year }}
           TEXLIVE_URL: ${{ matrix.mirror }}
 
+      - name: EPS graphics on Chromium (all three engines)
+        run: npx playwright test eps-graphics --workers=1
+        env:
+          TEXLIVE_VERSION: ${{ matrix.year }}
+          TEXLIVE_URL: ${{ matrix.mirror }}
+
       - name: Early-body preview output on Chromium
         run: npx playwright test e2e/early-page-preview.spec.ts --workers=1
         env:

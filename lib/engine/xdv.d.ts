@@ -21,7 +21,7 @@ export interface XdvParse {
     reliable: boolean;
 }
 /** Walk the XDV once, producing geometry + .notdef placements + a reliability flag. */
-export declare function parseXdv(xdv: Uint8Array): XdvParse;
+export declare function parseXdv(xdv: Uint8Array, onSpecial?: (special: string) => void): XdvParse;
 /** Page/box geometry for the document (#54 slice 3). Thin wrapper over {@link parseXdv}. */
 export declare function parseXdvGeometry(xdv: Uint8Array): DocumentGeometry;
 /** Every `.notdef` box and its position (#89 L2b). Thin wrapper over {@link parseXdv}. */

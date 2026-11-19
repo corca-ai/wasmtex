@@ -152,6 +152,7 @@ const ORIGIN = 72 // 1in, dvipdfmx default dev origin (bp)
 interface PState {
   r: Reader
   placements: NotdefPlacement[]
+  onSpecial: ((special: string) => void) | undefined
   pages: PageGeometry[]
   cur: PageGeometry | null
   /** Media box from the most recent `papersize` special, applied to subsequent pages. */
@@ -384,6 +385,7 @@ const DIM_TOKEN = /([\d.]+)\s*(bp|pt|in|mm|cm)\b/gi
  *  so we take the first two dimension tokens after the keyword; the `default` form
  *  carries no dimensions and is ignored. */
 function handleSpecial(s: PState, special: string): void {
+  s.onSpecial?.(special)
   if (!/p(?:aper|age)size/i.test(special)) return
   const dims = [...special.matchAll(DIM_TOKEN)]
   if (dims.length < 2) return
@@ -478,10 +480,11 @@ function finalizeContentBoxes(pages: PageGeometry[]): void {
 }
 
 /** Walk the XDV once, producing geometry + .notdef placements + a reliability flag. */
-export function parseXdv(xdv: Uint8Array): XdvParse {
+export function parseXdv(xdv: Uint8Array, onSpecial?: (special: string) => void): XdvParse {
   const s: PState = {
     r: new Reader(xdv),
     placements: [],
+    onSpecial,
     pages: [],
     cur: null,
     paper: null,
