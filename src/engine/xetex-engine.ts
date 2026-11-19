@@ -20,6 +20,7 @@ import type { CompileResult } from '../types'
 import type { AssetDownloadSession } from './asset-download'
 import { resolveTexliveUrl } from './base-worker-engine'
 import { buildDependencyGraph } from './dependency-graph'
+import { epsConversionFailure, xetexEpsSpecial } from './eps-graphics'
 import {
   BaseTexFmtEngine,
   type ChapterPreviewResult,
@@ -118,12 +119,23 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     await Promise.all([super.writeFile(path, content), this.dvipdfm.writeFile(path, content)])
   }
 
+  /** Preserve the EPS for XeTeX's geometry. The PDF worker detects format by bytes. */
+  writeConvertedEps(path: string, pdf: Uint8Array): Promise<void> {
+    return this.dvipdfm.writeFile(path, pdf)
+  }
+
   override async mkdir(path: string): Promise<void> {
     await super.mkdir(path)
     this.dvipdfm.mkdir(path)
   }
 
   async compile(): Promise<CompileResult> {
+    return this.compileWithEpsPreparation()
+  }
+
+  async compileWithEpsPreparation(
+    prepare?: (paths: ReadonlySet<string>) => Promise<{ path: string; error: string } | undefined>,
+  ): Promise<CompileResult> {
     const start = performance.now()
     // 0. Ensure the XeLaTeX format is built and present in the work dir.
     const fmtLog = await this.ensureFormat()
@@ -145,6 +157,23 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
         [xelatex.resolver],
       )
     }
+    let parsed: ReturnType<typeof parseXdv> | undefined
+    if (prepare) {
+      const eps = new Set<string>()
+      parsed = parseXdv(xelatex.out, (special) => {
+        const path = xetexEpsSpecial(special)
+        if (path) eps.add(path)
+      })
+      const failure = eps.size ? await prepare(eps) : undefined
+      if (failure)
+        return epsConversionFailure(
+          this.result(false, null, xelatex.log, start, xelatex.inputFiles, false, [
+            xelatex.resolver,
+          ]),
+          failure.path,
+          failure.error,
+        )
+    }
     // 2. dvipdfmx: main.xdv -> main.pdf (fetches + embeds fonts from the CDN).
     const dvi = await this.convert(jobName, xelatex.out)
     const log = `${xelatex.log}\n${dvi.log}`
@@ -161,7 +190,7 @@ export class WasmTexXetexEngine extends BaseTexFmtEngine {
     // Parse the XDV once (xelatex.out is the XeTeX output, before dvipdfmx) — headless,
     // no engine patch — and use it for both products: page/box geometry telemetry
     // (#54 slice 3) and the .notdef overlay positions (#89 L2b).
-    const { pages, placements, reliable } = parseXdv(xelatex.out)
+    const { pages, placements, reliable } = parsed ?? parseXdv(xelatex.out)
     if (result.telemetry) result.telemetry.geometry = { pages, reliable }
     if (result.glyphCoverage) attachPlacements(result.glyphCoverage.gaps, placements, reliable, log)
     // Enrich the dependency graph (#54 slice 4): combine the XeTeX `.fls` with

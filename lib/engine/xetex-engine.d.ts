@@ -29,8 +29,14 @@ export declare class WasmTexXetexEngine extends BaseTexFmtEngine {
      *  reference in the XDV; dvipdfmx re-opens the actual file (`\includegraphics`,
      *  `pdfpages` imports) from its own FS when embedding. */
     writeFile(path: string, content: string | Uint8Array): Promise<void>;
+    /** Preserve the EPS for XeTeX's geometry. The PDF worker detects format by bytes. */
+    writeConvertedEps(path: string, pdf: Uint8Array): Promise<void>;
     mkdir(path: string): Promise<void>;
     compile(): Promise<CompileResult>;
+    compileWithEpsPreparation(prepare?: (paths: ReadonlySet<string>) => Promise<{
+        path: string;
+        error: string;
+    } | undefined>): Promise<CompileResult>;
     private keepChapterAux;
     /** Typeset only pages 1..`pageLimit` of the current main source, or only the
      *  `\\include`d `chapter`, as a separate job (see {@link runPreviewJob}) and convert

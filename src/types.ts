@@ -71,6 +71,8 @@ export interface CompilerRetentionStats {
 export interface CompileResult {
   success: boolean
   pdf: Uint8Array | null
+  /** Project EPS sources used through the optional PDF conversion stage. */
+  convertedEps?: string[]
   log: string
   errors: TexError[]
   /** Checkpoints taken during this compile, when any were requested (#81). */

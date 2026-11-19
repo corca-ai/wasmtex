@@ -84,7 +84,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        uses: ./.github/actions/install-chromium
 
       - name: Require every annual golden
         run: |
