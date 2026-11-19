@@ -1,0 +1,14 @@
+name: Install Chromium
+description: Install Playwright Chromium and its Ubuntu system dependencies
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        # Some hosted runners use a region-selected mirror that returns 503 for
+        # Noble packages. The Ubuntu Azure mirror carries the same signed pockets.
+        sources=/etc/apt/sources.list.d/ubuntu.sources
+        if [[ -f "$sources" ]] && grep -q 'mirror+file:/etc/apt/apt-mirrors.txt' "$sources"; then
+          sudo sed -i -E 's|mirror\+file:/etc/apt/apt-mirrors\.txt|https://azure.archive.ubuntu.com/ubuntu|g; s|https?://security\.ubuntu\.com/ubuntu|https://azure.archive.ubuntu.com/ubuntu|g' "$sources"
+        fi
+        npx playwright install --with-deps chromium

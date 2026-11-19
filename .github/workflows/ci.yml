@@ -79,7 +79,7 @@ jobs:
           texlive-year: ${{ matrix.year }}
           destination: public/wasmtex/${{ matrix.year }}
           github-token: ${{ github.token }}
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/install-chromium
       - name: Nested output on Node (all three engines)
         run: npx vitest run src/engine/nested-output.smoke.test.ts
         env:
