@@ -1,0 +1,408 @@
+diff --git a/crates/stet-ops/src/show_ops.rs b/crates/stet-ops/src/show_ops.rs
+index ea6d223..a176f07 100644
+--- a/crates/stet-ops/src/show_ops.rs
++++ b/crates/stet-ops/src/show_ops.rs
+@@ -966,6 +966,10 @@ fn render_glyphshow(
+         })
+         .ok_or(PsError::InvalidFont)?;
+
++    if font_type == 42 {
++        return render_type42_glyphshow(ctx, font_entity, cs_entity, glyph_name_id);
++    }
++
+     // Look up charstring by glyph name
+     let cs_obj = ctx
+         .dicts
+@@ -1062,6 +1066,61 @@ fn render_glyphshow(
+     Ok(())
+ }
+
++fn render_type42_glyphshow(
++    ctx: &mut Context,
++    font: EntityId,
++    charstrings: EntityId,
++    name: stet_core::object::NameId,
++) -> Result<(), PsError> {
++    let (name, entry) = match ctx.dicts.get(charstrings, &DictKey::Name(name)) {
++        Some(entry) => (name, entry),
++        None => {
++            let notdef = ctx.name_cache.n_notdef;
++            let entry = ctx
++                .dicts
++                .get(charstrings, &DictKey::Name(notdef))
++                .ok_or(PsError::InvalidFont)?;
++            (notdef, entry)
++        }
++    };
++    let gid = entry
++        .as_i32()
++        .and_then(|value| u16::try_from(value).ok())
++        .ok_or(PsError::InvalidFont)?;
++    let tt = TrueTypeGlyphs::of(ctx, font);
++    let glyph = tt.glyph_by_gid(ctx, font, gid);
++    let fm = read_font_matrix(ctx, font).multiply(&Matrix::scale(1.0 / tt.upm, 1.0 / tt.upm));
++    let device_point = ctx.gstate.current_point.ok_or(PsError::NoCurrentPoint)?;
++    let ctm = ctx.gstate.ctm;
++    let inverse = ctm.invert().ok_or(PsError::UndefinedResult)?;
++    let (x, y) = inverse.transform_point(device_point.0, device_point.1);
++    let (paint_type, stroke_width) = get_paint_info(ctx, font, &fm, &ctm);
++    if !glyph.segments.is_empty() {
++        let path = transform_segments(&glyph.segments, &fm, x, y);
++        // A name need not have a character code. Keep its vector outline
++        // even on PDF pages where other glyphs are emitted as encoded text.
++        push_glyph_path(
++            ctx,
++            ctm_transform_path(&path, &ctm),
++            paint_type,
++            stroke_width,
++            false,
++        );
++    }
++    let (wx, wy) = fm.transform_delta(glyph.width_x, glyph.width_y);
++    record_glyphshow(
++        ctx,
++        font,
++        &fm,
++        text_record::truetype_metrics(tt.font_data.as_deref()),
++        name,
++        (x, y),
++        (wx, wy),
++    );
++    ctx.gstate.current_point = Some(ctm.transform_point(x + wx, y + wy));
++    Ok(())
++}
++
+ /// Record the glyph `glyphshow` showed. It shows by name, not by
+ /// character code, so the recorded code is 0.
+ fn record_glyphshow(
+@@ -2522,8 +2581,8 @@ fn render_composite_truetype_cids(
+     cid_metrics: &CidMetrics,
+ ) -> Result<(), PsError> {
+     let tt = TrueTypeCid::of(ctx, cidfont_entity);
+-    let font_data = tt.font_data.as_deref();
+-    let upm = tt.upm;
++    let font_data = tt.glyphs.font_data.as_deref();
++    let upm = tt.glyphs.upm;
+
+     let em_scale = Matrix::scale(1.0 / upm, 1.0 / upm);
+     let combined_fm = type0_fm.multiply(cidfont_fm).multiply(&em_scale);
+@@ -2892,24 +2951,17 @@ fn font_wmode(ctx: &Context, font_entity: EntityId) -> i32 {
+         .unwrap_or(0)
+ }
+
+-/// A Type 2 (TrueType) CIDFont's glyphs: outlines from `GlyphDirectory`
+-/// or the `sfnts` `glyf` table, advances from `hmtx`, both reached through
+-/// the font's `CIDMap` — `GlyphDirectory` "works exactly the same in a
+-/// Type 2 CIDFont as it does in a Type 42 font, except that the glyph index
+-/// used to access GlyphDirectory is obtained from the CIDMap table" (PLRM
+-/// Table 5.17). Outlines and advances are in font units.
+-struct TrueTypeCid {
++/// Type 42 and Type 2 CIDFont outlines and advances in TrueType font units.
++struct TrueTypeGlyphs {
+     font_data: Option<Vec<u8>>,
+     glyph_dir: Option<EntityId>,
+-    cid_map: crate::cid_ops::CidToGid,
+     /// The font's units per em.
+     upm: f64,
+ }
+
+-impl TrueTypeCid {
+-    /// Resolve the font's glyph data once per show operation.
+-    fn of(ctx: &Context, cidfont: EntityId) -> Self {
+-        let font_data = concatenate_sfnts_array(ctx, cidfont);
++impl TrueTypeGlyphs {
++    fn of(ctx: &Context, font: EntityId) -> Self {
++        let font_data = concatenate_sfnts_array(ctx, font);
+         let upm = font_data
+             .as_ref()
+             .map(|fd| truetype::get_units_per_em(fd) as f64)
+@@ -2917,7 +2969,7 @@ impl TrueTypeCid {
+         let glyph_dir = ctx
+             .names
+             .find(b"GlyphDirectory")
+-            .and_then(|id| ctx.dicts.get(cidfont, &DictKey::Name(id)))
++            .and_then(|id| ctx.dicts.get(font, &DictKey::Name(id)))
+             .and_then(|obj| match obj.value {
+                 PsValue::Dict(e) => Some(e),
+                 _ => None,
+@@ -2925,31 +2977,25 @@ impl TrueTypeCid {
+         Self {
+             font_data,
+             glyph_dir,
+-            cid_map: crate::cid_ops::CidToGid::of(ctx, cidfont),
+             upm,
+         }
+     }
+
+-    /// The advance width of `cid`'s glyph.
+-    fn advance(&self, ctx: &Context, cid: i32) -> f64 {
+-        let gid = self.cid_map.gid(ctx, cid);
++    fn advance(&self, gid: u16) -> f64 {
+         self.font_data
+             .as_ref()
+             .and_then(|fd| truetype::get_advance_width(fd, gid))
+             .map_or(500.0, f64::from)
+     }
+
+-    /// `cid`'s outline and advance, from the font's glyph cache or built
+-    /// and cached on a miss. A glyph with no outline has no segments.
+-    fn glyph(&self, ctx: &mut Context, cidfont: EntityId, cid: i32) -> CachedGlyph {
++    fn glyph_by_gid(&self, ctx: &mut Context, font: EntityId, gid: u16) -> CachedGlyph {
+         if let Some(cached) = ctx
+             .glyph_caches
+-            .get(&cidfont)
+-            .and_then(|gc| gc.by_cid.get(&cid))
++            .get(&font)
++            .and_then(|gc| gc.by_gid.get(&gid))
+         {
+             return cached.clone();
+         }
+-        let gid = self.cid_map.gid(ctx, cid);
+         let glyf = |gid: u16| -> Option<Vec<u8>> {
+             if let Some(dir) = self.glyph_dir {
+                 return ctx
+@@ -2974,18 +3020,42 @@ impl TrueTypeCid {
+         };
+         let glyph = CachedGlyph {
+             segments: Arc::new(segments),
+-            width_x: self.advance(ctx, cid),
++            width_x: self.advance(gid),
+             width_y: 0.0,
+         };
+         ctx.glyph_caches
+-            .entry(cidfont)
++            .entry(font)
+             .or_default()
+-            .by_cid
+-            .insert(cid, glyph.clone());
++            .by_gid
++            .insert(gid, glyph.clone());
+         glyph
+     }
+ }
+
++/// A Type 2 CIDFont obtains TrueType glyph IDs through its CIDMap.
++struct TrueTypeCid {
++    glyphs: TrueTypeGlyphs,
++    cid_map: crate::cid_ops::CidToGid,
++}
++
++impl TrueTypeCid {
++    fn of(ctx: &Context, font: EntityId) -> Self {
++        Self {
++            glyphs: TrueTypeGlyphs::of(ctx, font),
++            cid_map: crate::cid_ops::CidToGid::of(ctx, font),
++        }
++    }
++
++    fn advance(&self, ctx: &Context, cid: i32) -> f64 {
++        self.glyphs.advance(self.cid_map.gid(ctx, cid))
++    }
++
++    fn glyph(&self, ctx: &mut Context, font: EntityId, cid: i32) -> CachedGlyph {
++        let gid = self.cid_map.gid(ctx, cid);
++        self.glyphs.glyph_by_gid(ctx, font, gid)
++    }
++}
++
+ /// Where a CIDFontType 0 font's glyphs come from.
+ ///
+ /// Two forms share the CIDFontType: CFF Type 2 charstrings keyed by CID in
+@@ -4232,7 +4302,8 @@ fn measure_string_width_composite(
+         if has_sfnts {
+             // TrueType CIDFont
+             let tt = TrueTypeCid::of(ctx, cidfont_entity);
+-            let em_scale = Matrix::scale(1.0 / tt.upm, 1.0 / tt.upm);
++            let upm = tt.glyphs.upm;
++            let em_scale = Matrix::scale(1.0 / upm, 1.0 / upm);
+             let combined_fm = type0_fm.multiply(&cidfont_fm).multiply(&em_scale);
+
+             for (cid, _) in &cids {
+@@ -4243,7 +4314,7 @@ fn measure_string_width_composite(
+                 } else {
+                     (tt.advance(ctx, *cid), Default::default())
+                 };
+-                let place = cid_metrics.place(ctx, *cid, (advance, 0.0), &outline, tt.upm)?;
++                let place = cid_metrics.place(ctx, *cid, (advance, 0.0), &outline, upm)?;
+                 let (wx, wy) = place.advance(&combined_fm);
+                 total_wx += wx;
+                 total_wy += wy;
+@@ -4385,13 +4456,14 @@ fn render_charpath_composite(
+         if has_sfnts {
+             // TrueType CIDFont charpath
+             let tt = TrueTypeCid::of(ctx, cidfont_entity);
+-            let em_scale = Matrix::scale(1.0 / tt.upm, 1.0 / tt.upm);
++            let upm = tt.glyphs.upm;
++            let em_scale = Matrix::scale(1.0 / upm, 1.0 / upm);
+             let combined_fm = type0_fm.multiply(&cidfont_fm).multiply(&em_scale);
+
+             for (cid, _) in &cids {
+                 let glyph = tt.glyph(ctx, cidfont_entity, *cid);
+                 let place =
+-                    cid_metrics.place(ctx, *cid, (glyph.width_x, 0.0), &glyph.segments, tt.upm)?;
++                    cid_metrics.place(ctx, *cid, (glyph.width_x, 0.0), &glyph.segments, upm)?;
+                 if !glyph.segments.is_empty() {
+                     // From origin 0 in vertical writing.
+                     let (gx, gy) = place.origin(&combined_fm, (cur_x, cur_y));
+@@ -5151,7 +5223,7 @@ fn render_show_displaced_composite(
+         if has_sfnts {
+             // TrueType CIDFont
+             let tt = TrueTypeCid::of(ctx, cidfont_entity);
+-            let upm = tt.upm;
++            let upm = tt.glyphs.upm;
+             let em_scale = Matrix::scale(1.0 / upm, 1.0 / upm);
+             let combined_fm = type0_fm.multiply(&cidfont_fm).multiply(&em_scale);
+             let (paint_type, stroke_width_dev) =
+@@ -5181,7 +5253,7 @@ fn render_show_displaced_composite(
+                             descent: -upm / 2.0,
+                         }
+                     } else {
+-                        text_record::truetype_metrics(tt.font_data.as_deref())
++                        text_record::truetype_metrics(tt.glyphs.font_data.as_deref())
+                     };
+                     record_cid_glyph(
+                         ctx,
+@@ -5659,6 +5731,16 @@ fn push_glyph_element(
+     device_path: PsPath,
+     paint_type: i32,
+     stroke_width_device: f64,
++) {
++    push_glyph_path(ctx, device_path, paint_type, stroke_width_device, true);
++}
++
++fn push_glyph_path(
++    ctx: &mut Context,
++    device_path: PsPath,
++    paint_type: i32,
++    stroke_width_device: f64,
++    is_text_glyph: bool,
+ ) {
+     // A glyph painted with a pattern is the pattern seen through its outline.
+     if paint_type != 2 && ctx.gstate.current_pattern.is_some() {
+@@ -5682,7 +5764,7 @@ fn push_glyph_element(
+             },
+             ctm: Matrix::identity(),
+             stroke_adjust: false,
+-            is_text_glyph: true,
++            is_text_glyph,
+             overprint: paint.overprint,
+             overprint_mode: paint.overprint_mode,
+             opm_paired: paint.opm_paired,
+@@ -5707,7 +5789,7 @@ fn push_glyph_element(
+             color: paint.color,
+             ctm: Matrix::identity(),
+             fill_rule: FillRule::NonZeroWinding,
+-            is_text_glyph: true,
++            is_text_glyph,
+             overprint: paint.overprint,
+             overprint_mode: paint.overprint_mode,
+             opm_paired: paint.opm_paired,
+diff --git a/crates/stet/tests/text_extraction.rs b/crates/stet/tests/text_extraction.rs
+index 7c730d3..2ee9927 100644
+--- a/crates/stet/tests/text_extraction.rs
++++ b/crates/stet/tests/text_extraction.rs
+@@ -517,6 +517,10 @@ showpage
+ /// with ascender 900 and descender -250 in `hhea`. The glyphs have no
+ /// outlines, which is all a text-extraction test needs.
+ fn minimal_sfnt() -> Vec<u8> {
++    sfnt_with_second_glyph(&[])
++}
++
++fn sfnt_with_second_glyph(outline: &[u8]) -> Vec<u8> {
+     let mut head = vec![0u8; 54];
+     head[12..16].copy_from_slice(&0x5F0F_3CF5u32.to_be_bytes()); // magic
+     head[18..20].copy_from_slice(&1000u16.to_be_bytes()); // unitsPerEm
+@@ -533,11 +537,16 @@ fn minimal_sfnt() -> Vec<u8> {
+     let mut maxp = vec![0u8; 6];
+     maxp[0..4].copy_from_slice(&0x0000_5000u32.to_be_bytes());
+     maxp[4..6].copy_from_slice(&2u16.to_be_bytes());
+-    let loca = vec![0u8; 6]; // short offsets: both glyphs empty
+-    let glyf = vec![0u8; 4];
++    let mut loca = vec![0u8; 6]; // short offsets: glyph 0 is empty
++    loca[4..6].copy_from_slice(&u16::try_from(outline.len() / 2).unwrap().to_be_bytes());
++    let glyf = if outline.is_empty() {
++        &[0u8; 4]
++    } else {
++        outline
++    };
+
+     let tables: [(&[u8; 4], &[u8]); 6] = [
+-        (b"glyf", &glyf),
++        (b"glyf", glyf),
+         (b"head", &head),
+         (b"hhea", &hhea),
+         (b"hmtx", &hmtx),
+@@ -594,6 +603,73 @@ showpage
+     assert_eq!((run.ascent, run.descent), (900.0, -250.0));
+ }
+
++#[test]
++fn type42_glyphshow_uses_named_gids_and_advances_the_current_point() {
++    let hex: String = minimal_sfnt().iter().map(|b| format!("{b:02X}")).collect();
++    let ps = format!(
++        r#"%!PS
++/TT <<
++  /FontType 42 /FontMatrix [1 0 0 1 0 0] /FontBBox [0 -0.25 1 0.9]
++  /Encoding StandardEncoding
++  /CharStrings << /.notdef 0 /uni2212 1 >>
++  /sfnts [<{hex}>]
++>> definefont pop
++/TT findfont 12 scalefont setfont
++72 700 moveto /uni2212 glyphshow /absent glyphshow /uni2212 glyphshow
++showpage
++"#
++    );
++    let runs = runs_of(&ps);
++    assert_eq!(runs.len(), 1);
++    let run = &runs[0];
++    assert_eq!(run.glyphs.len(), 3);
++    assert_eq!(glyph_texts(run)[0], "−");
++    assert!(close(run.glyphs[0].advance, (7.2, 0.0)));
++    assert!(close(run.glyphs[1].origin, (79.2, 92.0)));
++    assert!(close(run.glyphs[1].advance, (6.0, 0.0)));
++    assert!(close(run.glyphs[2].origin, (85.2, 92.0)));
++    assert_eq!((run.ascent, run.descent), (900.0, -250.0));
++}
++
++#[test]
++#[cfg(feature = "pdf-output")]
++fn pdf_keeps_type42_glyphshow_outlines_alongside_encoded_text() {
++    // A single rectangular TrueType contour, in font units.
++    let mut outline: Vec<u8> = [1i16, 0, 0, 500, 600, 3, 0]
++        .into_iter()
++        .flat_map(i16::to_be_bytes)
++        .collect();
++    outline.extend([1; 4]); // on-curve, signed 16-bit deltas
++    for delta in [0i16, 500, 0, -500, 0, 0, 600, 0] {
++        outline.extend(delta.to_be_bytes());
++    }
++    let hex: String = sfnt_with_second_glyph(&outline)
++        .iter()
++        .map(|b| format!("{b:02X}"))
++        .collect();
++    let ps = format!(
++        r#"%!PS
++/TT <<
++  /FontType 42 /FontMatrix [1 0 0 1 0 0] /FontBBox [0 0 0.5 0.6]
++  /Encoding StandardEncoding /CharStrings << /.notdef 0 /square 1 >>
++  /sfnts [<{hex}>]
++>> definefont pop
++/Helvetica findfont 12 scalefont setfont
++72 600 moveto (Encoded text) show
++/TT findfont 100 scalefont setfont
++72 690 moveto /square glyphshow
++showpage
++"#
++    );
++    let pdf = Interpreter::new()
++        .render_to_pdf(ps.as_bytes(), 72.0)
++        .unwrap();
++    let document = stet_pdf_reader::PdfDocument::from_bytes(&pdf).unwrap();
++    let (rgba, width, _) = document.render_page_to_rgba(0, 72.0).unwrap();
++    let pixel = (70 * width as usize + 90) * 4;
++    assert_eq!(&rgba[pixel..pixel + 4], &[0, 0, 0, 255]);
++}
++
+ /// A CIDFontType 2 font over [`minimal_sfnt`], in Adobe's Japan1
+ /// collection, composed with `cmap` into the Type 0 font `/J`. Its glyphs
+ /// have no outlines; only their text and positions matter here.

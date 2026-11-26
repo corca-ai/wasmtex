@@ -1,0 +1,45 @@
+--- a/crates/stet/src/lib.rs
++++ b/crates/stet/src/lib.rs
+@@ -629,7 +629,7 @@
+         self.ctx.output_path = Some("stet_output".to_string());
+         let save_id = self.begin_job(dpi, w, h)?;
+
+-        let exec_result = self.run_eps(ps_data, llx, lly);
++        let exec_result = self.run_eps(ps_data, llx, lly, false);
+         if exec_result.is_ok() {
+             let _ = self.end_page_device();
+         }
+@@ -650,7 +650,7 @@
+
+     #[cfg(feature = "pdf-output")]
+     fn exec_eps(&mut self, ps_data: &[u8], llx: f64, lly: f64) -> Result<(), StetError> {
+-        self.run_eps(ps_data, llx, lly)
++        self.run_eps(ps_data, llx, lly, true)
+     }
+
+     /// Run an EPS with its bounding box's corner at the origin, and end its
+@@ -671,13 +671,23 @@
+         Ok(save_id)
+     }
+
+-    fn run_eps(&mut self, ps_data: &[u8], llx: f64, lly: f64) -> Result<(), StetError> {
++    fn run_eps(
++        &mut self,
++        ps_data: &[u8],
++        llx: f64,
++        lly: f64,
++        strict_pdf: bool,
++    ) -> Result<(), StetError> {
+         let wrapper = format!("gsave {} {} translate", -llx, -lly);
+         parse_and_exec(&mut self.ctx, wrapper.as_bytes()).map_err(ps_err)?;
+         let showpages_before = self.ctx.showpage_count;
+         let ran = parse_and_exec(&mut self.ctx, ps_data);
+         let mut callers_deadline = None;
+         if let Err(e) = job_result(&self.ctx, ran) {
++            // Figures delivered to TeX must never look successful after a PostScript error.
++            if strict_pdf && !self.keep_partial {
++                return Err(e);
++            }
+             callers_deadline = Some(self.abandon_job());
+             if self.keep_partial {
+                 self.last_error = Some(self.named_error(e));

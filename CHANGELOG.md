@@ -13,6 +13,10 @@ breaking changes are called out under **Changed** with a ⚠️ marker.
 
 ### Added
 
+- Separate opt-in `@wasmtex/eps-converter` package with pinned Stet runtime,
+  Type 42/bounds/error patches, fonts, notices and a worker-local loader.
+  Hosts retain scheduling and resource policy; the core SDK remains unchanged.
+
 - Headless `onAssetDownload` diagnostics for format/map transfers, including byte
   progress without Content-Length, retry counts and classified failures.
 - Explicit S3 provider, bucket, region and profile selection in mirror publishing;

@@ -62,8 +62,8 @@
     "dev": "vite --port 6001",
     "build": "tsgo && vite build",
     "preview": "vite preview",
-    "check": "tsgo --noEmit",
-    "lint": "biome check src/ && npm run lint:workers",
+    "check": "tsgo --noEmit && tsc -p packages/eps-converter/tsconfig.json --noEmit",
+    "lint": "biome check src/ packages/eps-converter/src/ && npm run lint:workers",
     "lint:fix": "biome check --write src/",
     "format": "biome format --write src/",
     "test": "vitest run",
@@ -103,7 +103,9 @@
     "build:lib": "BUILD_MODE=lib vite build && node scripts/fix-dts-specifiers.mjs && node scripts/check-dts-exports.mjs",
     "prepare": "npm run build:lib",
     "test:package-consumer": "node scripts/package-consumer/check.mjs",
-    "lint:workers": "node scripts/check-worker-scope.mjs && biome lint --config-path=biome.workers.json wasm-build --error-on-warnings"
+    "lint:workers": "node scripts/check-worker-scope.mjs && biome lint --config-path=biome.workers.json wasm-build --error-on-warnings",
+    "build:eps-converter": "node scripts/build-eps-converter.mjs",
+    "test:eps-converter": "node --test packages/eps-converter/test/*.test.mjs"
   },
   "peerDependencies": {
     "monaco-editor": "^0.55.1",

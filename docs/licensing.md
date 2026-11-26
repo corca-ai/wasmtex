@@ -52,6 +52,7 @@ the [proprietary integration guide](proprietary-integration.md).
 | `src/`, WasmTex-authored documentation and build glue | MIT unless the file says otherwise. |
 | `src/synctex/` port | MIT SDK distribution plus the retained upstream SyncTeX permission and non-endorsement notice. |
 | `lib/` | Generated form of the corresponding `src/` code; ship the same notices as the source package. |
+| Optional `@wasmtex/eps-converter` package | Separate distribution: MIT adapter; Stet MIT OR Apache-2.0, URW++ Core 35 OFL-1.1 and the linked crate/data notices in its assets. The root SDK never includes these binaries. See the [package guide](../packages/eps-converter/README.md). |
 | Engine Worker/glue/WASM release | The terms of the complete linked engine unit, including GPL and linked-component notices; never described by npm's MIT metadata alone. |
 | TeX Live packages, fonts and Lua files | Their upstream terms as part of the separately operated full TeX Live distribution. Generated engine formats and ICU data remain part of the exact engine-release audit. |
 | `LICENSES/` and third-party notices | Preserved license evidence; inclusion does not relicense the covered component. |

@@ -46,6 +46,26 @@ jobs:
       xetex_run: ${{ inputs.xetex_run }}
       luatex_run: ${{ inputs.luatex_run }}
 
+  eps-converter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
+      - run: cargo +1.96.0 install wasm-bindgen-cli --version 0.2.128 --locked
+      - run: cargo +1.96.0 install cargo-about --version 0.9.3 --locked --features cli
+      - run: npm run build:eps-converter
+      - run: npm run test:eps-converter
+      - run: npm pack --ignore-scripts ./packages/eps-converter
+      - uses: actions/upload-artifact@v7
+        with:
+          name: eps-converter
+          path: wasmtex-eps-converter-*.tgz
+          retention-days: 14
+
   package-consumer:
     runs-on: ubuntu-latest
     timeout-minutes: 10

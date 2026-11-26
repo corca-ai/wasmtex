@@ -1,0 +1,95 @@
+--- a/crates/stet-core/src/eps.rs
++++ b/crates/stet-core/src/eps.rs
+@@ -42,7 +42,8 @@
+ ///
+ /// Scans the first 4096 bytes for the bounding box comment. Prefers
+ /// `%%HiResBoundingBox` (float values) over `%%BoundingBox` (integer values).
+-/// Handles `%%BoundingBox: (atend)` by also scanning the last 4096 bytes.
++/// Handles `(atend)` by reading the document in order so nested DSC
++/// documents cannot overwrite an outer bounding box.
+ ///
+ /// Returns `Some((llx, lly, urx, ury))` or `None` if not found.
+ pub fn read_eps_bounding_box(data: &[u8]) -> Option<(f64, f64, f64, f64)> {
+@@ -56,11 +57,9 @@
+
+     scan_for_bbox(header, &mut bbox, &mut hires_bbox, &mut need_atend);
+
+-    // If %%BoundingBox: (atend), scan the trailer too
+-    if need_atend && data.len() > 4096 {
+-        let trailer_start = data.len().saturating_sub(4096);
+-        let trailer = &data[trailer_start..];
+-        scan_for_bbox(trailer, &mut bbox, &mut hires_bbox, &mut need_atend);
++    // Scan from the beginning to preserve DSC nesting through the trailer.
++    if need_atend && data.len() > header_end {
++        scan_for_bbox(data, &mut bbox, &mut hires_bbox, &mut need_atend);
+     }
+
+     hires_bbox.or(bbox)
+@@ -73,23 +72,25 @@
+     hires_bbox: &mut Option<(f64, f64, f64, f64)>,
+     need_atend: &mut bool,
+ ) {
++    let mut document_depth: usize = 0;
+     for line in data.split(|&b| b == b'\n' || b == b'\r') {
+-        if line.is_empty() {
+-            continue;
+-        }
+-
+-        if line.starts_with(b"%%HiResBoundingBox:") {
+-            let rest = &line[b"%%HiResBoundingBox:".len()..];
+-            if let Some(values) = parse_four_numbers(rest) {
+-                *hires_bbox = Some(values);
+-            }
+-        } else if line.starts_with(b"%%BoundingBox:") {
+-            let rest = &line[b"%%BoundingBox:".len()..];
+-            let trimmed = trim_ascii(rest);
+-            if trimmed == b"(atend)" {
++        if line.starts_with(b"%%BeginDocument:") {
++            document_depth += 1;
++        } else if trim_ascii(line) == b"%%EndDocument" {
++            document_depth = document_depth.saturating_sub(1);
++        } else if document_depth == 0 {
++            let (field, rest) = if let Some(rest) = line.strip_prefix(b"%%HiResBoundingBox:") {
++                (&mut *hires_bbox, rest)
++            } else if let Some(rest) = line.strip_prefix(b"%%BoundingBox:") {
++                (&mut *bbox, rest)
++            } else {
++                continue;
++            };
++            let rest = trim_ascii(rest);
++            if rest == b"(atend)" {
+                 *need_atend = true;
+             } else if let Some(values) = parse_four_numbers(rest) {
+-                *bbox = Some(values);
++                *field = Some(values);
+             }
+         }
+     }
+@@ -200,6 +201,27 @@
+     }
+
+     #[test]
++    fn test_bbox_ignores_nested_documents() {
++        let eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 150 120\n\
++            %%BeginDocument: logo.eps\n%%HiResBoundingBox: 10 10 40 30\n\
++            %%BoundingBox: 10 10 40 30\n%%EndDocument\n";
++        assert_eq!(read_eps_bounding_box(eps), Some((0.0, 0.0, 150.0, 120.0)));
++    }
++
++    #[test]
++    fn test_bbox_atend_maintains_nesting_beyond_the_header() {
++        let mut eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: (atend)\n\
++            %%HiResBoundingBox: (atend)\n%%BeginDocument: logo.eps\n"
++            .to_vec();
++        eps.resize(5200, b' ');
++        eps.extend_from_slice(
++            b"\n%%HiResBoundingBox: 0 0 20 30\n%%EndDocument\n\
++            %%Trailer\n%%BoundingBox: -1 0 151 121\n%%HiResBoundingBox: -0.5 0 150.5 120.5\n",
++        );
++        assert_eq!(read_eps_bounding_box(&eps), Some((-0.5, 0.0, 150.5, 120.5)));
++    }
++
++    #[test]
+     fn test_bbox_atend() {
+         // Build data larger than 4096 bytes with (atend) in header and bbox in trailer
+         let mut data = Vec::new();

@@ -1,0 +1,31 @@
+{
+  "name": "@wasmtex/eps-converter",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "SEE LICENSE IN assets/THIRD_PARTY_NOTICES.txt",
+  "private": true,
+  "description": "Optional local EPS-to-PDF converter for WasmTex, with pinned Stet runtime and fonts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./manifest.json": "./assets/manifest.json"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "native",
+    "README.md",
+    "LICENSE",
+    "src",
+    "tsconfig.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
