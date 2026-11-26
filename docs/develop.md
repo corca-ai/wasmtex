@@ -55,6 +55,14 @@ Set both `WASMTEX_SMOKE_TEXLIVE_VERSION` and `WASMTEX_SMOKE_TEXLIVE_URL`
 to a matching year and exact immutable snapshot URL when the
 opt-in Node, cross-host, or incremental smoke suites qualify a new mirror.
 
+## Optional EPS converter package
+
+The [package guide](../packages/eps-converter/README.md) owns its separate build,
+asset manifest, installed-package checks and redistribution notices. Run
+`npm run build:eps-converter` and `npm run test:eps-converter` before packing
+that release. The `eps-converter` CI job builds it from pinned native source
+and tests the packed package. It does not add assets to the core SDK.
+
 ## The committed `lib/` bundle
 
 WasmTex isn't on npm, so consumers `npm install github:corca-ai/wasmtex#main`. A

@@ -1,0 +1,19 @@
+[package]
+name = "cortex-stet-eps"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+stet = { path = "upstream/crates/stet", default-features = false, features = ["pdf-output"] }
+stet-graphics = { path = "upstream/crates/stet-graphics", default-features = false }
+wasm-bindgen = "=0.2.128"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

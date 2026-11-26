@@ -435,9 +435,11 @@ Set `WasmTexCompilerOptions.epsConverter` to supply an EPS-to-PDF tool. The
 callback receives `{ path, bytes, signal }` and returns a cropped single-page
 PDF as `Uint8Array` or throws. `signal` is aborted when the compile is
 cancelled or its inputs are replaced. Keep expensive work in a separate worker
-and abort that worker when a request is cancelled. The SDK ships no EPS
-interpreter. Pin the converter and include the notices for its runtime, fonts
-and dependencies when serving it to browsers.
+and abort that worker when a request is cancelled. The core SDK ships no EPS
+interpreter. The separate opt-in [`@wasmtex/eps-converter` package](../packages/eps-converter/README.md)
+provides a pinned Stet runtime and a worker-local loader. Hosts retain worker,
+queue, timeout, cancellation and memory policy. Pin the converter and include
+the notices for its runtime, fonts and dependencies when serving it to browsers.
 
 With the standard pdfLaTeX and LuaLaTeX graphics drivers, the SDK prepares
 missing default `epstopdf` companions after TeX identifies them and reruns

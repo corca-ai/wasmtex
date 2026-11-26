@@ -40,6 +40,9 @@
     }
   },
   "files": {
-    "includes": ["src/**"]
+    "includes": [
+      "src/**",
+      "packages/eps-converter/src/**"
+    ]
   }
 }
